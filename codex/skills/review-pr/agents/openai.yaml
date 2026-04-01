@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Pull Request"
+  short_description: "Ticket-aware PR review with findings first"
+  default_prompt: "Use $review-pr to review this PR or diff before approval against the ticket, acceptance criteria, branch naming, tests, and blocker risks."
