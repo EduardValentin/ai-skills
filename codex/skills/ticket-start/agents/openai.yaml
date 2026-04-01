@@ -1,4 +1,4 @@
 interface:
   display_name: "Ticket Start"
-  short_description: "Plan implementation from a full ticket"
-  default_prompt: "Use $ticket-start to begin implementation from this ticket."
+  short_description: "Start implementation from Jira or Linear tickets"
+  default_prompt: "Use $ticket-start to begin implementation from this Jira or Linear ticket."
