@@ -154,41 +154,49 @@ The agent MUST have a way to visually validate its work. Without visual validati
    - Look in `.claude/settings.json`, `.claude/settings.local.json`, or `~/.claude/settings.json` for an existing MCP server that provides browser automation (e.g. `playwright`, `puppeteer`, `browserbase`, `browser-use`, etc.).
    - If found, confirm it works by attempting to take a screenshot of a test page.
 
-2. **If no browser automation MCP is found, STOP and ask the user to set one up:**
+2. **If no browser automation MCP is found, fall back to user-provided screenshots:**
 
-   Inform the user:
+   If the agent does not have internal browsing capabilities AND no browser automation MCP is configured, the agent MUST ask the user to provide screenshots before any design work begins. Follow this process:
 
-   > "I don't have access to an internal browser preview in this environment, and I need one to visually validate design work. Please set up a browser automation MCP server so I can take screenshots and inspect the UI. Here's how:
-   >
-   > **Option A: Playwright MCP (recommended)**
-   >
-   > 1. Install the Playwright MCP server:
-   >    ```bash
-   >    npm install -g @anthropic-ai/mcp-playwright
-   >    ```
-   >    Or if you prefer npx (no global install), you can reference it directly in the config below.
-   >
-   > 2. Add it to your Claude Code MCP settings. Edit `~/.claude/settings.json` (global) or `<project-root>/.claude/settings.json` (project-level) and add:
-   >    ```json
-   >    {
-   >      "mcpServers": {
-   >        "playwright": {
-   >          "command": "npx",
-   >          "args": ["@anthropic-ai/mcp-playwright"]
-   >        }
-   >      }
-   >    }
-   >    ```
-   >
-   > 3. Restart Claude Code so the MCP server is picked up.
-   >
-   > **Option B: Any other browser automation MCP**
-   >
-   > If you already have a preferred browser automation tool (Puppeteer, Browserbase, etc.) that has an MCP server adapter, configure it the same way under `mcpServers` in your settings. As long as it can navigate to URLs and take screenshots, it will work.
-   >
-   > Once set up, re-run this skill and I'll use the browser automation to visually validate all design work."
+   a. **Start the dev server** so the user can access the app in their own browser.
 
-3. **Do NOT proceed with design work until browser automation is available.** Visual validation is a core requirement of this workflow — without it, the agent cannot guarantee the design meets quality standards. The only exception is if the user explicitly opts out and agrees to manually validate every change themselves.
+   b. **Request screenshots from the user:**
+
+      > "I don't have access to an internal browser or browser automation in this environment, so I can't take screenshots myself. Before I can start designing, I need to understand the current state of the app visually.
+      >
+      > Please open the app in your browser and send me screenshots of the following:
+      > - The page(s) or area(s) where the design work will happen
+      > - Any related pages that share layout or visual patterns with the target area
+      > - The overall navigation/layout so I can understand the app's visual language
+      >
+      > Once I've reviewed the screenshots and understand the current design, I'll proceed with your request."
+
+   c. **Wait for the user to provide the screenshots.** Do NOT proceed with any design implementation until screenshots have been received and reviewed.
+
+   d. **Review and confirm understanding.** After receiving the screenshots, describe back to the user what you observe — the layout, visual patterns, color usage, typography, spacing, component styles, and overall aesthetic. Confirm with the user that your understanding is accurate before proceeding to design work.
+
+   e. **During validation (Phase 4), request screenshots again.** After implementing changes, ask the user to provide new screenshots of the modified areas at relevant viewport widths so you can visually validate the result. The same review process applies — you must see the result before considering the task complete.
+
+   f. **Inform the user about browser automation for a smoother workflow:**
+
+      > "Tip: For a faster design workflow where I can take screenshots automatically, you can set up a browser automation MCP server:
+      >
+      > **Option A: Playwright MCP (recommended)**
+      > ```json
+      > // Add to ~/.claude/settings.json or <project-root>/.claude/settings.json
+      > {
+      >   "mcpServers": {
+      >     "playwright": {
+      >       "command": "npx",
+      >       "args": ["@anthropic-ai/mcp-playwright"]
+      >     }
+      >   }
+      > }
+      > ```
+      >
+      > **Option B: Any other browser automation MCP** (Puppeteer, Browserbase, etc.) that can navigate to URLs and take screenshots."
+
+3. **Do NOT proceed with design work until visual context is available** — either through internal browser capabilities, a browser automation MCP, or user-provided screenshots. The agent must understand the current design before making any changes.
 
 ---
 
@@ -260,7 +268,14 @@ These rules are NON-NEGOTIABLE. Every design action must comply with ALL of them
 - Respect `prefers-reduced-motion` by disabling or reducing animations.
 - No gratuitous animations. Every animation must serve a purpose: guide attention, provide feedback, or smooth transitions.
 
-### Rule 8: Clean Code
+### Rule 8: React Router Navigation Only
+
+- **NEVER** use `window.location.href`, `window.location.assign()`, `window.location.replace()`, or any other direct browser navigation API. These cause a full page reload and destroy all in-memory app state (including Dev Toggle settings and React context).
+- **NEVER** use raw `<a>` tags for in-app navigation. Raw anchors also trigger full page reloads and lose app state.
+- **ALWAYS** use React Router navigation for any link or redirect within the app: `<Link>` component, `useNavigate()` hook, or `<Navigate>` component.
+- The only acceptable use of `<a>` is for links that navigate **away from the app entirely** (e.g., external websites, social media). In that case, always include `target="_blank"` and `rel="noopener noreferrer"`.
+
+### Rule 9: Clean Code
 
 - Even though the primary concern is design, the React code must remain clean and composable.
 - Prefer composition over inheritance.
@@ -269,20 +284,20 @@ These rules are NON-NEGOTIABLE. Every design action must comply with ALL of them
 - Extract repeated patterns into utilities or shared components.
 - Follow the existing code conventions found in the reference app (CVA patterns, cn() utility, data-slot attributes, etc.).
 
-### Rule 9: Scope Discipline
+### Rule 10: Scope Discipline
 
 - Only build UI/UX for the feature being designed RIGHT NOW.
 - Do not add unrelated UI elements, pages, or features.
 - Backend integrations should be mocked (static data, setTimeout for async simulation, local state).
 - If a feature needs data, create realistic mock data that demonstrates the UI properly.
 
-### Rule 10: Latest Best Practices
+### Rule 11: Latest Best Practices
 
 - Always apply current UI/UX best practices for layout, interaction patterns, and visual design.
 - Use the latest recommended patterns for the tech stack in the reference app (React patterns, Tailwind utilities, Radix UI composition, etc.).
 - When unsure about a UI/UX pattern, prefer established patterns from reputable design systems (Material Design principles, Apple HIG concepts, Nielsen Norman Group guidelines).
 
-### Rule 11: No Ad-Hoc Spacing or Sizing on Reusable Components
+### Rule 12: No Ad-Hoc Spacing or Sizing on Reusable Components
 
 - **NEVER** apply ad-hoc padding, margin, gap, width, height, or other spacing/sizing overrides directly to reusable components (e.g. via className props, wrapper divs with spacing, or inline styles).
 - Reusable components must control their own internal spacing and sizing through **variants**, not through external ad-hoc classes.
@@ -463,6 +478,36 @@ Spawn a **background sub-agent** (using the Agent tool) with the following instr
 
 The sub-agent runs in the background so it does not block the main design workflow. Once it completes, briefly inform the user whether the PRD was updated and, if so, summarize only the business-level changes (not visual details).
 
+### Phase 7: Session Wrap-Up and PR Creation
+
+When the user signals that the design session is ending, the agent MUST treat that as an instruction to prepare and create a pull request for the current React reference app work.
+
+#### End-of-session triggers
+
+Treat phrases such as the following as explicit PR creation requests:
+
+- "let's end this session"
+- "let's create the PR"
+- Any clearly equivalent instruction to wrap up the current design session and open a PR
+
+#### What the PR must include
+
+Before creating the PR:
+
+1. Ensure the branch includes **all React reference app changes from this session**.
+2. Ensure any `PRD.md` additions or edits produced by Phase 6 are also included in the same PR.
+3. If `PRD.md` did not need an update, note that in the PR description instead of forcing a PRD change.
+4. Do NOT omit relevant design-app changes or leave PRD sync changes unstaged if they belong to the session.
+
+#### PR description requirements
+
+The PR description must be concise and cover:
+
+- What was changed in the React reference app
+- Any `PRD.md` additions or updates made during the session (or a short note that no PRD update was needed)
+
+Keep the description brief and practical. The goal is a clean handoff that shows both the design app work and the product-requirements updates that came out of the session.
+
 ---
 
 ## Definition of Done
@@ -478,10 +523,11 @@ A design task is complete ONLY when ALL of the following are true:
 - [ ] All copy follows brand-voice.md guidelines
 - [ ] Components are reusable and composable where applicable
 - [ ] The code is clean, typed, and follows existing conventions
-- [ ] The agent has visually validated the result through the internal browser preview or browser automation MCP
+- [ ] The agent has visually validated the result through the internal browser preview, browser automation MCP, or user-provided screenshots
 - [ ] `DESIGN.md` is up to date with any design system changes
 - [ ] If `PRD.md` exists and the change introduced or modified a business user flow, a sub-agent has been spawned to sync the PRD (business rules and functional requirements only — no visual or implementation details)
 - [ ] Only the React reference app was modified (no production code changes, except `PRD.md` updates)
+- [ ] If the user ends the session or asks to create the PR, a PR is created that includes the React reference app changes and any `PRD.md` additions from the session
 
 ---
 
@@ -489,6 +535,7 @@ A design task is complete ONLY when ALL of the following are true:
 
 - **This skill is for design work only.** The production codebase is synced separately.
 - **Only the React reference app should be modified.** Never touch files outside the `designs/` folder (except `DESIGN.md`, `brand-voice.md`, and `PRD.md` at the project root).
+- **Session end means PR time.** If the user says something like "let's end this session" or "let's create the PR", treat that as an explicit instruction to create a PR for the current design-session work.
 - **When in doubt, ask.** It's better to confirm with the user than to guess and introduce inconsistencies.
-- **The internal browser preview (or browser automation MCP) is your eyes.** Use it frequently to validate your work, not just at the end. If neither is available, do not proceed with design work until one is set up.
+- **The internal browser preview (or browser automation MCP) is your eyes.** Use it frequently to validate your work, not just at the end. If neither is available, request screenshots from the user to understand the current design before starting, and request new screenshots after implementation to validate the result.
 - **Mock everything.** Backend APIs, data fetching, authentication - all should be mocked with realistic data within the React app.

@@ -33,7 +33,8 @@ description: Start implementation work from a software ticket with a plan-first 
 5. Inspect `PRD.md` only in the areas relevant to the ticket. Do not load the whole document by default. Narrow scope by feature name, user flow, domain terms, affected screens, and nearby sections first, then read only the matching slices.
 6. Inspect the `designs/` reference app only in the areas relevant to the ticket. Treat it as the front-end behavior and styling reference for the feature. Look for the relevant routes, screens, mocked API flows, state transitions, and components that express the desired UX without loading unrelated parts of the design app into context.
 7. Use the scoped PRD findings to understand business logic and edge cases. Use the scoped `designs/` findings to understand UX, styling, interaction flow, and expected front-end behavior. Keep technical implementation decisions in the product codebase, not in the PRD.
-8. Ask concise clarifying questions only when the ticket, PRD, and design reference still leave material ambiguity.
+8. If the personal project includes a runnable React design reference app, identify the matching feature route and the important UI states up front so the same flows can be exercised in both apps during end-of-session visual verification.
+9. Ask concise clarifying questions only when the ticket, PRD, and design reference still leave material ambiguity.
 
 ## Shared Research Rules
 
@@ -89,6 +90,11 @@ description: Start implementation work from a software ticket with a plan-first 
 
 - Run the smallest meaningful validation set that proves the change works and does not obviously regress quality.
 - Prefer targeted tests first, then broader lint or test suites as appropriate for the repo.
+- In the personal workflow, when a runnable React design reference app exists, end the session by starting both the product app and the design reference app, opening the same feature in both, and capturing screenshots of the same states.
+- Compare those screenshots directly and make sure the implemented feature matches the design reference closely for colors, spacing, margins, and the relevant interaction states affected by the ticket.
+- Cover the meaningful states for the feature, such as default, loading, empty, hover, focus, active, disabled, error, success, expanded, or collapsed states, whenever they are part of the ticketed behavior.
+- If the visual comparison shows mismatches, iterate on the implementation and re-run the screenshot check before calling the work done.
+- If either app cannot be started, the feature cannot be exercised in both apps, or screenshots cannot be captured, report the blocker explicitly and do not claim that design parity was verified.
 - In the personal workflow, after implementation and validation, create a pull request with the GitHub CLI tool and then move the Linear ticket to `In Review`.
 - Do not close the Linear ticket and do not merge the PR immediately after creating it. Treat your user as the reviewer gate.
 - Only after the user explicitly approves the PR should you merge the PR and then move the Linear ticket to its completed state.
