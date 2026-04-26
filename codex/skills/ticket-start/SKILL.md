@@ -1,17 +1,27 @@
 ---
 name: ticket-start
-description: Start implementation work from a software ticket with a plan-first workflow. Use when the user wants to begin building a feature or fix from a ticket, especially when they say phrases such as "start ticket". Supports both job/Jira tickets and personal-project/Linear tickets. Gather the minimum relevant repo context, research version-specific third-party documentation when needed, produce an implementation plan, and wait for explicit approval before making code changes. For personal projects, inspect only the relevant areas of `PRD.md` and the `designs/` reference app, use Linear MCP for ticket reads and status changes, and create the PR before handing off for review. Do not use for code review, pure planning, or debugging-only tasks.
+description: Start implementation work from a software ticket with a plan-first workflow. Use when the user wants to begin building a feature or fix from a ticket, especially when they say phrases such as "start ticket", and for follow-up status or progress questions about that ticket. Supports both job/Jira tickets and personal-project/Linear tickets. Gather the minimum relevant repo context, research version-specific third-party documentation when needed, produce an implementation plan, and wait for explicit approval before making code changes. For personal projects, inspect only the relevant areas of `PRD.md` and the `designs/` reference app, use Linear MCP for ticket reads and status changes, and create the PR before handing off for review. Always refresh ticket, relation, and git facts from their source of truth before answering; do not rely on memory or stale chat context. Do not use for code review, pure planning, or debugging-only tasks.
 ---
 
 # Ticket Start
 
 ## Workflow Selection
 
-1. Confirm that the request is implementation work driven by a ticket. If the task is review, planning-only, or debugging-only, do not use this skill.
+1. Confirm that the request is implementation work driven by a ticket, or a follow-up status/progress question about a ticket already in this workflow. If the task is review, planning-only, or debugging-only, do not use this skill.
 2. Decide which workflow applies before gathering more context:
    - `Job workflow`: tickets come from Jira or the user pastes the full ticket content directly.
    - `Personal workflow`: tickets come from Linear and the project uses `PRD.md` plus a `designs/` reference app.
 3. Read and follow repository-local instructions first. Start with the nearest applicable `AGENTS.md`, then load only the additional instruction files and project docs that materially affect the task.
+
+## Freshness And Source Of Truth
+
+1. Treat memory, prior chat context, old plans, and earlier tool results as stale hints, not facts. This is especially important in long chats, after resumes, and after context compaction.
+2. Before any substantive response about ticket scope, status, blockers, related tickets, implementation progress, PR readiness, or git state, fetch current facts from the source of truth.
+3. For Linear tickets, read the current ticket from Linear. If blocked, blocking, related, duplicate, parent, or child tickets matter to the answer, read each relevant ticket from Linear too instead of relying on relation names or earlier context.
+4. For job/Jira tickets without a live Jira connector, require the current full ticket content from the user when ticket freshness matters. Do not treat a stale summary or previously pasted excerpt as current truth.
+5. For implementation or progress answers, inspect the current repository state and history that matters to the question, such as the current branch, working tree, relevant diffs, recent commits, and PR metadata when available.
+6. For repository docs, design references, and product code, re-read the relevant files from disk before citing or depending on them.
+7. If a source of truth is unavailable, say what could not be verified and do not fill the gap from memory. Separate verified facts from assumptions in the response.
 
 ## Job Workflow
 
