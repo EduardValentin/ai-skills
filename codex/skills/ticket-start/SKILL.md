@@ -1,6 +1,6 @@
 ---
 name: ticket-start
-description: Start implementation work from a software ticket with a plan-first workflow. Use when the user wants to begin building a feature or fix from a ticket, especially when they say phrases such as "start ticket", and for follow-up status or progress questions about that ticket. Supports both job/Jira tickets and personal-project/Linear tickets. Gather the minimum relevant repo context, research version-specific third-party documentation when needed, produce an implementation plan, and wait for explicit approval before making code changes. For personal projects, inspect only the relevant areas of `PRD.md` and the `designs/` reference app, use Linear MCP for ticket reads and status changes, and create the PR before handing off for review. Always refresh ticket, relation, and git facts from their source of truth before answering; do not rely on memory or stale chat context. Do not use for code review, pure planning, or debugging-only tasks.
+description: Start implementation work from a software ticket with a plan-first workflow. Use when the user wants to begin building a feature or fix from a ticket, especially when they say phrases such as "start ticket", and for follow-up status or progress questions about that ticket. Supports both job/Jira tickets and personal-project/Linear tickets. Gather the minimum relevant repo context, research version-specific third-party documentation when needed, produce an implementation plan, and wait for explicit approval before making code changes. For personal projects, inspect only the relevant areas of `PRD.md` and the `designs/` React reference app, treat that reference app as the UI/UX source of truth, use Linear MCP for ticket reads and status changes, and create the PR before handing off for review. Always refresh ticket, relation, and git facts from their source of truth before answering; do not rely on memory or stale chat context. Do not use for code review, pure planning, or debugging-only tasks.
 ---
 
 # Ticket Start
@@ -41,10 +41,21 @@ description: Start implementation work from a software ticket with a plan-first 
 3. Read the ticket from Linear before planning. Capture the title, description, acceptance criteria, related constraints, and any workflow metadata that matters for delivery.
 4. When work begins, move the Linear ticket to `In Progress`. If the Linear MCP server is unavailable or the team/state cannot be resolved safely, pause and surface the blocker.
 5. Inspect `PRD.md` only in the areas relevant to the ticket. Do not load the whole document by default. Narrow scope by feature name, user flow, domain terms, affected screens, and nearby sections first, then read only the matching slices.
-6. Inspect the `designs/` reference app only in the areas relevant to the ticket. Treat it as the front-end behavior and styling reference for the feature. Look for the relevant routes, screens, mocked API flows, state transitions, and components that express the desired UX without loading unrelated parts of the design app into context.
+6. Inspect the `designs/` reference app only in the areas relevant to the ticket. When it is a React reference app, treat it as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior. Look for the relevant routes, screens, mocked API flows, state transitions, and components that express the desired UX without loading unrelated parts of the design app into context.
 7. Use the scoped PRD findings to understand business logic and edge cases. Use the scoped `designs/` findings to understand UX, styling, interaction flow, and expected front-end behavior. Keep technical implementation decisions in the product codebase, not in the PRD.
 8. If the personal project includes a runnable React design reference app, identify the matching feature route and the important UI states up front so the same flows can be exercised in both apps during end-of-session visual verification.
 9. Ask concise clarifying questions only when the ticket, PRD, and design reference still leave material ambiguity.
+
+## React Reference App Parity
+
+Apply these rules in the personal workflow whenever the scoped `designs/` reference app is a runnable React app:
+
+1. Replicate the reference app's current UI/UX behavior 100% for the ticketed feature, including layout, spacing, colors, typography, sizing, radii, shadows, responsive behavior, interaction states, transitions, and animations.
+2. Inspect both apps' styling systems before implementing visual work. Compare Tailwind versions, theme configuration, CSS variables, design tokens, breakpoints, base styles, and any component-library defaults that affect the feature.
+3. Do not assume identical class names produce identical CSS across apps. Verify scale-sensitive utilities such as `size-*`, spacing, typography, radius, shadow, color, and breakpoint classes, then translate to exact production-equivalent values or tokens when the scales differ.
+4. Carry over every relevant animation and transition from the React reference app, including trigger conditions, duration, delay, easing, transform/opacity/property changes, mount/unmount behavior, and reduced-motion handling when present.
+5. If the production app uses a different technology stack or lacks the same styling or animation primitives, surface that during planning and discuss the direction with the user before coding or finalizing approximations. Prefer existing production libraries and out-of-the-box styling/animation primitives when they can reproduce the reference app faithfully.
+6. Document the reference route, production route, important UI states, styling scale findings, and animation findings in the implementation plan so the user can approve the parity approach before code changes begin.
 
 ## Shared Research Rules
 
@@ -95,16 +106,23 @@ description: Start implementation work from a software ticket with a plan-first 
 - Prefer small composable changes over cross-cutting rewrites.
 - Apply clean code practices even in greenfield personal projects. Choose names, module boundaries, and abstractions that stay understandable as the project grows.
 - Consider performance as part of the solution, especially on hot paths, repeated work, unnecessary rendering, or avoidable network and memory cost.
+- Consider security implications for every new feature and every change to existing behavior. Pay special attention to trust boundaries, authentication, authorization, user-controlled input, data exposure, persistence, file handling, redirects, external requests, privileged actions, and sensitive logs.
+- Avoid leaving the app vulnerable to common attack vectors such as injection, cross-site scripting, cross-site request forgery, server-side request forgery, insecure direct object references, broken access control, open redirects, path traversal, unsafe deserialization, secret leakage, insecure dependency usage, and unsafe client-side trust.
+- If secure behavior is ambiguous or the change affects access to sensitive data or privileged actions, surface the risk during planning and include targeted validation for the relevant security behavior.
 
 ## Validation, PR, And Closeout
 
 - Run the smallest meaningful validation set that proves the change works and does not obviously regress quality.
 - Prefer targeted tests first, then broader lint or test suites as appropriate for the repo.
 - In the personal workflow, when a runnable React design reference app exists, end the session by starting both the product app and the design reference app, opening the same feature in both, and capturing screenshots of the same states.
-- Compare those screenshots directly and make sure the implemented feature matches the design reference closely for colors, spacing, margins, and the relevant interaction states affected by the ticket.
-- Cover the meaningful states for the feature, such as default, loading, empty, hover, focus, active, disabled, error, success, expanded, or collapsed states, whenever they are part of the ticketed behavior.
+- Use internal browser capabilities for this visual verification. Set both apps to the same viewport size, device scale factor, browser zoom, and route/state before each screenshot.
+- Compare those screenshots directly and make sure the implemented feature matches the design reference closely for colors, spacing, margins, typography, sizing, animation-relevant states, and the relevant interaction states affected by the ticket.
+- Cover the meaningful states for the feature exhaustively, such as default, loading, empty, hover, focus, active, disabled, error, success, expanded, collapsed, modal open, validation, and navigation states, whenever they are part of the ticketed behavior.
+- Capture screenshots at every relevant responsive breakpoint and at widths immediately before and after each breakpoint switch so responsive behavior can be assessed against the reference app.
 - If the visual comparison shows mismatches, iterate on the implementation and re-run the screenshot check before calling the work done.
 - If either app cannot be started, the feature cannot be exercised in both apps, or screenshots cannot be captured, report the blocker explicitly and do not claim that design parity was verified.
+- After parity checks, use internal browser capabilities to thoroughly test the production app's implemented business flows and state transitions. Exercise every implemented path and inspect the UI after each important action to confirm the feature still looks correct and behaves correctly.
+- This production browser testing may be combined with the visual parity workflow, but the closeout must clearly distinguish visual parity coverage from business-logic coverage.
 - In the personal workflow, after implementation and validation, create a pull request with the GitHub CLI tool and then move the Linear ticket to `In Review`.
 - Do not close the Linear ticket and do not merge the PR immediately after creating it. Treat your user as the reviewer gate.
 - Only after the user explicitly approves the PR should you merge the PR and then move the Linear ticket to its completed state.
