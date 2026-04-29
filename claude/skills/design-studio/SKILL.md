@@ -13,6 +13,31 @@ A structured workflow for iterating on UI/UX design within a React + Tailwind re
 
 Before any design work begins, the agent MUST complete ALL of the following steps in order. Do not skip any step.
 
+### Step 0: Prepare the Design Studio Environment
+
+Run the bundled preparation script before manually inspecting or launching the React reference app:
+
+```bash
+<skill-dir>/scripts/prepare-design-studio.sh --project-root <absolute-project-or-worktree-root>
+```
+
+If the React reference app path is already known, pass it explicitly:
+
+```bash
+<skill-dir>/scripts/prepare-design-studio.sh --project-root <absolute-project-or-worktree-root> --app-root <absolute-design-app-root>
+```
+
+This script is the deterministic setup path. It:
+
+- Locates the React reference app under `designs/` when `--app-root` is not provided.
+- Reads the project Node version from `.node-version`, `.nvmrc`, or `.tool-versions` at the project/worktree root.
+- Uses `nvm` when available to install/use the declared Node version before dependency work.
+- Detects the package manager from the design app first (`packageManager`, `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`), then falls back to the project root package-manager signals, then npm.
+- Installs dependencies only for the React reference app. In a Claude worktree, dependency install is always required. Outside a worktree, install only happens when `node_modules/` is missing unless `--force-install` is passed.
+- Writes or updates `.claude/launch.json` with a `design-reference` configuration that starts the app with the detected package manager, uses the declared Node version through `nvm` when available, exposes the design app and project `node_modules/.bin` paths, and pins the Vite preview port when the dev script uses Vite.
+
+Do not hand-create `.claude/launch.json` or manually install design-app dependencies unless the script fails. If it fails, fix the underlying setup issue or ask the user before falling back to manual steps.
+
 ### Step 1: Locate the React Reference App
 
 Look for a `designs/` folder in the project root containing the React reference app.
@@ -123,22 +148,22 @@ After PRD generation (or if the user declined), proceed to the next step.
 
 Start the React dev server and open an internal browser preview to inspect the current state of the app.
 
-1. Ensure a launch configuration exists for the reference app. If `.claude/launch.json` does not exist or does not have an entry for the design app, create one:
+1. Confirm Step 0 created or updated `.claude/launch.json` with a `design-reference` entry. It should follow this shape:
    ```json
    {
      "version": "0.0.1",
      "configurations": [
        {
          "name": "design-reference",
-         "runtimeExecutable": "npm",
-         "runtimeArgs": ["run", "dev"],
+         "runtimeExecutable": "/bin/zsh",
+         "runtimeArgs": ["-lc", "<node/package-manager setup> && <package-manager> run dev"],
          "port": 5173,
          "cwd": "<absolute-path-to-react-reference-app>"
        }
      ]
    }
    ```
-   Adjust the port and dev command based on what `package.json` scripts define.
+   The command must come from the preparation script so the package manager, Node version, and binary paths stay consistent across local checkouts and Claude worktrees.
 
 2. Start the preview server using `preview_start`.
 3. Take a screenshot of the current app state.
