@@ -1,1 +1,5 @@
 .DS_Store
+
+# Zip archives generated under any dist directory
+**/dist/*.zip
+**/dist/**/*.zip
