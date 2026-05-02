@@ -23,6 +23,14 @@ description: Start implementation work from a software ticket with a plan-first 
 6. For repository docs, design references, and product code, re-read the relevant files from disk before citing or depending on them.
 7. If a source of truth is unavailable, say what could not be verified and do not fill the gap from memory. Separate verified facts from assumptions in the response.
 
+## Solution Brainstorming Gate
+
+1. **REQUIRED SUB-SKILL:** Use `superpowers:brainstorming` after the relevant source-of-truth facts have been gathered and before writing the implementation plan.
+2. Brainstorm the solution with the user, not alone. Use the ticket, repository instructions, architecture findings, and, for personal projects, scoped `PRD.md` and `designs/` findings as inputs.
+3. Explore the implementation shape, meaningful alternatives, tradeoffs, risks, validation strategy, and user-facing behavior. Ask focused questions when the direction is still ambiguous, and do not treat the first plausible approach as final by default.
+4. For personal-project tickets, use the brainstorm to map the prototype React reference design into the production app. Do not re-litigate copy, design, UI interactions, or animations that are already settled by the prototype unless the ticket or PRD conflicts with it.
+5. Do not produce the final implementation plan until the brainstorm has converged on a selected solution or the remaining decision points are explicitly called out for user approval.
+
 ## Job Workflow
 
 1. Require the full ticket title and the full ticket description before starting. The description must include acceptance criteria and any implementation context the user has. If any of these are missing, stop and ask for the missing details.
@@ -50,12 +58,14 @@ description: Start implementation work from a software ticket with a plan-first 
 
 Apply these rules in the personal workflow whenever the scoped `designs/` reference app is a runnable React app:
 
-1. Replicate the reference app's current UI/UX behavior 100% for the ticketed feature, including layout, spacing, colors, typography, sizing, radii, shadows, responsive behavior, interaction states, transitions, and animations.
-2. Inspect both apps' styling systems before implementing visual work. Compare Tailwind versions, theme configuration, CSS variables, design tokens, breakpoints, base styles, and any component-library defaults that affect the feature.
-3. Do not assume identical class names produce identical CSS across apps. Verify scale-sensitive utilities such as `size-*`, spacing, typography, radius, shadow, color, and breakpoint classes, then translate to exact production-equivalent values or tokens when the scales differ.
-4. Carry over every relevant animation and transition from the React reference app, including trigger conditions, duration, delay, easing, transform/opacity/property changes, mount/unmount behavior, and reduced-motion handling when present.
-5. If the production app uses a different technology stack or lacks the same styling or animation primitives, surface that during planning and discuss the direction with the user before coding or finalizing approximations. Prefer existing production libraries and out-of-the-box styling/animation primitives when they can reproduce the reference app faithfully.
-6. Document the reference route, production route, important UI states, styling scale findings, and animation findings in the implementation plan so the user can approve the parity approach before code changes begin.
+1. Mirror the prototype React reference design for the ticketed feature: exact copy, information hierarchy, layout, spacing, colors, typography, sizing, radii, shadows, responsive behavior, UI interactions, interaction states, transitions, and animations.
+2. Maintain the production app's design system while doing so. Prefer existing production components, variants, CSS variables, and semantic tokens over copying raw prototype values or one-off classes.
+3. Inspect both apps' styling systems before implementing visual work. Compare Tailwind versions, theme configuration, CSS variables, semantic tokens, breakpoints, base styles, and any component-library defaults that affect the feature.
+4. Do not assume identical class names produce identical CSS across apps. Verify scale-sensitive utilities such as `size-*`, spacing, typography, radius, shadow, color, and breakpoint classes, then translate to exact production-equivalent values or semantic tokens when the scales differ.
+5. Carry over every relevant interaction and animation from the React reference app, including trigger conditions, hover/focus/active/disabled behavior, duration, delay, easing, transform/opacity/property changes, mount/unmount behavior, and reduced-motion handling when present.
+6. If the production design system lacks a semantic token, component variant, styling primitive, or animation primitive needed to mirror the prototype, surface that during brainstorming and planning before coding. Prefer adding or reusing production-system primitives over hard-coded local styling.
+7. If the production app uses a different technology stack or lacks the same styling or animation primitives, surface that during planning and discuss the direction with the user before coding or finalizing approximations. Prefer existing production libraries and out-of-the-box styling/animation primitives when they can reproduce the reference app faithfully.
+8. Document the reference route, production route, important UI states, styling scale findings, semantic token/component mapping, interaction findings, and animation findings in the implementation plan so the user can approve the parity approach before code changes begin.
 
 ## Shared Research Rules
 
@@ -93,6 +103,9 @@ Apply these rules in the personal workflow whenever the scoped `designs/` refere
   - the relevant repo instructions have been read
   - the minimum necessary architecture research is done
   - for personal projects, the relevant `PRD.md` and `designs/` areas have been inspected
+  - the required `superpowers:brainstorming` conversation has converged on the selected solution
+- Base the implementation plan on the brainstorm outcome. Include the selected approach, key alternatives rejected or deferred, unresolved decisions requiring approval, concrete implementation steps, validation steps, and how each acceptance criterion will be satisfied.
+- For personal projects with a React reference app, include the prototype-to-production mapping for copy, design, UI interactions, animations, and semantic tokens/components.
 - Treat this plan as a hard approval gate.
 - Wait for an explicit user message approving the plan before making code changes.
 
