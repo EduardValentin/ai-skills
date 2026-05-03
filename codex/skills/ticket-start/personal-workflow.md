@@ -1,0 +1,54 @@
+# Personal Workflow
+
+Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` during the Setup phase. Return to `SKILL.md` for phase ordering, standards, and closeout.
+
+## Ticket Intake (Linear)
+
+1. Use the Linear MCP tool as the source of truth for the ticket whenever the user provides a Linear identifier or the task is clearly in a personal project that uses Linear.
+2. If no Linear ticket identifier is available, stop and ask for it before proceeding.
+3. Read the ticket directly from Linear. Capture title, description, acceptance criteria, related constraints, and any workflow metadata that matters for delivery. Do not rely on a partial retelling.
+4. When implementation begins, move the Linear ticket to `In Progress`. If the Linear MCP server is unavailable or the team/state cannot be resolved safely, pause and surface the blocker.
+
+## Scoped Reading (Required)
+
+Inspect only the areas of `PRD.md` and `designs/` that are relevant to this ticket. Do not load either in full by default.
+
+- **PRD.md** — narrow scope by feature name, user flow, domain terms, affected screens, and nearby sections. Read only the matching slices. Use this for business logic, edge cases, and rules.
+- **designs/** — narrow scope to the relevant routes, screens, mocked API flows, state transitions, and components. Use this for UX, styling, interaction flow, and front-end behavior.
+- Keep technical implementation decisions in the production codebase, not in the PRD.
+
+## React Reference App
+
+If `designs/` is a runnable React app, additionally read `react-parity.md` and treat the reference app as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior.
+
+Identify up front:
+
+- The reference route/screen for this feature.
+- The matching production route/screen.
+- The important UI states the feature has (default, loading, empty, hover, focus, active, disabled, error, success, expanded/collapsed, modal-open, validation, navigation), so the same flows can be exercised in both apps during verification.
+
+## Architecture Research
+
+Gather only the minimum code context needed:
+
+- the entry point or feature boot path
+- the target module or component
+- nearby reducers, services, fetchers, transformers, hooks, tests, or shared utilities that define the current pattern
+- existing implementations of similar behavior in the repo
+
+Reuse existing project patterns before inventing new abstractions. In earlier-stage personal projects without strong patterns, introduce clean patterns deliberately instead of improvising — favor simple architecture, clear ownership boundaries, composable modules, and low-coupling designs that scale.
+
+## Clarifications
+
+Ask concise clarifying questions only when the ticket, scoped PRD, and design reference still leave material ambiguity.
+
+## Ticket Requirements
+
+- Treat the Linear ticket as the source of truth for scope.
+- Prefer reading the ticket directly over relying on a partial retelling.
+- If acceptance criteria are missing, vague, or not testable, stop and ask for clarification.
+- If the ticket conflicts with repository instructions or existing architecture, surface the conflict before implementation.
+
+## Hand-off To Brainstorm
+
+When the scoped PRD and `designs/` findings are gathered, return to `SKILL.md` and proceed to the Brainstorm gate (`superpowers:brainstorming`). Use the brainstorm to map the prototype design into the production app — do not re-litigate copy, design, UI interactions, or animations already settled by the prototype unless the ticket or PRD conflicts with it.
