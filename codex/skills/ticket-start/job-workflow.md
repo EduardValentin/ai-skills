@@ -1,6 +1,6 @@
 # Job Workflow
 
-Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` during the Setup phase. Return to `SKILL.md` for phase ordering, standards, and closeout.
+Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake, Clarifications, and Architecture Research sections apply during Setup; the Verification section applies during Verify. Return to `SKILL.md` for phase ordering, standards, and Ship.
 
 ## Ticket Intake
 
@@ -32,11 +32,11 @@ Reuse existing project patterns before inventing new abstractions. Aim for the s
 
 ## Hand-off To Brainstorm
 
-When the ticket is concrete enough and the architecture findings are gathered, return to `SKILL.md` and proceed to the Brainstorm gate (`superpowers:brainstorming`).
+When you have the full ticket and the minimum architecture context needed to brainstorm meaningfully, return to `SKILL.md` and proceed to the Brainstorm gate (`superpowers:brainstorming`). The bar is not "ambiguity is fully resolved" — brainstorming is what resolves it. The bar is "I know enough to have a productive brainstorm with the user." If acceptance criteria are still missing or contradict the architecture, that is a brainstorm input, not a blocker to entering the brainstorm.
 
 ## Verification (Required Before PR)
 
-Loaded during the Verify phase. Run after the targeted tests and broader suite pass. Type checks and unit tests verify code correctness, not feature correctness — manual feature exercise is the evidence `superpowers:verification-before-completion` requires for a "feature works" claim on a ticket. Without it, there is no basis to declare the work done.
+Applies during the Verify phase. Run after the targeted tests and broader suite pass. Type checks and unit tests verify code correctness, not feature correctness — manual feature exercise is the evidence `superpowers:verification-before-completion` requires for a "feature works" claim on a ticket. Without it, there is no basis to declare the work done.
 
 Pick the mode that matches the change. If the ticket touches both a service and a UI, run both modes.
 
@@ -73,4 +73,4 @@ Run Mode A and Mode B both. The feature is not verified until each mode that app
 
 ### Outcome
 
-Only after the applicable mode(s) are clean is the Verify gate satisfied. Report what was exercised and how in the closeout, distinguishing API verification from browser verification when both ran. If any portion could not be exercised, name it explicitly as unverified — do not paper over it.
+Only after the applicable mode(s) are clean is the Verify gate satisfied. Report what was exercised and how in the final Report, distinguishing API verification from browser verification when both ran. If any portion could not be exercised, name it explicitly as unverified — do not paper over it.

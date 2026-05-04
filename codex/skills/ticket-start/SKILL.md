@@ -35,12 +35,12 @@ Each phase is a gate. Do not advance until the prior gate is satisfied. Each nam
 2. **Brainstorm** — `superpowers:brainstorming`. Converge on a solution with the user. Do not draft a plan until the brainstorm has converged or the remaining decisions are explicitly called out for user approval.
 3. **Plan** — `superpowers:writing-plans`. Produce the implementation plan from the brainstorm outcome. Wait for explicit user approval of the plan before writing any code.
 4. **Implement** — `superpowers:executing-plans`. Execute tasks against the approved plan.
-5. **Verify** — see "Closeout" below. For personal projects with a React reference app, the procedure in `verification.md` is required.
-6. **Ship** — open the PR; for the personal workflow, transition the Linear ticket. Wait for the user's explicit approval before merging.
+5. **Verify** — see "Verify" below.
+6. **Ship** — see "Ship" below.
 
 ## Setup (Always)
 
-1. **Worktree first.** Before reading the ticket, before exploring code, create an isolated worktree from the freshest remote default branch. Do not work in the primary checkout.
+1. **Worktree first.** Before reading the ticket body, before exploring code, create an isolated worktree from the freshest remote default branch. Do not work in the primary checkout. Identifying which workflow applies (Job vs Personal) requires only knowing the ticket's source system, not its contents — that minimal awareness is allowed before the worktree is in place.
    - Detect the upstream default branch (`main` or `master`).
    - `git fetch origin` to refresh remotes.
    - Base the new worktree off `origin/<default>`, not the local branch.
@@ -65,7 +65,7 @@ Apply for every change:
 - Smallest safe diff that satisfies the ticket. Reuse existing patterns; do not invent abstractions the ticket does not require.
 - Preserve or improve the repository's code quality; never degrade it to ship faster.
 - Keep functions, modules, and components single-responsibility. Preserve existing architecture unless the ticket truly requires change.
-- Apply clean-code practices in greenfield personal projects: clear ownership boundaries, low coupling, composable modules.
+- Apply clean-code principles to every change regardless of workflow. In greenfield personal projects with no established pattern to inherit, additionally establish clear ownership boundaries, low coupling, and composable modules deliberately rather than improvising.
 - Consider performance on hot paths, repeated work, unnecessary rendering, and avoidable I/O.
 - Consider security on every change. Pay attention to trust boundaries, authn/z, user-controlled input, data exposure, persistence, file handling, redirects, external requests, privileged actions, and sensitive logs.
 - Avoid common attack vectors: injection, XSS, CSRF, SSRF, IDOR, broken access control, open redirects, path traversal, unsafe deserialization, secret leakage, insecure dependencies, unsafe client-side trust.
@@ -75,25 +75,28 @@ Apply for every change:
 
 If the change touches a third-party library, identify the exact version from manifests/lockfiles, then read the official or primary documentation for that version before editing dependent code. Use targeted searches; do not load the whole library reference.
 
-## Closeout
+## Verify
 
 1. Run the smallest meaningful validation set: targeted tests first, then broader lint/test suites as appropriate. **All tests must pass** before continuing.
-2. **REQUIRED SUB-SKILL:** `superpowers:verification-before-completion` before declaring the work done.
-3. **Manual feature verification is required in every workflow.** Tests prove code correctness, not feature correctness — the implemented feature must be exercised against a running build before the PR is opened.
-   - **Personal workflow with a React reference app:** run the procedure in `verification.md`. Do not open the PR until both the visual parity pass and the behavior pass are clean.
+2. **Manual feature verification is required in every workflow.** Tests prove code correctness, not feature correctness — the implemented feature must be exercised against a running build before the work is called done.
+   - **Personal workflow with a React reference app:** run the procedure in `verification.md`. Do not advance to Ship until both the visual parity pass and the behavior pass are clean.
    - **Job workflow:** run the Verification procedure in `job-workflow.md`. For backend/API/service changes, start the service and issue real requests against the changed surfaces. For user-facing changes, start the app on its dev server and exercise the feature in the live Playwright browser session. For mixed changes, do both. If the app or service cannot be started, stop and report the blocker — do not claim verification was completed.
-4. **Personal workflow:** open the PR with `gh`, then move the Linear ticket to `In Review`. Do not merge or close the ticket.
-5. **Job workflow:** follow the team's PR conventions from repository instructions.
-6. Wait for the user's explicit approval before merging.
-7. After merge, move the Linear ticket to its completed state (personal workflow only).
-8. If PR creation, Linear state transition, merge, or closeout cannot be completed, say exactly what failed and what remains manual.
+3. **REQUIRED SUB-SKILL:** `superpowers:verification-before-completion` is the gate that governs every claim made about this work. Steps 1 and 2 produce the evidence VBC requires; do not assert the work is done until both are clean and the evidence has actually been gathered in this session — not recalled, not assumed, not extrapolated.
+
+## Ship
+
+1. **Personal workflow:** open the PR with `gh`, then move the Linear ticket to `In Review` per the transitions in `personal-workflow.md`. Do not merge or close the ticket.
+2. **Job workflow:** follow the team's PR conventions from repository instructions.
+3. Wait for the user's explicit approval before merging.
+4. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
+5. **Job workflow:** after merge, follow the team's post-merge ticket convention if specified in repository instructions; otherwise stop and surface what remains manual rather than guessing the destination state.
+6. If PR creation, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
 
 ## Report
 
 When done, report:
 - What changed.
-- What was validated and how.
-- Visual parity outcome and behavior-test outcome, if applicable.
+- What was validated and how — name each form of evidence explicitly: tests run, API verification (job, backend), browser verification (job, user-facing), visual parity pass and behavior pass (personal with React reference app). Omit only the ones that did not apply, and say so.
 - Any remaining risk, assumption, or follow-up.
 - What is blocked or unverified, named explicitly.
 
