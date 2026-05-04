@@ -1,4 +1,4 @@
 interface:
   display_name: "DB Work"
-  short_description: "Oracode Liquibase, DEV deploy, and comparison workflow."
-  default_prompt: "Use db-work for Oracode database changes, DEV shadow deploys, and original-vs-suffixed verification."
+  short_description: "Oracode Liquibase changes with brainstorm-first design, multi-variant performance benchmarking, and DEV evidence."
+  default_prompt: "Use db-work for Oracode database changes — runs machine doctor, brainstorm + plan with 2–3 variants, benchmarks the winner, and emits a reviewable handoff report."

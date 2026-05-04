@@ -1,0 +1,23 @@
+{
+  "ticket": "VA-XXX",
+  "variants": [
+    {
+      "name": "v1_baseline",
+      "harness_sql": "util/VA-XXX/variants/1/perf.sql",
+      "notes": "describe the approach and predicted KPI direction"
+    },
+    {
+      "name": "v2_alternative",
+      "harness_sql": "util/VA-XXX/variants/2/perf.sql",
+      "notes": "describe the approach and predicted KPI direction"
+    }
+  ],
+  "kpis": [
+    "elapsed_ms",
+    "consistent_gets",
+    "db_block_gets",
+    "sorts_memory",
+    "recursive_calls",
+    "plan_cost"
+  ]
+}
