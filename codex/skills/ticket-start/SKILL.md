@@ -79,7 +79,9 @@ If the change touches a third-party library, identify the exact version from man
 
 1. Run the smallest meaningful validation set: targeted tests first, then broader lint/test suites as appropriate. **All tests must pass** before continuing.
 2. **REQUIRED SUB-SKILL:** `superpowers:verification-before-completion` before declaring the work done.
-3. **Personal workflow with a React reference app:** after tests pass, run the procedure in `verification.md`. Do not open the PR until both the visual parity pass and the behavior pass are clean.
+3. **Manual feature verification is required in every workflow.** Tests prove code correctness, not feature correctness — the implemented feature must be exercised against a running build before the PR is opened.
+   - **Personal workflow with a React reference app:** run the procedure in `verification.md`. Do not open the PR until both the visual parity pass and the behavior pass are clean.
+   - **Job workflow:** run the Verification procedure in `job-workflow.md`. For backend/API/service changes, start the service and issue real requests against the changed surfaces. For user-facing changes, start the app on its dev server and exercise the feature in the live Playwright browser session. For mixed changes, do both. If the app or service cannot be started, stop and report the blocker — do not claim verification was completed.
 4. **Personal workflow:** open the PR with `gh`, then move the Linear ticket to `In Review`. Do not merge or close the ticket.
 5. **Job workflow:** follow the team's PR conventions from repository instructions.
 6. Wait for the user's explicit approval before merging.
@@ -105,6 +107,9 @@ When done, report:
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Claiming visual parity without running both apps in the browser.
 - Claiming behavior is verified without exercising every relevant state and scenario.
+- Declaring the feature done off the strength of unit/lint passing — the running app or service was never exercised end-to-end.
+- Job workflow, backend change: declaring done without issuing real requests against the running service.
+- Job workflow, user-facing change: declaring done without driving the feature in the live browser session.
 - Merging the PR before the user explicitly approves.
 
 If any of these is true: stop, name the violation, and recover before continuing.
