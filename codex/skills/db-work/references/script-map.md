@@ -4,6 +4,7 @@ All scripts live under `${CODEX_HOME:-$HOME/.codex}/skills/db-work/scripts/`. Ru
 
 ## Lifecycle
 - `start_session.sh` — create a marked temp session dir + temp `.db-work.yml` + scratch dir.
+- `dev_cleanup.sh` — drop DEV shadow objects compiled during the session (per ticket). Run BEFORE `cleanup_session.sh` at end of session. See `references/08-session-cleanup.md`.
 - `cleanup_session.sh` — remove marked temp session dirs at session end.
 
 ## Readiness

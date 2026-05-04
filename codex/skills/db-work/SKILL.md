@@ -42,6 +42,7 @@ Oracle/Liquibase changes in Oracode, with brainstorm-first design, multi-variant
 - **Post-execution summary required:** rows touched, errors, KPI deltas, log path.
 - **Batched walkthrough mandatory** before claiming done. Changed-file list MUST come from `git diff --name-only <base>...HEAD`, not memory or dictation. Per-file schema in `07-code-walkthrough-and-report.md`. Approval token must be explicit ("reviewed", "looks good", "approved") — emoji-ack alone insufficient if any field was templated. Report generation happens in the NEXT turn after approval, never the same turn.
 - **Doctor amber banner** must appear on the first line of every generated artifact AND the first line of the chat reply that delivers it. Repeat on every artifact in the session, not just the first.
+- **End-of-session triggers DEV cleanup BEFORE local cleanup.** When the user signals the end of the session ("let's end the session", "let's conclude the session", "we are finished", "done with db-work", or paraphrase), run `scripts/dev_cleanup.sh --ticket <T>` for every ticket the session touched, then `scripts/cleanup_session.sh`. DEV cleanup obeys all execution gates (5-line announce, alias check, explicit go). "Ending the session" is end-of-session consent, NOT execution consent — re-confirm per ticket. Order matters: if user aborts DEV cleanup, do NOT proceed to local cleanup.
 
 ## Required cross-skill calls
 
@@ -49,14 +50,22 @@ Oracle/Liquibase changes in Oracode, with brainstorm-first design, multi-variant
 - `superpowers:brainstorming` — REQUIRED before any plan, except trivial path.
 - `superpowers:writing-plans` — REQUIRED before any edit.
 - `superpowers:executing-plans` — REQUIRED for the implementation phase.
+- `superpowers:subagent-driven-development` — OPTIONAL for Phase 5 only when the plan has 3 variants AND each variant has substantial offline implementation work. See `references/05-implementation-and-shadow.md` for coordination rules (distinct sub-suffixes, parent-agent-only serializing steps). For 2 variants or template-fill variants, run sequentially.
 
 ## Session lifecycle
 
 ```bash
 DB_WORK_SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/db-work"
-"$DB_WORK_SKILL_DIR/scripts/start_session.sh"     # at start
-"$DB_WORK_SKILL_DIR/scripts/cleanup_session.sh"   # when user signals end
+
+# At start
+"$DB_WORK_SKILL_DIR/scripts/start_session.sh"
+
+# When user signals end (DEV cleanup FIRST, then local)
+"$DB_WORK_SKILL_DIR/scripts/dev_cleanup.sh" --ticket <T>     # repeat per ticket touched
+"$DB_WORK_SKILL_DIR/scripts/cleanup_session.sh"
 ```
+
+End-of-session flow and rules: see `references/08-session-cleanup.md`.
 
 Generated DEV artifacts: `util/<TICKET>/dev_sandbox/`. Variant scratch: `util/<TICKET>/variants/<n>/`. Throwaway scratch: `DB_WORK_TEMP_DIR`.
 
@@ -66,4 +75,5 @@ Generated DEV artifacts: `util/<TICKET>/dev_sandbox/`. Variant scratch: `util/<T
 - Compare-spec format and evidence-mode taxonomy: `references/compare-spec-format.md`.
 - Compare-spec JSON examples (function/procedure/refcursor): `references/compare-spec-examples.md`.
 - SQLPlus DEV execution: `references/sqlplus-dev-execution.md` (machine setup is in `01-machine-setup.md`).
+- End-of-session DEV + local cleanup: `references/08-session-cleanup.md`.
 - Script index: `references/script-map.md`.

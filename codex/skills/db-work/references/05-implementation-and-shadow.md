@@ -1,6 +1,6 @@
 # Implementation and Shadow Objects
 
-Implementation runs under `superpowers:executing-plans` after the plan is approved.
+Implementation runs under `superpowers:executing-plans` after the plan is approved. For multi-variant work, the OPTIONAL parallelization path is described at the end of this file.
 
 ## Variant directory layout
 
@@ -76,3 +76,45 @@ Generate suffixed copies for DEV compile and comparison:
 ```
 
 Capture the lint log under `util/<TICKET>/dev_sandbox/logs/lint.log` so the handoff report can summarize it.
+
+## Optional: parallel variant implementation via subagents
+
+**OPTIONAL SUB-SKILL:** `superpowers:subagent-driven-development`. Use ONLY when both apply:
+
+- The plan has **3 variants** (with 2 variants the coordination overhead usually outweighs the speedup).
+- Per-variant implementation involves **substantial offline work** — multi-file edits, non-trivial shadow generation, custom harness setup beyond filling in the template tokens.
+
+For 2 variants or trivial template-fill variants, sequential implementation is faster.
+
+### Coordination rules
+
+When fanning out, each subagent edits ONLY its own `util/<TICKET>/variants/<n>/` folder and uses a **distinct sub-suffix** so DEV compiles do not collide:
+
+| Variant | Suffix flag |
+|---------|-------------|
+| V1 | `--suffix _<INITIALS>_V1` (e.g. `_EDI_V1`) |
+| V2 | `--suffix _<INITIALS>_V2` |
+| V3 | `--suffix _<INITIALS>_V3` |
+
+Each subagent produces:
+
+- the variant's edited Liquibase-owned files (under its own `changes/` folder, NOT touching `PROD/` or `YES_SERVICES/` yet — the winner edits those after bench);
+- the variant's shadow object files via `generate_shadow_objects.py --suffix _<INITIALS>_V<n>`;
+- a filled-in `perf.sql` from `assets/sql/perf_harness_template.sql` calling its own shadow;
+- a one-page `notes.md` summarizing the approach.
+
+### Serializing steps (parent agent only)
+
+The parent agent — NOT the subagents — handles:
+
+- Writing `bench_spec.json` after all subagents return (it lists all variants).
+- Compiling each variant's shadow to DEV via `run_sqlplus_dev.sh` (sequential per variant, never concurrent — even with distinct suffixes, simultaneous compiles can serialize unfavourably and obscure the comparison).
+- Running `perf-bench.sh` (sequential by design — concurrent benches break the warm-cache assumption).
+- Picking the winner.
+- Promoting the winner's edits to the Liquibase-owned schema folders.
+
+### When subagents return
+
+Each subagent reports back its variant folder path and a 1-paragraph summary. The parent agent reviews each return for plan compliance (right entry point, KPI prediction stated, no adjacent-code edits) before accepting.
+
+If a subagent proposes adjacent-code changes, the parent agent treats it as scope expansion — re-brainstorm with the user per `references/04-performance-debugging.md`.
