@@ -7,7 +7,7 @@ description: Use when the user wants to start implementation work from a ticket 
 
 ## Overview
 
-Implementation work driven by a ticket. The skill enforces a strict phase order: setup → brainstorm → plan → implement → verify → ship. Workflow- and phase-specific detail files are loaded only when they apply, to keep context lean.
+Implementation work driven by a ticket. The skill enforces a strict phase order: setup → brainstorm → plan → implement → verify → ship. Brainstorm, Plan, and Implement defer to the superpowers methodology — the relevant skills auto-trigger from their own descriptions; ticket-start only adds explicit overrides where its workflow diverges. Workflow- and phase-specific detail files are loaded only when they apply, to keep context lean.
 
 ## When To Use
 
@@ -34,7 +34,9 @@ Each phase is a gate. Do not advance until the prior gate is satisfied. Each nam
 1. **Setup** — see "Setup" below.
 2. **Brainstorm** — `superpowers:brainstorming`. Converge on a solution with the user. Do not draft a plan until the brainstorm has converged or the remaining decisions are explicitly called out for user approval.
 3. **Plan** — `superpowers:writing-plans`. Produce the implementation plan from the brainstorm outcome. Wait for explicit user approval of the plan before writing any code.
-4. **Implement** — `superpowers:executing-plans`. Execute tasks against the approved plan.
+4. **Implement** — execute the approved plan using the superpowers methodology. The relevant skills (`superpowers:subagent-driven-development` for in-session work, `superpowers:executing-plans` for a parallel session, with `superpowers:test-driven-development` and per-task spec + code-quality review baked into the subagent-driven path) auto-trigger from their own descriptions; let them. Two overrides this skill adds:
+   - On the `superpowers:executing-plans` fallback path, explicitly invoke `superpowers:requesting-code-review` after the final task and before advancing to Verify — that path has no other end-of-feature review.
+   - When superpowers' flow reaches `superpowers:finishing-a-development-branch`, accept its test-pass check but do not present its 4-option prompt (merge locally / PR / keep / discard) to the user. Return to ticket-start's Verify phase instead. Ship replaces options 1–4 with the PR + Linear-transition flow defined below.
 5. **Verify** — see "Verify" below.
 6. **Ship** — see "Ship" below.
 
@@ -77,7 +79,7 @@ If the change touches a third-party library, identify the exact version from man
 
 ## Verify
 
-1. Run the smallest meaningful validation set: targeted tests first, then broader lint/test suites as appropriate. **All tests must pass** before continuing.
+1. Run the smallest meaningful validation set: targeted tests (including the tests written during Implement) first, then broader lint/test suites as appropriate. **All tests must pass** before continuing.
 2. **Manual feature verification is required in every workflow.** Tests prove code correctness, not feature correctness — the implemented feature must be exercised against a running build before the work is called done.
    - **Personal workflow with a React reference app:** run the procedure in `verification.md`. Do not advance to Ship until both the visual parity pass and the behavior pass are clean.
    - **Job workflow:** run the Verification procedure in `job-workflow.md`. For backend/API/service changes, start the service and issue real requests against the changed surfaces. For user-facing changes, start the app on its dev server and exercise the feature in the live Playwright browser session. For mixed changes, do both. If the app or service cannot be started, stop and report the blocker — do not claim verification was completed.
@@ -113,6 +115,8 @@ When done, report:
 - Declaring the feature done off the strength of unit/lint passing — the running app or service was never exercised end-to-end.
 - Job workflow, backend change: declaring done without issuing real requests against the running service.
 - Job workflow, user-facing change: declaring done without driving the feature in the live browser session.
+- Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Verify — that path has no other end-of-feature review.
+- Letting `superpowers:finishing-a-development-branch` present its 4-option prompt to the user instead of returning to this skill's Verify phase.
 - Merging the PR before the user explicitly approves.
 
 If any of these is true: stop, name the violation, and recover before continuing.
