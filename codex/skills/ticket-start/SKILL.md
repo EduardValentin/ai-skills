@@ -37,7 +37,7 @@ Each phase is a gate. Do not advance until the prior gate is satisfied. Each nam
 
    **Design approval is not plan approval.** When the brainstorm converges and the user says "yes, do it," "approved," "go ahead," or similar, that is approval of the *approach*. It is not approval of the plan. The plan still has to be written by `superpowers:writing-plans` and re-approved as its own artifact. Do not collapse the two.
 
-   **No code between brainstorm convergence and plan approval.** Not exploratory edits. Not scaffolding. Not "drafting what the plan would say in code." Not small or obvious changes. Not "let me just sketch the structure." If you have started writing code without an approved written plan from `superpowers:writing-plans`, you are in the Recovery protocol below — go there immediately.
+   **No code between brainstorm convergence and plan approval.** Not exploratory edits. Not scaffolding. Not "drafting what the plan would say in code." Not small or obvious changes. Not "let me just sketch the structure." Edit tools are off-limits until the written plan exists and the user has explicitly approved it.
 4. **Implement** — execute the approved plan using the superpowers methodology. The relevant skills (`superpowers:subagent-driven-development` for in-session work, `superpowers:executing-plans` for a parallel session, with `superpowers:test-driven-development` and per-task spec + code-quality review baked into the subagent-driven path) auto-trigger from their own descriptions; let them. Two overrides this skill adds:
    - On the `superpowers:executing-plans` fallback path, explicitly invoke `superpowers:requesting-code-review` after the final task and before advancing to Verify — that path has no other end-of-feature review.
    - When superpowers' flow reaches `superpowers:finishing-a-development-branch`, accept its test-pass check but do not present its 4-option prompt (merge locally / PR / keep / discard) to the user. Return to ticket-start's Verify phase instead. Ship replaces options 1–4 with the PR + Linear-transition flow defined below.
@@ -115,7 +115,6 @@ When done, report:
 - Treating design approval at the end of `superpowers:brainstorming` ("yes, do it" / "approved" / "go") as plan approval. They are separate artifacts; the plan still has to exist and be approved on its own.
 - Skipping `superpowers:writing-plans` because "the path is obvious," "the change is small," "the brainstorm covered it," or "I'll write the plan after."
 - Writing exploratory code, scaffolding, or "sketching the structure" between brainstorm convergence and plan approval.
-- Recovering from a skipped Plan gate with a softening "housekeeping note," "quick housekeeping," or "I got slightly ahead" instead of explicitly naming the violated gate, stopping, and following the Recovery protocol.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Claiming visual parity without running both apps in the browser.
@@ -128,16 +127,3 @@ When done, report:
 - Merging the PR before the user explicitly approves.
 
 If any of these is true: stop, name the violation, and recover before continuing.
-
-## Recovery — Skipped Phase Gate
-
-If you discover that a phase gate was crossed — typical case: you started coding before the Plan was approved — do not paper over it. The honest recovery is the recovery.
-
-1. **Stop immediately.** Do not finish the current file, do not "round out" the change, do not commit, do not push. Stopping mid-edit is correct.
-2. **Name the violation explicitly to the user, in their words.** Example: "I skipped the Plan gate. I implemented after the brainstorm without writing a `superpowers:writing-plans` plan and getting your approval on it." Do not soften this into "housekeeping," "quick note," "I got slightly ahead," or "minor process detour" — those phrases are the rationalization, not the recovery. The user needs to know exactly which gate was skipped and why it matters.
-3. **Decide with the user how to recover.** Two options, no third:
-   - **Roll back** the uncommitted code if it was exploratory; then produce the plan from scratch via `superpowers:writing-plans`.
-   - **Pause** and produce a plan via `superpowers:writing-plans` covering both what is already written and what remains. Mark the already-written portion explicitly in the plan so the user can see what they are retroactively approving.
-4. **Resume only after explicit plan approval.** Do not continue under the assumption that "the design was already approved" — that assumption is the violation that got you here. The user must approve the *plan*, not the *recovery narrative*.
-
-Skipped gates are recoverable. Pretending they did not happen is not. A clean acknowledgment of a skipped gate is more trustworthy than a smooth report of a clean run.
