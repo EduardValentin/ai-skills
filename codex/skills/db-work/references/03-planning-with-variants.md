@@ -1,6 +1,6 @@
 # Planning with Variants
 
-**REQUIRED SUB-SKILL:** Use `superpowers:writing-plans` to produce the plan. Use `superpowers:executing-plans` to execute it.
+A written plan is REQUIRED before any edit; the harness's plan-writing workflow auto-fires when a multi-step task is identified, and the plan-execution workflow auto-fires when the plan is approved. Db-work does not name them explicitly — if either fails to engage, `db-work-doctor.sh` (Check #7) prints the exact install command.
 
 ## Plan template
 

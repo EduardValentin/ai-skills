@@ -1,6 +1,6 @@
 # Implementation and Shadow Objects
 
-Implementation runs under `superpowers:executing-plans` after the plan is approved. For multi-variant work, the OPTIONAL parallelization path is described at the end of this file.
+Implementation runs under the harness's plan-execution workflow once the plan is approved (auto-engaged on plan-driven implementation; not invoked by name from db-work). For multi-variant work, the OPTIONAL parallelization path is described at the end of this file.
 
 ## Variant directory layout
 
@@ -79,12 +79,12 @@ Capture the lint log under `util/<TICKET>/dev_sandbox/logs/lint.log` so the hand
 
 ## Optional: parallel variant implementation via subagents
 
-**OPTIONAL SUB-SKILL:** `superpowers:subagent-driven-development`. Use ONLY when both apply:
+The harness's parallel-subagent workflow MAY be used during Phase 5 ONLY when both apply:
 
 - The plan has **3 variants** (with 2 variants the coordination overhead usually outweighs the speedup).
 - Per-variant implementation involves **substantial offline work** — multi-file edits, non-trivial shadow generation, custom harness setup beyond filling in the template tokens.
 
-For 2 variants or trivial template-fill variants, sequential implementation is faster.
+For 2 variants or trivial template-fill variants, sequential implementation is faster. Db-work does not invoke the parallel-subagent skill by name; the harness engages it on its own triggers when the conditions above are met.
 
 ### Coordination rules
 

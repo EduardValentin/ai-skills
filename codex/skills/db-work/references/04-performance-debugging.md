@@ -130,7 +130,7 @@ If the bench shows no variant clears the plan's threshold:
 1. STOP the implementation phase.
 2. Identify candidate adjacent edits (callers, helpers, indexes, materialized views, hints). **During re-brainstorm, run divergent generation first** — do not pre-enumerate candidates seeded only by the user's suggestion, since that anchors the session.
 3. **Run a regression sweep** on adjacent objects touched by any proposed edits (other queries hitting dropped indexes, MV refresh cost, hint side effects). Surface this before asking for approval.
-4. RE-BRAINSTORM with the user using `superpowers:brainstorming`. Do not edit adjacent code unilaterally.
+4. RE-BRAINSTORM with the user (the harness's brainstorming workflow re-engages on a fresh creative pass; do not edit adjacent code unilaterally).
 5. **Approval must be user-authored prose** explicitly naming:
    - (a) the adjacent objects affected;
    - (b) the accepted blast radius (which other queries / callers may regress);

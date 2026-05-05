@@ -17,7 +17,7 @@ Carry forward into later phases: ticket id, title, acceptance criteria, branch i
 
 ## Brainstorm gate
 
-**REQUIRED SUB-SKILL:** Use `superpowers:brainstorming` BEFORE producing a plan.
+A structured brainstorming pass is REQUIRED before any plan (the harness's brainstorming workflow auto-fires on creative work; if it does not, run `db-work-doctor.sh` — Check #7 surfaces the exact install command).
 
 Brainstorm objectives — align with the user on:
 
