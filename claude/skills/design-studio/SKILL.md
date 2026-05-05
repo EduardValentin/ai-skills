@@ -46,8 +46,8 @@ Pick one based on the user's request. If unclear, ask.
 
 For new pages, components, sections, or design-system extensions.
 
-1. **Understand** — clarify scope, identify affected pages/components/tokens, ask clarifying questions before any code.
-2. **Plan + design guardrails** — invoke `frontend-design:frontend-design`. Then describe what you'll build, list components to create/modify/reuse, identify any new tokens needed, describe responsive behavior. Get explicit user approval before writing code.
+1. **Understand** — clarify scope, identify affected pages/components/tokens, ask clarifying questions before any code. **Then run the domain/business-logic gate (Rule 8) before planning.**
+2. **Plan + design guardrails** — invoke `frontend-design:frontend-design`. Then describe what you'll build, list components to create/modify/reuse, identify any new tokens needed, describe responsive behavior. If Rule 8 answered *yes*, include the PRD update in the plan. Get explicit user approval before writing code.
 3. **Copy gate (if any copy is involved)** — see Rule 6. Do not skip.
 4. **Implement** — incrementally, one component/section at a time. Comply with all rules. Preview after each significant change.
 5. **Validate** — see "Visual validation" below.
@@ -57,7 +57,7 @@ For new pages, components, sections, or design-system extensions.
 
 For refining an existing page for a visitor segment, decluttering, fixing visual bugs, or improving SEO/copy on the page.
 
-1. **Frame the audit** — ask the user: who is the audience, what is the goal (declutter / segment fit / bug fix / SEO / copy clarity), what does success look like?
+1. **Frame the audit** — ask the user: who is the audience, what is the goal (declutter / segment fit / bug fix / SEO / copy clarity), what does success look like? **Then run the domain/business-logic gate (Rule 8) before capturing state.**
 2. **Capture current state** — screenshot the target page(s) at every breakpoint boundary (just-before and just-after each defined breakpoint, plus 320px and 1920px).
 3. **Critique** — invoke `frontend-design:frontend-design`. Produce a written critique covering: information hierarchy, visual clutter, accessibility, responsive issues, visual bugs, copy clarity, and on-page SEO observations. Do not start changing code yet.
 4. **Propose ranked fixes** — list fixes ordered by impact. Get user approval on scope before changing code.
@@ -118,6 +118,19 @@ Bypassing this gate (writing copy yourself, skipping the user gate, skipping the
 
 Build only the UI/UX for the feature being designed right now. No unrelated additions. Backend integrations are mocked (static data, setTimeout for async, local state). Only the React reference app is modified — never production code, except `DESIGN.md`, `brand-voice.md`, and `PRD.md` at the project root.
 
+### Rule 8: Domain/business-logic gate
+
+The PRD is the source of truth for business rules and user flows. Many design changes silently encode new business assumptions ("an item can have multiple owners now", "drafts can be shared", "this filter implies a new entity field"). If the design shifts what the product *does*, the PRD must be updated as part of the same task — not patched in later, not forgotten.
+
+**Gate (mandatory at the start of every task, before planning, in both flows):**
+
+1. STOP. Ask the user: *"Before I plan this — is this change introducing, modifying, or extending domain or business logic? Specifically: a new product capability, a new business rule or constraint, a new data entity or field that production must model, an altered or new step in a user flow, an additional case for an existing flow, or removal/replacement of an existing flow. If yes, I'll plan the PRD update alongside the design work."*
+2. Wait for the user's answer. Do not proceed without it.
+3. If **yes** → treat the PRD update as in-scope from the start. Phase 6 (PRD sync) is not optional and must appear in the plan you present in Flow A Step 2 / Flow B Step 4.
+4. If **no** or **not sure** → proceed without planned PRD work. But during validation, re-evaluate against the PRD-sync trigger criteria below. If the implementation surfaced a business change the user didn't anticipate at the gate, raise it explicitly before declaring done — do not silently skip it.
+
+Bypassing this gate (making prototype changes that imply new business rules without raising them) is a violation of the skill, even if the visual outcome is correct.
+
 ---
 
 General quality (a11y to WCAG 2.1 AA, responsive testing methodology, animation timing & `prefers-reduced-motion`, latest UI/UX patterns, clean React/TS code) is owned by `frontend-design:frontend-design`. Don't duplicate it — invoke that skill.
@@ -138,6 +151,8 @@ If any check fails, fix before presenting.
 
 ## PRD sync
 
+This phase **executes** the answer to the Rule 8 gate. If Rule 8 was answered *yes* at task start, the PRD update is in scope and runs here. If it was answered *no*, run through the trigger criteria once more — if validation surfaced a business change you didn't anticipate, raise it with the user and update the PRD now rather than letting it slip.
+
 If `PRD.md` exists, update it ONLY when the change introduces or modifies a **business user flow** — a change that would result in new or altered production user stories.
 
 **Update for:** new product capabilities, new business rules/constraints implied by the UI, new data entities or fields production must model, altered flow steps/states/branching, removal or replacement of existing flows.
@@ -156,11 +171,12 @@ Treat phrases like "let's end this session", "let's create the PR", or any clear
 
 ## Self-check before "done"
 
+- [ ] Rule 8 gate (domain/business-logic) was run at task start
 - [ ] Visually validated at all breakpoint boundaries
 - [ ] Only semantic tokens used (no ad-hoc values)
 - [ ] All copy went through the user-input gate + `searchfit-seo:on-page-seo`
 - [ ] `frontend-design:frontend-design` was invoked at the planning/critique step
 - [ ] DESIGN.md updated if the design system changed
-- [ ] PRD synced (background sub-agent) if business behavior changed; otherwise skipped
+- [ ] PRD synced (background sub-agent) if Rule 8 was *yes*, or if validation surfaced a business change; otherwise skipped
 - [ ] Only the React reference app was modified (plus DESIGN.md / brand-voice.md / PRD.md at root)
 - [ ] If the user signaled session end, a PR was created including reference-app changes and any PRD edits
