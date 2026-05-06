@@ -15,6 +15,88 @@ If `ticket-start` is unavailable, ask the user directly for:
 
 Carry forward into later phases: ticket id, title, acceptance criteria, branch intent, open questions.
 
+## Scope research (subagent-only)
+
+Once the ticket is read and the candidate objects are named, **the parent agent does NOT read PL/SQL packages, callers, or dependent objects directly into its own context.** PL/SQL packages routinely run 1000+ lines; pulling several into the main window has been observed to consume the bulk of a 250K-token session before the plan is even drafted. Scope research is delegated to a subagent so the raw source lives in the subagent's context, not the parent's.
+
+### When to dispatch
+
+Dispatch immediately after the Intake fields are populated, BEFORE the brainstorm gate runs. The brainstorm and the plan are written from the subagent's digest. If the harness auto-fires `superpowers:brainstorming` or `superpowers:writing-plans` before scope research has run, pause those workflows, run the subagent, then resume with the digest in context.
+
+### Subagent prompt template
+
+The parent passes ticket metadata and asks for a digest. The subagent is **not** told it is a test or that it is part of db-work — it is given a research task with an explicit output schema:
+
+```
+You are researching the database scope for ticket <TICKET_ID> — <TITLE>.
+
+Acceptance criteria:
+<paste from intake>
+
+Named in-scope objects (from ticket / user):
+<list of schemas, packages, callables, views, tables>
+
+Repo roots to inspect:
+- <PROD/...>
+- <YES_SERVICES/...>
+- <other team folders as relevant>
+
+Read whatever PL/SQL, views, or changelogs are needed to answer the questions below. Do NOT propose fixes, variants, or design — research only. Return a digest in the schema specified. Cite every claim with file:line ranges so the parent can re-read specific spans if needed.
+```
+
+### Required digest schema
+
+The subagent MUST return all sections. Missing sections force a re-dispatch.
+
+```markdown
+# Scope Digest — <TICKET>
+
+## In-scope callables
+For each callable named in the ticket OR found to contain changed/affected logic:
+
+- **Name:** <SCHEMA.PACKAGE.CALLABLE>
+- **Signature (verbatim):** <full param list with modes + return type, copy-paste from source>
+- **Source location:** <file>:<line_start>-<line_end>
+- **Purpose (1 sentence):** ...
+- **Hot-path notes:** loops / joins / subqueries that look expensive, with file:line ranges. NO SQL bodies — line ranges only.
+- **Side effects:** DML target tables, autonomous transactions, sequence reads. Names only.
+- **Dependent objects:** types, sequences, views, packages referenced. Names + file:line where each is defined if findable.
+
+## Public callers
+For each in-scope callable, list public packages/procedures/functions/views/jobs that invoke it:
+
+- <CALLER>: <file>:<line_start>-<line_end> — <one-line note on how it's used>
+
+If a caller is itself a private helper, recurse one level until a public entry point is reached.
+
+## Open questions
+Things the subagent could not resolve from code alone (missing fixtures, ambiguous business intent, untraced callers, cross-schema synonyms it could not follow).
+
+## Citation index
+A flat list the parent can scan to re-read specific spans:
+
+- <file>:<line_start>-<line_end> — <what's there>
+```
+
+### Parent rules after the digest returns
+
+- The parent agent reads the digest into its main context. The digest replaces the raw source for design purposes.
+- If brainstorm or plan-writing genuinely needs more detail than the digest provides, the parent re-reads ONLY the specific line ranges cited in the citation index — never whole files.
+- If the digest is structurally incomplete (missing schema sections, no citations, paraphrased signatures instead of verbatim), the parent re-dispatches the subagent with a corrective prompt. The parent does NOT fall back to reading the source itself.
+- Multiple subagent passes are cheaper than one polluted main context. Re-dispatch freely.
+- The digest is committed under `util/<TICKET>/scope_digest.md` so later phases (and the handoff report) can reference it.
+
+### Out of scope for this subagent
+
+The scope-research subagent does NOT:
+- propose variants;
+- write any part of the plan;
+- make design decisions;
+- run anything against DEV;
+- read more than the in-scope objects + their callers + their direct dependents (no whole-package speculative reads).
+
+If the subagent volunteers a fix or a variant idea, the parent ignores it. Design happens in the brainstorm/plan phases, with the user, on the digest.
+
 ## Brainstorm gate
 
 A structured brainstorming pass is REQUIRED before any plan (the harness's brainstorming workflow auto-fires on creative work; if it does not, run `db-work-doctor.sh` — Check #7 surfaces the exact install command).

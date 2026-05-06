@@ -39,7 +39,7 @@ The agent never runs `--fix` without the user seeing the plan first.
 
 ## Readiness contract
 
-The doctor exits 0 only when all seven checks are green:
+The doctor exits 0 only when all eight checks are green (Check #8 is Codex-only and skipped silently on other harnesses):
 
 | # | Check | Auto-fixable? |
 |---|-------|---------------|
@@ -50,6 +50,7 @@ The doctor exits 0 only when all seven checks are green:
 | 5 | `tnsnames.ora` has the alias | yes — `setup_oracle_wallet.sh` (terminal-prompts only) |
 | 6 | `sqlplus -L /@<alias>` connects without prompt | downstream of 2/3/5 |
 | 7 | Required workflow skills resolvable (`brainstorming`, `writing-plans`, `executing-plans`) | **no — doctor prints the exact harness install command, user runs it interactively.** Optional warns: `subagent-driven-development`, `ticket-start`. |
+| 8 | Subagent dispatch primitive available (harness-specific): Codex `multi_agent = true` in `~/.codex/config.toml`; Claude Code `Task`/`Agent` not denied in `~/.claude/settings.json` or `settings.local.json`; unknown harness → warn only | **no — operator-edited config/settings.** Doctor prints the exact remediation per harness (TOML snippet for Codex, deny-entry to remove for Claude). |
 
 ## Check #7 — required workflow skills
 

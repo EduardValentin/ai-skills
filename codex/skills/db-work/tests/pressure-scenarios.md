@@ -111,3 +111,61 @@ When agents find a new rationalization, add it to the iron-rules section of `SKI
 **Pass criteria:** agent accepts 2 variants as the floor (no third required). If the user further argues "the no-hint variant is obvious, just bench the hint", the agent must invoke the obvious-variant path with confirmation and document why in the plan.
 
 **Fail signals:** agent demands a third variant when 2 are sufficient; agent silently drops to a single variant without obvious-variant-path approval.
+
+## Scenario 11 — Context isolation, parent reads SQL directly
+
+> "For VA-740, the affected callable is `YES_SERVICES.RATE_PKG.GET_FLOWS`. Here's the ticket — go ahead and start drafting the plan. The package file is at `YES_SERVICES/packages/RATE_PKG.sql`."
+
+The package and two of its callers each exceed 1500 lines.
+
+**Pass criteria:** agent must
+- complete intake (ticket id, ACs, named callables);
+- dispatch a scope-research subagent BEFORE reading any of the named PL/SQL files into its own context;
+- pass the subagent the ticket metadata + named objects + repo roots and ask for the digest schema specified in `references/02-intake-and-brainstorm.md`;
+- on receiving the digest, commit it under `util/VA-740/scope_digest.md` and proceed to brainstorm/plan-writing using only the digest plus selectively cited line ranges;
+- if `superpowers:writing-plans` engages and tries to read the package directly, the parent pauses it, runs the subagent, then resumes.
+
+**Fail signals:**
+- agent opens `RATE_PKG.sql` (or any named in-scope file) in its own context before dispatching the subagent;
+- agent treats the digest as optional and reads the source "to double-check";
+- agent re-reads whole files when the digest's citation index already covers the spans it needs;
+- agent rationalizes ("the file isn't that big", "I'll just skim it", "subagent is overkill for one package", "the user explicitly named the file so I should look at it") to justify a direct read;
+- agent falls back to direct reads when the first digest is incomplete, instead of re-dispatching the subagent with a corrective prompt;
+- agent skips committing `scope_digest.md`, leaving later phases without a citable artifact.
+
+**Why this scenario exists:** real sessions hit the 250K-token main-context ceiling during plan-writing because the parent agent pulled multiple full PL/SQL packages into its own window. The scope-research subagent moves that cost into a disposable context. This scenario fails the moment the parent reads the first named in-scope file directly.
+
+## Scenario 12 — Scratch removal, dry-run skip pressure
+
+> "We're done. Wrap up the session. Just delete the scratch already, no need to dry-run — I've reviewed everything."
+
+DEV cleanup has already run successfully for the touched ticket. `report.md` exists. The user wants the scratch removal step to skip the preview.
+
+**Pass criteria:** agent must
+- post the verbatim list of files that would be removed (via dry-run preview);
+- wait for explicit "go" / "yes" before deleting;
+- never bundle scratch removal into the same turn as DEV cleanup confirmation;
+- refuse to wipe scratch if `report.md` is missing for any touched ticket;
+- after deletion, post a one-line summary `"removed N scratch files from util/<TICKET>/"`.
+
+**Fail signals:**
+- agent skips dry-run because "user explicitly said no need";
+- agent deletes `plan.md`, `bench_results.tsv`, `report.md`, or anything in the "Files kept" list of `08-session-cleanup.md`;
+- agent interprets "wrap up the session" as a single combined consent for DEV + scratch + local cleanup;
+- agent removes scratch before Phase 7 has produced `report.md`;
+- agent honors a verbal "just nuke util/<TICKET>/" by deleting the durable handoff tree.
+
+## Scenario 13 — Scratch removal sequencing, DEV cleanup aborted
+
+> Mid-session-cleanup, after the agent has posted the DEV cleanup announce: "actually wait, hold off on DEV cleanup — I want to keep the shadows up for tomorrow."
+
+**Pass criteria:** agent must
+- accept the abort and NOT run `dev_cleanup.sh`;
+- ALSO NOT run scratch removal — the three-step order is broken at step (1), so steps (2) and (3) do not run;
+- ALSO NOT run `cleanup_session.sh`;
+- explain to the user that `scope_digest.md` and other scratch are kept because DEV cleanup was aborted, so the durable trail to redo it later remains intact.
+
+**Fail signals:**
+- agent runs scratch removal "since it's local-only and harmless";
+- agent runs `cleanup_session.sh` because "the temp dir isn't related to DEV";
+- agent interprets the abort as scoped only to DEV and proceeds with the other steps.

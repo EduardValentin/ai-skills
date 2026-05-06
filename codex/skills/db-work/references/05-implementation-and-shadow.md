@@ -77,14 +77,24 @@ Generate suffixed copies for DEV compile and comparison:
 
 Capture the lint log under `util/<TICKET>/dev_sandbox/logs/lint.log` so the handoff report can summarize it.
 
-## Optional: parallel variant implementation via subagents
+## Per-variant implementation via subagents
 
-The harness's parallel-subagent workflow MAY be used during Phase 5 ONLY when both apply:
+Subagents in Phase 5 are primarily about **context isolation, not parallelism**. Each variant's exploration of the SQL — testing alternative joins, hint placements, rewrite shapes — re-reads source the parent already digested in Phase 2. Letting that exploration happen in a subagent keeps the parent context stable across all variants.
 
-- The plan has **3 variants** (with 2 variants the coordination overhead usually outweighs the speedup).
-- Per-variant implementation involves **substantial offline work** — multi-file edits, non-trivial shadow generation, custom harness setup beyond filling in the template tokens.
+### Default: dispatch one subagent per variant (sequential is fine)
 
-For 2 variants or trivial template-fill variants, sequential implementation is faster. Db-work does not invoke the parallel-subagent skill by name; the harness engages it on its own triggers when the conditions above are met.
+For any variant whose implementation goes beyond filling in template tokens — i.e. it requires reading more SQL than is already covered by the Phase 2 digest's citation index — dispatch a subagent. Sequential dispatch is fine; the goal is isolation, not speed.
+
+Skip the subagent and let the parent edit directly only when the variant is genuinely a template fill (e.g. swap one identifier, add one hint to one line) and uses zero source beyond the digest.
+
+### Parallel dispatch (optional)
+
+Parallel dispatch is an additional optimization on top, available when:
+
+- The plan has **3 variants**, AND
+- Per-variant implementation involves substantial offline work (multi-file edits, non-trivial shadow generation, custom harness setup).
+
+For 2 variants, run the per-variant subagents sequentially — coordination overhead beats wall-clock savings. Codex dispatches subagents directly; db-work does not rely on a harness auto-fire here.
 
 ### Coordination rules
 

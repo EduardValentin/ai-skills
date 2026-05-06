@@ -214,6 +214,65 @@ for s in "${OPTIONAL_STANDALONE[@]}"; do
   fi
 done
 
+# 8. Subagent dispatch primitive available (harness-specific).
+# Phase 2 scope-research and Phase 5 per-variant subagents both depend on this primitive.
+# Codex: multi_agent flag in config.toml. Claude: Task/Agent tool not denied in settings.
+case "$HARNESS" in
+  codex)
+    codex_config="${CODEX_CONFIG:-$HOME/.codex/config.toml}"
+    if [[ -f "$codex_config" ]] && grep -qE '^[[:space:]]*multi_agent[[:space:]]*=[[:space:]]*true\b' "$codex_config"; then
+      ok "codex multi_agent=true in $codex_config (spawn_agent available)"
+    elif [[ -f "$codex_config" ]]; then
+      fail "codex multi_agent flag not enabled in $codex_config; add '[features]\nmulti_agent = true' so spawn_agent is available for Phase 2 scope-research and Phase 5 per-variant subagents (not auto-fixable — operator-edited config)"
+    else
+      fail "codex config $codex_config not found; create it with '[features]\nmulti_agent = true' so spawn_agent is available (not auto-fixable — operator-edited config)"
+    fi
+    ;;
+  claude)
+    # Task/Agent dispatch is available by default in Claude Code. Flag only if a settings file
+    # explicitly denies it. Use python3 (already a project dependency for generate_*.py scripts)
+    # so multi-line JSON parsing stays robust.
+    blocked_in=""
+    blocked_entry=""
+    for cfg in "$HOME/.claude/settings.json" "$HOME/.claude/settings.local.json"; do
+      [[ -f "$cfg" ]] || continue
+      hit="$(python3 - "$cfg" <<'PY' 2>/dev/null
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        cfg = json.load(f)
+except Exception:
+    sys.exit(0)
+deny = (cfg.get("permissions") or {}).get("deny") or []
+for entry in deny:
+    if not isinstance(entry, str):
+        continue
+    head = entry.split("(", 1)[0].strip()
+    if head in ("Task", "Agent"):
+        print(entry)
+        break
+PY
+)"
+      if [[ -n "$hit" ]]; then
+        blocked_in="$cfg"
+        blocked_entry="$hit"
+        break
+      fi
+    done
+    if [[ -n "$blocked_in" ]]; then
+      fail "claude Task/Agent dispatch denied in $blocked_in (deny entry: '$blocked_entry'); remove or scope the entry so subagent dispatch works for Phase 2 scope-research and Phase 5 per-variant subagents (not auto-fixable — user-edited settings)"
+    else
+      ok "claude Task/Agent dispatch available (no deny entries in ~/.claude/settings.json or settings.local.json)"
+    fi
+    ;;
+  *)
+    # Unknown harness: cannot probe the dispatch primitive. Don't fail — the operator may be
+    # running the skill outside the two supported harnesses; just surface that the gate cannot
+    # be verified, so the agent knows Phase 2 may silently fall back to parent-side reads.
+    printf "[warn] unknown harness; cannot verify subagent dispatch primitive — Phase 2 scope-research may silently fall back to parent-side reads\n"
+    ;;
+esac
+
 # ---------- Pass 2: print plan if requested ----------
 
 if [[ "$red" -gt 0 && ( "$PLAN" -eq 1 || "$FIX" -eq 1 ) ]]; then
