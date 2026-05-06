@@ -17,11 +17,11 @@ Carry forward into later phases: ticket id, title, acceptance criteria, branch i
 
 ## Scope research (subagent-only)
 
-Once the ticket is read and the candidate objects are named, **the parent agent does NOT read PL/SQL packages, callers, or dependent objects directly into its own context.** PL/SQL packages routinely run 1000+ lines; pulling several into the main window has been observed to consume the bulk of a 250K-token session before the plan is even drafted. Scope research is delegated to a subagent so the raw source lives in the subagent's context, not the parent's.
+The policy — "PL/SQL scope reads happen in a subagent, never in the parent" — is the iron rule in `SKILL.md`. This section covers the *mechanics*: when to dispatch, the subagent prompt, the digest schema, and what the parent does with what comes back.
 
 ### When to dispatch
 
-Dispatch immediately after the Intake fields are populated, BEFORE the brainstorm gate runs. The brainstorm and the plan are written from the subagent's digest. If the harness auto-fires `superpowers:brainstorming` or `superpowers:writing-plans` before scope research has run, pause those workflows, run the subagent, then resume with the digest in context.
+Immediately after the Intake fields are populated, BEFORE the brainstorm gate runs. Brainstorm and plan-writing operate on the digest, not on raw source.
 
 ### Subagent prompt template
 

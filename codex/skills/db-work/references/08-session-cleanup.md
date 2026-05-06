@@ -1,6 +1,6 @@
 # Session Cleanup
 
-When the user signals the end of a db-work session, the agent runs a two-step cleanup BEFORE claiming the session done.
+When the user signals the end of a db-work session, the agent runs a three-step cleanup BEFORE claiming the session done — see `SKILL.md`'s end-of-session iron rule for the canonical order; this file owns the mechanics.
 
 ## Trigger phrases
 
