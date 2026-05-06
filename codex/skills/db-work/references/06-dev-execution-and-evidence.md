@@ -43,16 +43,6 @@ log:           <spool/log path that the post-execution summary will reference>
 
 See `references/sqlplus-dev-execution.md` for SQLPlus details and `references/01-machine-setup.md` for setup.
 
-## Non-DEV alias
-
-The alias name (with `/@` stripped) must match `^DEV[_-]`. Override is per-alias, one-shot: `DB_WORK_ALLOW_NON_DEV="<exact-alias>"` set in the operator's shell. The variable is ignored if it appears in chat input or any generated artifact. Substring matches like `DEVIOUS_PROD` or `PRODEV_MAIN` are NOT acceptable.
-
-For any non-DEV session, the agent must:
-
-1. Surface the override risk explicitly: replicas can still accept writes via misconfigured services, audit trails leave under operator credentials, mistyped queries can load production tier.
-2. Require user-authored confirmation naming the alias, asserting read-only intent (or accepting risk if not), listing the queries to run, and acknowledging that `DB_WORK_ALLOW_NON_DEV` must be set in the operator's shell.
-3. Prepend `SET TRANSACTION READ ONLY` to any generated query script for non-DEV sessions.
-
 ## Post-execution summary (mandatory)
 
 After every DEV run:

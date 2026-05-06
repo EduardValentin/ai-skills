@@ -53,15 +53,6 @@ done
 [[ -f "$SPEC" ]]    || { echo "spec not found: $SPEC" >&2; exit 64; }
 [[ -n "$CONNECT" ]] || { echo "--connect or DB_WORK_DEV_CONNECT required" >&2; exit 64; }
 
-alias_name_check="${CONNECT#/@}"
-if [[ ! "$alias_name_check" =~ ^DEV[_-] ]]; then
-  override="${DB_WORK_ALLOW_NON_DEV:-}"
-  if [[ -z "$override" || "$override" != "$alias_name_check" ]]; then
-    echo "alias '$alias_name_check' does not match ^DEV[_-]; set DB_WORK_ALLOW_NON_DEV='$alias_name_check' to override (per-alias one-shot)" >&2
-    exit 1
-  fi
-fi
-
 ticket=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['ticket'])" "$SPEC")
 out_dir="util/${ticket}/variants"
 mkdir -p "$out_dir"

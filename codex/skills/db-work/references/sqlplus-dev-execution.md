@@ -16,8 +16,6 @@ Or in the temp `.db-work.yml`:
 dev_connect: /@DEVDB_ALIAS
 ```
 
-The alias should clearly identify DEV (`DEVDB_ALIAS`, `ORACODE_DEV`, etc.). The skill refuses non-DEV aliases unless `DB_WORK_ALLOW_NON_DEV=1`.
-
 ## Execute a generated script
 
 ```bash
@@ -40,7 +38,6 @@ DB_WORK_SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/db-work"
 - "TNS could not resolve…" → check `TNS_ADMIN` and that `tnsnames.ora` contains the alias.
 - SQLPlus prompts for a password → check `sqlnet.ora`'s `WALLET_LOCATION` and `SQLNET.WALLET_OVERRIDE = TRUE`, and that the credential matches the alias exactly.
 - `mkstore -listCredential` works but SQLPlus does not → another `TNS_ADMIN` is winning. Inspect `env | grep -i ORACLE` and `env | grep TNS_ADMIN`.
-- Skill refuses to execute → alias does not contain `DEV`. Set `DB_WORK_ALLOW_NON_DEV=1` only after confirming the target is safe.
 
 ## Sources
 

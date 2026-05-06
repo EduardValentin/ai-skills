@@ -106,7 +106,6 @@ DEV cleanup IS DEV execution and obeys all the iron rules:
 
 - Pre-execution announce (5 lines: script, alias, expected, evidence_mode=cleanup, log path).
 - Wait for explicit "go" / "yes" before running.
-- Refuse non-DEV alias unless `DB_WORK_ALLOW_NON_DEV="<exact-alias>"` is set.
 - Post-execution summary (drops succeeded, errors, log path).
 
 "User said end the session" is end-of-session consent, NOT execution consent. Re-confirm before each ticket's `dev_cleanup.sh` invocation.

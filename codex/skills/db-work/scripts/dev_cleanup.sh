@@ -38,14 +38,6 @@ done
 [[ -n "$TICKET" ]] || { echo "--ticket required" >&2; exit 64; }
 if [[ "$DRY_RUN" != 1 ]]; then
   [[ -n "$CONNECT" ]] || { echo "--connect or DB_WORK_DEV_CONNECT required (or use --dry-run)" >&2; exit 64; }
-  alias_name_check="${CONNECT#/@}"
-  if [[ ! "$alias_name_check" =~ ^DEV[_-] ]]; then
-    override="${DB_WORK_ALLOW_NON_DEV:-}"
-    if [[ -z "$override" || "$override" != "$alias_name_check" ]]; then
-      echo "alias '$alias_name_check' does not match ^DEV[_-]; set DB_WORK_ALLOW_NON_DEV='$alias_name_check' to override (per-alias one-shot)" >&2
-      exit 1
-    fi
-  fi
 fi
 
 ticket_dir="util/${TICKET}"

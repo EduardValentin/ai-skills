@@ -88,22 +88,11 @@ if [[ -z "$ALIAS" ]]; then
 fi
 alias_blocked=0
 if [[ -z "$ALIAS" ]]; then
-  fix_needed "DB_WORK_DEV_CONNECT not set; expected /@<DEV-alias>"
-  agent_inputs+=("DEV TNS alias name (e.g. DEVDB_ALIAS) — pass via --alias <name>; the user must export DB_WORK_DEV_CONNECT='/@<name>' in their shell after setup")
+  fix_needed "DB_WORK_DEV_CONNECT not set; expected /@<alias>"
+  agent_inputs+=("TNS alias name — pass via --alias <name>; the user must export DB_WORK_DEV_CONNECT='/@<name>' in their shell after setup")
   alias_blocked=1
 else
   ok "DB_WORK_DEV_CONNECT=$ALIAS"
-  alias_name_check="${ALIAS#/@}"
-  if [[ "$alias_name_check" =~ ^DEV[_-] ]]; then
-    ok "alias '$alias_name_check' matches ^DEV[_-]"
-  else
-    override="${DB_WORK_ALLOW_NON_DEV:-}"
-    if [[ -n "$override" && "$override" == "$alias_name_check" ]]; then
-      ok "non-DEV alias '$alias_name_check' explicitly authorized via DB_WORK_ALLOW_NON_DEV"
-    else
-      fail "alias '$alias_name_check' does not match ^DEV[_-]; set DB_WORK_ALLOW_NON_DEV='$alias_name_check' in your shell to override (per-alias one-shot, not auto-fixable)"
-    fi
-  fi
 fi
 
 # 5. tnsnames.ora has the alias

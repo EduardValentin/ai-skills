@@ -31,7 +31,7 @@ The agent never runs `--fix` without the user seeing the plan first.
    - `Need from you (chat):` — values the agent must collect from the user before `--fix` runs (alias name, optional TNS descriptor). These are non-secret.
    - `Your local terminal will prompt for:` — secrets the wallet setup will request via `read -s` in the user's terminal. NEVER ask for these in chat.
 3. **Collect the chat-required values from the user.** Typically:
-   - DEV TNS alias name (e.g. `DEVDB_ALIAS`) — must match `^DEV[_-]`.
+   - DEV TNS alias name (e.g. `DEVDB_ALIAS`).
    - DEV TNS descriptor — only if the alias is not already in `tnsnames.ora`.
 4. **Get explicit approval.** A "yes", "go", "proceed" reply. Anything else cancels.
 5. **Run `--fix --yes`** with the collected values. The doctor performs the installs in order. Wallet setup will pause at local terminal prompts; the agent should tell the user "your terminal will now prompt for the DEV username, DEV password, and wallet password — enter them locally, not in chat."
@@ -46,7 +46,7 @@ The doctor exits 0 only when all eight checks are green (Check #8 is Codex-only 
 | 1 | `DB_WORK_SKILL_DIR` resolves and contains `scripts/` | manual |
 | 2 | `sqlplus` on PATH | yes — Oracle Instant Client Basic + SQL*Plus DMG |
 | 3 | `mkstore` available | yes — lean Java launcher |
-| 4 | `DB_WORK_DEV_CONNECT` set, alias matches `^DEV[_-]` | partial — agent needs alias name from user; user must export the var |
+| 4 | `DB_WORK_DEV_CONNECT` set | partial — agent needs alias name from user; user must export the var |
 | 5 | `tnsnames.ora` has the alias | yes — `setup_oracle_wallet.sh` (terminal-prompts only) |
 | 6 | `sqlplus -L /@<alias>` connects without prompt | downstream of 2/3/5 |
 | 7 | Required workflow skills resolvable (`brainstorming`, `writing-plans`, `executing-plans`) | **no — doctor prints the exact harness install command, user runs it interactively.** Optional warns: `subagent-driven-development`, `ticket-start`. |
@@ -77,7 +77,6 @@ Install commands the doctor prints on miss (it never auto-installs — plugin fe
 
 **Manual user action (agent cannot do this):**
 - Exporting `DB_WORK_DEV_CONNECT='/@<alias>'` to the shell rc file. The doctor prints the exact line to add.
-- Setting `DB_WORK_ALLOW_NON_DEV='<exact-alias>'` if a non-DEV alias must be authorized. Per-alias one-shot.
 
 ## Setup-only session (standalone use)
 
@@ -94,6 +93,5 @@ The skill is valid even when the user's only goal is provisioning their machine.
 ## Operating rules (specific to setup; the iron rules in `SKILL.md` cover the general gates)
 
 - Script-only operations (changelog generation, shadow-object generation, deploy-script generation) are allowed when checks 1–2 are green even if 4–6 are red — the agent must add `"doctor amber: SQLPlus connect blocked, generation only"` as the first line of every generated artifact AND the chat reply that delivers it.
-- DEV alias substring matches like `DEVIOUS_PROD` or `PRODEV_MAIN` do NOT pass the `^DEV[_-]` check. Override mechanics (per-alias one-shot, ignored from chat/artifacts) are documented under check #4 above.
 - Doctor never asks for secrets in chat. Wallet setup prompts the local terminal only.
 - `mkstore` is intentionally chosen over a full Database Client for macOS ARM ergonomics — see `references/sqlplus-dev-execution.md`.

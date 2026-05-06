@@ -258,7 +258,7 @@ It expects a wallet-style connect string such as:
 sqlplus -L /@ORACODE_DEV
 ```
 
-The wrapper guards against accidental non-DEV aliases unless explicitly overridden by the user. It should be used for running generated deploy, metadata, comparison, and stats scripts.
+It should be used for running generated deploy, metadata, comparison, and stats scripts.
 
 If `sqlplus` is missing or not on `PATH`, this wrapper calls `scripts/ensure_sqlplus.sh` and also searches common Oracle client install locations.
 

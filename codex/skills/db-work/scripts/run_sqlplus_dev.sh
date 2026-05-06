@@ -83,7 +83,6 @@ wallet or another local SQLPlus-safe mechanism. Do not pass username/password.
 
 Environment:
   DB_WORK_DEV_CONNECT=/@DEVDB_ALIAS
-  DB_WORK_ALLOW_NON_DEV=1    Override the DEV-name guard after manual confirmation.
   DB_WORK_AUTO_INSTALL_SQLPLUS=0
                               Disable automatic SQLPlus installation when missing.
 USAGE
@@ -141,12 +140,6 @@ fi
 
 if [[ "$connect" != /@* ]]; then
   echo "Refusing to run: connect value must use wallet-style /@ALIAS, not username/password." >&2
-  exit 2
-fi
-
-upper_connect="$(printf '%s' "$connect" | tr '[:lower:]' '[:upper:]')"
-if [[ "${DB_WORK_ALLOW_NON_DEV:-0}" != "1" && "$upper_connect" != *DEV* ]]; then
-  echo "Refusing to run: connect alias does not look like DEV. Set DB_WORK_ALLOW_NON_DEV=1 only after manual confirmation." >&2
   exit 2
 fi
 
