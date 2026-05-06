@@ -128,3 +128,11 @@ The parent agent — NOT the subagents — handles:
 Each subagent reports back its variant folder path and a 1-paragraph summary. The parent agent reviews each return for plan compliance (right entry point, KPI prediction stated, no adjacent-code edits) before accepting.
 
 If a subagent proposes adjacent-code changes, the parent agent treats it as scope expansion — re-brainstorm with the user per `references/04-performance-debugging.md`.
+
+## Exit — auto-advance to Phase 6
+
+When the bench picks a winner under the plan's "winner-picked-when" rule and `bench_results.tsv` exists, Phase 5 is over. The agent immediately advances to Phase 6 without waiting for the user to ask. The next message in the conversation is **not** "ready for DEV evidence?" or "should I start the manual testing?" — it is the Phase 6 prep work itself: emit `shadow_manifest.json` for the winner, run `generate_metadata_probe.py`, then `generate_compare_spec.py`, and present the resulting `compare_spec.json` for user review per `references/06-dev-execution-and-evidence.md`.
+
+The user controls DEV execution via the announce + "go" gate inside Phase 6, not by gatekeeping phase entry. Stalling at the Phase 5 → Phase 6 boundary is the specific defect this rule prevents.
+
+If no variant clears the plan's threshold, the exit is different: do NOT advance to Phase 6. Instead, follow the adjacent-code expansion path in `references/04-performance-debugging.md` — STOP, propose adjacent edits, re-brainstorm with the user. Phase 6 only auto-engages on a clean winner pick.

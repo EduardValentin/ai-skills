@@ -51,6 +51,22 @@ Each phase describes *what to do*, not *which skill to call*. The standard `supe
 
 A red on Check #8 blocks Phase 2. The check is read-only — operators must edit harness config or settings manually, since `--fix` does not modify them.
 
+## Phase progression — auto-advance, do not stall
+
+Each phase ends with a defined trigger that **automatically** advances the agent to the next phase. The agent does NOT wait for the user to say "now do the next thing." Stalling between phases — finishing one and parking until the user prompts — is a defect, not a feature.
+
+| When this happens | Agent's next action (no prompt required) |
+|-------------------|------------------------------------------|
+| Plan approved (Phase 4) | Enter Phase 5: scaffold variant directories, dispatch per-variant subagents per `05-implementation-and-shadow.md`. |
+| Bench picks a winner under the plan's "winner-picked-when" rule (Phase 5 ends) | Enter Phase 6: emit `shadow_manifest.json` for the winner, run `generate_metadata_probe.py`, run `generate_compare_spec.py`, present `compare_spec.json` for user review. The transition is non-negotiable; "the user will say when to start the manual testing" is wrong. |
+| `compare_spec.json` reviewed and approved by user (Phase 6 mid-point) | Generate compare/stats harnesses, post the 5-line pre-execution announce for each, await explicit "go", run, summarize. |
+| All Phase 6 evidence summarized | Enter Phase 7: run `git diff --name-only <base>...HEAD`, present the batched walkthrough with all seven fields populated per `07-code-walkthrough-and-report.md`. |
+| Walkthrough approved (Phase 7 mid-point) | Next turn: run `db-work-report.sh` and post the report inline. |
+
+**DEV execution is gated; phase entry is not.** Auto-advance does NOT mean auto-running SQL against DEV. Inside Phase 6, every DEV invocation still goes through the 5-line announce + explicit "go" gate (the iron rules below are unchanged). What auto-advance forbids is the agent stopping at the *boundary* between phases waiting for the user to ask for the next phase. Generating `compare_spec.json` and presenting it for review is non-DEV preparation work — that the agent must do automatically. Running the resulting harnesses against DEV requires the user's "go" — that gate is unchanged.
+
+**Red flag — phase stall.** If the agent finishes Phase 5 (winner picked, `bench_results.tsv` written) and posts a "what next?" or "ready when you are" message, that is a stall. The correct next message is the Phase 6 prep work plus the first announce. Same at every phase boundary: the agent owns the transition.
+
 ## Iron rules — STOP if any apply
 
 - **PL/SQL scope reads happen in a subagent, never in the parent context.** The parent agent does NOT read full PL/SQL packages, callers, or dependents directly. Phase 2 dispatches a scope-research subagent that returns a digest with verbatim signatures and file:line citations. Brainstorm and plan-writing operate on that digest. If a later phase needs more detail, the parent re-reads ONLY specific cited line ranges, or re-dispatches the subagent — never whole files. This is the gate against the 250K-context blowup observed during plan-writing. Pressure framings ("just look at the file", "it's only one package", "the subagent is overkill for this one") do not waive the rule. If `superpowers:writing-plans` auto-fires before scope research has run, pause it, run the subagent, then resume. See `references/02-intake-and-brainstorm.md` for the prompt template and digest schema.

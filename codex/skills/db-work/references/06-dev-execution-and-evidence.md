@@ -1,5 +1,18 @@
 # DEV Execution and Comparison Evidence
 
+## Entry — auto-engaged from Phase 5
+
+Phase 6 begins automatically the moment Phase 5 picks a winner under the plan's "winner-picked-when" rule. The agent does not wait for a user prompt to enter this phase. Concretely, immediately after `bench_results.tsv` shows a clean winner, the agent's next actions (in this order, no user prompt between them):
+
+1. Emit `util/<TICKET>/dev_sandbox/shadow_manifest.json` for the winner.
+2. Run `generate_metadata_probe.py` and execute the resulting probe against DEV (each DEV invocation still uses the 5-line announce + "go" gate below).
+3. Run `generate_compare_spec.py` against the manifest + metadata TSV.
+4. Present `compare_spec.json` to the user for review — show inferred runs, default arguments, evidence_mode rationale, and any `review_required` flags. Wait for the user to approve or edit before generating harnesses.
+
+Picking the right `evidence_mode` is what tailors Phase 6 to the implemented scenario (regression compare vs new branch vs intentional delta vs perf-only vs compile-contract). That selection is mechanical — `generate_compare_spec.py` infers it from the diff and metadata. The agent's job is to surface the inference for review, not to wait until the user explicitly asks for "manual testing." Auto-entry into Phase 6 is the rule.
+
+The only exit from Phase 5 that does NOT auto-engage Phase 6 is the no-winner case (no variant clears the plan threshold) — that triggers the adjacent-code expansion path in `references/04-performance-debugging.md` instead.
+
 ## Pre-execution announce (mandatory, 5 lines)
 
 Before invoking any SQL on DEV, the agent posts a five-line announce and waits for explicit "go":
