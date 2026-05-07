@@ -2,9 +2,7 @@
 
 ## Intake
 
-**REQUIRED SUB-SKILL:** Use `ticket-start` if available. Follow only its Job workflow path. Personal-project / Linear path is out of scope for `db-work`.
-
-If `ticket-start` is unavailable, ask the user directly for:
+Ask the user directly for:
 
 - ticket id, ticket title, business goal;
 - acceptance criteria;

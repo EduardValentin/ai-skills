@@ -37,7 +37,7 @@ Loaded on demand by the agent when the corresponding phase is active. SKILL.md's
 Doctor + auto-fix flow. Eight readiness checks (the eighth is harness-specific: Codex `multi_agent` flag or Claude `permissions.deny`). What's auto-installed (Oracle Instant Client, mkstore, wallet) and what isn't (plugin install, multi_agent flag). Setup-only sessions are valid; the doctor is the gateway. The amber-banner rule for partial-doctor generation-only flows.
 
 ### `references/02-intake-and-brainstorm.md`
-Phase 2 intake (ticket fields, defer to `ticket-start` if installed) + the **scope-research subagent** (when to dispatch, prompt template, required digest schema, parent rules after the digest returns, what's out of scope, rationalizations that fail the rule). Phase 3 brainstorm gate, the trivial-change escape hatch (all 7 criteria), the brainstorm summary's required fields.
+Phase 2 intake (ticket fields the agent collects) + the **scope-research subagent** (when to dispatch, prompt template, required digest schema, parent rules after the digest returns, what's out of scope, rationalizations that fail the rule). Phase 3 brainstorm gate, the trivial-change escape hatch (all 7 criteria), the brainstorm summary's required fields.
 
 ### `references/03-planning-with-variants.md`
 Plan template (saved at `util/<TICKET>/plan.md`), variant rules (2–3 floor, obvious-variant escape only on user request, even on obvious-variant the single variant still gets benched), the **performance acceptance criterion** (a perf floor — NOT a winner-picker), the KPI list, the "Selection — human picks" section (the plan does NOT name a winner; the human picks from qualifying variants on Phase 5's decision surface).

@@ -176,7 +176,6 @@ emit_install_hint() {
 HARNESS="$(detect_harness)"
 REQUIRED_SUPERPOWERS=(brainstorming writing-plans executing-plans)
 OPTIONAL_SUPERPOWERS=(subagent-driven-development)
-OPTIONAL_STANDALONE=(ticket-start)
 
 for s in "${REQUIRED_SUPERPOWERS[@]}"; do
   if path="$(resolve_skill_path "$s")"; then
@@ -192,14 +191,6 @@ for s in "${OPTIONAL_SUPERPOWERS[@]}"; do
   else
     printf "[warn] optional skill superpowers:%s not installed (used only on the subagent-driven Phase 5 path)\n" "$s"
     emit_install_hint "$s" "$HARNESS" superpowers
-  fi
-done
-for s in "${OPTIONAL_STANDALONE[@]}"; do
-  if path="$(resolve_skill_path "$s")"; then
-    ok "skill $s resolvable ($path)"
-  else
-    printf "[warn] optional skill %s not installed (intake falls back to direct ask)\n" "$s"
-    emit_install_hint "$s" "$HARNESS" "$s"
   fi
 done
 

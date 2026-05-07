@@ -28,12 +28,25 @@ For each file, the agent presents — all seven fields required, no field may be
 
 A walkthrough that templates any field (e.g. `<KPI delta>`, `<file_n>`) does not pass the gate.
 
-### Files in scope
+### Files in scope (walked with all 7 fields)
 
-- All Liquibase-owned files in the diff.
+The walkthrough subjects are the COMMITTED files only — what's about to ship in the PR:
+
+- All Liquibase-owned files in the `git diff` (the team's schema folders).
 - The team changelog.
-- The chosen variant's bench harness and `bench_results.tsv`.
-- The compare/stats harnesses and their summarized logs.
+- Ad-hoc data-fix / migration scripts under `util/ADHOC/` that the changelog references via `<sqlFile>` — these ARE committed there, and the walkthrough walks them like any other Liquibase-owned change.
+
+### Files referenced but NOT walked
+
+Evidence artifacts under `util/<TICKET>/` are local-only and never committed. They're cited from each in-scope file's "Pointer to evidence file" field (field 7), but they are NOT walkthrough subjects themselves:
+
+- `util/<TICKET>/variants/<n>/perf.sql` and `util/<TICKET>/variants/bench_results.tsv` — referenced from the per-file performance rationale.
+- `util/<TICKET>/dev_sandbox/compare_harness.sql`, `stats_harness.sql`, and `dev_sandbox/logs/*.summary.log` — referenced from the per-file evidence pointer.
+- `util/<TICKET>/plan.md`, `scope_digest.md`, `dev_sandbox/report.md` — referenced as session-local audit material.
+
+### Out-of-scope: `util/<TICKET>/...`
+
+If `git diff --name-only <base>...HEAD` shows any path under `util/<TICKET>/`, that's a defect — db-work session artifacts are not part of the deployment surface and must not enter git. STOP, surface the unexpected files, and either gitignore the path or remove it from the index before continuing the walkthrough. (Paths under `util/ADHOC/` are NOT a defect — they're the proper home for committed ad-hoc scripts.)
 
 ### User signal to proceed
 
@@ -92,7 +105,7 @@ Emits `util/VA-515/dev_sandbox/report.md` in this fixed shape:
 - [ ] Liquibase deploy plan confirmed with team
 ```
 
-The agent posts this report inline (so the user sees it without opening the file) AND commits the file under `util/<TICKET>/dev_sandbox/report.md`.
+The agent posts this report inline (so the user sees it without opening the file) AND writes it to `util/<TICKET>/dev_sandbox/report.md`. The report is local-only audit material — like everything else under `util/<TICKET>/`, it does NOT enter git.
 
 ## Done definition
 

@@ -220,9 +220,30 @@ The verification verdict depends on the run's `evidence_mode`:
 
 ### Parent rules after the subagent returns
 
-- For every run marked PASS: keep inferred values, annotate the artifact (`perf.sql` for Phase 5, `compare_spec.json` for Phase 6) with `verified_against_dev: true` and `verified_row_count: <n>`.
-- For every run marked FAIL with a recommended replacement: update the artifact's parameter values to the recommended values, annotate with `verified_against_dev: true`, `verified_row_count: <n>`, and `original_inferred_values: <…>` for audit.
-- For every run marked UNVERIFIABLE: mark the run `verified_against_dev: false` AND `unverifiable_reason: "<…>"`, and surface it explicitly at the top of the user-approval surface so the user can decide to skip the run, change the `evidence_mode`, or load fixtures.
+The parent applies the digest to the right artifact, in the right format. The artifact and format differ between phases:
+
+- **Phase 5 — `perf.sql` (one per variant).** Args live as inline literals in each variant's harness body. The parent rewrites the literals to the verified values and records the audit trail in a SQL header comment block at the top of `perf.sql`:
+
+  ```sql
+  -- Parameter verification (Phase 5 bench)
+  --   verified args:  iso=PJM market=DA window=last_30_days
+  --   verified rows:  1247
+  --   original inferred (if changed): iso=PJM market=RT window=last_30_days
+  --   change reason: inferred RT market returned 0 rows; DA returned 1247
+  ```
+
+  `bench_spec.json` is not touched — it carries variant names, harness paths, and the KPI list, none of which verification changes.
+
+- **Phase 6 — `compare_spec.json`.** The spec is JSON, so verification metadata goes in as per-run fields per `references/compare-spec-format.md`:
+
+  ```json
+  { "verified_against_dev": true,
+    "verified_row_count": 1247,
+    "original_inferred_values": { ... },
+    "verification_change_reason": "..." }
+  ```
+
+For every run marked UNVERIFIABLE (Phase 5 or Phase 6): mark `verified_against_dev: false` plus an `unverifiable_reason` (in the perf.sql comment block for Phase 5, in the JSON for Phase 6), and surface it explicitly at the top of the next user-approval surface so the user can decide to skip the run, change the `evidence_mode`, or load fixtures.
 - The parent does NOT silently fix UNVERIFIABLE cases. They go to the user as red-flagged items.
 - If the subagent's digest is structurally incomplete (missing schema fields, paraphrased values instead of verbatim), the parent re-dispatches with a corrective prompt — does NOT fall back to running the probes itself.
 

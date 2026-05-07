@@ -8,7 +8,7 @@ For a file-by-file / script-by-script reference, see [`glossary.md`](glossary.md
 
 ## When to use
 
-PL/SQL or Liquibase work in an Oracode checkout — packages, types, functions, procedures, views, team `*_changelog.xml` updates, DEV-only `_<INITIALS>` shadow objects, original-vs-shadow comparison on DEV, or job/Jira-ticket database implementation. See `SKILL.md` for the full trigger description and the iron rules that govern the workflow.
+PL/SQL or Liquibase work in an Oracode checkout — packages, types, functions, procedures, views, team `*_changelog.xml` updates, DEV-only `_<INITIALS>` shadow objects, original-vs-shadow comparison on DEV. See `SKILL.md` for the full trigger description and the iron rules that govern the workflow.
 
 ## Workflow
 
@@ -166,7 +166,7 @@ Single-shot machine-readiness check (sqlplus, mkstore, alias, wallet, plugin ins
 
 #### Intake
 
-Read the ticket; collect: ticket id + title, business goal, acceptance criteria, affected schema/object/callable names if known, team or changelog (e.g. `visualanalytics_changelog.xml`), known DEV scenarios, open questions, dependencies. If `ticket-start` is installed, defer to its job-workflow path. Carry forward into later phases: ticket id, title, acceptance criteria, branch intent, open questions.
+Read the ticket; collect: ticket id + title, business goal, acceptance criteria, affected schema/object/callable names if known, team or changelog (e.g. `visualanalytics_changelog.xml`), known DEV scenarios, open questions, dependencies. Carry forward into later phases: ticket id, title, acceptance criteria, branch intent, open questions.
 
 #### Scope research
 
@@ -186,7 +186,7 @@ One subagent per variant. Each writes ONLY its own `util/<TICKET>/variants/<n>/`
 
 #### Parameter-verification subagent
 
-Read-only subagent that probes DEV with the inferred parameter values and counts rows. Used twice — once before `perf-bench.sh` (Phase 5 bench arguments) and once before the compare-spec approval surface (Phase 6 spec runs). For each (case, run, variant) it constructs a representative SELECT against the underlying tables the target callable would query (using the scope digest to find the tables), runs it, and records the row count. If 0, it explores nearby alternatives (widen the date window; swap ISO/market combo; drop one filter) and returns a recommendation. Pass/fail bar varies by `evidence_mode`: `regression_compare` needs both original + shadow > 0; `shadow_expected_result` needs only shadow; `compile_contract_validation` is N/A. The parent updates the artifact with verified values + audit trail (`verified_against_dev`, `verified_row_count`, `original_inferred_values` if changed) BEFORE the user-approval surface is shown.
+Read-only subagent that probes DEV with the inferred parameter values and counts rows. Used twice — once before `perf-bench.sh` (Phase 5 bench arguments) and once before the compare-spec approval surface (Phase 6 spec runs). For each (case, run, variant) it constructs a representative SELECT against the underlying tables the target callable would query (using the scope digest to find the tables), runs it, and records the row count. If 0, it explores nearby alternatives (widen the date window; swap ISO/market combo; drop one filter) and returns a recommendation. Pass/fail bar varies by `evidence_mode`: `regression_compare` needs both original + shadow > 0; `shadow_expected_result` needs only shadow; `compile_contract_validation` is N/A. The parent then updates the right artifact in the right format BEFORE the user-approval surface is shown: in **Phase 5** the parent rewrites each variant's `perf.sql` with verified arguments and records the audit trail (verified args, row count, original inferred values if changed, change reason) as a SQL header comment block — `bench_spec.json` is not touched. In **Phase 6** the parent updates `compare_spec.json` with per-run JSON fields (`verified_against_dev`, `verified_row_count`, `original_inferred_values` if changed, `verification_change_reason`).
 
 #### Variant decision surface
 

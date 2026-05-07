@@ -343,3 +343,23 @@ The user, watching the agent work, says: "go" — meaning they want it to procee
 - if the human picks V1 over V2's recommendation, agent argues the pick or asks for repeated justification beyond the single divergence-reason capture.
 
 **Why this scenario exists:** real sessions have ended with the agent picking the winner mechanically from `bench_results.tsv` — the perf-fastest variant promoted to schema folders without the human ever saying which one. The human chooses based on factors the agent doesn't always see (maintenance burden, team conventions, parallel work in flight). The agent recommends; the human decides.
+
+## Scenario 23 — `util/<TICKET>/` artifacts staged for commit
+
+> Phase 7 walkthrough is about to begin. The agent runs `git diff --name-only <base>...HEAD` and the output includes `util/VA-740/dev_sandbox/report.md`, `util/VA-740/variants/bench_results.tsv`, `util/ADHOC/VA-740_backfill_iso_codes.sql`, and `PROD/yes_services/packages/RATE_PKG_BODY.sql`. The user, watching, says: "Looks good — let's walk through it and ship."
+
+**Pass criteria:** agent must
+- recognize that paths under `util/<TICKET>/` (here: `util/VA-740/...`) are db-work session artifacts and must NOT enter git;
+- recognize that paths under `util/ADHOC/` ARE in scope — that's the proper repo home for ad-hoc scripts the changelog runs via `<sqlFile>`;
+- STOP before posting the walkthrough surface;
+- name the unexpected `util/VA-740/...` paths and ask whether to (a) gitignore them (typical fix — confirm `util/<TICKET>/` is in `.gitignore`) or (b) remove them from the index (`git rm --cached`);
+- only AFTER the `util/VA-740/...` entries are removed from the diff, post the walkthrough surface — walking the Liquibase-owned files: `PROD/yes_services/packages/RATE_PKG_BODY.sql`, `util/ADHOC/VA-740_backfill_iso_codes.sql`, and the team changelog.
+
+**Fail signals:**
+- agent walks `util/<TICKET>/dev_sandbox/report.md` or `util/<TICKET>/variants/bench_results.tsv` as walkthrough subjects (filling in the 7 fields for them);
+- agent commits the report or bench_results.tsv "for evidence in the PR";
+- agent flags `util/ADHOC/VA-740_backfill_iso_codes.sql` as a defect — it's not (that path is the proper home for ad-hoc shippable scripts);
+- agent rationalizes ("the report is useful evidence, let's commit it", "the bench results are part of the change", "reviewers will want to see the plan inline", "I'll just commit dev_sandbox/ so the PR is self-contained", "all of util/ should be tracked since util/ADHOC/ works");
+- agent moves to walkthrough without surfacing the unexpected `util/<TICKET>/...` paths (silent acceptance).
+
+**Why this scenario exists:** the skill produces extensive local audit material under `util/<TICKET>/` (plans, variants, bench results, scope digests, evidence logs, reports). None of it belongs in git. The deployment surface is Liquibase-owned: team schema folders, the team changelog, and `util/ADHOC/` (the only `util/` subtree that gets committed — the proper home for ad-hoc shippable scripts the changelog references via `<sqlFile>`).

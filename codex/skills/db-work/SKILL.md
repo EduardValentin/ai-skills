@@ -1,6 +1,6 @@
 ---
 name: db-work
-description: Use when changing PL/SQL or Liquibase changelogs in an Oracode checkout — packages, types, functions, procedures, views, DEV-only shadow objects with user-initial suffixes (e.g. PACKAGE_A_EDI), original-vs-shadow comparison on DEV, SQLPlus DEV execution, or job/Jira-ticket database implementation. Performance-critical repository.
+description: Use when changing PL/SQL or Liquibase changelogs in an Oracode checkout — packages, types, functions, procedures, views, DEV-only shadow objects with user-initial suffixes (e.g. PACKAGE_A_EDI), original-vs-shadow comparison on DEV, SQLPlus DEV execution. Performance-critical repository.
 ---
 
 # DB Work
@@ -13,7 +13,6 @@ Oracle/Liquibase changes in Oracode: brainstorm-first design, multi-variant impl
 - Updating a team `*_changelog.xml`.
 - Generating DEV-only `_<INITIALS>` shadow objects.
 - Comparing original vs. shadow on DEV.
-- Job/Jira-ticket database implementation.
 
 ## Phase 1 — Machine readiness (gateway)
 
@@ -50,7 +49,7 @@ The agent advances between phases on its own; `"what next?"` / `"ready when you 
 | When this happens | Agent's next action |
 |-------------------|---------------------|
 | Plan approved (Phase 4) | Enter Phase 5: scaffold variant directories, dispatch per-variant subagents per `05-implementation-and-shadow.md`. |
-| Variant subagents return with filled-in `perf.sql` / `bench_spec.json` | Dispatch the parameter-verification subagent (`06-dev-execution-and-evidence.md` "Parameter-verification subagent"). Update `perf.sql` / `bench_spec.json` with verified values, then run `perf-bench.sh`. |
+| Variant subagents return with filled-in `perf.sql` / `bench_spec.json` | Dispatch the parameter-verification subagent (`06-dev-execution-and-evidence.md` "Parameter-verification subagent"). Rewrite each variant's `perf.sql` with verified arguments (header comments record the audit trail), then run `perf-bench.sh`. `bench_spec.json` is not touched — it carries no args. |
 | Bench finishes — `bench_results.tsv` exists for every variant | Post the variant decision surface per `05-implementation-and-shadow.md`. **Wait for the human's pick.** |
 | Human picks a variant | Enter Phase 6: promote the chosen variant's edits to Liquibase-owned schema, emit `shadow_manifest.json`, run `generate_metadata_probe.py`, run `generate_compare_spec.py`, dispatch the parameter-verification subagent, present `compare_spec.json`. **Wait for compare-spec approval.** |
 | `compare_spec.json` approved | Generate compare/stats harnesses and run them (spec approval covers the spec-defined writes; reads run gate-free). Summarize logs. |
@@ -78,6 +77,7 @@ DDL/DML gating, approval-token shape, and the per-phase mechanics live in the ir
 - **Batched walkthrough mandatory before claiming done.** File list from `git diff --name-only <base>...HEAD`. Approval token must be explicit. Report generation happens in the NEXT turn after approval. Per-file schema: `references/07-code-walkthrough-and-report.md`.
 - **Doctor amber banner** on the first line of every generated artifact AND the chat reply that delivers it. Repeat on every artifact in the session.
 - **End-of-session cleanup runs in three steps, in order:** `dev_cleanup.sh` per ticket → per-ticket scratch removal → `cleanup_session.sh`. Aborting any step halts the rest. Trigger phrases, file lists, and gate mechanics: `references/08-session-cleanup.md`.
+- **db-work session artifacts under `util/<TICKET>/` are local-only — never staged, committed, or pushed.** The skill's audit / scratch / evidence material (plan, variants, bench results, scope digest, evidence logs, report) lives there for in-session review. It is NOT part of the deployment surface and MUST NOT enter git. The deployment surface is: the team's schema folders (`PROD/`, `YES_SERVICES/`, sibling team folders), the team `*_changelog.xml`, and ad-hoc shippable scripts under `util/ADHOC/` referenced by the changelog. **`util/ADHOC/` is the ONLY path under `util/` that gets committed.** It's the proper repo home for one-shot data-fix / migration scripts referenced from a Liquibase `<sqlFile>` changeset. Everything else under `util/` — i.e. anything matching `util/<TICKET>/...` produced by this skill — is local-only. If `git diff --name-only <base>...HEAD` shows anything under `util/<TICKET>/`, the agent stops, surfaces it, and removes it from the index (or confirms it's gitignored) before continuing the walkthrough. Rationalizations that fail: "the report is useful evidence, let's commit it"; "the bench results are part of the change"; "reviewers will want to see the plan inline"; "I'll just commit `dev_sandbox/` so the PR is self-contained"; "all of `util/` should be tracked since `util/ADHOC/` works".
 
 ## Session lifecycle
 
