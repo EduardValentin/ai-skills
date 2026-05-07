@@ -19,6 +19,17 @@ Carry forward into later phases: ticket id, title, acceptance criteria, branch i
 
 The policy — "PL/SQL scope reads happen in a subagent, never in the parent" — is the iron rule in `SKILL.md`. This section covers the *mechanics*: when to dispatch, the subagent prompt, the digest schema, and what the parent does with what comes back.
 
+**Why this is gated:** PL/SQL packages routinely run 1000+ lines; pulling several into the main window has been observed to consume the bulk of a 250K-token session before the plan is even drafted. The subagent isolates that cost in a disposable context and returns a digest the parent can hold cheaply.
+
+**Rationalizations that fail the rule:**
+- "just look at the file";
+- "it's only one package";
+- "the subagent is overkill for this one";
+- "the user explicitly named the file so I should look at it";
+- "the file isn't that big";
+- "I'll just skim it";
+- "I'll fall back to direct reads since the first digest was incomplete" — re-dispatch the subagent with a corrective prompt instead.
+
 ### When to dispatch
 
 Immediately after the Intake fields are populated, BEFORE the brainstorm gate runs. Brainstorm and plan-writing operate on the digest, not on raw source.

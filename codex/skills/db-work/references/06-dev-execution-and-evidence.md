@@ -15,9 +15,34 @@ Picking the right `evidence_mode` is what tailors Phase 6 to the implemented sce
 
 Exception: if no variant cleared the plan's threshold, Phase 6 does NOT auto-engage — see `references/04-performance-debugging.md` adjacent-code expansion path.
 
-## Pre-execution announce (mandatory, 5 lines)
+## DEV write gate (announce + "go")
 
-Before invoking any SQL on DEV, the agent posts a five-line announce and waits for explicit "go":
+The iron rule in `SKILL.md`: pre-execution announce + explicit "go" required ONLY for DDL or DML mutation against DEV. Everything else runs without a gate.
+
+### What requires announce + "go"
+
+- **DDL:** `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `GRANT`, `REVOKE`, `RENAME`.
+- **DML mutation:** `INSERT`, `UPDATE`, `DELETE`, `MERGE`.
+- **Anonymous PL/SQL blocks** (`BEGIN ... END;`) that contain any of the above.
+- **Procedure / function calls whose documented side effects include DML or DDL** per `util/<TICKET>/scope_digest.md` or the approved `compare_spec.json`. If side effects are not documented, treat as mutating (lean safe).
+- **Functions with OUT parameters** unless the scope digest documents them as read-only.
+
+### What runs WITHOUT a gate
+
+- **Read-only SQL:** `SELECT`, `WITH ... SELECT`, `DESC`, `EXPLAIN PLAN`, `SHOW`, queries against `v$mystat` / `v$sql` / `user_tab_columns` / any data-dictionary or dynamic-performance view.
+- **Function calls whose side effects are explicitly read-only** per the scope digest or spec.
+
+The agent posts a one-line "running: <short summary>" before the action and a one-line result summary after, so the user can audit progress, but no "go" is required.
+
+### Plan and spec approval cover the mutations they authorize
+
+When the user approves `plan.md`, the bench-defined mutations are covered — variant shadow compiles via `run_sqlplus_dev.sh` against the variant's `deploy_shadow.sql`, bench harness side effects documented in the variant's `notes.md`. When the user approves `compare_spec.json`, the spec-defined mutations are covered — observer pattern inserts into helper tables, the observer's `cleanup_sql: "rollback;"`, expected_delta materialization writes the spec authorizes. Running these covered mutations does NOT need a fresh announce; the prior approval IS the consent. Mutations OUTSIDE what plan or spec authorize ALWAYS re-gate to the full announce + "go".
+
+End-of-session DEV cleanup (`scripts/dev_cleanup.sh`) is DDL (`DROP` of every shadow object) and ALWAYS re-gates with a full announce, even though the shadows themselves were covered by plan approval at compile time. End-of-session is a fresh consent surface.
+
+### The 5-line announce
+
+Before invoking any gated DEV operation, the agent posts:
 
 ```
 about to run:  <script path>
@@ -27,13 +52,27 @@ evidence_mode: <regression_compare | shadow_expected_result | expected_delta | p
 log:           <spool/log path that the post-execution summary will reference>
 ```
 
-**Hard rules:**
+Hard rules on the announce:
 
 - If ANY field is unknown, STOP and ask. Do not fabricate. Do not infer `evidence_mode` from filename, directory name, or file contents.
-- Re-announce in full once unknowns are resolved. **Never honor "go" against an announce that contains `<unknown>` placeholders.**
+- Re-announce in full once unknowns are resolved. Never honor "go" against an announce that contains `<unknown>` placeholders.
 - "User asked me to run it" does not waive the announce — the user can say "go" in 2 seconds after the announce.
 - "Wallet's set up", "creds are loaded", "the connection works" are auth statements, NOT execution consent.
 - The `log` field commits the spool path before execution, so the post-execution summary has a pre-declared evidence anchor.
+
+### Rationalizations that fail the gate
+
+- "this DML is small";
+- "this DDL is just creating a temp table";
+- "the user is watching, they can interrupt";
+- "the rollback at the end means it's safe";
+- "I'll just run it and revert if needed";
+- "the DELETE is just helper-table cleanup";
+- "this DDL is in the same shape as what the plan approved" (different DDL → different gate);
+- "the user's prior 'go' on the deploy covers this DML too";
+- "this is the same kind of thing as the spec asked for".
+
+All of these mean: STOP, post the 5-line announce, wait for "go".
 
 ## Execution
 
@@ -196,6 +235,20 @@ The verification verdict depends on the run's `evidence_mode`:
 
 If the subagent volunteers a recommendation outside its scope (e.g. "you should change `evidence_mode` from `regression_compare` to `expected_delta`"), the parent surfaces the observation to the user as a separate question — but does NOT act on it without user input.
 
+### Rationalizations that fail the verification rule
+
+- "the inferred values look right";
+- "we'll see if rows come back when the bench runs";
+- "0 rows is still informative";
+- "the spec is short, no need to verify";
+- "the user can spot bad values during approval";
+- "verification adds friction";
+- "the user already approved the plan, parameters are implicit";
+- "the variant subagent already picked good values";
+- "the inference is mechanical, it must be right".
+
+The gate exists precisely because inference is mechanical and DEV data is messy. Empty result sets must be discovered before the user approves, not at run time.
+
 ## Compare-spec approval gate (mandatory)
 
 After `generate_compare_spec.py` produces `util/<TICKET>/dev_sandbox/compare_spec.json` AND the parameter-verification subagent has updated it with verified values, the agent posts a review surface to the user and waits for an explicit affirmative approval token before generating any harness. This gate has the same shape as the Phase 7 walkthrough gate.
@@ -239,7 +292,20 @@ Harness generation (`generate_compare_harness.py`, `generate_stats_harness.py`) 
 - run any harness against DEV;
 - mutate `compare_spec.json` after the user has been shown a version (only further user-driven edits modify it after presentation).
 
-Rationalizations that fail the gate are listed in `SKILL.md`'s iron rule — they apply here verbatim.
+### Rationalizations that fail this gate
+
+- "the user told me to start the perf testing so the spec is implicitly approved";
+- "the spec is straightforward";
+- "the spec is short";
+- "the user said go on the announce so that covers downstream artifacts";
+- "the harness will fail if the spec is wrong, so review-by-failure is fine";
+- "I'll let the user review the harness output instead";
+- "the user has reviewed compare specs before, so they trust the inference";
+- "this is the same shape as the last ticket's spec";
+- "the user already approved the plan";
+- "the user will see the spec inside the harness".
+
+All of these mean: STOP, post the verbatim review surface, wait for the explicit token.
 
 ## Harness execution (post-spec-approval)
 

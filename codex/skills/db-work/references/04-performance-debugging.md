@@ -157,3 +157,19 @@ In any of those cases, the agent surfaces the regression on the variant decision
 ## Reporting
 
 Bench output and per-run logs are referenced from the handoff report. The report names the winner the human picked, the agent's recommendation (and reasoning), and — if the two diverge — the human's reason for diverging. See `references/07-code-walkthrough-and-report.md` for the report fields.
+
+## Rationalizations that fail the perf-evidence rule
+
+Performance evidence MUST come from `perf-bench.sh` and live in `bench_results.tsv`. Ad-hoc `set timing on` output, a single SQLPlus elapsed line, "I ran it twice and it was about 80ms", or any timing number the agent observed in passing is NOT a benchmark.
+
+These all mean: STOP, run the bench properly:
+
+- "I already saw the timing";
+- "one run is enough to see the pattern";
+- "we don't need warmup for a quick check";
+- "I'll just paste the elapsed time";
+- "this is small enough that the bench is overkill";
+- "the user just wants a number";
+- "the variant is obviously faster, no need to bench".
+
+Chat-pasted milliseconds are not evidence; `bench_results.tsv` with the full KPI grid is.
