@@ -22,7 +22,7 @@ For each file, the agent presents — all seven fields required, no field may be
 2. **Purpose** (one sentence).
 3. **What changed** — concrete diff summary, not "minor edits".
 4. **Why this change** — link to plan section + brainstorm decision.
-5. **Performance rationale** — which variant won, by how much (concrete number from `bench_results.tsv`), on which KPI. "See evidence" is not acceptable.
+5. **Performance rationale** — which variant the human picked, by how much (concrete number from `bench_results.tsv`), on which KPI. Note the agent's recommendation if different, with the divergence reason. "See evidence" is not acceptable.
 6. **Risks and reviewer attention points.**
 7. **Pointer to the evidence file** proving the change is safe.
 
@@ -62,8 +62,12 @@ Emits `util/VA-515/dev_sandbox/report.md` in this fixed shape:
 - Branch
 - Team changelog
 - Variants benchmarked: N
-- Winner: V<n> (Δ elapsed_ms, Δ consistent_gets vs baseline)
-- Picked under rule: <verbatim from plan's "winner-picked-when">
+- Performance acceptance criterion (verbatim from plan): <...>
+- Qualifying variants: V<a>, V<b>, ...
+- Agent's recommendation: V<n> — <one-line reason>
+- Human's pick: V<m>
+- Divergence reason (if pick != recommendation): <user-supplied reason, captured at the time of the pick>
+- Winner KPIs vs baseline: Δ elapsed_ms, Δ consistent_gets
 
 ## Files changed (Liquibase-owned)
 - list (from git diff)

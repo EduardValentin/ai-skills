@@ -1,6 +1,6 @@
 # Implementation and Shadow Objects
 
-Implementation runs under the harness's plan-execution workflow once the plan is approved (auto-engaged on plan-driven implementation; not invoked by name from db-work). For multi-variant work, the OPTIONAL parallelization path is described at the end of this file.
+Implementation runs once the plan is approved — use `superpowers:executing-plans` (sequential) or `superpowers:subagent-driven-development` (per-task subagents). For multi-variant work, db-work's per-variant subagent path is described at the end of this file.
 
 ## Variant directory layout
 
@@ -94,7 +94,7 @@ Parallel dispatch is an additional optimization on top, available when:
 - The plan has **3 variants**, AND
 - Per-variant implementation involves substantial offline work (multi-file edits, non-trivial shadow generation, custom harness setup).
 
-For 2 variants, run the per-variant subagents sequentially — coordination overhead beats wall-clock savings. Codex dispatches subagents directly; db-work does not rely on a harness auto-fire here.
+For 2 variants, run the per-variant subagents sequentially — coordination overhead beats wall-clock savings.
 
 ### Coordination rules
 
@@ -119,9 +119,10 @@ The parent agent — NOT the subagents — handles:
 
 - Writing `bench_spec.json` after all subagents return (it lists all variants).
 - Compiling each variant's shadow to DEV via `run_sqlplus_dev.sh` (sequential per variant, never concurrent — even with distinct suffixes, simultaneous compiles can serialize unfavourably and obscure the comparison).
+- **Dispatching the parameter-verification subagent** (`references/06-dev-execution-and-evidence.md` "Parameter-verification subagent") to probe DEV with each variant's `perf.sql` arguments. Update each `perf.sql` and `bench_spec.json` with verified values + `verified_against_dev: true` annotations BEFORE running `perf-bench.sh`. Empty result sets discovered now are cheap; discovered after the bench, they invalidate hours of perf evidence.
 - Running `perf-bench.sh` (sequential by design — concurrent benches break the warm-cache assumption).
-- Picking the winner.
-- Promoting the winner's edits to the Liquibase-owned schema folders.
+- Posting the variant decision surface (see below) and waiting for the human's pick.
+- Promoting the human-chosen variant's edits to the Liquibase-owned schema folders — only after the pick.
 
 ### When subagents return
 
@@ -129,8 +130,81 @@ Each subagent reports back its variant folder path and a 1-paragraph summary. Th
 
 If a subagent proposes adjacent-code changes, the parent agent treats it as scope expansion — re-brainstorm with the user per `references/04-performance-debugging.md`.
 
-## Exit — auto-advance to Phase 6
+## Variant decision surface (mandatory before Phase 6)
 
-When the bench picks a winner under the plan's "winner-picked-when" rule and `bench_results.tsv` exists, Phase 5 ends and Phase 6 auto-engages — see `SKILL.md`'s "Phase progression" table for the transition rule. The Phase 6 entry sequence (manifest → metadata probe → compare_spec → review surface) is in `references/06-dev-execution-and-evidence.md` under "Entry".
+After `bench_results.tsv` is written, the agent does NOT pick a winner. The agent posts a decision surface to the human and waits for an explicit pick. This surface is the input the human uses to decide; it is also the artifact the handoff report cites.
 
-If no variant clears the plan's threshold, do NOT auto-advance. Follow the adjacent-code expansion path in `references/04-performance-debugging.md` — STOP, propose adjacent edits, re-brainstorm with the user. Phase 6 only auto-engages on a clean winner pick.
+### Per-variant entries
+
+For every variant — including disqualified ones (so the human sees why) — post:
+
+1. **Identifier** — `V1`, `V2`, `V3`.
+2. **Approach (1 sentence)** — what this variant does, copy-paste from `notes.md`.
+3. **Bench KPIs** — mean / median / p95 for the full KPI grid from `bench_results.tsv` (at minimum `elapsed_ms`, `consistent_gets`; whatever else the plan added).
+4. **Performance acceptance** — `qualifies` or `disqualified — <reason from "Diagnosing a regression" in 04-performance-debugging.md>`.
+5. **Cleanliness assessment** — score against each criterion in the next section.
+6. **Diff size** — files touched + lines changed (`git diff --stat` against the baseline for the variant's `changes/` set).
+7. **Side-effect surface** — DML targets, autonomous transactions, sequence reads, new dependencies. Names only.
+8. **Maintenance burden** — anything the team will have to keep maintaining (refresh job, hint dependent on stats, pinned plan, custom index).
+9. **Review/follow-up risk** — one of: `low` (one-shot review), `medium` (needs a reviewer who knows the package), `high` (broad blast radius or non-idiomatic structure).
+
+### Cleanliness criteria
+
+The agent scores each variant on each axis as `+` (clearly good), `0` (neutral), or `−` (concern), with a short justification (≤ 10 words):
+
+- **Pattern fit** — does it reuse an existing pattern in the team's schema folder, or invent a new one?
+- **Complexity** — single SELECT vs multi-step procedure vs cross-package coordination.
+- **Hidden assumptions** — does correctness depend on stats, an existing index, an optimizer hint, or a particular plan being chosen?
+- **Reviewability** — can a reviewer who knows Oracode but not this ticket understand it from the diff alone, or do they need the brainstorm context?
+- **Reversibility** — if a regression surfaces post-merge, how hard is the rollback? (drop one object: `+`; rewrite a caller: `0`; un-pick a materialized view that other queries now depend on: `−`.)
+- **Test surface** — does it widen the comparison/stats spec scope (more callables affected, more scenarios needed)?
+
+The cleanliness assessment is the agent's judgement, not measured. Ties are fine; explicit `0` is fine. Do not pad with `+` to favour a recommendation.
+
+### Agent recommendation
+
+Below the per-variant entries, the agent posts ONE recommendation, in this exact shape:
+
+```
+Recommended: V<n>
+Reasoning: <2–4 sentences spelling out the trade-off explicitly — e.g. "V2 is 3% slower than V3 on elapsed_ms but reuses the existing TRANS_CONST_OVERLAP cursor pattern, has zero side effects, and a one-shot review surface. V3 introduces a materialized view requiring a refresh job; the perf gain does not justify the maintenance burden.">
+```
+
+The recommendation MUST be a qualifying variant. If only one variant qualifies, the agent recommends it but still posts the decision surface — the human's pick is still required.
+
+### The ask
+
+End the surface with an explicit, short question:
+
+> Which variant should we promote to the Liquibase-owned schema?
+
+Wait for the human to name a variant (`"V2"`, `"go with V1"`, `"the second one"`). Bare assent — `"go"`, `"yes"`, `"approved"`, `"ok"`, emoji-only ack — does NOT pick a variant; it is ambiguous in this context. Re-prompt by name if the response is ambiguous.
+
+### What the gate prevents
+
+Until the human names a variant:
+
+- the agent does NOT promote any variant's edits to `PROD/`, `YES_SERVICES/`, or sibling schema folders;
+- the agent does NOT emit `shadow_manifest.json` for a winner;
+- the agent does NOT enter Phase 6.
+
+The human is allowed to override the recommendation. If they pick a variant the agent did not recommend, the agent accepts the pick without arguing — but asks (once) for the divergence reason so the report can record it. The agent does NOT re-debate the trade-off after the pick.
+
+### Rationalizations that fail the gate
+
+- "V2 is 3ms faster than V3 — that's the winner";
+- "the bench is unambiguous, no need to wait";
+- "the user said start the perf testing, that covers the pick";
+- "the plan said pick the lowest mean, so I picked the lowest mean";
+- "agent recommendation is effectively the pick when the human is silent";
+- "fastest variant wins by default";
+- "user already approved the plan with this winner-picked-when rule";
+- "going to Phase 6 with V<n>, can switch later if user objects".
+
+All of these mean: STOP, post the decision surface (or the missing parts of it), and wait for the human to name a variant.
+
+## Exit — auto-advance to Phase 6 once the human has picked
+
+Phase 5 ends when the human names a variant on the decision surface. At that point, Phase 6 auto-engages — see `SKILL.md`'s "Phase progression" table. The Phase 6 entry sequence (promote-to-schema → manifest → metadata probe → compare_spec → review surface) is in `references/06-dev-execution-and-evidence.md` under "Entry".
+
+If no variant clears the plan's performance acceptance criterion, do NOT post the decision surface yet, and do NOT auto-advance. Follow the adjacent-code expansion path in `references/04-performance-debugging.md` — STOP, propose adjacent edits, re-brainstorm with the user. Phase 6 only engages after a human pick on a qualifying variant.

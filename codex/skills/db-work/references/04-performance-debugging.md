@@ -5,13 +5,19 @@ The repository is performance-critical. Picking the right implementation matters
 ## Algorithm
 
 ```
-1. baseline      capture KPIs for the original on N representative scenarios
-2. hypothesize   for each variant, predict which KPI moves and why
-3. measure       perf-bench.sh --runs M; collect mean, median, p95
-4. diagnose      autotrace + dbms_xplan for any KPI that worsened on any variant
-5. expand?       if no variant beats baseline by the plan's threshold, propose
-                 adjacent-code changes and RE-BRAINSTORM with the user
-6. pick winner   apply the plan's "winner-picked-when" rule; otherwise stop and report
+1. baseline       capture KPIs for the original on N representative scenarios
+2. hypothesize    for each variant, predict which KPI moves and why
+3. measure        perf-bench.sh --runs M; collect mean, median, p95
+4. diagnose       autotrace + dbms_xplan for any KPI that worsened on any variant
+5. expand?        if no variant clears the plan's performance acceptance
+                  criterion, propose adjacent-code changes and RE-BRAINSTORM
+                  with the user
+6. qualify        keep variants that clear the perf acceptance criterion;
+                  drop those that don't
+7. recommend      score each qualifying variant on cleanliness; post the
+                  variant decision surface (per references/05-implementation-
+                  and-shadow.md) with the agent's recommendation + reasoning
+8. wait for pick  the human picks the winner — agent does not pick mechanically
 ```
 
 ## KPIs (default set)
@@ -140,14 +146,14 @@ If the bench shows no variant clears the plan's threshold:
 
 ## Diagnosing a regression
 
-Even if a variant wins on `elapsed_ms`, refuse to declare it the winner if:
+Even if a variant leads on `elapsed_ms`, the agent must flag it as **disqualified for a winner pick** if:
 
 - `consistent_gets` rises >10% on a dependent caller;
 - a new sort appears that didn't exist on the original plan;
 - `plan_cost` rises and `elapsed_ms` improvement is within run-to-run noise (<5%).
 
-In any of those cases, document the regression in the report and either pick a different variant or escalate to the user.
+In any of those cases, the agent surfaces the regression on the variant decision surface (see `references/05-implementation-and-shadow.md`) and recommends against picking it. The human still makes the final call, but a regressed variant should never be the agent's recommendation.
 
 ## Reporting
 
-Bench output and per-run logs are referenced from the handoff report. The report explicitly names the winner plus the rule used to pick it (verbatim from the plan's "winner-picked-when" clause).
+Bench output and per-run logs are referenced from the handoff report. The report names the winner the human picked, the agent's recommendation (and reasoning), and — if the two diverge — the human's reason for diverging. See `references/07-code-walkthrough-and-report.md` for the report fields.

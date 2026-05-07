@@ -1,6 +1,6 @@
 # Planning with Variants
 
-A written plan is REQUIRED before any edit; the harness's plan-writing workflow auto-fires when a multi-step task is identified, and the plan-execution workflow auto-fires when the plan is approved. Db-work does not name them explicitly — if either fails to engage, `db-work-doctor.sh` (Check #7) prints the exact install command.
+A written plan is REQUIRED before any edit — use `superpowers:writing-plans`. After the plan is approved, execution runs through `superpowers:executing-plans` or `superpowers:subagent-driven-development`. If any of these are not available, `db-work-doctor.sh` (Check #7) prints the install command.
 
 ## Plan template
 
@@ -32,8 +32,11 @@ Save as `util/<TICKET>/plan.md`.
 ### V3 — <name>            # optional; include when 2 are insufficient
 - (same fields)
 
-## Winner-picked-when rule
-<concrete rule, e.g. "lowest mean elapsed_ms across 5 runs AND no >10% rise in consistent_gets on PUBLIC_API_X">
+## Performance acceptance criterion
+<concrete perf floor a variant MUST clear to qualify as a candidate, e.g. "≥20% lower mean elapsed_ms vs original AND no >10% rise in consistent_gets on PUBLIC_API_X across 5 runs">
+
+This is the floor — variants that fail it cannot be the winner. It is NOT the selection rule.
+The human picks the winner from among qualifying variants (see "Selection — human picks" below).
 
 ## KPI list
 elapsed_ms, consistent_gets, db_block_gets, sorts_memory, recursive_calls, plan_cost
@@ -52,7 +55,13 @@ elapsed_ms, consistent_gets, db_block_gets, sorts_memory, recursive_calls, plan_
 - A user arriving with a pre-written fix is treated as a candidate variant (V1), not as a completed implementation. The variant gate still applies.
 - Each variant MUST predict which KPI it improves and why. "Just try it" is not a variant.
 - "Adjacent code touched" must be `none` for every variant in the initial plan. Adjacent-code edits require a re-brainstorm — see `references/04-performance-debugging.md`.
-- The "winner-picked-when" rule must be measurable from `bench_results.tsv` alone. Vague rules ("V1 should feel faster") are rejected.
+- The "performance acceptance criterion" must be measurable from `bench_results.tsv` alone. Vague criteria ("V1 should feel faster") are rejected. The criterion only filters qualifiers — the final pick is the human's, not derived from KPIs.
+
+## Selection — human picks
+
+The plan does NOT name a winner. The plan only states the performance acceptance criterion (a floor) and the KPI list. After Phase 5 benches all variants, the agent posts a variant decision surface (see `references/05-implementation-and-shadow.md`) and the human picks.
+
+Reasoning: a 3% perf gain that introduces a maintenance burden, a hidden coupling to an existing index, or a non-idiomatic structure is not automatically the winner. Cleanliness, fit with existing patterns, and review/follow-up risk are co-equal axes the human weighs alongside KPIs.
 
 ## Output of the phase
 

@@ -26,6 +26,49 @@ Each generated case contains one or more `runs`. Runs are based on the callable'
 
 When matching parameters exist, the generator may propose varied ISO, market, or time-window values. When no safe scenario dimensions are inferred, it emits a single `baseline_review_required` run. Review all runs before execution; add, remove, or edit runs to reflect the business cases that matter.
 
+## Parameter verification metadata
+
+After `generate_compare_spec.py` produces the draft, the agent dispatches a parameter-verification subagent (see `references/06-dev-execution-and-evidence.md` "Parameter-verification subagent") to probe DEV with each run's inferred arguments. The subagent's findings are written back into the spec as per-run annotations BEFORE the user is asked to approve:
+
+```json
+{
+  "name": "pjm_da_last_30_days",
+  "args": { "iso": "PJM", "market": "DA", "start_dt": "sysdate-30", "end_dt": "sysdate" },
+  "evidence_mode": "regression_compare",
+  "verified_against_dev": true,
+  "verified_row_count": 1247,
+  "original_inferred_values": null
+}
+```
+
+If the subagent recommended a change because the inferred values returned 0 rows:
+
+```json
+{
+  "name": "nyiso_da_last_30_days",
+  "args": { "iso": "NYISO", "market": "DA", "start_dt": "sysdate-30", "end_dt": "sysdate" },
+  "evidence_mode": "regression_compare",
+  "verified_against_dev": true,
+  "verified_row_count": 891,
+  "original_inferred_values": { "iso": "NYISO", "market": "RT", "start_dt": "sysdate-30", "end_dt": "sysdate" },
+  "verification_change_reason": "inferred RT market returned 0 rows; DA returned 891"
+}
+```
+
+If the subagent could not verify a run (e.g. the underlying table for the callable wasn't in the scope digest, or the run is `compile_contract_validation` and verification doesn't apply):
+
+```json
+{
+  "name": "type_signature_check",
+  "args": null,
+  "evidence_mode": "compile_contract_validation",
+  "verified_against_dev": false,
+  "unverifiable_reason": "compile_contract_validation runs prove signature compatibility, no row-count meaning"
+}
+```
+
+The compare/stats harness generators do not consume these annotations for SQL emission — they're audit fields. But the user-approval surface MUST display them: every run shows its `verified_row_count` (or `unverifiable_reason`) so the user is approving values that are known to produce data, not values that look plausible.
+
 ## Scope controls
 
 ```bash

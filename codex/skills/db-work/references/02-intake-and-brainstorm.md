@@ -99,7 +99,7 @@ If the subagent volunteers a fix or a variant idea, the parent ignores it. Desig
 
 ## Brainstorm gate
 
-A structured brainstorming pass is REQUIRED before any plan (the harness's brainstorming workflow auto-fires on creative work; if it does not, run `db-work-doctor.sh` — Check #7 surfaces the exact install command).
+A structured brainstorming pass is REQUIRED before any plan — use `superpowers:brainstorming`. If it's not available, run `db-work-doctor.sh` (Check #7) for the install command.
 
 Brainstorm objectives — align with the user on:
 
