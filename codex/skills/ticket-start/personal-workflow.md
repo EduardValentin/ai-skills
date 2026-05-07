@@ -1,6 +1,6 @@
 # Personal Workflow
 
-Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, React Reference App, Architecture Research, Clarifications, and Ticket Requirements sections apply during Setup; the Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, standards, Verify, and Ship.
+Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup; the Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, standards, Verify, and Ship.
 
 ## Ticket Intake (Linear)
 
@@ -26,28 +26,6 @@ Identify up front:
 - The reference route/screen for this feature.
 - The matching production route/screen.
 - The important UI states the feature has (default, loading, empty, hover, focus, active, disabled, error, success, expanded/collapsed, modal-open, validation, navigation), so the same flows can be exercised in both apps during verification.
-
-## Architecture Research
-
-Gather only the minimum code context needed:
-
-- the entry point or feature boot path
-- the target module or component
-- nearby reducers, services, fetchers, transformers, hooks, tests, or shared utilities that define the current pattern
-- existing implementations of similar behavior in the repo
-
-Reuse existing project patterns before inventing new abstractions. In earlier-stage personal projects without strong patterns, introduce clean patterns deliberately instead of improvising — favor simple architecture, clear ownership boundaries, composable modules, and low-coupling designs that scale.
-
-## Clarifications
-
-Ask concise clarifying questions only when the ticket, scoped PRD, and design reference still leave material ambiguity.
-
-## Ticket Requirements
-
-- Treat the Linear ticket as the source of truth for scope.
-- Prefer reading the ticket directly over relying on a partial retelling.
-- If acceptance criteria are missing, vague, or not testable, stop and ask for clarification.
-- If the ticket conflicts with repository instructions or existing architecture, surface the conflict before implementation.
 
 ## Hand-off To Brainstorm
 

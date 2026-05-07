@@ -6,7 +6,7 @@ Loaded during the Verify phase **only** when the personal project has a runnable
 
 Two distinct verifications. Both are required. Both are reported separately at closeout.
 
-- **Visual parity** — the implemented feature matches the prototype.
+- **Visual parity** — the implemented feature matches the prototype, confirmed by both numeric style/layout extraction and visual inspection.
 - **Behavior** — the production feature's business logic and behavior are correct across every relevant state and scenario.
 
 ## Setup
@@ -14,13 +14,17 @@ Two distinct verifications. Both are required. Both are reported separately at c
 1. Start both apps locally:
    - The production app on its dev server.
    - The `designs/` React reference app on its dev server.
-2. Open both apps in the internal browser session, side by side.
-3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison or screenshot.
+2. Open both apps in the browser session. Use `browser_tabs` to switch between them; do not rely on a compressed side-by-side view to spot small differences.
+3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison, screenshot, or `browser_evaluate` call.
 4. If either app cannot be started, the feature cannot be exercised in both apps, or screenshots cannot be captured: stop, report the blocker explicitly, and do not claim parity was verified.
 
 ## Pass 1 — Visual Parity
 
-Drive both apps to each important UI state of the implemented feature:
+Vision alone misses small differences in spacing, font-weight, color, border-radius, line-height, and shadow. Pass 1 must combine **programmatic style and layout extraction** with element-level visual inspection. Numbers catch what vision misses — a 4px gap difference, a `font-weight: 500` vs `400`, a `#0f172a` vs `#111827`. Treat any numeric divergence as a mismatch.
+
+### Important UI states
+
+Cover every state the feature surfaces:
 
 - Default
 - Loading
@@ -32,15 +36,98 @@ Drive both apps to each important UI state of the implemented feature:
 - Modal-open
 - Navigation states tied to the feature
 
-For each state:
+### Matched-element inventory (do this first)
 
-1. Drive both apps into the same state.
-2. Capture screenshots of the same state in both apps.
-3. Compare directly: colors, spacing, margins, padding, typography, sizing, radii, shadows, alignment, animation-relevant states, and the relevant interaction states affected by the ticket.
-4. Capture screenshots at every relevant responsive breakpoint, plus widths immediately before and after each breakpoint switch.
-5. If a mismatch is found, fix the implementation and re-run the parity pass for the affected states. Do not declare parity until the comparison is clean.
+Before any comparison, enumerate matched element pairs for the feature. For every visible region — header, button, input, label, card, list item, icon, badge, link, divider, container — identify the matching element in both apps. Match by role, accessible name, text content, or `data-testid`. Record:
 
-Reference `react-parity.md` for the parity rules being checked.
+- the selector you will use in each app
+- which prototype element maps to which production element
+- any element that exists in one app but not the other (an unmatched element is a parity miss; flag it explicitly)
+
+If you cannot match all visible elements, the inventory is incomplete and Pass 1 cannot start.
+
+### Per-state procedure
+
+For each important UI state, at every relevant breakpoint plus the widths immediately before and after each breakpoint switch:
+
+1. **Drive both apps into the same state.** Same route, same data, same interaction depth, same viewport, same device scale, same zoom.
+
+2. **Element-level screenshots per matched pair.** Use `browser_take_screenshot` with an element selector for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
+
+3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair, run `browser_evaluate` in both apps to read computed styles and bounding rects:
+
+   ```js
+   ((selector) => {
+     const el = document.querySelector(selector);
+     if (!el) return { missing: true, selector };
+     const cs = getComputedStyle(el);
+     const rect = el.getBoundingClientRect();
+     return {
+       font: {
+         family: cs.fontFamily,
+         size: cs.fontSize,
+         weight: cs.fontWeight,
+         style: cs.fontStyle,
+         lineHeight: cs.lineHeight,
+         letterSpacing: cs.letterSpacing,
+         textTransform: cs.textTransform,
+         textDecoration: cs.textDecorationLine,
+       },
+       color: { fg: cs.color, bg: cs.backgroundColor, opacity: cs.opacity },
+       box: {
+         padding: cs.padding,
+         margin: cs.margin,
+         border: cs.border,
+         borderRadius: cs.borderRadius,
+         boxShadow: cs.boxShadow,
+         outline: cs.outline,
+       },
+       layout: {
+         display: cs.display,
+         flexDirection: cs.flexDirection,
+         alignItems: cs.alignItems,
+         justifyContent: cs.justifyContent,
+         gap: cs.gap,
+         position: cs.position,
+       },
+       size: { width: rect.width, height: rect.height },
+       transform: cs.transform,
+     };
+   })('YOUR_SELECTOR')
+   ```
+
+   Compare property-by-property, prototype against production. Any divergence is a mismatch unless it is a deliberate, documented divergence raised during planning (rare).
+
+4. **Layout-position check.** For matched elements that share a parent, compare `getBoundingClientRect()` `x`, `y`, `width`, `height`. Position drift inside the same parent reveals alignment, gap, padding, or sizing mismatches that style values alone may not surface.
+
+5. **Visual cross-check.** Inspect the element-level screenshots. Vision is the redundant check on top of numbers, not the primary one. If a screenshot looks wrong but styles match, dig deeper — a parent layout, a sibling, or a pseudo-element may be the cause.
+
+6. **Fix-and-rerun.** If any mismatch is found — visual, computed-style, or layout-position — fix the implementation and re-run Pass 1 for every state where the changed property could surface. Do not narrow the re-run to only the state that reported the bug.
+
+### What "clean" means
+
+Pass 1 is clean only when **all** of the following hold for every matched element pair, at every important state, at every relevant breakpoint:
+
+- `font-family`, `font-size`, `font-weight`, `font-style`, `line-height`, `letter-spacing`, `text-transform`, `text-decoration` match.
+- `color`, `background-color`, `opacity` match.
+- `padding`, `margin`, `border`, `border-radius`, `box-shadow`, `outline` match.
+- `display`, `flex-direction`, `align-items`, `justify-content`, `gap`, `position` match.
+- `width` and `height` agree within sub-pixel rounding.
+- `transform` matches (relevant for animation rest states).
+- The matched-element inventory is complete: no unmatched elements in either app.
+- Element-level screenshots agree under visual inspection.
+
+If any one of these is not true, parity is **not** clean. Do not declare visual parity. Do not advance to Pass 2.
+
+### Forbidden shortcuts
+
+- Declaring parity off full-page screenshots alone.
+- Skipping `browser_evaluate` because the screenshots "look the same."
+- Restricting the matched-element inventory to elements named in the ticket — the inventory covers every visible region of the feature.
+- Tolerating "small" numeric differences. There is no tolerance budget — different numbers mean different rendering.
+- Re-running only the state that surfaced the bug instead of every state where the changed property could affect rendering.
+
+Reference `react-parity.md` for the parity rules being applied.
 
 ## Pass 2 — Behavior
 
