@@ -23,7 +23,7 @@ Implementation work driven by a ticket. The skill enforces a strict phase order:
 Choose one before reading any detail file:
 
 - **Job workflow** — ticket comes from Jira or is pasted by the user. Read `job-workflow.md`.
-- **Personal workflow** — ticket comes from Linear; project has `PRD.md` and a `designs/` reference app. Read `personal-workflow.md`. Also read `react-parity.md` if `designs/` is a runnable React app.
+- **Personal workflow** — ticket comes from Linear; project has `PRD.md` and a `designs/` reference app. Read `personal-workflow.md` (which loads `react-parity.md` when applicable).
 
 If the workflow is ambiguous, ask the user before loading anything else.
 
@@ -63,6 +63,16 @@ Each phase is a gate. Do not advance until the prior gate is satisfied. Each nam
    - If a source of truth is unavailable, say what could not be verified. Do not fill the gap from memory.
 
 4. **Workflow-specific reading.** Read the workflow file selected above. Stop when the relevant facts are gathered — do not push past the Brainstorm gate without them.
+
+5. **Architecture research.** Gather only the minimum code context needed to brainstorm meaningfully:
+   - the entry point or feature boot path
+   - the target module or component
+   - nearby reducers, services, fetchers, transformers, hooks, tests, or shared utilities that define the current pattern
+   - existing implementations of similar behavior in the repo
+
+   Reuse existing project patterns before inventing new abstractions. The bar for advancing to Brainstorm is not "ambiguity is fully resolved" — brainstorming is what resolves it. The bar is "I know enough to have a productive brainstorm with the user."
+
+6. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the ticket conflicts with repository instructions or existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after the workflow-specific reading.
 
 ## Implementation Standards
 

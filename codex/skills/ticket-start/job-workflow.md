@@ -1,6 +1,6 @@
 # Job Workflow
 
-Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake, Clarifications, and Architecture Research sections apply during Setup; the Verification section applies during Verify. Return to `SKILL.md` for phase ordering, standards, and Ship.
+Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup; the Verification section applies during Verify. Return to `SKILL.md` for phase ordering, standards, and Ship.
 
 ## Ticket Intake
 
@@ -12,27 +12,6 @@ Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.m
    - explicit context the user provided
    - non-goals, if present
    - open ambiguities that could change the implementation
-
-## Clarifications
-
-- Ask concise clarifying questions whenever the ticket leaves material ambiguity. Prefer a short focused set over broad brainstorming.
-- If acceptance criteria are missing, vague, or not testable, stop and ask before continuing.
-- If the ticket conflicts with repository instructions or existing architecture, surface the conflict before implementation.
-
-## Architecture Research
-
-Gather only the minimum code context needed to understand the current architecture and the implementation path. Prefer:
-
-- the entry point or feature boot path
-- the target module or component
-- nearby reducers, services, fetchers, transformers, hooks, tests, or shared utilities that define the current pattern
-- existing implementations of similar behavior in the repo
-
-Reuse existing project patterns before inventing new abstractions. Aim for the smallest safe diff that satisfies the ticket cleanly.
-
-## Hand-off To Brainstorm
-
-When you have the full ticket and the minimum architecture context needed to brainstorm meaningfully, return to `SKILL.md` and proceed to the Brainstorm gate (`superpowers:brainstorming`). The bar is not "ambiguity is fully resolved" — brainstorming is what resolves it. The bar is "I know enough to have a productive brainstorm with the user." If acceptance criteria are still missing or contradict the architecture, that is a brainstorm input, not a blocker to entering the brainstorm.
 
 ## Verification (Required Before PR)
 
