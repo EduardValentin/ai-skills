@@ -49,23 +49,21 @@ Each phase describes *what to do*, not *which skill to call*. The workflow relie
 
 A red on Check #8 blocks Phase 2. The check is read-only — operators must edit harness config or settings manually, since `--fix` does not modify them.
 
-## Phase progression — auto-advance, do not stall
+## Phase progression — agent owns transitions
 
-Each phase ends with a defined trigger that **automatically** advances the agent to the next phase. The agent does NOT wait for the user to say "now do the next thing." Stalling between phases — finishing one and parking until the user prompts — is a defect, not a feature.
+The agent advances between phases on its own; `"what next?"` / `"ready when you are"` prompts after a phase ends are stalls, not checkpoints. The only places the agent *waits* are the explicit user gates marked **Wait for…** below — those are the iron-rule approval surfaces, not stalls.
 
-| When this happens | Agent's next action (no prompt required) |
-|-------------------|------------------------------------------|
+| When this happens | Agent's next action |
+|-------------------|---------------------|
 | Plan approved (Phase 4) | Enter Phase 5: scaffold variant directories, dispatch per-variant subagents per `05-implementation-and-shadow.md`. |
-| Variant subagents return with filled-in `perf.sql` / `bench_spec.json` (Phase 5 mid-point) | Dispatch the parameter-verification subagent (see `references/06-dev-execution-and-evidence.md` "Parameter-verification subagent") to probe DEV with each variant's bench arguments and confirm > 0 rows. Update `perf.sql` / `bench_spec.json` with verified values + `verified_against_dev: true` annotations. Only then run `perf-bench.sh`. |
-| Bench finishes — `bench_results.tsv` exists for every variant (Phase 5 mid-point) | Post the variant decision surface per `references/05-implementation-and-shadow.md`: per-variant bench KPIs, cleanliness assessment, agent recommendation with trade-off reasoning. Wait for the human's explicit pick. Do NOT advance to Phase 6 yet. |
-| Human picks a variant (Phase 5 ends) | Enter Phase 6: promote the chosen variant's edits to the Liquibase-owned schema folders, emit `shadow_manifest.json` for the winner, run `generate_metadata_probe.py`, run `generate_compare_spec.py`, **dispatch the parameter-verification subagent** to probe DEV with each run's inferred arguments and update the spec with verified values, then present `compare_spec.json` for user review. The transition is non-negotiable; "the user will say when to start the manual testing" is wrong. |
-| `compare_spec.json` reviewed and approved by user (Phase 6 mid-point) | Generate compare/stats harnesses, post the 5-line pre-execution announce for each, await explicit "go", run, summarize. |
-| All Phase 6 evidence summarized | Enter Phase 7: run `git diff --name-only <base>...HEAD`, present the batched walkthrough with all seven fields populated per `07-code-walkthrough-and-report.md`. |
-| Walkthrough approved (Phase 7 mid-point) | Next turn: run `db-work-report.sh` and post the report inline. |
+| Variant subagents return with filled-in `perf.sql` / `bench_spec.json` | Dispatch the parameter-verification subagent (`06-dev-execution-and-evidence.md` "Parameter-verification subagent"). Update `perf.sql` / `bench_spec.json` with verified values, then run `perf-bench.sh`. |
+| Bench finishes — `bench_results.tsv` exists for every variant | Post the variant decision surface per `05-implementation-and-shadow.md`. **Wait for the human's pick.** |
+| Human picks a variant | Enter Phase 6: promote the chosen variant's edits to Liquibase-owned schema, emit `shadow_manifest.json`, run `generate_metadata_probe.py`, run `generate_compare_spec.py`, dispatch the parameter-verification subagent, present `compare_spec.json`. **Wait for compare-spec approval.** |
+| `compare_spec.json` approved | Generate compare/stats harnesses and run them (spec approval covers the spec-defined writes; reads run gate-free). Summarize logs. |
+| All Phase 6 evidence summarized | Enter Phase 7: run `git diff --name-only <base>...HEAD`, present the batched walkthrough per `07-code-walkthrough-and-report.md`. **Wait for walkthrough approval.** |
+| Walkthrough approved | Next turn: run `db-work-report.sh` and post the report inline. |
 
-**Auto-advance covers phase entry; the gate model below covers DEV writes.** Auto-advance forbids the agent stopping at a *phase boundary* waiting for the user to ask for the next phase. It does NOT change the DEV write rules: DDL and DML mutation still require a 5-line announce + explicit "go" unless covered by an explicit prior approval (plan approval covers the bench-defined mutations; spec approval covers the spec-defined mutations). Read-only SQL — including the metadata probe at Phase 6 entry, the spec-defined compare/stats harness invocations after spec approval, and ad-hoc diagnostic SELECTs — runs without a per-action gate. The user-facing approval surfaces (plan approval, variant pick, compare-spec approval, walkthrough approval) are unaffected by auto-advance and unaffected by the DDL/DML gate; they're their own gates.
-
-**Red flag — phase stall.** If the agent's bench finishes (`bench_results.tsv` written) and the agent posts a "what next?" or "ready when you are" message instead of the variant decision surface, that is a stall. If the human picks a variant and the agent posts a hand-off prompt instead of beginning Phase 6 prep, that is a stall. Same at every phase boundary: the agent owns the transition. The Phase 5 mid-point (post-bench) is the one place where the agent *must* wait — for the human's explicit pick — but waiting is not the same as stalling. Stalling = silence after writing the TSV. Waiting = the decision surface is posted and the agent is on hold for the pick.
+DDL/DML gating, approval-token shape, and the per-phase mechanics live in the iron rules below and the referenced files. Auto-advance does not change any of those gates.
 
 ## Iron rules — STOP if any apply
 
