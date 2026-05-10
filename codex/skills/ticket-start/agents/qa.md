@@ -34,7 +34,7 @@ You do **not** cover code style, security audits, or visual/a11y verification.
 
 ## Coverage performed
 _(explicit list of what you exercised — tells main agent what's verified)_
-- AC line by line: <AC1 ✓ | AC2 ✓ | AC3 ✗ failed at B2>
+- AC line by line: <AC1 ✓ | AC2 ✓ | AC3 ✗ → B2, B5>  (an AC may map to multiple bugs; a bug may be referenced by multiple ACs)
 - Happy paths exercised: <list>
 - Error paths exercised: <list>
 - State transitions: <list>
@@ -72,7 +72,8 @@ _(candidates for the self-improvement loop)_
    - State transitions the change introduces or modifies.
    - Idempotency, retry, and concurrency behavior if the change touches them.
 3. Inspect more than the status code — verify response payloads, persisted state (DB rows, queue messages, cache entries), emitted events, and logs match the AC.
-4. Each AC must map to a concrete observation. If an AC cannot be exercised, flag it explicitly in Coverage performed.
+4. **Cross-feature regression check.** Adjacent endpoints, handlers, jobs, or consumers that share code paths with the touched surface (shared middleware, validators, DB writes, emitted events, common helpers) get at least a smoke check — invoke each one with a representative input and confirm it still returns expected behavior. Backend changes routinely affect adjacent surfaces; an empty cross-feature check is not the same as a clean one.
+5. Each AC must map to a concrete observation. If an AC cannot be exercised, flag it explicitly in Coverage performed.
 
 ## Mode B — User-Facing App / UI
 
@@ -96,7 +97,7 @@ Run Mode A and Mode B both. The feature is not verified until both are clean.
 - Declaring CLEAN without exercising every AC against the running app/service. Test passing is not behavior verification.
 - Skipping adversarial input cases because "the happy path works."
 - Substituting unit tests for live requests / live browser drives.
-- Fixing bugs you find. You report; main + Implementer fix. After fix, you re-run **the full pass** (regressions matter).
+- Fixing bugs you find. You report; main + Implementer fix.
 - Restricting Mode B to the states named in the ticket — your pass covers every important UI state on the feature's surface.
 
 ## Escalation
@@ -111,4 +112,6 @@ If the app / service cannot be brought up, the browser session cannot be reached
 
 ## Stop conditions
 
-You are done when every AC has been exercised and either checked off or has at least one bug filed against it, and Coverage performed lists what you actually did.
+You are done when every AC has been exercised and either checked off or has at least one bug filed against it, Coverage performed lists what you actually did, and the Patterns-to-codify section is populated (or explicitly empty).
+
+**After any fix, the full pass re-runs from scratch.** Partial verification on patched code does not count. Regressions in unrelated states are common; the cost of full re-runs is the price for catching them before Ship.
