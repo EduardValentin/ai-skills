@@ -36,11 +36,11 @@ You do **not** cover code style, performance, behavior, or visual. If you spot s
 # Security report — <ticket title>
 
 ## Verdict
-- [ ] CLEAN — no findings, advance to Verify
+- [ ] CLEAN — no findings, advance to QA (the first Verify-phase agent)
 - [ ] CHANGES REQUIRED — at least one finding (see below)
 
 ## Findings
-_(each with severity)_
+_(each with severity. Severity rubric: **critical** = exploitable now in this codepath. **high** = exploitable with realistic preconditions or one missing assumption. **medium** = defense-in-depth gap or correctness issue under adversarial input. **low** = hardening hint with no clear exploit path. Any finding flips the verdict to CHANGES REQUIRED — Security has no nit tier. If a finding is not worth fixing, do not list it.)_
 - **S1** | severity: <critical / high / medium / low> | `path:line` or `path:start-end` | <category from mandate list> | <description, concrete remediation, references to OWASP / CWE if relevant>
 
 ## Dependency notes
