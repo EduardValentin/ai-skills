@@ -16,7 +16,7 @@ The main agent classifies each fix into one of three tiers. **The main agent dec
 
 | Tier | Definition | Path |
 |---|---|---|
-| **Trivial** | Typo, one-liner, mechanical change with no design implication. Examples: rename a variable, fix a copy string, swap a constant. | Straight to Implementer. **No** brainstorm, **no** plan, **no** architect. |
+| **Trivial** | Typo, one-liner, mechanical change with no design implication. Examples: rename a private variable, fix a comment typo, swap a constant import path, correct a log-message string with no UI surface. | Straight to Implementer. **No** brainstorm, **no** plan, **no** architect. |
 | **Non-trivial, non-architectural** | Real change that doesn't alter the architecture of the solution. Examples: add a missing validation branch, restructure a function's control flow, fix an off-by-one bug, add error handling on an existing path. | Main re-runs `superpowers:brainstorming` + `superpowers:writing-plans` with the user. **No** architect involvement. |
 | **Architectural** | Fix changes the solution's architecture: module boundaries, data model, integration approach, or what gets persisted. Examples: a fix requires extracting a shared service, changing a type that ripples across consumers, moving logic between layers. | Main re-engages **Architect**, then re-runs brainstorm + plan (full initial loop). |
 
@@ -37,7 +37,7 @@ These scopes are non-negotiable — they reflect the cost-of-miss tradeoff for e
 
 ## Iteration cap
 
-**Cap = 3 fix iterations** per ticket. After the third unresolved fix attempt, the main agent stops and produces an **intervention report**:
+**Cap = 3 fix iterations per ticket.** The counter increments on every auditor-gate cycle that returns non-clean, regardless of which agent triggered it. It is **not** per-agent. (Test-failure repair does not increment the counter — only auditor-gate cycles do.) After the third unresolved iteration, the main agent stops and produces an **intervention report**:
 
 ```markdown
 # Intervention requested — <ticket title>
@@ -73,31 +73,24 @@ At **any** point in the loop — not just at the cap — if the main agent hits 
 
 ## Sequencing of re-runs
 
-After a fix:
+**Gate order:** Reviewer → Security → QA → UI/UX (matches the phase order in `SKILL.md`).
+
+**Sequencing rule:** after any fix, all full-rerun gates run in **upstream-first** order regardless of which agent originated the finding. Reviewer findings can render Security findings moot (and Security findings can render QA findings moot), so running upstream gates first avoids wasted work and prevents cross-gate contradictions.
+
+**After a fix:**
 
 1. Implementer commits the fix on the same branch.
-2. Tests run; if they fail, fix-the-fix before any agent re-runs.
-3. Re-run the agent that originally reported (Reviewer / Security / QA / UI/UX).
-4. If that agent goes CLEAN, **continue downstream** through the remaining gates that hadn't run yet *plus* any earlier gate whose scope rule above mandates a full re-run.
-5. If that agent stays non-clean, increment the iteration counter and loop.
+2. Tests run; if they fail, fix-the-fix before any agent re-runs. Test-failure repair does **not** increment the iteration counter — only auditor-gate cycles do.
+3. Re-run all upstream full-rerun gates in order (Reviewer → Security → QA), then re-run UI/UX scoped to affected states if applicable. Skip UI/UX entirely if backend-only.
+4. If every gate that ran returned CLEAN, the loop exits successfully.
+5. If any gate returns non-clean, increment the iteration counter and re-enter the loop with the new finding.
 
-Specifically, after a Security-found bug is fixed:
-- Reviewer re-runs (full diff, per scope rule).
-- Then Security re-runs (full diff).
-- Then QA runs.
-- Then UI/UX runs (or skips if backend-only).
+**Worked chains:**
 
-After a QA-found bug:
-- Reviewer re-runs.
-- Security re-runs.
-- QA re-runs (full pass).
-- Then UI/UX (if applicable).
-
-After a UI/UX-found bug:
-- Reviewer re-runs.
-- Security re-runs.
-- QA does **not** re-run unless the fix touches behavior code (main agent's judgment).
-- UI/UX re-runs scoped to affected states.
+- **After a Reviewer-found bug:** Reviewer re-runs (full diff) → Security re-runs (full diff) → QA runs (full pass) → UI/UX runs scoped (or skips if backend-only).
+- **After a Security-found bug:** Reviewer re-runs (full diff, per scope rule) → Security re-runs (full diff) → QA runs (full pass) → UI/UX runs scoped (or skips if backend-only).
+- **After a QA-found bug:** Reviewer re-runs (full diff) → Security re-runs (full diff) → QA re-runs (full pass) → UI/UX runs scoped (or skips if backend-only).
+- **After a UI/UX-found bug:** Reviewer re-runs (full diff) → Security re-runs (full diff) → QA re-runs only if the fix touches behavior code (main agent's judgment) → UI/UX re-runs scoped to affected states.
 
 The full-rerun rule for code/security after **any** fix is a deliberate cost: a fix anywhere can break a review or audit, and we'd rather catch that here than ship it.
 
