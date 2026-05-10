@@ -15,6 +15,7 @@ Produce the highest-quality software the workflow can deliver per ticket. Specif
 - **Maintainable / scalable / extendable** — owned by the Reviewer agent.
 - **Free of bugs** — owned by the QA agent (behavior) and UI/UX agent (visual + accessibility), backed up by TDD on the implementation path.
 - **Self-improving** — recurring findings from auditor agents become codified rules in repo and user-level instruction files, so the next session starts from a higher baseline.
+- **Context-efficient** — heavy reads happen inside subagents and are returned to the main agent as navigable indices with precise file:line locators, not as transcripts. Downstream agents (Architect, plan writer, Implementer) read only the surgical slices the upstream report points at; they never reload full files to do their job. This is what makes the orchestrator pattern pay off — context isolation is not just "subagents take work off the main agent's plate" but "subagents return information that lets every later step stay surgical."
 
 ### Non-goals
 
@@ -67,8 +68,9 @@ Each agent is a self-contained role with a single mandate. Inputs and outputs ar
 - **Mandate:** Read-only repo and pattern survey for the feature in scope.
 - **Inputs:** Ticket title and description; relevant `AGENTS.md` and `CLAUDE.md`; for personal workflow, the scoped slices of `PRD.md` and `designs/` that match the feature.
 - **Outputs:** A scoped summary doc covering: entry points / feature boot path; target module or component; nearby reducers, services, fetchers, transformers, hooks, tests, shared utilities; existing implementations of similar behavior; project patterns to reuse; potential conflict points with existing architecture.
-- **Forbidden:** Proposing solutions, making decisions, writing code.
-- **Reused by:** Architect (primary consumer), main agent (during brainstorm).
+- **Granular-locator requirement (context-economy contract):** The scoping report is the only place downstream agents (Architect, main during plan-writing, Implementer subagents during implementation) should need to learn *where* relevant code lives. For every referenced entity, the report includes: absolute file path, line-number range (`path:start-end`), the function/class/component name and signature, and a one-line "why this is relevant." Patterns and idioms are quoted with their `path:line` locator. Type and interface definitions are referenced by `path:line`. Test files covering the area are listed by `path:line` range. Imports and dependencies relevant to the change are itemized with location. The downstream test of a good scoping report: any later agent can read only the surgical slices the report indicates and never need to load full files to construct the plan or implement a task.
+- **Forbidden:** Proposing solutions, making decisions, writing code, returning prose without locators.
+- **Reused by:** Architect (primary consumer), main agent (during brainstorm and plan-writing), Implementer subagents (during execution).
 
 ### 3.2 Architect (Brainstorm input + bug-fix-loop)
 
