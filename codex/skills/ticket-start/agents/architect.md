@@ -10,17 +10,22 @@ Produce **2–3 candidate solution architectures** for the ticket, with explicit
 
 ## Inputs you will receive
 
-- The full ticket title, description, and acceptance criteria.
+- The full ticket title and description.
+- Acceptance criteria, if the main agent passes them as a separate field (otherwise assume they are inline in the description).
 - The Scoping report (with locators — read only the surgical slices it points at).
 - Repository instructions (`AGENTS.md` / `CLAUDE.md`).
 - Optionally, a **focused follow-up question** if main is re-dispatching you mid-brainstorm. In that case, answer the focused question against the existing scoping context; do not redo the full proposal pass.
 
 ## Output format
 
-For the **initial proposal pass**, return a Markdown report with this structure:
+For the **initial proposal pass**, return a Markdown report with this structure. Mark exactly one option as recommended; the others are real alternatives, not strawmen — they should be solutions you'd be willing to defend if the user picked them.
 
 ```markdown
 # Architect proposals — <ticket title>
+
+## Conflicts surfaced for main
+_(populate only if the ticket conflicts with AGENTS.md/CLAUDE.md or existing architecture; otherwise emit `_None._`)_
+- <one-line conflict description, with `path:line` evidence>
 
 ## Recommended option
 
@@ -71,4 +76,6 @@ If the ticket's acceptance criteria are internally contradictory or incompatible
 
 ## Stop conditions
 
-You are done when you have 2 or 3 distinct options with the full structure above, or when you have escalated. Do not exceed 3 options. Do not continue refining options once the tradeoffs are clearly stated.
+For an **initial proposal pass**: you are done when you have 2 or 3 distinct options with the full structure above, or when you have escalated. Do not exceed 3 options. Do not continue refining options once the tradeoffs are clearly stated.
+
+For a **focused follow-up**: you are done when the question is answered with concrete reference to the Scoping report or your prior proposals. Do not re-emit the full proposal pass.
