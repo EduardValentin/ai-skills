@@ -16,10 +16,20 @@ KEYCHAIN_PREFIX="ai-skills.gh-bot"
 
 read_keychain() {
   local service="$1"
-  if ! security find-generic-password -s "$service" -a "$USER" -w 2>/dev/null; then
+  local raw
+  if ! raw=$(security find-generic-password -s "$service" -a "$USER" -w 2>/dev/null); then
     echo "Missing Keychain entry: $service (account: $USER)" >&2
     echo "See bot-identity.md runbook Step A." >&2
     exit 1
+  fi
+  # macOS `security ... -w` returns hex-encoded output (no leading 0x) when the
+  # stored value contains non-printable bytes such as newlines — which happens
+  # for PEM-encoded private keys. Detect (long, all-hex, even-length) and decode.
+  # Short alphanumeric IDs (App ID, Installation ID, etc.) come back as-is.
+  if [[ "$raw" =~ ^[0-9a-f]+$ ]] && (( ${#raw} >= 200 )) && (( ${#raw} % 2 == 0 )); then
+    printf '%s' "$raw" | xxd -r -p
+  else
+    printf '%s' "$raw"
   fi
 }
 
