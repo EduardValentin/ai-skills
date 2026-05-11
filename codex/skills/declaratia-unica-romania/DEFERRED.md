@@ -54,10 +54,10 @@ Această validare e cea mai informativă — folosește date reale. Defer-uită 
 
 ## Phase 8 status — DONE
 
-- 21 commits clean (de la `0a73b54` scaffold până la `005961d` test-log)
+- 24 commits clean pe acest branch (`f54f3a8..HEAD`), inclusiv spec + plan + scaffold + 6 faze de conținut + test-log + acest DEFERRED.md
 - 4 locații byte-identical (`claude/skills/`, `codex/skills/`, `~/.claude/skills/`, `~/.codex/skills/`)
 - SKILL.md vizibil în system reminder ca skill loaded
-- Branch `claude/thirsty-thompson-6ce3f6` ready pentru push
+- Branch `claude/thirsty-thompson-6ce3f6` push-uit la `origin`
 
 ## Notă proces
 
