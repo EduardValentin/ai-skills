@@ -63,25 +63,27 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - **REQUIRED SUB-SKILL:** `superpowers:using-git-worktrees` for the exact procedure and safety checks.
    - If `git fetch` fails, surface the blocker and stop. Do not silently fall back to a stale local branch.
 
-2. **Repository instructions.** Inside the worktree, read the nearest applicable `AGENTS.md` first, then load only the additional instruction files and project docs that materially affect the task.
+2. **Activate bot identity (personal workflow only).** Before any further Setup work, run the three checks documented in `bot-identity.md` → `## Setup activation`: (a) mint a fresh GitHub installation token via `scripts/get-bot-gh-token.sh` and verify it with a no-op API call; (b) read the bot's git name and email from Keychain and apply them as per-worktree git config in the worktree; (c) probe the Linear MCP `viewer` and confirm the authenticated identity is the bot, not the user. Any check failure: halt and point at the runbook section in `bot-identity.md` that fixes it. **Fail-closed** — the skill never falls back to personal credentials. Job workflow: skip this step entirely; job-workflow tickets continue to use personal credentials.
 
-3. **Freshness — treat memory as stale.** Memory, prior chat context, old plans, and earlier tool results are hints, not facts. Before any substantive answer about scope, status, blockers, related tickets, progress, PR readiness, or git state, fetch current facts from the source of truth:
+3. **Repository instructions.** Inside the worktree, read the nearest applicable `AGENTS.md` first, then load only the additional instruction files and project docs that materially affect the task.
+
+4. **Freshness — treat memory as stale.** Memory, prior chat context, old plans, and earlier tool results are hints, not facts. Before any substantive answer about scope, status, blockers, related tickets, progress, PR readiness, or git state, fetch current facts from the source of truth:
    - **Linear tickets:** read the current ticket via Linear MCP. If blocked/blocking/related/duplicate/parent/child tickets matter, read each one too — do not infer from relation names or earlier context.
    - **Job/Jira tickets:** prefer `acli jira workitem view <KEY> --json` (per `job-workflow.md`); fall back to user paste if `acli` is unavailable. Stale summaries and previously pasted excerpts are not current truth.
    - **Repo state:** inspect the current branch, working tree, relevant diffs, recent commits, and PR metadata when relevant.
    - **Repo docs and code:** re-read from disk before citing or depending on them.
    - If a source of truth is unavailable, say what could not be verified. Do not fill the gap from memory.
 
-4. **Workflow-specific reading.** Read the workflow file selected above. Stop when the relevant facts are gathered — do not push past the Brainstorm gate without them.
+5. **Workflow-specific reading.** Read the workflow file selected above. Stop when the relevant facts are gathered — do not push past the Brainstorm gate without them.
 
-5. **Dispatch Scoping subagent.** Read `agents/scoping.md` for the role prompt. Invoke a subagent on the host platform's native subagent API with:
+6. **Dispatch Scoping subagent.** Read `agents/scoping.md` for the role prompt. Invoke a subagent on the host platform's native subagent API with:
    - The ticket title, description, AC.
    - The repo's `AGENTS.md` and `CLAUDE.md`.
    - For personal workflow: the scoped slices of `PRD.md` and `designs/` identified above.
    - The role-prompt content from `agents/scoping.md` as the subagent's instruction set.
    Wait for the Scoping report (a Markdown document with locator-rich sections per the role-prompt's output format). Treat that report as the definitive map of the relevant code surface — do **not** re-read full files later when a Scoping locator points at the slice you need.
 
-6. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping.
+7. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping.
 
 ## Brainstorm
 

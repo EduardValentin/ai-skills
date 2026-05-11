@@ -11,6 +11,12 @@ Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs
 
 After intake, proceed to Scoped Reading, then dispatch the Scoping subagent as `SKILL.md`'s Setup phase directs.
 
+## Bot Identity (REQUIRED for this workflow)
+
+Personal-workflow tickets always run under a dedicated bot identity — a GitHub App for `gh` and commits, a Linear OAuth application for ticket reads and transitions. The skill never uses your personal credentials on personal-workflow tickets.
+
+See `bot-identity.md` for the full one-time setup runbook, the three Setup activation checks the main agent performs, the Ship-phase token refresh, and the failure-mode catalog. If the bot creds are not configured in macOS Keychain, the skill halts at Setup with a pointer to the relevant runbook step. **Fail-closed by design.**
+
 ## Scoped Reading
 
 Inspect only the areas of `PRD.md` and `designs/` that are relevant to this ticket. Do not load either in full by default.
