@@ -15,7 +15,6 @@ from pathlib import Path
 
 from _lib.frontmatter import read as fm_read
 
-WORD_OVERLAP_THRESHOLD = 0.5
 MODIFIED_RATIO_MIN = 0.4
 MODIFIED_RATIO_MAX = 0.95
 
