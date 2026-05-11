@@ -80,7 +80,7 @@ Run this once per machine. After it's done, the skill picks up the bot identity 
 
 The Linear MCP server currently authenticates as you. Reconfigure it to use the bot's OAuth access token. The exact instructions depend on which Linear MCP server you're using:
 
-- **Official hosted server (`mcp.linear.app`):** in your MCP client (Claude Code or Codex), disconnect the existing Linear OAuth connection. Reconnect — but during the OAuth authorization step in your browser, log out of Linear first (or use a private window) and log back in as the **bot's** Linear member if you also created a Linear member for the bot. If the hosted server only supports user-attributed OAuth, you can instead use the self-hosted-server path below.
+- **Official hosted server (`mcp.linear.app`):** in your MCP client (Claude Code or Codex), disconnect the existing Linear OAuth connection. Reconnect — but during the OAuth authorization step in your browser, log out of Linear first (or use a private window) and log back in as the **bot's** Linear member if you also created a Linear member for the bot. If the hosted server only supports user-attributed OAuth, you can instead use the self-hosted-server path below. **Detection:** after reconfiguring, if Check 3 (Setup activation) still reports your personal account as the `viewer`, the hosted server is giving user-attributed OAuth — switch to the self-hosted path before proceeding with any personal-workflow ticket.
 - **Self-hosted Linear MCP** (e.g., `@linear/mcp-server` or a community fork): edit the server's config to read the access token from Keychain. Example for a server that supports a `LINEAR_API_KEY` env var:
   ```bash
   # In your MCP client config:
@@ -106,14 +106,14 @@ The main agent runs these three checks at the start of the Setup phase, after th
 
 ### Check 1 — Mint a fresh GitHub installation token
 
+`<skill-root>` in the snippet below is one of:
+- Codex: `~/.codex/skills/ticket-start`
+- Claude Code: `~/.claude/skills/ticket-start`
+
 Run:
 ```bash
 GH_TOKEN_PROBE=$(<skill-root>/scripts/get-bot-gh-token.sh)
 ```
-
-Where `<skill-root>` is:
-- Codex: `~/.codex/skills/ticket-start`
-- Claude Code: `~/.claude/skills/ticket-start`
 
 Verify the token works with a no-op API call:
 ```bash
@@ -149,12 +149,12 @@ If `security find-generic-password` fails on either entry: **halt**. Point at ru
 
 ### Check 3 — Probe the Linear MCP for `viewer` identity
 
-Use the Linear MCP tool to query the authenticated viewer. Exact MCP method/field depends on the server in use:
+Use whichever Linear MCP tool fetches the authenticated user — the exact tool name varies by server:
 
-- **Official `mcp.linear.app`:** call the `linear:me` or `linear:viewer` tool (the resource shape includes the authenticated identity's `name`, `email`, and `id`).
-- **Self-hosted servers:** typically expose a `linear:viewer` or `linear:current_user` tool.
+- **Official `mcp.linear.app`:** the `get_user` tool, called with no arguments, returns the authenticated user. The `list_users` tool also returns the current user implicitly via `viewer` or similar — check the tool's response shape.
+- **Self-hosted servers:** typically expose a `get_user`, `get_viewer`, `me`, or `current_user` tool. If uncertain, list the available Linear MCP tools (`mcp/list_tools` or your host's equivalent) and use the one whose description mentions "current user" or "authenticated user."
 
-The viewer's identity must be the bot's Linear identity (the email or name should match the bot you created in Step B, not your personal Linear account). If the viewer is your personal account, the MCP was not reconfigured per Step C. **Halt.** Point at runbook Step C.
+The returned identity must be the bot's Linear identity (the email or name should match the bot you created in Step B, not your personal Linear account). If the viewer is your personal account, the MCP was not reconfigured per Step C. **Halt.** Point at runbook Step C.
 
 If the MCP call itself errors (auth failure, network, server unreachable): **halt.** Point at runbook Step B (if the Linear access token is missing or revoked) or Step C (if the MCP isn't reachable).
 
@@ -175,7 +175,7 @@ Expected: the bot's name and email.
 
 ## Ship phase — token refresh
 
-Before invoking `gh pr create`, refresh the GitHub installation token. Even if the session has been short, a fresh token guarantees we don't bump into the 1-hour ceiling mid-call:
+Before invoking `gh pr create`, refresh the GitHub installation token. Even if the session has been short, a fresh token guarantees we don't bump into the 1-hour ceiling mid-call. `<skill-root>` is the same value as in Check 1 (`~/.codex/skills/ticket-start` on Codex or `~/.claude/skills/ticket-start` on Claude Code):
 
 ```bash
 GH_TOKEN=$(<skill-root>/scripts/get-bot-gh-token.sh) gh pr create --title "..." --body "..."
