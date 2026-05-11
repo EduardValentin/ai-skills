@@ -7,4 +7,6 @@
 # Stock-research scripts
 claude/skills/stock-research/scripts/.venv/
 claude/skills/stock-research/scripts/.pytest_cache/
+codex/skills/stock-research/scripts/.venv/
+codex/skills/stock-research/scripts/.pytest_cache/
 **/__pycache__/
