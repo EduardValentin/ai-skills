@@ -54,7 +54,9 @@ Close the four root causes by tightening **what the role-prompts require** and *
 | Trust model | Evidence-shaped contract enforced by main agent | "Trust the agent's self-report" is what failed. The fix is to make the report mechanically falsifiable. |
 | Inventory exhaustiveness | Every visible element on the feature surface | Selective inventories let the agent silently miss elements (eyebrow pill, phone frame). Exhaustive removes the option. |
 | Inventory format | Markdown table with per-element computed-style + rect values | Compact, scannable, and a missing row is visible at a glance. Easier to enforce than free-form prose. |
-| Host bootstrap | Capability-language in the body; named tool surfaces in a dedicated subsection | Keeps the role-prompt portable while still giving each host an explicit "use this tool" hook. |
+| **Tree content policy** | **Host-pure: each tree contains only its own host's tooling language and instructions** | Loaded skill content stays free of irrelevant host-specific noise. When Codex loads the skill, it sees only Codex tool names + `browser-use:browser` bootstrap. When Claude Code loads the skill, it sees only Playwright MCP tools + Claude-Code bootstrap. The two repo trees (`codex/skills/` and `claude/skills/`) diverge in host-specific content. |
+| Host bootstrap | One `## Browser bootstrap` subsection per tree, containing only that tree's host instructions | No "Codex section" vs "Claude Code section" inside a single file — each tree's file simply *is* that host's bootstrap. |
+| Tool references in body text | Each tree uses its host's actual tool names | Codex tree references `iab` browser / `browser-use:browser` skill. Claude tree references Playwright MCP tools (`mcp__playwright__browser_*`). No capability abstraction is needed within a tree because there is no cross-host ambiguity inside one tree. |
 | Precedence rule | Prototype parity > design-system primitives (for personal workflow with React reference) | Codex's self-diagnosis named this exact conflict. Without an explicit rule the agent will infer wrong. |
 | Main-agent fact-check | Inventory shape + completeness spot-check before accepting any verdict | Closes the loop where main accepted a CLEAN without evidence. |
 | New auditor subagent | **No** — fix is in shape contract, not a new role | Adding agents adds operational complexity without addressing the root cause (no contract). |
@@ -62,32 +64,60 @@ Close the four root causes by tightening **what the role-prompts require** and *
 
 ## 4. The six concrete changes
 
-### 4.1 Tool-language refactor (`agents/ui-ux.md`, `agents/qa.md`, `SKILL.md`)
+### 4.1 Tool references — host-pure per tree
 
-Replace Claude-Code-specific tool names with capability descriptions throughout the body of the role-prompts and the SKILL.md dispatch instructions:
+Each tree uses **its host's actual tool names** in the body of the role-prompts and SKILL.md dispatch instructions. No capability-abstraction layer.
 
-- `browser_evaluate` → "DOM evaluation" / "extract computed styles via `getComputedStyle()`"
-- `browser_take_screenshot` → "element-level screenshot"
-- `browser_snapshot` → "DOM snapshot"
-- `browser_tabs` → "tab switching via the available browser tooling"
-- "Playwright MCP" → "browser tooling"
+**Codex tree (`codex/skills/ticket-start/`):**
+- Body text references the Codex Browser plugin: `iab` browser, `browser-use:browser` skill, `getComputedStyle()` / `getBoundingClientRect()` extraction via the plugin's Playwright API surface.
+- No mention of `mcp__playwright__*`, Playwright MCP server, or other Claude Code surfaces.
 
-Codex already wrote these patches correctly on its install-side. We pull them into the repo and propagate to the claude tree.
+**Claude tree (`claude/skills/ticket-start/`):**
+- Body text references the Playwright MCP server: `mcp__playwright__browser_navigate`, `mcp__playwright__browser_evaluate`, `mcp__playwright__browser_take_screenshot`, `mcp__playwright__browser_snapshot`, `mcp__playwright__browser_tabs`, etc.
+- No mention of `browser-use:browser`, `iab` browser, or Codex Browser plugin.
 
-### 4.2 Host-specific browser bootstrap subsection
+Capability descriptions ("DOM evaluation", "computed-style extraction") may appear as supporting language alongside tool names but are not the primary reference.
 
-In `agents/ui-ux.md` (and `agents/qa.md`), add a subsection right after the Inputs list:
+### 4.2 Browser bootstrap subsection — one per tree, host-pure
+
+Each tree adds a `## Browser bootstrap` subsection in `agents/ui-ux.md` and `agents/qa.md` (right after the Inputs list). The subsection contains only that tree's host instructions.
+
+**In `codex/skills/ticket-start/agents/ui-ux.md` and `agents/qa.md`:**
 
 ```markdown
-### Host-specific browser bootstrap
+## Browser bootstrap
 
-When running under a specific host, use that host's primary browser surface before any fallback:
+Use the Codex Browser plugin / `browser-use:browser` skill for all browser interaction. Follow that skill's bootstrap path, acquire the `iab` browser, and use its Playwright APIs for:
+- Tab control + viewport setup
+- DOM snapshots
+- Element-level screenshots
+- `getComputedStyle()` extraction per matched pair
+- `getBoundingClientRect()` extraction per matched pair
+- Clicks, keyboard input, navigation
 
-- **Codex.** If the `browser-use:browser` skill is available, follow its bootstrap path, acquire the `iab` browser, and use its Playwright APIs for tab control, viewport setup, screenshots, DOM snapshots, clicks, keyboard input, `getBoundingClientRect()`, and `getComputedStyle()` extraction. Do not start with standalone Chrome, external Playwright, Puppeteer, or Chrome DevTools Protocol unless the Browser plugin is unavailable or cannot acquire `iab`.
-- **Claude Code.** Use the Playwright MCP server's tool family (`mcp__playwright__browser_navigate`, `mcp__playwright__browser_evaluate`, `mcp__playwright__browser_take_screenshot`, `mcp__playwright__browser_snapshot`, `mcp__playwright__browser_tabs`, etc.) for the same set of capabilities.
+Do not start with standalone Chrome, external Playwright, Puppeteer, or Chrome DevTools Protocol unless the Browser plugin is unavailable or cannot acquire `iab`.
 
-If the host's primary browser surface cannot be acquired, report `UI/UX cannot proceed` (or `QA cannot proceed`) with the exact browser-acquisition blocker. Only use a standalone Chrome/DevTools fallback when the main agent explicitly authorizes degraded verification for that run, and label the report as **degraded**.
+If the Browser plugin or `iab` browser cannot be acquired, report `UI/UX cannot proceed` (or `QA cannot proceed`) with the exact browser-acquisition blocker. Only use a standalone Chrome/DevTools fallback when the main agent explicitly authorizes degraded verification for that run, and label the report as **degraded**.
 ```
+
+**In `claude/skills/ticket-start/agents/ui-ux.md` and `agents/qa.md`:**
+
+```markdown
+## Browser bootstrap
+
+Use the Playwright MCP server (`playwright` MCP) for all browser interaction:
+- `mcp__playwright__browser_navigate` — load URLs
+- `mcp__playwright__browser_tabs` — open/switch tabs (for side-by-side comparison)
+- `mcp__playwright__browser_resize` — viewport setup
+- `mcp__playwright__browser_snapshot` — DOM snapshots
+- `mcp__playwright__browser_take_screenshot` — element-level screenshots
+- `mcp__playwright__browser_evaluate` — `getComputedStyle()` and `getBoundingClientRect()` extraction per matched pair
+- `mcp__playwright__browser_click`, `mcp__playwright__browser_press_key`, `mcp__playwright__browser_type` — interaction
+
+If the Playwright MCP server is not reachable, report `UI/UX cannot proceed` (or `QA cannot proceed`) with the exact connection blocker. Do not silently fall back to a different browser surface.
+```
+
+Each file mentions ONLY its host. A Codex agent reading `~/.codex/skills/ticket-start/agents/ui-ux.md` sees no reference to Playwright MCP. A Claude Code agent reading `~/.claude/skills/ticket-start/agents/ui-ux.md` sees no reference to `browser-use:browser`.
 
 ### 4.3 Mandatory exhaustive matched-element inventory
 
@@ -163,27 +193,40 @@ This rule exists because of an observed failure mode where this exact substituti
 
 Also update line 50 in `personal-workflow.md` (parity-mode description) to use capability language (replace `browser_evaluate` with "DOM evaluation").
 
-### 4.6 Mirror everywhere
+### 4.6 Mirror policy — within-host only
 
-All changes propagate to:
-- `codex/skills/ticket-start/` ← repo source of truth
-- `claude/skills/ticket-start/` ← mirror (Claude Code tree)
-- `~/.codex/skills/ticket-start/` ← Codex install path
-- `~/.claude/skills/ticket-start/` ← Claude Code install path
+Because the codex and claude trees diverge in host-specific content, the mirror operation is **within-host only**:
 
-Tree symmetry: only `agents/openai.yaml` is codex-only (unchanged convention).
+- `codex/skills/ticket-start/` → `~/.codex/skills/ticket-start/` (Codex install path)
+- `claude/skills/ticket-start/` → `~/.claude/skills/ticket-start/` (Claude Code install path)
+
+**There is no automatic mirror between `codex/skills/` and `claude/skills/` trees.** Each tree is maintained as a host-pure copy. After this PR, the trees are byte-different in the host-specific sections; tree-symmetry checks (`diff -r --brief`) will show real differences in `agents/ui-ux.md`, `agents/qa.md`, `SKILL.md`, `personal-workflow.md`, and `verification.md` — not just the existing `agents/openai.yaml` divergence.
+
+### 4.7 Cross-tree maintenance discipline (operational note)
+
+Because the trees genuinely diverge in host-specific content, edits that affect both hosts must be made twice with host-appropriate substitutions:
+
+1. Make the host-pure change in `codex/skills/ticket-start/` (using Codex tool names and Codex bootstrap language).
+2. Make the equivalent host-pure change in `claude/skills/ticket-start/` (using Playwright MCP tool names and Claude bootstrap language).
+3. Mirror each tree to its install path.
+
+A simple discipline: search both trees for the section/concept being changed, edit both, then mirror within each host. Adding `verification.md` substitutions, future tool-name changes, etc., all go through the same cross-tree apply pattern.
+
+The trade-off accepted: harder maintenance, in exchange for loaded skill content that is host-pure when an agent reads it.
 
 ## 5. File-by-file changes
 
-### Files modified (in both `codex/` and `claude/` skill trees)
+### Files modified (in both `codex/` and `claude/` skill trees, with host-pure content per tree)
 
-| File | Change |
+| File | Change (applied in BOTH trees, with host-appropriate tool names per tree) |
 |---|---|
-| `agents/ui-ux.md` | (a) tool-language → capability descriptions; (b) new "Host-specific browser bootstrap" subsection; (c) `## Matched-element inventory` section becomes mandatory + exhaustive with completeness rules; (d) new forbidden behavior about selectivity. |
-| `agents/qa.md` | (a) tool-language → capability descriptions; (b) new "Host-specific browser bootstrap" subsection (parallel to UI/UX). No other changes. |
-| `SKILL.md` | (a) Verify step 6 — dispatch instruction wording host-neutral; (b) new step 6a — main-agent inventory validation + spot-check; (c) two new red flags. |
-| `personal-workflow.md` | (a) parity-mode description wording host-neutral; (b) new subsection "Prototype parity dominates all other rules" after React Reference App section. |
-| `verification.md` | (a) tool-language → capability descriptions; (b) reinforce inventory exhaustiveness language to match `agents/ui-ux.md`. |
+| `agents/ui-ux.md` | (a) tool references in body text → each tree's host-actual tool names; (b) new `## Browser bootstrap` subsection containing only that tree's host bootstrap; (c) `## Matched-element inventory` section becomes mandatory + exhaustive with completeness rules; (d) new forbidden behavior about selectivity. |
+| `agents/qa.md` | (a) tool references in body text → each tree's host-actual tool names; (b) new `## Browser bootstrap` subsection (parallel to UI/UX, host-pure). No other changes. |
+| `SKILL.md` | (a) Verify step 6 — dispatch wording uses each tree's host tool names; (b) new step 6a — main-agent inventory validation + spot-check (host-neutral; no tool names needed here); (c) two new red flags. |
+| `personal-workflow.md` | (a) parity-mode description uses each tree's host tool names; (b) new subsection "Prototype parity dominates all other rules" after React Reference App section (host-neutral content). |
+| `verification.md` | (a) tool references in body → each tree's host tool names; (b) reinforce inventory exhaustiveness language to match `agents/ui-ux.md`. |
+
+Notable: `SKILL.md` step 6a (main-agent inventory validation) and the prototype-parity-dominance rule in `personal-workflow.md` are **host-neutral content** — they don't reference browser tools. Those sections stay identical between the two trees. Only the tool-naming + Browser bootstrap pieces diverge.
 
 ### Files unchanged
 
