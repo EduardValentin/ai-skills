@@ -1,55 +1,73 @@
 # Job Workflow
 
-Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup; the Verification section applies during Verify. Return to `SKILL.md` for phase ordering, standards, and Ship.
+Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is now delegated to the QA and UI/UX subagents — this file specifies the **mode** they run in for the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, the bug-fix loop, the self-improvement loop, and Ship.
 
 ## Ticket Intake
 
-1. Require the full ticket title and full description before starting. The description must include acceptance criteria and any implementation context the user has. If any of these are missing, stop and ask.
+Two intake paths, in priority order:
+
+### 1. Atlassian CLI (preferred)
+
+If the user provides a Jira issue key (e.g., `PROJ-1234`):
+
+1. Detect availability:
+   ```bash
+   command -v acli && acli --version
+   ```
+   If both succeed, proceed.
+
+2. Fetch the ticket:
+   ```bash
+   acli jira workitem view <KEY> --json
+   ```
+   Parse the returned JSON to extract title, description, acceptance criteria, comments, labels, priority, issue type, status, parent/subtasks.
+
+3. If `acli` errors (auth failure, network, invalid key, missing permissions), surface the error verbatim and fall back to manual paste (path 2). Do not silently retry or guess.
+
+### 2. Manual paste (fallback)
+
+If `acli` is not on PATH, errors out, or the user is pasting a ticket directly:
+
+1. Require the **full** ticket title and full description before starting. The description must include acceptance criteria and any implementation context the user has. If any of these are missing, stop and ask.
 2. Do not accept a partial summary when the full title or description is required to implement safely. Stale or excerpted retellings are not current truth.
-3. Extract and restate:
-   - acceptance criteria
-   - constraints
-   - explicit context the user provided
-   - non-goals, if present
-   - open ambiguities that could change the implementation
 
-## Verification (Required Before PR)
+### Restate (both paths)
 
-Applies during the Verify phase. Run after the targeted tests and broader suite pass. Type checks and unit tests verify code correctness, not feature correctness — manual feature exercise is the evidence `superpowers:verification-before-completion` requires for a "feature works" claim on a ticket. Without it, there is no basis to declare the work done.
+After intake, extract and restate to the user:
 
-Pick the mode that matches the change. If the ticket touches both a service and a UI, run both modes.
+- acceptance criteria
+- constraints
+- explicit context the user provided
+- non-goals, if present
+- open ambiguities that could change the implementation
 
-### Mode A — Backend / API / Service Change
+Then proceed to Scoping subagent dispatch as instructed by `SKILL.md`'s Setup phase.
 
-1. Start the affected service locally (or use the dev environment the repository instructions specify). If the service cannot be started, stop and surface the blocker — do not declare the feature verified.
-2. Issue real requests against the changed endpoints, jobs, handlers, or message consumers. Use `curl`, the project's HTTP client, or an HTTP MCP tool. Do not substitute unit tests for live requests.
-3. Cover, at minimum:
-   - Happy path for every flow the ticket implements.
-   - Each documented input variation, including boundary values.
-   - Validation failures and error responses (4xx, 5xx, domain errors).
-   - Auth and permission boundaries (authenticated vs unauthenticated, role gates, tenant isolation).
-   - State transitions the change introduces or modifies.
-   - Idempotency, retry, and concurrency behavior if the change touches them.
-4. Inspect more than the status code — verify response payloads, persisted state (DB rows, queue messages, cache entries), emitted events, and logs match the acceptance criteria.
-5. If a defect is found, fix it and re-run the affected portion. Do not skip back to declaring done.
+## Verification — Mode mapping for QA and UI/UX
 
-### Mode B — User-Facing App / UI Change
+The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the job workflow.
 
-1. Start the app on its dev server. Open it in the live browser session via the Playwright MCP tools. If either the app or the browser session cannot be brought up, stop and surface the blocker — do not declare the feature verified.
-2. Drive the feature through every state and scenario the ticket affects:
-   - Happy path end-to-end.
-   - Loading, empty, success, error, and validation states.
-   - Hover, focus, active, disabled, expanded/collapsed, modal-open, and any navigation states tied to the feature.
-   - Adversarial input: invalid values, out-of-range values, rapid clicks, double submits, navigating mid-action.
-   - Cross-feature impact: adjacent flows visible from the feature's surface area must not regress.
-   - Responsive behavior at the relevant breakpoints, including widths immediately before and after each breakpoint.
-3. After each meaningful action, inspect the UI to confirm it still looks correct and behaves correctly. Use the browser snapshot/screenshot tools rather than guessing from console output.
-4. If a defect is found, fix it and re-run the affected portion. Do not skip back to declaring done.
+### QA mode
 
-### Mode C — Mixed Change
+Determined from the diff (main agent decides):
 
-Run Mode A and Mode B both. The feature is not verified until each mode that applies is clean.
+- **`backend`** — diff touches only backend / API / service files. QA runs Mode A (start the affected service, issue real requests against changed endpoints, inspect persisted state and logs against AC).
+- **`ui`** — diff touches only user-facing app files. QA runs Mode B (start the dev server, drive every state via the live Playwright browser session against AC).
+- **`mixed`** — diff touches both. QA runs Mode C (Mode A and Mode B both must be clean).
 
-### Outcome
+If the app or service cannot be started, QA escalates and the workflow stops on the user-intervention principle. Do not declare verified.
 
-Only after the applicable mode(s) are clean is the Verify gate satisfied. Report what was exercised and how in the final Report, distinguishing API verification from browser verification when both ran. If any portion could not be exercised, name it explicitly as unverified — do not paper over it.
+### UI/UX mode
+
+For the job workflow, the UI/UX agent always runs in **`consistency` mode**:
+
+- No external reference (job apps in this workflow do not have a React reference app in `designs/`).
+- Mandate is stylistic consistency against existing analog elements in the same view: icon sizing rhythm, typography scale, spacing rhythm, color tokens, border radii, shadow elevation, alignment.
+- Programmatic-first: extract computed styles and bounding rects via `browser_evaluate`. Screenshots only as supplementary context.
+- Accessibility checks always apply.
+
+UI/UX is **skipped** if main agent determines the change is backend-only (no UI files in the diff) per `SKILL.md`'s backend-only detection.
+
+## Hand-off to Brainstorm
+
+When ticket intake and the Scoping subagent's report are both complete, return to `SKILL.md` and proceed to the Brainstorm gate. Architect dispatch happens there; this file is no longer relevant until the Verify phase.
