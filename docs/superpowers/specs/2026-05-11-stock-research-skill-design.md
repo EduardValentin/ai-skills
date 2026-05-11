@@ -465,7 +465,7 @@ A single config file (e.g., `<skill>/config.yaml` or env-based, decided at imple
 
 - `research_repo_path` — default `/Users/trocaneduard/Documents/Personal/investing-research`
 - `transcript_source_priority` — `[motley_fool, ir_page, manual]`
-- `sec_user_agent` — SEC requires a User-Agent header for EDGAR; configured here (e.g., `Eduard Trocan eduard.trocan@yesenergy.com`)
+- `sec_user_agent` — SEC requires a User-Agent header for EDGAR; configured here (e.g., `Eduard Trocan eduard.valentin1996@gmail.com`)
 - `discount_rate` — default 0.10 for reverse DCF
 - `terminal_growth_rate` — default 0.025 for reverse DCF
 - `years_of_history` — default 10
