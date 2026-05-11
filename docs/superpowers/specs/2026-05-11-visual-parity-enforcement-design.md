@@ -202,6 +202,33 @@ Because the codex and claude trees diverge in host-specific content, the mirror 
 
 **There is no automatic mirror between `codex/skills/` and `claude/skills/` trees.** Each tree is maintained as a host-pure copy. After this PR, the trees are byte-different in the host-specific sections; tree-symmetry checks (`diff -r --brief`) will show real differences in `agents/ui-ux.md`, `agents/qa.md`, `SKILL.md`, `personal-workflow.md`, and `verification.md` — not just the existing `agents/openai.yaml` divergence.
 
+#### Where the host-isolation actually happens (loading model)
+
+The mechanism that prevents Codex from loading Claude-Code-specific content (and vice versa) is **the filesystem boundary**, not any runtime conditional:
+
+```
+REPO (source of truth — diverges by design)
+codex/skills/ticket-start/        claude/skills/ticket-start/
+        │                                  │
+        │ mirror within-host               │ mirror within-host
+        ▼                                  ▼
+INSTALL PATHS (what each host actually reads)
+~/.codex/skills/ticket-start/     ~/.claude/skills/ticket-start/
+        ▲                                  ▲
+        │                                  │
+        │ reads only this path             │ reads only this path
+Codex (CLI / app)                  Claude Code (CLI / app)
+```
+
+Codex loads skill files from `~/.codex/skills/` only. Claude Code loads from `~/.claude/skills/` only. Neither host has visibility into the other's install path. Because the source trees feeding those install paths are themselves host-pure, the loaded content is host-pure too.
+
+This means:
+- **No runtime conditionals** in the skill files (no `if (codex) {…}` blocks).
+- **No abstraction layer** mapping capability names to host tools.
+- **No accidental cross-load** of irrelevant content into an agent's context.
+
+The trade-off is what §4.7 names: cross-tree maintenance for changes that affect both hosts must be applied twice with appropriate substitutions.
+
 ### 4.7 Cross-tree maintenance discipline (operational note)
 
 Because the trees genuinely diverge in host-specific content, edits that affect both hosts must be made twice with host-appropriate substitutions:
