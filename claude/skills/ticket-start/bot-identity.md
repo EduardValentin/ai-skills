@@ -98,18 +98,40 @@ We use Linear's **`client_credentials` OAuth grant**, not the browser-based `aut
 
 ### Step C — Reconfigure the Linear MCP server
 
-The Linear MCP server currently authenticates as you. Reconfigure it to use the bot's OAuth access token. The exact instructions depend on which Linear MCP server you're using:
+The Linear MCP server currently authenticates as you (interactive OAuth at first connection). The hosted server at `mcp.linear.app` accepts a pre-authenticated **`Authorization: Bearer <token>`** header — when this header is present, the server uses it directly and skips the interactive OAuth flow. We inject the bot's `client_credentials` access token from Keychain into both Codex and Claude Code MCP configs.
 
-- **Official hosted server (`mcp.linear.app`):** in your MCP client (Claude Code or Codex), disconnect the existing Linear OAuth connection. Reconnect — but during the OAuth authorization step in your browser, log out of Linear first (or use a private window) and log back in as the **bot's** Linear member if you also created a Linear member for the bot. If the hosted server only supports user-attributed OAuth, you can instead use the self-hosted-server path below. **Detection:** after reconfiguring, if Check 3 (Setup activation) still reports your personal account as the `viewer`, the hosted server is giving user-attributed OAuth — switch to the self-hosted path before proceeding with any personal-workflow ticket.
-- **Self-hosted Linear MCP** (e.g., `@linear/mcp-server` or a community fork): edit the server's config to read the access token from Keychain. Example for a server that supports a `LINEAR_API_KEY` env var:
-  ```bash
-  # In your MCP client config:
-  env:
-    LINEAR_API_KEY: $(security find-generic-password -s "ai-skills.linear-bot.access-token" -a "$USER" -w)
-  ```
-  Then restart the MCP server.
+1. Run the config-update helper:
+   ```bash
+   # On Codex:
+   bash ~/.codex/skills/ticket-start/scripts/update-linear-mcp-configs.sh
+   # On Claude Code:
+   bash ~/.claude/skills/ticket-start/scripts/update-linear-mcp-configs.sh
+   ```
+   The script reads `ai-skills.linear-bot.access-token` from Keychain and writes the `Authorization: Bearer ...` header into:
+   - `~/.codex/config.toml` → `[mcp_servers.linear].http_headers.Authorization`
+   - `~/.claude.json` → `mcpServers.linear.headers.Authorization` (global)
+   - `~/.claude.json` → `projects.<path>.mcpServers.linear.headers.Authorization` (every project-level Linear MCP entry, if any)
 
-After reconfiguration, the agent's next Linear MCP call should identify the bot as the `viewer` (see Step 3 of "Setup activation" below).
+   The token never appears on stdout, in `ps`, or in shell history — it's read inside a single Python process and written straight to the config files.
+
+2. **Restart Codex and Claude Code** so the new MCP config takes effect. Existing sessions still hold the old auth in memory until restart.
+
+3. Verify in a fresh session (see Setup activation Check 3 below): call your MCP client's `get_user` Linear tool with no arguments and confirm the returned identity is `eduard-agent` (the OAuth app), not your personal Linear account.
+
+#### Token rotation
+
+Linear's `client_credentials` tokens expire ~30 days after issuance. To rotate:
+1. Re-run `linear-oauth-bootstrap.sh` (mints a fresh token; Linear invalidates the previous one; Keychain entry updated in place).
+2. Re-run `update-linear-mcp-configs.sh` (pushes the new token into both MCP configs).
+3. Restart Codex and Claude Code.
+
+You can chain steps 1 + 2 in one line:
+```bash
+bash ~/.codex/skills/ticket-start/scripts/linear-oauth-bootstrap.sh && \
+bash ~/.codex/skills/ticket-start/scripts/update-linear-mcp-configs.sh
+```
+
+After reconfiguration, the agent's next Linear MCP call identifies the bot as the `viewer` (see Setup activation Check 3 below).
 
 ### Step D — Defaults the skill assumes
 
