@@ -117,6 +117,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 1. **Dispatch Reviewer subagent.** Read `agents/reviewer.md` for the role prompt. Invoke a subagent with:
    - The full diff (`git diff origin/<default>..HEAD`).
    - The ticket, AC, and approved plan.
+   - The Architect proposals — specifically the recommended option that was chosen during brainstorm.
    - The repo's `AGENTS.md`.
    - The Scoping report.
    - The role-prompt content from `agents/reviewer.md`.
