@@ -66,6 +66,12 @@ def _pct(num: float | None, denom: float | None) -> float | None:
     return None if r is None else r * 100.0
 
 
+def _net_debt(ltd: float | None, cash: float | None) -> float | None:
+    if ltd is None and cash is None:
+        return None
+    return (ltd or 0) - (cash or 0)
+
+
 def _build_year(fy: int, raw: dict[str, dict[int, float]]) -> dict:
     revenue = raw["revenue"].get(fy)
     net_income = raw["net_income"].get(fy)
@@ -78,6 +84,8 @@ def _build_year(fy: int, raw: dict[str, dict[int, float]]) -> dict:
     buybacks = raw["buybacks"].get(fy)
     dividends_paid = raw["dividends_paid"].get(fy)
     fcf = (cfo - capex) if (cfo is not None and capex is not None) else None
+    cash_val = raw["cash"].get(fy)
+    ltd_val = raw["long_term_debt"].get(fy)
     return {
         "fiscal_year": fy,
         "revenue": revenue,
@@ -87,6 +95,9 @@ def _build_year(fy: int, raw: dict[str, dict[int, float]]) -> dict:
         "cfo": cfo,
         "capex": capex,
         "fcf": fcf,
+        "cash": cash_val,
+        "long_term_debt": ltd_val,
+        "net_debt": _net_debt(ltd_val, cash_val),
         "gross_margin_pct": _pct(gross_profit, revenue),
         "operating_margin_pct": _pct(op_income, revenue),
         "net_margin_pct": _pct(net_income, revenue),

@@ -49,6 +49,17 @@ def test_compute_financials_writes_full_schema(fixtures_dir: Path, tmp_path: Pat
     sbc_pct = fy24["sbc_pct_of_revenue"]
     assert round(sbc_pct, 2) == round(11688000000 / 391035000000 * 100, 2)
 
+    # Balance sheet (only FY24 has cash/LTD in fixture)
+    assert fy24["cash"] == 29943000000
+    assert fy24["long_term_debt"] == 85750000000
+    assert fy24["net_debt"] == 85750000000 - 29943000000
+
+    # FY22 has neither cash nor LTD in fixture → net_debt should be None
+    fy22 = next(y for y in data["years"] if y["fiscal_year"] == 2022)
+    assert fy22["cash"] is None
+    assert fy22["long_term_debt"] is None
+    assert fy22["net_debt"] is None
+
     # Trend pass-fail gate
     assert "trend_gate" in data
     assert data["trend_gate"]["revenue_up_and_right"] in (True, False, "mixed")
