@@ -52,34 +52,49 @@ Run this once per machine. After it's done, the skill picks up the bot identity 
 
 ### Step B — Linear OAuth Application
 
+We use Linear's **`client_credentials` OAuth grant**, not the browser-based `authorization_code` grant. The resulting token is an "app actor token" — Linear automatically attributes every action to the OAuth app, not to a user. No browser dance, no callback URL, just one curl. Tokens are valid ~30 days; the script re-mints whenever invoked.
+
 1. Go to `https://linear.app/<your-workspace>/settings/api/applications/new` and create a new OAuth application:
-   - **Application name:** match the GitHub bot name (e.g., `eduard-bot`).
+   - **Application name:** match the GitHub bot name (e.g., `eduard-agent`).
    - **Description:** anything.
    - **Developer URL:** any.
-   - **Callback URLs:** `http://localhost:8765/callback` — this exact URL.
-2. After creating it, note the **Client ID** and **Client Secret** on the application's settings page.
-3. Store the app credentials in Keychain. **Run these in your own terminal** so the client secret never enters any chat log or process arg list:
+   - **GitHub username:** `<bot-name>[bot]` (e.g., `eduard-agent[bot]`) — ties Linear cross-posts to the GitHub App identity.
+   - **Callback URLs:** `http://localhost:8765/callback` — required by Linear's form even though we never use it. This exact URL.
+2. **Enable client credentials tokens.** In the app's settings page, find the **"Client credentials tokens"** toggle and turn it on. Without this, Linear will reject the grant with `Client does not support the client_credentials grant type`.
+3. After creating it, note the **Client ID** and **Client Secret** on the application's settings page.
+4. Store the app credentials in Keychain. **Run these in your own terminal** so the client secret never enters any chat log or process arg list. For the secret, use `read -rs` so it doesn't land in shell history:
    ```bash
+   # Client ID (not sensitive — inline is fine):
    security add-generic-password -U -s "ai-skills.linear-bot.client-id" -a "$USER" -w '<CLIENT_ID>'
-   security add-generic-password -U -s "ai-skills.linear-bot.client-secret" -a "$USER" -w '<CLIENT_SECRET>'
+
+   # Client Secret (sensitive — paste into prompt, nothing echoes back):
+   read -rs LINEAR_CLIENT_SECRET
+   security add-generic-password -U -s "ai-skills.linear-bot.client-secret" -a "$USER" -w "$LINEAR_CLIENT_SECRET"
+   unset LINEAR_CLIENT_SECRET
    ```
-   `-U` updates the entry if it already exists (so this is safe to re-run).
-4. Run the one-shot OAuth bootstrap script. It reads `client-id` and `client-secret` from Keychain, runs the browser dance, and writes the resulting access + refresh tokens directly back to Keychain. Tokens never appear on stdout or in `ps`:
+   `-U` updates the entry if it already exists (safe to re-run).
+5. Run the bootstrap script. It reads `client-id` and `client-secret` from Keychain, POSTs to Linear's `/oauth/token` with `grant_type=client_credentials`, and writes the resulting `access-token` directly back to Keychain. The token never appears on stdout or in `ps`:
    ```bash
    # On Codex:
    bash ~/.codex/skills/ticket-start/scripts/linear-oauth-bootstrap.sh
    # On Claude Code:
    bash ~/.claude/skills/ticket-start/scripts/linear-oauth-bootstrap.sh
    ```
-   The script opens your browser to Linear's authorize URL with `actor=app` set, listens on `127.0.0.1:8765` for the OAuth callback, captures the authorization code, exchanges it for tokens, and writes them to Keychain:
-   - `ai-skills.linear-bot.access-token`
-   - `ai-skills.linear-bot.refresh-token`
-5. Verify the tokens are stored:
+   On success, the script stores `ai-skills.linear-bot.access-token` in Keychain. **No refresh token is issued** — `client_credentials` doesn't include one. To renew (or rotate), re-run the script; Linear invalidates the previous token and returns a fresh 30-day one.
+6. Verify the token is stored and works:
    ```bash
    security find-generic-password -s "ai-skills.linear-bot.access-token" -a "$USER" >/dev/null && echo "access-token ✓"
-   security find-generic-password -s "ai-skills.linear-bot.refresh-token" -a "$USER" >/dev/null && echo "refresh-token ✓"
+
+   # Probe Linear API — should return your bot's name, not your personal user.
+   ACCESS_TOKEN=$(security find-generic-password -s "ai-skills.linear-bot.access-token" -a "$USER" -w)
+   curl -sS -X POST https://api.linear.app/graphql \
+     -H "Authorization: $ACCESS_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"query":"{ viewer { name email } }"}'
+   unset ACCESS_TOKEN
    ```
-6. (Recommended) Save the client ID, client secret, and both tokens to NordPass as a backup.
+   Expected: `name` is your bot's name; `email` ends with `@oauthapp.linear.app` (Linear's marker for OAuth-app actors).
+7. (Recommended) Save the **Client ID** and **Client Secret** to NordPass as a backup. The access token is regenerable from those — don't bother backing it up.
 
 ### Step C — Reconfigure the Linear MCP server
 
@@ -210,6 +225,7 @@ All failures are fail-closed: the skill never silently substitutes personal cred
 This skill does not proactively rotate tokens. If you want to rotate:
 
 - **GitHub App private key:** generate a new private key on the App's settings page, replace the Keychain entry (`security delete-generic-password -s "ai-skills.gh-bot.private-key" -a "$USER"`, then `security add-generic-password ...` with the new key). You can revoke the old key from the App settings page after confirming the new one works.
-- **Linear OAuth tokens:** revoke the existing OAuth grant in Linear's settings, re-run `linear-oauth-bootstrap.sh`, replace the Keychain entries.
+- **Linear bot access token:** re-run `linear-oauth-bootstrap.sh`. Linear's `client_credentials` grant invalidates the previous active token on every successful issuance and returns a fresh 30-day one. The Keychain entry is updated in place.
+- **Linear OAuth app client secret:** in the Linear app's settings, regenerate the secret. Update `ai-skills.linear-bot.client-secret` in Keychain. Re-run `linear-oauth-bootstrap.sh` to mint a new access token with the new credentials.
 
 Rotation is out of scope for the skill's runtime behavior. The skill assumes whatever's in Keychain is current.
