@@ -27,6 +27,18 @@ APP_ID=$(read_keychain "${KEYCHAIN_PREFIX}.app-id")
 INSTALLATION_ID=$(read_keychain "${KEYCHAIN_PREFIX}.installation-id")
 PRIVATE_KEY=$(read_keychain "${KEYCHAIN_PREFIX}.private-key")
 
+# Sanity-check the private key shape before we ask openssl to sign with it.
+# A common footgun is pasting the .pem contents with escaped \n literals
+# (instead of real newlines) into `security add-generic-password`. Catch
+# that here with a targeted error pointing at the runbook rather than
+# letting openssl emit a generic "Unable to load Private Key".
+if ! printf '%s' "$PRIVATE_KEY" | grep -q "BEGIN .* PRIVATE KEY"; then
+  echo "Private key in Keychain does not look like a PEM block." >&2
+  echo "Re-import the key per bot-identity.md runbook Step A.4." >&2
+  echo "Hint: pass the file contents in unquoted via \"\$(cat /path/to/key.pem)\", not as an escaped string." >&2
+  exit 2
+fi
+
 # Mint a 9-minute JWT. GitHub App JWT lifetime hard ceiling is 10 minutes;
 # 9 minutes gives a small buffer for clock skew between this host and GitHub.
 NOW=$(date +%s)
@@ -41,20 +53,29 @@ PAYLOAD_B64=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$NOW" "$EXP" "$APP_ID" | 
 SIGNING_INPUT="${HEADER_B64}.${PAYLOAD_B64}"
 
 # Sign with openssl. The private key is fed via process substitution so it
-# never lands on disk as a temp file.
-SIG=$(printf '%s' "$SIGNING_INPUT" \
-  | openssl dgst -sha256 -sign <(printf '%s' "$PRIVATE_KEY") -binary 2>/dev/null \
-  | b64url)
+# never lands on disk as a temp file. Wrap in an `if !` so set -e doesn't
+# short-circuit the friendly diagnostic; let openssl's own error reach
+# stderr (it complains about PEM format, never echoes key material).
+if ! SIG=$(printf '%s' "$SIGNING_INPUT" \
+  | openssl dgst -sha256 -sign <(printf '%s' "$PRIVATE_KEY") -binary \
+  | b64url); then
+  echo "JWT signing failed. Is the private key in Keychain a valid PEM-encoded RSA private key?" >&2
+  exit 2
+fi
 
 if [[ -z "$SIG" ]]; then
-  echo "JWT signing failed. Is the private key in Keychain a valid PEM-encoded RSA private key?" >&2
+  echo "JWT signing produced empty signature." >&2
   exit 2
 fi
 
 JWT="${SIGNING_INPUT}.${SIG}"
 
 # Exchange the JWT for an installation access token (~1h lifetime).
+# --connect-timeout caps the TCP handshake; --max-time caps total request
+# time. Without these, a flaky network can hang the agent indefinitely.
 RESPONSE=$(curl -sS -X POST \
+  --connect-timeout 10 \
+  --max-time 30 \
   -H "Authorization: Bearer $JWT" \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
