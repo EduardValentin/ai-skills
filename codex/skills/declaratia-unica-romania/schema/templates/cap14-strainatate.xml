@@ -1,0 +1,14 @@
+<cap14
+  str_stat_realiz_v="{{stat_iso}}"
+  den_stat="{{stat_denumire}}"
+  str_categ_venit="{{cod_categorie}}"
+  den_categ_venit="{{denumire_categorie}}"{{#if dubla_impunere}}
+  dubla_impunere="{{dubla_impunere}}"{{/if}}
+  str_venit_net_anual="{{venit_net_anual}}"{{#if pierdere_precedenta}}
+  str_pierdere_precedenta="{{pierdere_precedenta}}"{{/if}}
+  str_pierdere_compensata="{{pierdere_compensata|default:0}}"
+  str_venit_recalculat="{{venit_recalculat}}"
+  str_impozit_datorat_Ro="{{impozit_datorat_ro}}"{{#if impozit_platit}}
+  str_impozit_platit="{{impozit_platit}}"{{/if}}
+  str_credit_fiscal="{{credit_fiscal|default:0}}"
+  str_dif_impozit_datorat="{{dif_impozit_datorat}}" />

@@ -1,0 +1,182 @@
+# form-mapping.yaml
+# Structured mapping: categorie venit ↔ atribute XML ↔ secțiune DUF.
+# Companion narrative: form-mapping.md
+# Sync rules: schema-validator.md
+# Last sync with d212-xml-schema.md: 2026-05-11
+
+meta:
+  schema_namespace: mfp:anaf:dgti:d212:declaratie:v11
+  last_synced_with_xml_schema: 2026-05-11
+
+categorii_venit:
+  - cod: "2012"
+    denumire: "Transferul titlurilor de valoare și orice alte operațiuni cu instrumente financiare, inclusiv instrumente financiare derivate, precum și transferul aurului financiar"
+    sursa_posibila: [strainatate, romania]
+    capitol_xml: cap14
+    duf_section: "Venituri realizate → Adaugă venit {sursa} → Categorie 2012"
+    campuri:
+      str_stat_realiz_v:
+        required_if: "sursa == strainatate"
+        type: ISO-3166-alpha2
+        sursa_date: "input.country_of_broker"
+      str_categ_venit:
+        required: true
+        type: string
+        constant: "2012"
+      den_categ_venit:
+        required: true
+        type: string
+        constant: "Transferul titlurilor de valoare și orice alte operațiuni cu instrumente financiare, inclusiv instrumente financiare derivate, precum și transferul aurului financiar"
+      str_venit_net_anual:
+        required: true
+        type: integer_lei
+        sursa_date: "calc.net_gain_RON"
+        calcul_ref: "../pf-investitii.md#calcul-cap-2012"
+      str_pierdere_precedenta:
+        required: false
+        type: integer_lei
+        sursa_date: "input.d212_anul_precedent.pierdere_reportata_2012"
+      str_pierdere_compensata:
+        required: true
+        type: integer_lei
+        calcul_ref: "../pf-investitii.md#compensare-pierderi"
+      str_venit_recalculat:
+        required: true
+        type: integer_lei
+        formula: "str_venit_net_anual - str_pierdere_compensata"
+      str_impozit_datorat_Ro:
+        required: true
+        type: integer_lei
+        formula: "round(str_venit_recalculat * cota_2012)"
+        cache_ref: "_legi/{an}/impozit-castig-capital.md#cota-art-94"
+      str_impozit_platit:
+        required_if: "sursa == strainatate AND broker_aplica_retinere"
+        type: integer_lei
+        sursa_date: "input.foreign_tax_withheld_RON"
+      str_credit_fiscal:
+        required_if: "dubla_impunere == 1"
+        type: integer_lei
+        formula: "min(str_impozit_platit, str_impozit_datorat_Ro)"
+        cache_ref: "_legi/{an}/tratate-dubla-impunere.md"
+      str_dif_impozit_datorat:
+        required: true
+        type: integer_lei
+        formula: "str_impozit_datorat_Ro - str_credit_fiscal"
+    citation_required:
+      - "_legi/{an}/impozit-castig-capital.md#cota-art-94"
+      - "_legi/{an}/impozit-castig-capital.md#regula-anuala-broker-international"
+      - "_legi/{an}/tratate-dubla-impunere.md"   # numai dacă străinătate
+
+  - cod: "2017"
+    denumire: "Dobânzi"
+    sursa_posibila: [strainatate, romania]
+    capitol_xml: cap14
+    duf_section: "Venituri realizate → Adaugă venit {sursa} → Categorie 2017"
+    campuri:
+      str_stat_realiz_v:
+        required_if: "sursa == strainatate"
+        type: ISO-3166-alpha2
+        sursa_date: "input.country_of_payer"
+      str_categ_venit:
+        constant: "2017"
+      den_categ_venit:
+        constant: "Dobânzi"
+      str_venit_net_anual:
+        required: true
+        type: integer_lei
+        sursa_date: "calc.interest_RON"
+        calcul_ref: "../pf-investitii.md#calcul-cap-2017"
+      str_pierdere_compensata:
+        required: true
+        type: integer_lei
+        default: 0
+      str_venit_recalculat:
+        formula: "str_venit_net_anual - str_pierdere_compensata"
+      str_impozit_datorat_Ro:
+        formula: "round(str_venit_recalculat * cota_2017)"
+        cache_ref: "_legi/{an}/impozit-dobanzi.md#cota"
+      str_impozit_platit:
+        required_if: "sursa == strainatate AND broker_aplica_retinere"
+        type: integer_lei
+      str_credit_fiscal:
+        required_if: "dubla_impunere == 1"
+        formula: "min(str_impozit_platit, str_impozit_datorat_Ro)"
+      str_dif_impozit_datorat:
+        formula: "str_impozit_datorat_Ro - str_credit_fiscal"
+    citation_required:
+      - "_legi/{an}/impozit-dobanzi.md#cota"
+      - "_legi/{an}/tratate-dubla-impunere.md"
+
+  - cod: "2018"
+    denumire: "Dividende"
+    sursa_posibila: [strainatate, romania]
+    capitol_xml: cap14
+    duf_section: "Venituri realizate → Adaugă venit {sursa} → Categorie 2018"
+    campuri:
+      str_stat_realiz_v:
+        required_if: "sursa == strainatate"
+      str_categ_venit:
+        constant: "2018"
+      den_categ_venit:
+        constant: "Dividende"
+      dubla_impunere:
+        type: boolean_01
+        rule: "true (1) dacă țara are tratat de evitare a dublei impuneri cu România ȘI s-a reținut impozit străinătate"
+        cache_ref: "_legi/{an}/tratate-dubla-impunere.md"
+      str_venit_net_anual:
+        required: true
+        type: integer_lei
+        sursa_date: "calc.dividend_gross_RON"
+        calcul_ref: "../pf-investitii.md#calcul-cap-2018"
+      str_pierdere_compensata:
+        type: integer_lei
+        default: 0
+      str_venit_recalculat:
+        formula: "str_venit_net_anual - str_pierdere_compensata"
+      str_impozit_datorat_Ro:
+        formula: "round(str_venit_recalculat * cota_2018)"
+        cache_ref: "_legi/{an}/impozit-dividende.md#cota"
+      str_impozit_platit:
+        required_if: "dubla_impunere == 1"
+        sursa_date: "input.foreign_tax_withheld_RON"
+      str_credit_fiscal:
+        required_if: "dubla_impunere == 1"
+        formula: "min(str_impozit_platit, str_impozit_datorat_Ro)"
+      str_dif_impozit_datorat:
+        formula: "str_impozit_datorat_Ro - str_credit_fiscal"
+    citation_required:
+      - "_legi/{an}/impozit-dividende.md#cota"
+      - "_legi/{an}/tratate-dubla-impunere.md"
+
+# Note: PFA în sistem real nu folosește <cap14> ci alte capitole (a se determina
+# din Instrucțiuni la freshness check). Mapping-ul PFA real va fi adăugat la
+# Task 2.3.B într-o iterație ulterioară dacă scenariul PFA e activat în sesiune.
+# Pentru moment, scope-ul YAML acoperă strict capitolele <cap14> cu codurile
+# 2012/2017/2018 și obligațiile <oblig_realizat>.
+
+oblig_realizat:
+  duf_section: "Date privind CASS / Date privind CAS / sumar fiscal"
+  campuri:
+    cass_ven_inv:
+      sursa_date: "calc.cass_baza_din_venituri_investitii"
+      calcul_ref: "../pf-investitii.md#cass-baza"
+    cass_baza:
+      type: integer_lei
+      formula: "min(cass_total_ven, 12 * salariu_minim_brut)"
+      cache_ref: "_legi/{an}/plafoane-cass.md"
+      note: "plafon 12 salarii minime brute conform art. 174 CF"
+    cass_anuala:
+      type: integer_lei
+      formula: "round(cass_baza * 0.10)"
+      cache_ref: "_legi/{an}/plafoane-cass.md#cota"
+    cass_retinut:
+      type: integer_lei
+      sursa_date: "input.cass_retinut_broker_RO_sau_banca"
+    cass_dif_plus:
+      formula: "max(0, cass_anuala - cass_retinut)"
+    cass_dif_minus:
+      formula: "max(0, cass_retinut - cass_anuala)"
+    dif_de_plata:
+      formula: "impozit_venit_plus + cas_plus + cass_plus"
+    dif_de_restituit:
+      formula: "impozit_venit_minus + cass_minus"
