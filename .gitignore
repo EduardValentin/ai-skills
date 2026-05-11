@@ -3,3 +3,8 @@
 # Zip archives generated under any dist directory
 **/dist/*.zip
 **/dist/**/*.zip
+
+# Stock-research scripts
+claude/skills/stock-research/scripts/.venv/
+claude/skills/stock-research/scripts/.pytest_cache/
+**/__pycache__/
