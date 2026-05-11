@@ -1,7 +1,6 @@
 """Shared pytest fixtures and path setup for stock-research scripts tests."""
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
