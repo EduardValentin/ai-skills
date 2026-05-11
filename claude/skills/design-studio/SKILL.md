@@ -1,6 +1,6 @@
 ---
 name: design-studio
-description: Use when doing UI/UX work on a React reference app that mirrors a production codebase — building new pages/components/sections, auditing existing pages for clarity/decluttering/visitor fit, fixing visual bugs, or extending the design system. Only the React reference app is modified, never production code.
+description: Use when doing UI/UX work on a React reference app that mirrors a production codebase — building new pages/components/sections, auditing existing pages for clarity/decluttering/visitor fit, fixing visual bugs, or extending the design system.
 ---
 
 # Design Studio
@@ -9,13 +9,15 @@ Project-specific overlay for design work on a React + Tailwind reference app. Ge
 
 **Deadlines do not relax the rules.** User-imposed time pressure ("I need this in 20 minutes", "the demo is at the top of the hour") does not authorize skipping the copy gate, the `frontend-design` invocation, semantic-token discipline, or visual validation. If the timeline cannot accommodate compliance, surface the tradeoff to the user (do it right and miss the deadline / scaffold with placeholders + flag for proper pass / push the deadline) rather than silently cut corners.
 
+**Violating the letter of the rules is violating the spirit of the rules.** "I followed the intent" is not a defense for skipping a named step (the copy gate, Rule 8, the `frontend-design` invocation, visual validation, the user-approval beat in either flow). If a rule names a step, the step runs.
+
 ## Required sub-skills
 
 These MUST be invoked at the points specified. Do not paraphrase, summarize, or skip.
 
 | Sub-skill | When to invoke |
 |---|---|
-| `frontend-design:frontend-design` | Before implementing any visual change (Flow A Phase 2; Flow B critique step) |
+| `frontend-design:frontend-design` | Before implementing any visual change (Flow A Step 3 "Plan + design guardrails"; Flow B Step 4 "Critique") |
 | `searchfit-seo:on-page-seo` | Whenever copy is created or rewritten — AFTER the copy gate (Rule 6) |
 | `searchfit-seo:content-brief` | Fallback for long-form pages only (blog post, guide, deep article) |
 
@@ -23,49 +25,62 @@ These MUST be invoked at the points specified. Do not paraphrase, summarize, or 
 
 Run in order. Do not skip.
 
-1. **Setup script** — `<skill-dir>/scripts/prepare-design-studio.sh --project-root <abs-path>` (add `--app-root` if known). Handles Node version, package manager, install, and `.claude/launch.json`. Don't hand-create launch.json or install deps manually unless the script fails.
+1. **Setup + locate the reference app** — run `<skill-dir>/scripts/prepare-design-studio.sh --project-root <abs-path>`. The script auto-detects the React app under `<project-root>/designs/`; pass `--app-root` only if you already know the path or auto-detection picks the wrong one. The script handles Node version, package manager, install, and `.claude/launch.json`. If it fails to find a React `package.json`, ask the user for the path. Don't hand-create launch.json or install deps manually unless the script fails.
 
-2. **Locate the reference app** — `<project-root>/designs/<app-name>/`. If `designs/` is missing or has no JSX/TSX, ask the user for the path. Validate the path has a `package.json` with React.
+2. **Project-context digest (subagent)** — dispatch an Agent using the prompt in `references/context-digest-prompt.md`. Pass the project root, the located reference app root, and a one-line summary of the current task (used to scope which PRD sections come back). The subagent returns ONE structured markdown digest with these sections: **Design tokens**, **Components**, **Routes**, **Brand voice highlights**, **PRD slice relevant to current task**, **Visual aesthetic signals**, **Notable dependencies**, **Mismatches**, **Missing**.
 
-3. **Read project context** (every session):
-   - `DESIGN.md` (project root) — design system. Missing? Ask the user for design direction and create it before proceeding.
-   - `brand-voice.md` (project root) — copy guidelines. Missing? Note it; default to clear, direct, human language.
-   - **Tailwind theme** — `@theme` blocks in CSS for v4, or `tailwind.config.{ts,js}` for v3. Map every semantic token. This is your styling vocabulary; nothing outside it without explicit approval.
-   - **Component inventory** — scan `components/` for primitives, custom components, and patterns (CVA, cn(), data-slot).
-   - **Router + pages** — current routes/structure.
-   - `package.json` — dependency versions.
-   - `PRD.md` (project root) — business rules / user flows. Missing? See `references/prd-generation.md` and offer to generate one.
+   This subagent replaces inline reads of `DESIGN.md`, `brand-voice.md`, `PRD.md`, the Tailwind theme, the component inventory, the router, and `package.json`. Do not read those files directly in the main agent — the digest is your working reference for the session.
 
-4. **Visual context** — start the dev server (`preview_start`), screenshot the main pages, build a mental model of the existing aesthetic. No internal browser? See `references/browser-fallback.md`.
+   **On return, before proceeding:**
+   - If `Missing` is non-empty, handle each item:
+     - `DESIGN.md` missing → ask the user for design direction and create DESIGN.md before any design work.
+     - `brand-voice.md` missing → note it; default to clear, direct, human language for any copy gate.
+     - `PRD.md` missing → see `references/prd-generation.md` and offer to generate one.
+     - Tailwind theme or components directory missing → ask the user where they live, then re-dispatch the digest.
+   - If `Mismatches` is non-empty, raise each one with the user. **Conflict rule:** the Tailwind theme is authoritative — flag the mismatch and offer to update DESIGN.md as part of the current task.
+
+   **Re-dispatch the digest when** (a) any source artifact has been edited since the last digest, or (b) the active task shifts enough that the PRD slice no longer covers it (pass a refreshed task summary).
+
+3. **Visual context** — start the dev server (`preview_start`) and screenshot the main pages. Then write down (in the working response) a 3-to-5-bullet aesthetic summary covering: color rhythm (palette breadth, accent usage), spacing rhythm (base unit, typical gaps), type hierarchy (display vs body weighting), density / whitespace tendency, dominant motion/interaction patterns. This is the rendered counterpart to the digest's *Visual aesthetic signals* — confirm the signals or flag where the rendered app diverges from what the tokens implied. No internal browser? See `references/browser-fallback.md`.
 
 ## The two flows
 
-Pick one based on the user's request. If unclear, ask.
+Pick one based on the user's request. Use the triage table; if still unclear, ask.
+
+| User says... | Flow |
+|---|---|
+| "Build a new pricing page" / "Add a comparison section" / "Extend the design system with a callout component" | **A — Build from scratch** |
+| "Make the dashboard less cluttered" / "Fix the mobile layout on /clients" / "Improve the empty-state copy on /onboarding" | **B — Audit existing** |
+| Ambiguous (e.g. "improve the dashboard", "make the pricing page better") | **Ask first:** "Are you adding new sections, or refining what's already there?" |
 
 ### Flow A — Build from scratch
 
 For new pages, components, sections, or design-system extensions.
 
-1. **Understand** — clarify scope, identify affected pages/components/tokens, ask clarifying questions before any code. **Then run the domain/business-logic gate (Rule 8) before planning.**
-2. **Plan + design guardrails** — invoke `frontend-design:frontend-design`. Then describe what you'll build, list components to create/modify/reuse, identify any new tokens needed, describe responsive behavior. If Rule 8 answered *yes*, include the PRD update in the plan. Get explicit user approval before writing code.
-3. **Copy gate (if any copy is involved)** — see Rule 6. Do not skip.
-4. **Implement** — incrementally, one component/section at a time. Comply with all rules. Preview after each significant change.
-5. **Validate** — see "Visual validation" below.
-6. **Document + sync** — update DESIGN.md if the system was extended. Run PRD sync if business behavior changed.
+1. **Understand** — clarify scope, identify affected pages/components/tokens, ask clarifying questions before any code.
+2. **Domain/business-logic gate** — run the Rule 8 gate verbatim. Wait for the user's answer before continuing. Do not merge this into Step 1's clarifying questions.
+3. **Plan + design guardrails** — invoke `frontend-design:frontend-design`. Then describe what you'll build, list components to create/modify/reuse, identify any new tokens needed, describe responsive behavior. If Rule 8 answered *yes*, include the PRD update in the plan. Get explicit user approval before writing code.
+4. **Copy gate (if any copy is involved)** — see Rule 6. Do not skip.
+5. **Implement** — incrementally, one component/section at a time. Comply with all rules. Preview after each significant change.
+6. **Validate** — see "Visual validation" below.
+7. **Document + sync** — update DESIGN.md if the system was extended. Run PRD sync if business behavior changed.
 
 ### Flow B — Audit existing
 
 For refining an existing page for a visitor segment, decluttering, fixing visual bugs, or improving SEO/copy on the page.
 
-1. **Frame the audit** — ask the user: who is the audience, what is the goal (declutter / segment fit / bug fix / SEO / copy clarity), what does success look like? **Then run the domain/business-logic gate (Rule 8) before capturing state.**
-2. **Capture current state** — screenshot the target page(s) at every breakpoint boundary (just-before and just-after each defined breakpoint, plus 320px and 1920px).
-3. **Critique** — invoke `frontend-design:frontend-design`. Produce a written critique covering: information hierarchy, visual clutter, accessibility, responsive issues, visual bugs, copy clarity, and on-page SEO observations. Do not start changing code yet.
-4. **Propose ranked fixes** — list fixes ordered by impact. Get user approval on scope before changing code.
-5. **Apply fixes**:
+1. **Frame the audit** — ask the user: who is the audience, what is the goal (declutter / segment fit / bug fix / SEO / copy clarity), what does success look like?
+2. **Domain/business-logic gate** — run the Rule 8 gate verbatim. Wait for the user's answer before continuing. Do not merge this into Step 1's framing questions.
+3. **Capture current state** — screenshot the target page(s) at the breakpoint boundaries defined in "Visual validation" below.
+4. **Critique** — invoke `frontend-design:frontend-design`. Produce a written critique covering: information hierarchy, visual clutter, accessibility, responsive issues, visual bugs, copy clarity, and on-page SEO observations. Do not start changing code yet.
+
+   **Delegate when:** the audit spans 3+ pages or covers all categories in depth. Dispatch a subagent with the screenshots, the digest from Prerequisites Step 2, and the user's audit goals; have it return the written critique. The main agent then ranks fixes in Step 5. For single-page or focused audits, run inline.
+5. **Propose ranked fixes** — list fixes ordered by impact. Get user approval on scope before changing code. If Rule 8 answered *yes*, include the PRD update in this plan.
+6. **Apply fixes**:
    - Visual/structural changes — implement directly under the design rules.
    - **Copy changes** — see Rule 6. The copy gate applies here too. Never rewrite copy from your own head, even when "just fixing" a phrase.
-6. **Re-validate** — re-screenshot at the same viewports and confirm fixes landed without regressions.
-7. **Document + sync** — DESIGN.md if the system was extended; PRD only if business behavior changed.
+7. **Re-validate** — re-screenshot at the same viewports and confirm fixes landed without regressions.
+8. **Document + sync** — DESIGN.md if the system was extended; PRD only if business behavior changed.
 
 ## Design rules
 
@@ -126,7 +141,7 @@ The PRD is the source of truth for business rules and user flows. Many design ch
 
 1. STOP. Ask the user: *"Before I plan this — is this change introducing, modifying, or extending domain or business logic? Specifically: a new product capability, a new business rule or constraint, a new data entity or field that production must model, an altered or new step in a user flow, an additional case for an existing flow, or removal/replacement of an existing flow. If yes, I'll plan the PRD update alongside the design work."*
 2. Wait for the user's answer. Do not proceed without it.
-3. If **yes** → treat the PRD update as in-scope from the start. Phase 6 (PRD sync) is not optional and must appear in the plan you present in Flow A Step 2 / Flow B Step 4.
+3. If **yes** → treat the PRD update as in-scope from the start. The PRD sync phase is not optional and must appear in the plan you present in Flow A Step 3 / Flow B Step 5.
 4. If **no** or **not sure** → proceed without planned PRD work. But during validation, re-evaluate against the PRD-sync trigger criteria below. If the implementation surfaced a business change the user didn't anticipate at the gate, raise it explicitly before declaring done — do not silently skip it.
 
 Bypassing this gate (making prototype changes that imply new business rules without raising them) is a violation of the skill, even if the visual outcome is correct.
@@ -137,11 +152,13 @@ General quality (a11y to WCAG 2.1 AA, responsive testing methodology, animation 
 
 ## Visual validation
 
-Screenshots from Prerequisites Step 4 are exploratory — they build the agent's mental model of the existing aesthetic. They are **not boundary-precise** and do **not** count as validation. Validation (Flow A Phase 5, Flow B Steps 2 and 6) requires fresh screenshots taken at the exact breakpoint boundaries below. Do not reuse prerequisite shots to skip this step.
+**Breakpoint set (canonical):** desktop, every breakpoint boundary — just-before and just-after each defined Tailwind breakpoint — plus 320px and 1920px. Every other section that says "the breakpoint boundaries defined in Visual validation" means this list.
+
+Screenshots from Prerequisites Step 3 are exploratory — they build the agent's mental model of the existing aesthetic. They are **not boundary-precise** and do **not** count as validation. Validation (Flow A Step 6, Flow B Steps 3 and 7) requires fresh screenshots taken at the canonical breakpoint set above. Do not reuse prerequisite shots to skip this step.
 
 After every implementation:
 
-1. Screenshot at desktop, then at every breakpoint boundary: just-before and just-after each defined Tailwind breakpoint, plus 320px and 1920px.
+1. Screenshot at the canonical breakpoint set.
 2. At every viewport, verify: no clipping, no overflow (no unintended horizontal scroll), proper alignment, no layout collapse (0-height sections, overlapping elements), readable typography.
 3. Compare against the existing app aesthetic — same tokens, patterns, visual language.
 4. Check focus states and color contrast on key text.
