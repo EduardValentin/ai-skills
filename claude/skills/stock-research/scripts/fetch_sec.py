@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
     index = {
         "ticker": info.ticker,
+        "schema_version": 1,
         "cik": info.cik_padded,
         "name": info.name,
         "filings": [],

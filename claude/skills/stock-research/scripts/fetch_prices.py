@@ -28,7 +28,11 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     period = f"{args.years}y"
-    hist = yfa.get_history(ticker, period=period)
+    try:
+        hist = yfa.get_history(ticker, period=period)
+    except yfa.NoDataError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     bars = [
         {
             "date": str(idx.date()),

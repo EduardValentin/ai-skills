@@ -52,5 +52,8 @@ def test_diff_writes_markdown_summary(tmp_path: Path) -> None:
         ]
     )
     md = out_md.read_text()
+    assert md.startswith("---\n")
+    assert "ticker: MSFT" in md
+    assert "artifact: risk-factor-diff" in md
     assert "Risk C" in md  # added
     assert "Risk B" in md  # removed

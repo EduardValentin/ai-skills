@@ -55,3 +55,12 @@ def test_fetch_prices_writes_three_files(_h, _d, _s, tmp_path: Path) -> None:
 
     splits = json.loads((out_dir / "splits.json").read_text())
     assert splits["splits"] == []
+
+
+@patch("fetch_prices.yfa.get_history")
+def test_fetch_prices_returns_2_on_no_data(history_mock, tmp_path: Path) -> None:
+    from _lib.yf_adapter import NoDataError
+    history_mock.side_effect = NoDataError("empty history for ZZZZ")
+    out_dir = tmp_path / "raw"
+    rc = fetch_prices.main(["ZZZZ", "--years", "10", "--out", str(out_dir)])
+    assert rc == 2

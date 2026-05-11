@@ -53,6 +53,7 @@ def test_fetch_sec_downloads_and_writes_index(
     assert index_path.exists()
     index = json.loads(index_path.read_text())
     assert index["ticker"] == "AAPL"
+    assert index["schema_version"] == 1
     assert index["cik"] == "0000320193"
     assert len(index["filings"]) == 2
     forms_downloaded = sorted(f["form"] for f in index["filings"])
@@ -89,3 +90,17 @@ def test_fetch_sec_filters_by_since(fixtures_dir, tmp_path) -> None:
     assert rc == 0
     index = json.loads((out_dir / "_filings_index.json").read_text())
     assert len(index["filings"]) == 1
+
+
+@responses.activate
+def test_fetch_sec_returns_2_for_unknown_ticker(fixtures_dir, tmp_path) -> None:
+    # company_tickers.json fixture only contains AAPL/MSFT/AMZN — ZZZZ is unknown.
+    responses.add(
+        responses.GET,
+        tr.COMPANY_TICKERS_URL,
+        body=(fixtures_dir / "company_tickers_sample.json").read_text(),
+        status=200,
+    )
+    out_dir = tmp_path / "raw"
+    rc = fetch_sec.main(["ZZZZ", "--out", str(out_dir)])
+    assert rc == 2

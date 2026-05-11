@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-from _lib.frontmatter import read as fm_read
+from _lib.frontmatter import read as fm_read, write as fm_write
 
 MODIFIED_RATIO_MIN = 0.4
 MODIFIED_RATIO_MAX = 0.95
@@ -97,8 +97,12 @@ def main(argv: list[str] | None = None) -> int:
     }
     out_path.write_text(json.dumps(payload, indent=2))
     if args.out_md:
-        Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out_md).write_text(to_markdown(args.ticker.upper(), diff))
+        meta = {
+            "ticker": args.ticker.upper(),
+            "artifact": "risk-factor-diff",
+            "schema_version": 1,
+        }
+        fm_write(Path(args.out_md), meta, to_markdown(args.ticker.upper(), diff))
     print(
         f"Added: {len(diff['added'])} | Removed: {len(diff['removed'])} | "
         f"Modified: {len(diff['modified'])}"

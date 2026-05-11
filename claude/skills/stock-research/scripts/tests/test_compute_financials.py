@@ -86,3 +86,16 @@ def test_compute_financials_marks_revenue_trend_mixed(
     compute_financials.main(["AAPL", "--years", "3", "--out", str(out_path)])
     data = json.loads(out_path.read_text())
     assert data["trend_gate"]["revenue_up_and_right"] == "mixed"
+
+
+@responses.activate
+def test_compute_financials_returns_2_for_unknown_ticker(fixtures_dir, tmp_path) -> None:
+    responses.add(
+        responses.GET,
+        tr.COMPANY_TICKERS_URL,
+        body=(fixtures_dir / "company_tickers_sample.json").read_text(),
+        status=200,
+    )
+    out_path = tmp_path / "financials.json"
+    rc = compute_financials.main(["ZZZZ", "--out", str(out_path)])
+    assert rc == 2
