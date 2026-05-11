@@ -113,6 +113,8 @@ cp <ticker_dir>/business-and-moat.md  # (the orchestrator handles install-dir mi
 
 ## Checkpoint 1
 
+**Before rendering CP1: read the ELI5 section (the first `### 1. ELI5...` block) from `<ticker_dir>/business-and-moat.md` — the file the Phase 2 subagent just wrote. The CP1 message MUST lead with that ELI5 verbatim. Do not paraphrase, shorten, or "compress for the chat." The whole point of ELI5 is that it's the same plain-language voice the user wants to see at the top of the conversation, not just buried in the file. If the ELI5 section in the file is itself jargon-heavy (uses terms like "ACV", "ARR", "platform", "operating leverage", "low-code", "workflow OS"), that's a Phase 2 failure — re-dispatch the subagent with explicit feedback before rendering CP1.**
+
 Format (output exactly this shape):
 
 ```
@@ -120,7 +122,13 @@ Format (output exactly this shape):
 
 Drafted at <ticker_dir>/business-and-moat.md.
 
-Summary: <paste the subagent's ~500-word summary, trimmed to the most load-bearing 3–5 sentences>
+**Explain like I'm in 5th grade:**
+
+<Paste the ELI5 section from business-and-moat.md verbatim — typically 3-6 short paragraphs of plain language covering every business area the company operates in. Banned vocabulary in this block: ACV, ARR, NDR, NRR, TAM, SAM, platform-as-a-service, workflow OS, low-code, operating leverage, vertical, monetization, take rate, attach rate, GAAP/non-GAAP — and any other jargon. If you can't explain a segment in 10-year-old English, the ELI5 wasn't written right.>
+
+**Technical summary:**
+
+<3-5 sentences of load-bearing findings: segments + revenue mix with specific dollar/percent numbers, moat verdict + trajectory + key evidence, leadership/insider signal, top 2-3 risks. Jargon allowed here — this is the analyst voice.>
 
 Quick verification before we fan out the data-gathering batch:
 1. Does the ELI5 match how YOU think about this business?

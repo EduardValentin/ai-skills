@@ -20,7 +20,12 @@ You are a research subagent for the `stock-research` skill. Your job is the busi
 ## Your job
 
 Produce **one file**: `<ticker_dir>/business-and-moat.md` with the structure below.
-Return a **~500-word summary** to the orchestrator covering: ELI5 in 2–3 sentences, key segments + geographic mix, moat verdict, CEO/leadership signal, top 2–3 risks worth flagging in later phases.
+Return a **~500-word summary** to the orchestrator in this exact shape:
+
+- **First paragraph (3-5 sentences):** A genuine 5th-grader ELI5 of what the company does and its main business areas. Same banned-vocabulary rules as the file's ELI5 section (no ACV / ARR / TAM / NDR / platform-as-a-service / workflow OS / operating leverage / vertical / monetization / take rate / GAAP / non-GAAP / low-code etc.). If the term wouldn't survive a conversation with a 10-year-old, it doesn't belong in this paragraph.
+- **Then technical findings (jargon OK):** segments + geographic mix with specific numbers, moat verdict + trajectory + evidence, CEO/leadership signal, top 2-3 risks worth flagging in later phases.
+
+The orchestrator pastes the ELI5 section from `business-and-moat.md` at CP1 verbatim, but the first paragraph of your *summary* is the fallback if anything goes wrong reading the file — so write it with the same discipline.
 
 ## Inputs available
 
@@ -84,9 +89,19 @@ Then the body. Sections must appear in this order:
 
 Length: 3–6 short paragraphs.
 
+**Banned vocabulary in this section** (these words tell you you've slipped out of ELI5 voice — rewrite if you catch yourself using them):
+- Pricing/business jargon: ACV, ARR, NDR, NRR, TAM, SAM, ASP, take rate, attach rate, monetization, monetize
+- "Workflow OS", "platform-as-a-service", "low-code", "platform layer", "operating system for X"
+- Margin/financial vocab in the ELI5 itself: operating leverage, GAAP, non-GAAP, GAAP-to-non-GAAP, gross margin %, EBITDA. (You'll have a separate financials section for those.)
+- Industry buzzwords without translation: AI agent, agentic, secular tailwind, category leader, vertical, end-to-end, hyperscaler
+- Acronyms generally — if you must use one, spell it out and define it like you're talking to someone who's never heard it
+
+**The test:** read your ELI5 out loud. Could a curious 10-year-old who's never read a 10-K or an earnings call follow it? If they'd say "what does 'workflow' mean?", you're not done.
+
 Anti-examples (do not write these):
 - "leading provider of SaaS solutions for enterprise customers" — what does that mean to a 10-year-old?
 - "diversified technology conglomerate operating in cloud, advertising, and consumer hardware" — break that into actual products
+- "ServiceNow is the workflow operating system for back-office work" — banned ("workflow operating system" means nothing to a 10-year-old). Try: "ServiceNow makes computer programs that big companies use to keep track of their internal tasks — like asking IT to fix your laptop, asking HR for a vacation day, or asking the finance team to approve an expense. Every time you ask, the request follows a set path through the company until it's done, and ServiceNow's software is what tracks all those requests so nothing gets lost."
 
 Good examples:
 - "Apple sells iPhones, which are little computers you hold in your hand. They also sell laptops (Macs), tablets (iPads), watches that track your steps, and earbuds. Increasingly, they make money from subscriptions — music, TV shows, iCloud storage — that you pay for every month."
@@ -165,7 +180,7 @@ From the DEF 14A proxy:
 - All 9 numbered sections present
 - ELI5 section is the first thing the user sees after frontmatter — must be plain language
 - Cite specific numbers and dates where possible (e.g., "Services revenue $XX.YB in FY2024, +14% YoY") rather than vague claims ("growing services business")
-- ~500-word summary returned to orchestrator with: ELI5 in 2–3 sentences, segments + geo mix snapshot, moat verdict, leadership signal, top 2–3 risks
+- ~500-word summary returned to orchestrator: first paragraph is a 3-5 sentence true ELI5 in plain language (same banned-vocabulary rules), then technical findings in subsequent paragraphs (jargon OK)
 
 ## Failure modes
 
