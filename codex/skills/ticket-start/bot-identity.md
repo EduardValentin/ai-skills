@@ -58,22 +58,27 @@ Run this once per machine. After it's done, the skill picks up the bot identity 
    - **Developer URL:** any.
    - **Callback URLs:** `http://localhost:8765/callback` — this exact URL.
 2. After creating it, note the **Client ID** and **Client Secret** on the application's settings page.
-3. Store the app credentials in Keychain:
+3. Store the app credentials in Keychain. **Run these in your own terminal** so the client secret never enters any chat log or process arg list:
    ```bash
-   security add-generic-password -s "ai-skills.linear-bot.client-id" -a "$USER" -w "<CLIENT_ID>"
-   security add-generic-password -s "ai-skills.linear-bot.client-secret" -a "$USER" -w "<CLIENT_SECRET>"
+   security add-generic-password -U -s "ai-skills.linear-bot.client-id" -a "$USER" -w '<CLIENT_ID>'
+   security add-generic-password -U -s "ai-skills.linear-bot.client-secret" -a "$USER" -w '<CLIENT_SECRET>'
    ```
-4. Run the one-shot OAuth bootstrap script:
+   `-U` updates the entry if it already exists (so this is safe to re-run).
+4. Run the one-shot OAuth bootstrap script. It reads `client-id` and `client-secret` from Keychain, runs the browser dance, and writes the resulting access + refresh tokens directly back to Keychain. Tokens never appear on stdout or in `ps`:
    ```bash
    # On Codex:
-   bash ~/.codex/skills/ticket-start/scripts/linear-oauth-bootstrap.sh "<CLIENT_ID>" "<CLIENT_SECRET>"
+   bash ~/.codex/skills/ticket-start/scripts/linear-oauth-bootstrap.sh
    # On Claude Code:
-   bash ~/.claude/skills/ticket-start/scripts/linear-oauth-bootstrap.sh "<CLIENT_ID>" "<CLIENT_SECRET>"
+   bash ~/.claude/skills/ticket-start/scripts/linear-oauth-bootstrap.sh
    ```
-   The script opens your browser to Linear's authorize URL with `actor=app` set, listens on `127.0.0.1:8765` for the OAuth callback, captures the authorization code, exchanges it for an access token + refresh token, and prints two `security add-generic-password` commands.
-5. Paste and run the printed commands to store the tokens. After this, the relevant Keychain entries are:
+   The script opens your browser to Linear's authorize URL with `actor=app` set, listens on `127.0.0.1:8765` for the OAuth callback, captures the authorization code, exchanges it for tokens, and writes them to Keychain:
    - `ai-skills.linear-bot.access-token`
    - `ai-skills.linear-bot.refresh-token`
+5. Verify the tokens are stored:
+   ```bash
+   security find-generic-password -s "ai-skills.linear-bot.access-token" -a "$USER" >/dev/null && echo "access-token ✓"
+   security find-generic-password -s "ai-skills.linear-bot.refresh-token" -a "$USER" >/dev/null && echo "refresh-token ✓"
+   ```
 6. (Recommended) Save the client ID, client secret, and both tokens to NordPass as a backup.
 
 ### Step C — Reconfigure the Linear MCP server
