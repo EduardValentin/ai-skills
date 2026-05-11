@@ -32,7 +32,7 @@ When in doubt, classify as repo-specific. Universal promotions are higher stakes
 | Classification | Destination | Update mechanism |
 |---|---|---|
 | Repo-specific | Repo's `AGENTS.md` (the same file the worktree's repo uses) | Append in a **separate commit** in the same worktree, distinct from the feature commits. Same PR. |
-| Universal | **Both** `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`, with the **same rule text**, in the **same flow** (both must update or neither does — keep Codex and Claude Code in sync) | Same separate commit in the same worktree if the universal rule is appended via the worktree; otherwise update both files atomically with separate-commit-style messages |
+| Universal | **Both** `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`, with the **same rule text**, in the **same flow** (both must update or neither does — keep Codex and Claude Code in sync) | Append to both files in a separate commit in the same worktree as the feature work, alongside the repo-AGENTS.md commit. Both files must update atomically — if one append fails, neither lands and the workflow stops to surface the blocker. |
 
 Codex's auto-managed `~/.codex/memories/` is **not** a destination — it is internal to Codex. We do not write to it.
 

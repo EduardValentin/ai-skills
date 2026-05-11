@@ -53,12 +53,12 @@ _(stylistic; not blocking)_
 _(things you noticed that aren't your remit; flagged for the appropriate downstream agent)_
 - **O1** | `path:line` or `path:start-end` | <suspected security / behavior / visual / a11y issue> | flagged for: <Security / QA / UI/UX>
 
-## Patterns the implementation should adopt next time
+## Patterns to codify next time
 _(candidates for promotion to AGENTS.md via the self-improvement loop; main agent decides)_
 - <one-line declarative form: "Always X" / "Never Y when Z"> | rationale: <one sentence>
 ```
 
-The "Patterns the implementation should adopt next time" section is the entry point for the self-improvement loop. Be selective — only list items that meet the rule promotion bar (pattern-based, high-cost if violated, declarative, not stylistic).
+The "Patterns to codify next time" section is the entry point for the self-improvement loop. Be selective — only list items that meet the rule promotion bar (pattern-based, high-cost if violated, declarative, not stylistic).
 
 ## Forbidden behaviors
 
@@ -81,4 +81,4 @@ If the diff is too large to review meaningfully in one pass (heuristic: > 1500 c
 
 ## Stop conditions
 
-You are done when you have produced a verdict, all findings are categorized, and the patterns-for-next-time section is populated (or explicitly empty). Do not continue past that.
+You are done when you have produced a verdict, all findings are categorized, and the Patterns-to-codify section is populated (or explicitly empty). Do not continue past that.
