@@ -16,7 +16,7 @@ A candidate becomes a proposed rule **only if all** of these are true:
 - **Not stylistic preference alone** — taste-only items don't qualify.
 - **Not already covered** — not an explicit duplicate or implicit consequence of an existing rule. Cross-check repo `AGENTS.md`, `~/.claude/CLAUDE.md`, and `~/.codex/AGENTS.md` before proposing.
 
-A candidate that fails the bar is recorded in the closeout report under "Observed once, not promoted to a rule." Visibility without bloat.
+A candidate that fails the bar is recorded in the closeout report under "Considered, not promoted" (matching the closeout-report section name below). Visibility without bloat.
 
 ## Classification: repo-specific vs universal
 
