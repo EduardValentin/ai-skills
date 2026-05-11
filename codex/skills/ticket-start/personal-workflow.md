@@ -1,6 +1,6 @@
 # Personal Workflow
 
-Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup; the Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, standards, Verify, and Ship.
+Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the **mode** the QA and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, the bug-fix loop, the self-improvement loop, and Ship.
 
 ## Ticket Intake (Linear)
 
@@ -9,13 +9,17 @@ Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs
 3. Read the ticket directly from Linear. Capture title, description, acceptance criteria, related constraints, and any workflow metadata that matters for delivery. Do not rely on a partial retelling.
 4. State transitions for the Linear ticket are defined in the **Linear State Transitions** section below. Do not move the ticket out of order or skip transitions.
 
-## Scoped Reading (Required)
+After intake, proceed to Scoped Reading, then dispatch the Scoping subagent as `SKILL.md`'s Setup phase directs.
+
+## Scoped Reading
 
 Inspect only the areas of `PRD.md` and `designs/` that are relevant to this ticket. Do not load either in full by default.
 
 - **PRD.md** — narrow scope by feature name, user flow, domain terms, affected screens, and nearby sections. Read only the matching slices. Use this for business logic, edge cases, and rules.
 - **designs/** — narrow scope to the relevant routes, screens, mocked API flows, state transitions, and components. Use this for UX, styling, interaction flow, and front-end behavior.
 - Keep technical implementation decisions in the production codebase, not in the PRD.
+
+The scoped slices feed directly into the Scoping subagent's input set.
 
 ## React Reference App
 
@@ -27,13 +31,34 @@ Identify up front:
 - The matching production route/screen.
 - The important UI states the feature has (default, loading, empty, hover, focus, active, disabled, error, success, expanded/collapsed, modal-open, validation, navigation), so the same flows can be exercised in both apps during verification.
 
-## Hand-off To Brainstorm
+These are passed to the UI/UX subagent during Verify.
 
-When the scoped PRD and `designs/` findings are gathered, return to `SKILL.md` and proceed to the Brainstorm gate (`superpowers:brainstorming`). Use the brainstorm to map the prototype design into the production app — do not re-litigate copy, design, UI interactions, or animations already settled by the prototype unless the ticket or PRD conflicts with it.
+## Verification — Mode mapping for QA and UI/UX
+
+The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the personal workflow.
+
+### QA mode
+
+Determined from the diff (main agent decides), same as the job workflow:
+
+- **`backend`** — diff touches only backend / service files. QA Mode A.
+- **`ui`** — diff touches only user-facing files. QA Mode B.
+- **`mixed`** — both. QA Mode C.
+
+### UI/UX mode
+
+- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via `browser_evaluate`, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth.
+- **`consistency`** — fallback when `designs/` is missing or not runnable. Same as job-workflow consistency mode: stylistic consistency against existing analog elements in the production app.
+
+UI/UX is **skipped** if main agent determines the change is backend-only.
+
+## Hand-off to Brainstorm
+
+When ticket intake, scoped PRD/designs reading, and the Scoping subagent's report are complete, return to `SKILL.md` and proceed to the Brainstorm gate. Architect dispatch happens there. Use the brainstorm to map the prototype design into the production app — do not re-litigate copy, design, UI interactions, or animations already settled by the prototype unless the ticket or PRD conflicts with it.
 
 ## Linear State Transitions
 
-Move the Linear ticket through these states at these exact moments. `SKILL.md`'s Verify and Ship sections defer to this list.
+Move the Linear ticket through these states at these exact moments. `SKILL.md`'s Implement and Ship phases defer to this list.
 
 - **In Progress** — at the start of the Implement phase, immediately after the user approves the plan and before any code is written. Not during Setup, not during Brainstorm, not during Plan.
 - **In Review** — at the start of the Ship phase, immediately after the PR is opened with `gh`.
@@ -46,5 +71,5 @@ If the Linear MCP server is unavailable or the team/state cannot be resolved saf
 If the project has a Linear ticket but is missing `PRD.md`, `designs/`, or both, treat it as personal workflow and adapt as follows. Surface the gap to the user during Setup so the brainstorm can compensate.
 
 - **No `PRD.md`:** gather requirements from the Linear ticket alone and flag missing context during Brainstorm. Do not invent business rules to fill the gap.
-- **No `designs/`:** skip the React reference app, skip `react-parity.md`, and skip `verification.md`. Verification falls back to the procedure in `job-workflow.md` (Mode A for backend, Mode B for UI, Mode C for mixed).
-- **Neither present:** gather everything from the ticket, confirm scope and acceptance criteria with the user before brainstorming, and use the `job-workflow.md` Verification procedure at the Verify phase.
+- **No `designs/`:** skip the React reference app, skip `react-parity.md`, and skip parity mode. UI/UX runs in **consistency mode** instead.
+- **Neither present:** gather everything from the ticket, confirm scope and acceptance criteria with the user before brainstorming. UI/UX runs in **consistency mode** during Verify.
