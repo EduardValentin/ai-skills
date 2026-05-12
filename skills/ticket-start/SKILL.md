@@ -253,6 +253,53 @@ After **each** auditor agent (Reviewer, Security, QA, UI/UX) returns a CLEAN rep
 - Destinations: repo `AGENTS.md` (separate commit, same PR) for repo-specific; both `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` (kept in sync) for universal.
 - Mandatory user-approval gate per rule.
 
+## Dispatch → user briefing protocol
+
+Whenever the workflow dispatches a subagent and then asks the user for input, a decision, or a choice, main agent does NOT bring the user into the dialogue cold. Main agent first **briefs the user** with a synthesis of what the subagent surfaced.
+
+The principle: **the user must enter the dialogue with the same context the subagent had.** Never ask the user to pick between options they haven't seen, answer a question whose backstory wasn't surfaced, or decide on a fix whose finding wasn't named.
+
+A briefing is always presented as a single user-facing message (or short paragraph at the top of a longer one), BEFORE the first question / decision / choice is asked. The minimum required contents differ by handoff type.
+
+### Handoff type 1 — Scoping → user clarification (Setup)
+
+When Scoping returns with items under `## Conflicts surfaced for main` or with insufficient AC coverage and main agent needs the user to clarify:
+
+- The specific conflict or ambiguity Scoping flagged, quoted from the report.
+- The `path:line` evidence Scoping gave (so the user can drill in).
+- The clarification main agent is asking for, framed against the surfaced conflict.
+
+### Handoff type 2 — Architect → Brainstorm dialogue
+
+When the Architect returns proposals and main agent runs `superpowers:brainstorming` with the user:
+
+- The Architect's **recommended approach** + the Architect's rationale for recommending it.
+- The **alternative approaches** considered, with the tradeoffs Architect captured.
+- Any **open questions** the Architect surfaced for user input, each accompanied by the context that motivated the question (what code / constraint / design choice raised it).
+- Pointers into the Scoping report for any locator references the Architect built on, so the user can drill in if they want to.
+
+Only after this synthesis is in the user's view does the one-question-at-a-time brainstorming dialogue start.
+
+### Handoff types 3–6 — Auditor (Reviewer / Security / QA / UI/UX) → fix decision
+
+When an auditor returns CHANGES REQUIRED / BUGS FOUND / FINDINGS and the workflow routes through `bug-fix-loop.md`:
+
+- The finding(s), one per line, with severity, location (`path:line` if known), and one-line description.
+- The auditor's suggested fix (if any).
+- The complexity tier the bug-fix loop assigned (trivial / non-architectural / architectural).
+- For architectural complexity: the architectural tradeoff main agent sees, presented as options the user can weigh in on.
+
+### Handoff type 7 — Bug-fix loop architectural intervention
+
+Already structured around user input. Apply handoff types 3–6's briefing content (findings + suggested fix + tradeoff) before asking the user to decide on the architectural direction.
+
+### Forbidden behaviors (briefing-specific)
+
+- Asking the user to pick an option they haven't seen.
+- Asking the user to answer a clarifying question without explaining what raised it.
+- Asking the user to approve a fix without naming the finding.
+- Routing through bug-fix-loop's architectural-intervention path without surfacing the architectural tradeoff to the user first.
+
 ## Implementation Standards
 
 Apply for every change:
