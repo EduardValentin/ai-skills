@@ -81,7 +81,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/scoping.md` as the subagent's instruction set.
    Wait for the Scoping report (a Markdown document with locator-rich sections per the role-prompt's output format). Treat that report as the definitive map of the relevant code surface — do **not** re-read full files later when a Scoping locator points at the slice you need.
 
-6. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping.
+6. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping. Before asking the user any clarifying question, brief per `## Dispatch → user briefing protocol` (handoff type 1: Scoping → user clarification).
 
 ## Brainstorm
 
@@ -92,9 +92,9 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/architect.md`.
    Wait for the Architect's proposals (2–3 candidate solutions with tradeoffs, per the role-prompt's output format).
 
-2. **Run `superpowers:brainstorming` with the user.** Use the Architect's proposals as the starting material. Standard one-question-at-a-time dialogue. Converge on a chosen direction.
+2. **Brief per `## Dispatch → user briefing protocol` (handoff type 2: Architect → Brainstorm dialogue), then run `superpowers:brainstorming` with the user.** Brief BEFORE the first brainstorming question — present the Architect's recommended approach + rationale, alternatives + tradeoffs, and any open questions with their motivating context, as a single message. Only after this synthesis is in the user's view, start the standard one-question-at-a-time dialogue. Converge on a chosen direction.
 
-3. **On-demand re-dispatch.** If a follow-up architectural question arises mid-brainstorm that the original proposals didn't cover, re-dispatch the Architect with the focused question (per `agents/architect.md`'s follow-up handling) and bring the answer back into the conversation.
+3. **On-demand re-dispatch.** If a follow-up architectural question arises mid-brainstorm that the original proposals didn't cover, re-dispatch the Architect with the focused question (per `agents/architect.md`'s follow-up handling) and bring the answer back into the conversation. When you bring the re-dispatched Architect's answer back, brief the user on what the Architect found (recommended adjustment + rationale + any new tradeoffs) before continuing the brainstorming dialogue.
 
 4. **Convergence is not plan approval.** When the brainstorm converges and the user says "yes, do it," "approved," "go ahead," or similar, that is approval of the *approach*. It is **not** approval of the plan. The plan still has to be written by `superpowers:writing-plans` and re-approved as its own artifact. Do not collapse the two.
 
@@ -133,7 +133,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/reviewer.md`.
    Wait for the Reviewer report.
 
-2. **If Reviewer returns CHANGES REQUIRED**, route through `bug-fix-loop.md`.
+2. **If Reviewer returns CHANGES REQUIRED**, brief the user per `## Dispatch → user briefing protocol` (handoff types 3–6: auditor → fix decision) before routing through `bug-fix-loop.md`.
 
 3. **When Reviewer returns CLEAN**, run the **self-improvement extraction pass** on Reviewer findings (see `self-improvement.md`). Then advance to Security.
 
@@ -148,7 +148,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/security.md`.
    Wait for the Security report.
 
-2. **If Security returns CHANGES REQUIRED**, route through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **Reviewer + Security re-run on the full diff**.
+2. **If Security returns CHANGES REQUIRED**, brief the user per `## Dispatch → user briefing protocol` (handoff types 3–6: auditor → fix decision) before routing through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **Reviewer + Security re-run on the full diff**.
 
 3. **When Security returns CLEAN**, run the self-improvement extraction pass on Security findings. Then advance to Verify.
 
@@ -170,7 +170,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/qa.md`.
    Wait for the QA report.
 
-3. **If QA returns BUGS FOUND**, route through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **QA re-runs the full behavior pass**.
+3. **If QA returns BUGS FOUND**, brief the user per `## Dispatch → user briefing protocol` (handoff types 3–6: auditor → fix decision) before routing through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **QA re-runs the full behavior pass**.
 
 4. **When QA returns CLEAN**, run the self-improvement extraction pass on QA findings.
 
@@ -204,7 +204,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/ui-ux.md`.
    Wait for the UI/UX report.
 
-6. **If UI/UX returns FINDINGS**, route through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **UI/UX re-runs scoped to affected states**.
+6. **If UI/UX returns FINDINGS**, brief the user per `## Dispatch → user briefing protocol` (handoff types 3–6: auditor → fix decision) before routing through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **UI/UX re-runs scoped to affected states**.
 
 6a. **Validate the UI/UX report's matched-element inventory before accepting any verdict.**
 
@@ -351,6 +351,8 @@ When done, report:
 - Main agent dispatching UI/UX in parity mode without supplying the expected matched-element inventory constructed in step 4a.
 - Scoping report's `## Prototype elements relevant to this feature` section is empty or `_None._` for a parity-mode UI ticket — surface this at Setup, do not proceed to Brainstorm.
 - UI/UX returns a verified inventory with rows that have blank `font-*`, `color/bg`, `box`, `layout`, `size`, or `verdict` cells. The DOM-evaluation work was skipped for those rows; reject the verdict at step 6a.
+- Starting a brainstorming dialogue, a clarification question, or a fix-decision request to the user without first presenting the relevant subagent's synthesis (per `## Dispatch → user briefing protocol`). The user must enter the conversation with the same context the subagent had.
+- Routing an auditor's findings through bug-fix-loop's architectural-intervention path without surfacing the architectural tradeoff to the user.
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review — that path has no other end-of-feature review.
 - Letting `superpowers:finishing-a-development-branch` present its 4-option prompt to the user instead of returning to this skill's Review phase.
 - Merging the PR before the user explicitly approves.
