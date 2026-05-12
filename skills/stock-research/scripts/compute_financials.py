@@ -2,6 +2,15 @@
 
 Usage:
     compute_financials.py <TICKER> [--years N] --out <path>
+
+Companies report the same business metric under different `us-gaap` concept
+names — SEC's XBRL taxonomy has evolved (especially around ASC 606 in 2018,
+which added `RevenueFromContractWithCustomerExcludingAssessedTax`) and some
+companies have their own conventions. For each metric we look at a list of
+candidate concepts and pick the first one that has data. The output JSON
+records which concept actually resolved (`tag_resolution`) and which metrics
+had no candidate hit (`missing_concepts`), so the Phase 3 subagent can apply
+critical thinking to fill gaps rather than silently emit null fields.
 """
 from __future__ import annotations
 
@@ -14,20 +23,95 @@ from pathlib import Path
 from _lib.sec_client import SECClient
 from _lib.ticker_resolver import resolve, TickerNotFound
 
-# us-gaap concepts we care about. (concept, unit)
-CONCEPTS: dict[str, tuple[str, str]] = {
-    "revenue": ("Revenues", "USD"),
-    "net_income": ("NetIncomeLoss", "USD"),
-    "gross_profit": ("GrossProfit", "USD"),
-    "operating_income": ("OperatingIncomeLoss", "USD"),
-    "cfo": ("NetCashProvidedByUsedInOperatingActivities", "USD"),
-    "capex": ("PaymentsToAcquirePropertyPlantAndEquipment", "USD"),
-    "cash": ("CashAndCashEquivalentsAtCarryingValue", "USD"),
-    "long_term_debt": ("LongTermDebt", "USD"),
-    "diluted_shares": ("WeightedAverageNumberOfDilutedSharesOutstanding", "shares"),
-    "sbc": ("ShareBasedCompensation", "USD"),
-    "buybacks": ("PaymentsForRepurchaseOfCommonStock", "USD"),
-    "dividends_paid": ("PaymentsOfDividends", "USD"),
+# us-gaap concept candidates per metric. Each entry is (candidate_list, unit).
+# Candidates are tried in order; the first one with any FY 10-K data wins.
+#
+# When extending: prefer the most "natural" / current taxonomy name first,
+# then fall back to older names, then to broader categories. Adding more
+# candidates is cheap — they're only consulted if earlier ones returned no data.
+CONCEPTS: dict[str, tuple[list[str], str]] = {
+    "revenue": (
+        [
+            "Revenues",
+            "RevenueFromContractWithCustomerExcludingAssessedTax",
+            "RevenueFromContractWithCustomerIncludingAssessedTax",
+            "SalesRevenueNet",
+            "Revenue",
+        ],
+        "USD",
+    ),
+    "net_income": (
+        [
+            "NetIncomeLoss",
+            "ProfitLoss",
+            "NetIncomeLossAvailableToCommonStockholdersBasic",
+        ],
+        "USD",
+    ),
+    "gross_profit": (["GrossProfit"], "USD"),
+    "operating_income": (
+        [
+            "OperatingIncomeLoss",
+            "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+        ],
+        "USD",
+    ),
+    "cfo": (
+        [
+            "NetCashProvidedByUsedInOperatingActivities",
+            "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+        ],
+        "USD",
+    ),
+    "capex": (
+        [
+            "PaymentsToAcquirePropertyPlantAndEquipment",
+            "PaymentsToAcquireProductiveAssets",
+            "PaymentsForPropertyPlantAndEquipment",
+        ],
+        "USD",
+    ),
+    "cash": (
+        [
+            "CashAndCashEquivalentsAtCarryingValue",
+            "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+            "Cash",
+        ],
+        "USD",
+    ),
+    "long_term_debt": (
+        [
+            "LongTermDebt",
+            "LongTermDebtNoncurrent",
+        ],
+        "USD",
+    ),
+    "diluted_shares": (
+        ["WeightedAverageNumberOfDilutedSharesOutstanding"],
+        "shares",
+    ),
+    "sbc": (
+        [
+            "ShareBasedCompensation",
+            "AllocatedShareBasedCompensationExpense",
+        ],
+        "USD",
+    ),
+    "buybacks": (
+        [
+            "PaymentsForRepurchaseOfCommonStock",
+            "PaymentsForRepurchaseOfEquity",
+        ],
+        "USD",
+    ),
+    "dividends_paid": (
+        [
+            "PaymentsOfDividends",
+            "PaymentsOfDividendsCommonStock",
+            "PaymentsOfDividendsMinorityInterest",
+        ],
+        "USD",
+    ),
 }
 
 
@@ -39,10 +123,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def _pick_fy_values(
+def _pick_fy_values_for_concept(
     facts: dict, concept: str, unit: str, years: int
 ) -> dict[int, float]:
-    """Return {fiscal_year: value} for FY 10-K facts under the concept."""
+    """Return {fiscal_year: value} for FY 10-K facts under a single concept."""
     out: dict[int, float] = {}
     section = facts.get("us-gaap", {}).get(concept)
     if not section:
@@ -53,6 +137,33 @@ def _pick_fy_values(
     # Keep the most recent N fiscal years
     keep = sorted(out)[-years:]
     return {fy: out[fy] for fy in keep}
+
+
+def _pick_fy_values_with_fallback(
+    facts: dict, candidates: list[str], unit: str, years: int
+) -> tuple[dict[int, float], str | None]:
+    """Try each candidate concept in order. Return (data, used_concept).
+
+    Merges data across candidates: if Revenues covers FY2015-2017 and
+    RevenueFromContractWithCustomerExcludingAssessedTax covers FY2018-2024,
+    we want both windows. used_concept names the candidate that contributed
+    the LATEST fiscal year (i.e., the one that's currently "in use").
+    """
+    merged: dict[int, float] = {}
+    latest_used: str | None = None
+    latest_fy = -1
+    for candidate in candidates:
+        data = _pick_fy_values_for_concept(facts, candidate, unit, years)
+        if not data:
+            continue
+        for fy, val in data.items():
+            merged.setdefault(fy, val)  # first candidate to provide a year wins
+            if fy > latest_fy:
+                latest_fy = fy
+                latest_used = candidate
+    # Trim again after merging across candidates
+    keep = sorted(merged)[-years:]
+    return {fy: merged[fy] for fy in keep}, latest_used
 
 
 def _safe_div(num: float | None, denom: float | None) -> float | None:
@@ -135,17 +246,23 @@ def main(argv: list[str] | None = None) -> int:
     client = SECClient()
     facts = client.get_company_facts(info.cik_padded).get("facts", {})
 
-    raw = {
-        key: _pick_fy_values(facts, concept, unit, args.years)
-        for key, (concept, unit) in CONCEPTS.items()
-    }
+    raw: dict[str, dict[int, float]] = {}
+    tag_resolution: dict[str, str | None] = {}
+    missing_concepts: list[str] = []
+    for key, (candidates, unit) in CONCEPTS.items():
+        data, used = _pick_fy_values_with_fallback(facts, candidates, unit, args.years)
+        raw[key] = data
+        tag_resolution[key] = used
+        if used is None:
+            missing_concepts.append(key)
+
     all_fys: set[int] = set()
     for series in raw.values():
         all_fys.update(series.keys())
     fys = sorted(all_fys)[-args.years :]
     years = [_build_year(fy, raw) for fy in fys]
 
-    result = {
+    result: dict = {
         "ticker": info.ticker,
         "cik": info.cik_padded,
         "name": info.name,
@@ -157,10 +274,26 @@ def main(argv: list[str] | None = None) -> int:
             "net_income_up_and_right": _trend_gate(years, "net_income"),
             "fcf_up_and_right": _trend_gate(years, "fcf"),
         },
+        "tag_resolution": tag_resolution,
+        "missing_concepts": missing_concepts,
     }
+    # If anything failed to resolve, dump the list of available us-gaap
+    # concept names so the subagent can manually pick a substitute.
+    if missing_concepts:
+        result["available_us_gaap_concepts"] = sorted(
+            facts.get("us-gaap", {}).keys()
+        )
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(result, indent=2))
-    print(f"Wrote {args.out} ({len(years)} fiscal years)")
+    if missing_concepts:
+        print(
+            f"Wrote {args.out} ({len(years)} fiscal years) — "
+            f"WARNING: {len(missing_concepts)} concepts had no candidate hit: "
+            f"{', '.join(missing_concepts)}. See 'available_us_gaap_concepts' in the JSON.",
+            file=sys.stderr,
+        )
+    else:
+        print(f"Wrote {args.out} ({len(years)} fiscal years)")
     return 0
 
 

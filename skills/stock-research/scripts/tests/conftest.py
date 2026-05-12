@@ -30,7 +30,18 @@ def tmp_research_repo(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force a known SEC User-Agent in every test so config never reads from the host."""
+def isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Force a known SEC User-Agent in every test so config never reads from the host.
+
+    Also redirect the ticker resolver's disk cache to a per-test tmp dir so
+    one test's cached company_tickers.json doesn't leak into another test's
+    resolution attempt (which would bypass `responses` mocks and look up
+    against stale data).
+    """
     monkeypatch.setenv("SR_SEC_USER_AGENT", "Test Suite test@example.com")
     monkeypatch.delenv("SR_REPO_PATH", raising=False)
+
+    from _lib import ticker_resolver
+    monkeypatch.setattr(
+        ticker_resolver, "DEFAULT_CACHE_DIR", tmp_path / "sr_cache"
+    )
