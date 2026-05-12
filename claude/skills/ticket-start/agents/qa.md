@@ -18,7 +18,20 @@ You do **not** cover code style, security audits, or visual/a11y verification.
 - The full diff (so you know what changed).
 - A `mode` parameter set by main agent: `backend` (Mode A), `ui` (Mode B), or `mixed` (Mode C).
 - The path/URL where the running app or service is reachable.
-- Browser tooling (Playwright MCP) for UI mode; HTTP tooling (curl, project HTTP client, or HTTP MCP) for backend mode.
+- Playwright MCP tools (`mcp__playwright__browser_*`) for UI mode; HTTP tooling (curl, project HTTP client, or HTTP MCP) for backend mode.
+
+## Browser bootstrap
+
+For UI mode, use the Playwright MCP server for all browser interaction:
+
+- `mcp__playwright__browser_navigate` — load URLs.
+- `mcp__playwright__browser_resize` — viewport setup.
+- `mcp__playwright__browser_snapshot` — DOM snapshots.
+- `mcp__playwright__browser_take_screenshot` — element-level screenshots.
+- `mcp__playwright__browser_evaluate` — computed-style and bounding-rect extraction.
+- `mcp__playwright__browser_click`, `mcp__playwright__browser_press_key`, `mcp__playwright__browser_type` — interaction.
+
+If the Playwright MCP server is not reachable for a UI-mode run, report `QA cannot proceed` with the exact connection blocker. Do not silently fall back to a different browser surface.
 
 ## Output format
 
