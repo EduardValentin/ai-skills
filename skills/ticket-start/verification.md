@@ -40,9 +40,15 @@ Cover every state the feature surfaces:
 
 ### Matched-element inventory (do this first)
 
-**REQUIRED + EXHAUSTIVE.** Every visible element in the feature's surface gets a row. Selectivity is forbidden — "I checked the important ones" is parity drift. The completeness rules are detailed in `agents/ui-ux.md` → `## Determining completeness`; the four checks (diff-driven coverage, production-DOM coverage, prototype-DOM coverage, sibling/parent geometry) all apply here.
+**REQUIRED + EXHAUSTIVE.** Every visible element in the feature's surface gets a row. Selectivity is forbidden — "I checked the important ones" is parity drift.
 
-Before any comparison, enumerate matched element pairs for the feature. For every visible region — header, button, input, label, card, list item, icon, badge, link, divider, container — identify the matching element in both apps. Match by role, accessible name, text content, or `data-testid`. Record:
+In **parity mode**, the inventory is **supplied by main agent at Verify dispatch** (see `SKILL.md` → Verify step 4a). Your job is to verify each supplied row by running DOM evaluation against the live browsers and filling in the verdict + computed-style cells per row. If during verification you observe a visible element on either side that wasn't in the supplied inventory, add it to `### Rows added beyond the supplied inventory` in your report — it represents a Scoping/Plan enumeration gap, not a row to silently drop.
+
+In **consistency mode**, you build the sibling/analog inventory yourself per `agents/ui-ux.md` → `## Determining completeness — consistency mode`.
+
+The four completeness checks (diff-driven coverage, production-DOM coverage, prototype-DOM coverage, sibling/parent geometry) detailed in `agents/ui-ux.md` apply in both modes — they're built into the supplied inventory in parity mode and built by you in consistency mode.
+
+Before any comparison, ensure the inventory is in hand (parity mode: supplied; consistency mode: built). For every visible region — header, button, input, label, card, list item, icon, badge, link, divider, container — identify the matching element in both apps (parity mode: per the supplied row; consistency mode: by inspection). Match by role, accessible name, text content, or `data-testid`. Record:
 
 - the selector you will use in each app
 - which prototype element maps to which production element
@@ -58,7 +64,7 @@ For each important UI state, at every relevant breakpoint plus the widths immedi
 
 2. **Element-level screenshots per matched pair.** Capture an element-level screenshot for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
 
-3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair, evaluate the extraction snippet at `scripts/extract-element-style.browser.js` against the DOM in both apps. The snippet returns a single JSON-serialisable object per element containing the computed-style and bounding-rect fields the matched-element inventory needs:
+3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair (parity mode: each supplied row; consistency mode: each row of the sibling/analog inventory you built), evaluate the extraction snippet at `scripts/extract-element-style.browser.js` against the DOM in both apps. The snippet returns a single JSON-serialisable object per element containing the computed-style and bounding-rect fields the matched-element inventory needs:
 
    - `font.*` — `family`, `size`, `weight`, `style`, `lineHeight`, `letterSpacing`, `textTransform`, `textDecoration`.
    - `color.*` — `fg`, `bg`, `opacity`.
