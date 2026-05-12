@@ -18,7 +18,13 @@ You do **not** cover code style, security audits, or visual/a11y verification.
 - The full diff (so you know what changed).
 - A `mode` parameter set by main agent: `backend` (Mode A), `ui` (Mode B), or `mixed` (Mode C).
 - The path/URL where the running app or service is reachable.
-- Browser tooling (Playwright MCP) for UI mode; HTTP tooling (curl, project HTTP client, or HTTP MCP) for backend mode.
+- Codex Browser plugin (`browser-use:browser` skill) for UI mode; HTTP tooling (curl, project HTTP client, or HTTP MCP) for backend mode.
+
+## Browser bootstrap
+
+For UI mode, use the Codex Browser plugin / `browser-use:browser` skill for all browser interaction. Follow that skill's bootstrap path, acquire the `iab` browser, and use its Playwright APIs for navigation, clicks, keyboard input, screenshots, DOM snapshots, and computed-style evaluation. Do not start with standalone Chrome, external Playwright, Puppeteer, or Chrome DevTools Protocol unless the Browser plugin is unavailable or cannot acquire `iab`.
+
+If the Browser plugin or `iab` browser cannot be acquired for a UI-mode run, report `QA cannot proceed` with the exact browser-acquisition blocker. Only use a standalone Chrome/DevTools fallback when the main agent explicitly authorizes degraded verification for that run, and label the report as **degraded**.
 
 ## Output format
 
