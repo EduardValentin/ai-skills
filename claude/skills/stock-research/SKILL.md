@@ -56,6 +56,24 @@ Apply this at every place in the workflow where the choice space is finite and e
 
 If the runtime doesn't offer a structured-input mechanism (or you're unsure), fall back to clearly enumerated plain text — but try the native mechanism first.
 
+## Output formatting
+
+**Everything you print back to the user — checkpoint summaries, phase status messages, the projection brainstorm, the verdict review, the completion confirmation — must be rendered as well-structured Markdown.** The user sees these in a chat UI that renders Markdown; raw text or ASCII-art separators look ugly and waste cognitive load.
+
+Apply these rules to every chat output:
+
+- **Section headings:** Use `##` for top-level sections (e.g., `## Checkpoint 1 — Business Model & Moat`), `###` for subsections (e.g., `### Explain like I'm in 5th grade`). **Never** use `=== ... ===` ASCII separators.
+- **File paths, ticker symbols, code, env vars:** Wrap in backticks (`` `<ticker_dir>/business-and-moat.md` ``, `` `AAPL` ``, `` `SR_SEC_USER_AGENT` ``).
+- **Lists:** Use numbered lists for sequenced prompts, bullet lists for enumerations. Indent nested items with 2 spaces.
+- **Tables:** Use Markdown tables for any comparison of >2 fields (projection scenarios, verdict summary, ratings distribution). Header row + separator row.
+- **Emphasis:** `**bold**` for labels and load-bearing terms (e.g., **Verdict:**, **Buy zone:**). `*italic*` sparingly, for meta-info like "*Drafted at `path`*".
+- **Blockquotes:** Use `>` for content quoted verbatim from artifact files (especially the ELI5 paragraph pasted into CP1) and for any prompt you're posing to the user.
+- **Currency & numbers:** Format consistently — `$391.0B`, `$195.50`, `46.2%`, `+5%`. Never raw scientific notation in chat (`391035000000` is unreadable; `$391.0B` is fine).
+- **Status indicators:** Use emoji sparingly but meaningfully when status is binary — ✅ for pass, ⚠️ for warning, ❌ for fail, ⬆ / ⬇ / ↔ for trend direction.
+- **Code blocks:** Triple-backtick blocks for any shell command shown to the user. Specify the language (` ```bash`, ` ```json`).
+
+For artifact files (the on-disk `.md` outputs), the same Markdown discipline applies — frontmatter at the top, then well-structured Markdown body. Subagents already follow this in their phase prompts.
+
 ## Workflow overview
 
 Ten phases, four user checkpoints:
@@ -136,28 +154,29 @@ cp <ticker_dir>/business-and-moat.md  # (the orchestrator handles install-dir mi
 
 **Before rendering CP1: read the ELI5 section (the first `### 1. ELI5...` block) from `<ticker_dir>/business-and-moat.md` — the file the Phase 2 subagent just wrote. The CP1 message MUST lead with that ELI5 verbatim. Do not paraphrase, shorten, or "compress for the chat." The whole point of ELI5 is that it's the same plain-language voice the user wants to see at the top of the conversation, not just buried in the file. If the ELI5 section in the file is itself jargon-heavy (uses terms like "ACV", "ARR", "platform", "operating leverage", "low-code", "workflow OS"), that's a Phase 2 failure — re-dispatch the subagent with explicit feedback before rendering CP1.**
 
-Format (output exactly this shape):
+Format (output exactly this Markdown shape — render it as Markdown in the chat, not inside a code block):
 
-```
-=== CHECKPOINT 1: Business Model & Moat ===
+```markdown
+## Checkpoint 1 — Business Model & Moat
 
-Drafted at <ticker_dir>/business-and-moat.md.
+*Drafted at `<ticker_dir>/business-and-moat.md`.*
 
-**Explain like I'm in 5th grade:**
+### Explain like I'm in 5th grade
 
-<Paste the ELI5 section from business-and-moat.md verbatim — typically 3-6 short paragraphs of plain language covering every business area the company operates in. Banned vocabulary in this block: ACV, ARR, NDR, NRR, TAM, SAM, platform-as-a-service, workflow OS, low-code, operating leverage, vertical, monetization, take rate, attach rate, GAAP/non-GAAP — and any other jargon. If you can't explain a segment in 10-year-old English, the ELI5 wasn't written right.>
+> <Paste the ELI5 section from business-and-moat.md verbatim — typically 3-6 short paragraphs of plain language covering every business area the company operates in. Banned vocabulary in this block: ACV, ARR, NDR, NRR, TAM, SAM, platform-as-a-service, workflow OS, low-code, operating leverage, vertical, monetization, take rate, attach rate, GAAP/non-GAAP — and any other jargon. If you can't explain a segment in 10-year-old English, the ELI5 wasn't written right.>
 
-**Technical summary:**
+### Technical summary
 
 <3-5 sentences of load-bearing findings: segments + revenue mix with specific dollar/percent numbers, moat verdict + trajectory + key evidence, leadership/insider signal, top 2-3 risks. Jargon allowed here — this is the analyst voice.>
 
-Quick verification before we fan out the data-gathering batch:
+### Quick verification
+
+Before we fan out the data-gathering batch:
+
 1. Does the ELI5 match how YOU think about this business?
 2. Any segment, geography, or customer-concentration risk I missed?
 3. Moat — am I overrating or underrating any of pricing power / network / scale / brand?
 4. Anything you already know that should color the rest of the analysis?
-
-Reply with corrections, raise something different, or "continue" to proceed.
 ```
 
 **Use the runtime's native interactive-input mechanism for the Continue / Push back & revise choice** — printing the question block above and then surfacing two structured options. If the user picks "Push back & revise," the follow-up reply is free-form text.
@@ -189,18 +208,21 @@ Wait for all 5 to return.
 
 ## Checkpoint 2
 
-```
-=== CHECKPOINT 2: Earnings Calls — Tone, Direction, Recent Events ===
+Format (rendered Markdown, not inside a code block):
 
-Last 3 calls analyzed at <ticker_dir>/earnings-calls/.
-Cross-call themes at <ticker_dir>/earnings-calls/cross-call-themes.md.
+```markdown
+## Checkpoint 2 — Earnings Calls: Tone, Direction, Recent Events
 
-Summary: <paste Phase 5's tone-trajectory + cross-call summary>
+*Last 3 calls analyzed at `<ticker_dir>/earnings-calls/`. Cross-call themes at `<ticker_dir>/earnings-calls/cross-call-themes.md`.*
 
-Worth discussing before we move to projections:
-1. <Phase 5's "CP2 prep" items, 3–5 bullets>
+### Tone & cross-call summary
 
-Reply with reactions, additional context, or "continue" to start the projection brainstorm.
+<Paste Phase 5's tone-trajectory + cross-call summary — 2-4 paragraphs. Use blockquotes for any verbatim mgmt quotes you cite.>
+
+### Worth discussing before projections
+
+1. <Phase 5's "CP2 prep" items, 3–5 bullets — specific events / guidance / KPI shifts the user should weigh in on>
+2. ...
 ```
 
 **Use the runtime's native interactive-input mechanism for the Continue / Discuss further choice** at the end of CP2. If the user picks "Discuss further," the follow-up dialogue is free-form text — this is the most conversation-heavy checkpoint, and the user often has a take on recent events that should color the projections. Engage substantively before continuing.
@@ -213,23 +235,38 @@ This phase runs in the main agent (you), not a subagent — it's an interactive 
 - `references/gvd-tailoring.md` — how to push back on assumptions for this GVD bucket
 - `references/projection-kpis.md` — the full KPI list + formulas + dialogue flow
 
-Open the brainstorm:
+Open the brainstorm (rendered Markdown):
 
-```
-=== PHASE 8: Bull / Base / Bear 5-Year Projections ===
+```markdown
+## Phase 8 — Bull / Base / Bear 5-Year Projections
 
-I'll walk us through the base case row-by-row, anchored in everything we've gathered:
-- Historical 5-yr trends (financials.json)
-- Peer averages (competitors.md)
-- Mgmt forward guidance (cross-call-themes.md)
-- Reverse-DCF implied growth (valuation.md)
-- **Consensus expectations** (market-expectations.md):
-  <paste Phase 7's calibration prompt verbatim>
+I'll walk us through the **base case** row-by-row, anchored in everything we've gathered:
+
+- Historical 5-yr trends → `financials.json`
+- Peer averages → `competitors.md`
+- Mgmt forward guidance → `earnings-calls/cross-call-themes.md`
+- Reverse-DCF implied growth → `valuation.md`
+- **Consensus expectations** → `market-expectations.md`:
+
+> <Paste Phase 7's calibration prompt verbatim, as a blockquote so it visually anchors the brainstorm.>
 
 Base case first. Then bull and bear as perturbations from base. Then probabilities.
 
-Starting with revenue growth — Y1, Y2, Y3, Y4, Y5. The historical 3-yr CAGR is X%, peers average Y%, mgmt guides Z%, consensus expects W%. My base-case proposal: <proposed-numbers>. Push back, adjust, or accept.
+### Row 1 — Revenue growth (Y1 → Y5)
+
+| Anchor | Value |
+|---|---|
+| Historical 3-yr CAGR | X% |
+| Peers (avg) | Y% |
+| Mgmt guidance | Z% |
+| Consensus | W% |
+
+**My base-case proposal:** Y1 = a%, Y2 = b%, Y3 = c%, Y4 = d%, Y5 = e%.
+
+Push back, adjust, or accept.
 ```
+
+Continue this row-by-row pattern (each row = a Markdown subsection with an anchor table and your base-case proposal) for the remaining rows.
 
 Walk through the locking sequence from `references/projection-kpis.md`:
 
@@ -254,28 +291,30 @@ When all rows are locked and computations done, write:
 
 ## Checkpoint 3
 
-```
-=== CHECKPOINT 3: Projection Refinement ===
+Format (rendered Markdown, not inside a code block):
 
-projections.{md,json} written to <ticker_dir>.
+```markdown
+## Checkpoint 3 — Projection Refinement
 
-Summary table:
-| Scenario | Probability | 5-yr Total Return CAGR (low/high) |
+*`projections.md` and `projections.json` written to `<ticker_dir>`.*
+
+### Scenario summary
+
+| Scenario | Probability | 5-yr Total Return CAGR (low → high) |
 |---|---|---|
-| Bull | XX% | +XX% / +XX% |
-| Base | XX% | +XX% / +XX% |
-| Bear | XX% | -XX% / -XX% |
-| **Probability-weighted** | — | +XX% / +XX% |
+| 🐂 Bull | XX% | **+XX% → +XX%** |
+| ⚖️ Base | XX% | **+XX% → +XX%** |
+| 🐻 Bear | XX% | **−XX% → −XX%** |
+| **Probability-weighted** | — | **+XX% → +XX%** |
 
-Margin of safety today: XX%
-Bear-case max drawdown from current: -XX%
+- **Margin of safety today:** XX%
+- **Bear-case max drawdown from current:** −XX%
 
-Quick sanity check:
+### Quick sanity check
+
 1. Does the asymmetry feel right? (Bull upside vs bear downside.)
 2. Any assumption locked above you want to revisit?
-3. Probabilities — does the bull scenario require what you'd call "everything going right"? Should we push base case probability up?
-
-"continue" to construct the verdict, or push back.
+3. Probabilities — does the bull scenario require what you'd call "everything going right"? Should we push the base case probability up?
 ```
 
 **Use the runtime's native interactive-input mechanism for the Continue / Revise projections choice** at the end of CP3.
@@ -313,28 +352,31 @@ Use the interactive brainstorm pattern for steps 5–8 (don't unilaterally pick 
 
 ## Checkpoint 4
 
-```
-=== CHECKPOINT 4: Verdict Approval ===
+Format (rendered Markdown, not inside a code block):
 
-verdict.{md,json} drafted at <ticker_dir>.
+```markdown
+## Checkpoint 4 — Verdict Approval
+
+*`verdict.md` and `verdict.json` drafted at `<ticker_dir>`.*
+
+### Verdict at a glance
 
 | Field | Value |
 |---|---|
-| Classification | BUY/WATCH/AVOID |
-| Conviction | High/Medium/Low |
-| GVD bucket | <category> |
-| Target position % | XX% |
-| Buy zone | $XXX–$XXX (first tranche) |
-| Active sell triggers | <count> |
-| Watch KPIs | 5 generic + N story-custom |
+| **Classification** | 🟢 BUY / 🟡 WATCH / 🔴 AVOID |
+| **Conviction** | High / Medium / Low |
+| **GVD bucket** | `<category>` |
+| **Target position** | XX% of portfolio |
+| **Buy zone (first tranche)** | $XXX – $XXX |
+| **Active sell triggers** | <count> |
+| **Watch KPIs** | 5 generic + N story-custom |
 
-Final review before commit:
-1. Classification — does the BUY/WATCH/AVOID match your gut after all this analysis?
-2. Sizing — too small, too big, right?
-3. Sell triggers — any too strict (would fire on noise) or too loose (would never fire)?
-4. Anything missing from verdict.md?
+### Final review before commit
 
-"approve" to commit, or push back.
+1. **Classification** — does the BUY / WATCH / AVOID match your gut after all this analysis?
+2. **Sizing** — too small, too big, right?
+3. **Sell triggers** — any too strict (would fire on noise) or too loose (would never fire)?
+4. Anything missing from `verdict.md`?
 ```
 
 **Use the runtime's native interactive-input mechanism for the Approve & commit / Push back choice** at the end of CP4.
@@ -400,40 +442,67 @@ After Checkpoint 4 approval:
 
 5. **Optional remote push** (if a remote is configured): ask the user via **the runtime's native interactive-input mechanism** — 2 options: Push now / Skip. Default: skip — let the user push when they want.
 
-6. **Confirm completion** to the user:
-   ```
-   === Research complete ===
-   <TICKER> — <NAME>
-   Verdict: <BUY|WATCH|AVOID>, conviction <level>, GVD <category>
-   Target position: XX%, buy zone $XXX–$XXX
-   Artifacts: <ticker_dir>
-   Commit: <SHA>
-   Tag: <TICKER>/v1
+6. **Confirm completion** to the user (rendered Markdown):
+
+   ```markdown
+   ## ✅ Research complete — `<TICKER>` (`<NAME>`)
+
+   | Field | Value |
+   |---|---|
+   | **Verdict** | 🟢/🟡/🔴 `<BUY/WATCH/AVOID>` — conviction `<level>` — GVD `<category>` |
+   | **Target position** | XX% of portfolio |
+   | **Buy zone (first tranche)** | $XXX – $XXX |
+   | **Artifacts** | `<ticker_dir>` |
+   | **Commit** | `<SHA>` |
+   | **Tag** | `<TICKER>/v1` |
    ```
 
 ## Recovery / setup errors
 
+All setup-error messages render as Markdown (header + code block), not plain text.
+
 If Phase 1 finds:
-- `SR_SEC_USER_AGENT` unset → print:
-  ```
+
+- **`SR_SEC_USER_AGENT` unset** → print:
+  ````markdown
+  ### ❌ Setup needed: SEC User-Agent
+
   Set this in your shell rc and reload:
+
+  ```bash
   export SR_SEC_USER_AGENT="<Your Name> <your@email>"
+  source ~/.zshrc
   ```
-- Research repo missing → print:
-  ```
-  Research repo not found at /Users/trocaneduard/Documents/Personal/investing-research.
+  ````
+
+- **Research repo missing** → print:
+  ````markdown
+  ### ❌ Setup needed: research repo
+
+  Research repo not found at `/Users/trocaneduard/Documents/Personal/investing-research`.
+
   Bootstrap (one-time):
-    mkdir -p /Users/trocaneduard/Documents/Personal/investing-research
-    cd $_ && git init -b main
-    # Then create README.md, INDEX.md, tickers.json, .gitignore per docs/superpowers/specs/2026-05-11-stock-research-plan-2-design.md §10
+
+  ```bash
+  mkdir -p /Users/trocaneduard/Documents/Personal/investing-research
+  cd $_ && git init -b main
+  # Then create README.md, INDEX.md, tickers.json, .gitignore per
+  # docs/superpowers/specs/2026-05-11-stock-research-plan-2-design.md §10
   ```
-- Python venv missing → print:
-  ```
+  ````
+
+- **Python venv missing** → print:
+  ````markdown
+  ### ❌ Setup needed: scripts venv
+
   Set up the skill venv:
-    cd ~/.claude/skills/stock-research/scripts
-    python -m venv .venv
-    .venv/bin/pip install -r requirements.txt
+
+  ```bash
+  cd ~/.claude/skills/stock-research/scripts
+  python -m venv .venv
+  .venv/bin/pip install -r requirements.txt
   ```
+  ````
 
 ## File references
 
