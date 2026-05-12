@@ -45,7 +45,7 @@ Apply this at every place in the workflow where the choice space is finite and e
 - **Phase 1 — GVD lens:** 5 options (growth / quality-growth / value / dividend / speculative-growth)
 - **Phases 3–7 batch — per-failed-phase recovery:** 3 options (Retry / Skip & continue / Abort)
 - **Phase 5 transcript fallback:** 2 options (Paste transcript inline / Skip this quarter)
-- **Each checkpoint (CP1, CP2, CP3, CP4):** 2 options (Continue / Push back & revise) — when the user pushes back, the follow-up is free-form, not a picker
+- **Each checkpoint (Checkpoint 1, 2, 3, and 4):** 2 options (Continue / Push back & revise) — when the user pushes back, the follow-up is free-form, not a picker
 - **Phase 10 — push to remote:** 2 options (Push now / Skip)
 
 **Do NOT use a picker for open-ended input.** Conversational dialogue stays as free-form text:
@@ -67,7 +67,7 @@ Apply these rules to every chat output:
 - **Lists:** Use numbered lists for sequenced prompts, bullet lists for enumerations. Indent nested items with 2 spaces.
 - **Tables:** Use Markdown tables for any comparison of >2 fields (projection scenarios, verdict summary, ratings distribution). Header row + separator row.
 - **Emphasis:** `**bold**` for labels and load-bearing terms (e.g., **Verdict:**, **Buy zone:**). `*italic*` sparingly, for meta-info like "*Drafted at `path`*".
-- **Blockquotes:** Use `>` for content quoted verbatim from artifact files (especially the ELI5 paragraph pasted into CP1) and for any prompt you're posing to the user.
+- **Blockquotes:** Use `>` for content quoted verbatim from artifact files (especially the plain-English explanation paragraph pasted into Checkpoint 1) and for any prompt you're posing to the user.
 - **Currency & numbers:** Format consistently — `$391.0B`, `$195.50`, `46.2%`, `+5%`. Never raw scientific notation in chat (`391035000000` is unreadable; `$391.0B` is fine).
 - **Status indicators:** Use emoji sparingly but meaningfully when status is binary — ✅ for pass, ⚠️ for warning, ❌ for fail, ⬆ / ⬇ / ↔ for trend direction.
 - **Code blocks:** Triple-backtick blocks for any shell command shown to the user. Specify the language (` ```bash`, ` ```json`).
@@ -152,7 +152,7 @@ cp <ticker_dir>/business-and-moat.md  # (the orchestrator handles install-dir mi
 
 ## Checkpoint 1
 
-**Before rendering CP1: read the ELI5 section (the first `### 1. ELI5...` block) from `<ticker_dir>/business-and-moat.md` — the file the Phase 2 subagent just wrote. The CP1 message MUST lead with that ELI5 verbatim. Do not paraphrase, shorten, or "compress for the chat." The whole point of ELI5 is that it's the same plain-language voice the user wants to see at the top of the conversation, not just buried in the file. If the ELI5 section in the file is itself jargon-heavy (uses terms like "ACV", "ARR", "platform", "operating leverage", "low-code", "workflow OS"), that's a Phase 2 failure — re-dispatch the subagent with explicit feedback before rendering CP1.**
+**Before rendering Checkpoint 1: read the "Explain like I'm in 5th grade" section (the first `### 1. Explain like I'm in 5th grade` block) from `<ticker_dir>/business-and-moat.md` — the file the Phase 2 subagent just wrote. The Checkpoint 1 message MUST lead with that section verbatim. Do not paraphrase, shorten, or "compress for the chat." The whole point of the plain-English explanation is that it's the same plain-language voice the user wants to see at the top of the conversation, not just buried in the file. If the section in the file is itself jargon-heavy (uses terms like "ACV", "ARR", "platform", "operating leverage", "low-code", "workflow OS"), that's a Phase 2 failure — re-dispatch the subagent with explicit feedback before rendering Checkpoint 1.**
 
 Format (output exactly this Markdown shape — render it as Markdown in the chat, not inside a code block):
 
@@ -163,7 +163,7 @@ Format (output exactly this Markdown shape — render it as Markdown in the chat
 
 ### Explain like I'm in 5th grade
 
-> <Paste the ELI5 section from business-and-moat.md verbatim — typically 3-6 short paragraphs of plain language covering every business area the company operates in. Banned vocabulary in this block: ACV, ARR, NDR, NRR, TAM, SAM, platform-as-a-service, workflow OS, low-code, operating leverage, vertical, monetization, take rate, attach rate, GAAP/non-GAAP — and any other jargon. If you can't explain a segment in 10-year-old English, the ELI5 wasn't written right.>
+> <Paste the "Explain like I'm in 5th grade" section from business-and-moat.md verbatim — typically 3-6 short paragraphs of plain language covering every business area the company operates in. Banned vocabulary in this block: ACV, ARR, NDR, NRR, TAM, SAM, platform-as-a-service, workflow OS, low-code, operating leverage, vertical, monetization, take rate, attach rate, GAAP/non-GAAP — and any other jargon. If you can't explain a segment in 10-year-old English, the section wasn't written right.>
 
 ### Technical summary
 
@@ -173,7 +173,7 @@ Format (output exactly this Markdown shape — render it as Markdown in the chat
 
 Before we fan out the data-gathering batch:
 
-1. Does the ELI5 match how YOU think about this business?
+1. Does the plain-English explanation match how YOU think about this business?
 2. Any segment, geography, or customer-concentration risk I missed?
 3. Moat — am I overrating or underrating any of pricing power / network / scale / brand?
 4. Anything you already know that should color the rest of the analysis?
@@ -221,11 +221,11 @@ Format (rendered Markdown, not inside a code block):
 
 ### Worth discussing before projections
 
-1. <Phase 5's "CP2 prep" items, 3–5 bullets — specific events / guidance / KPI shifts the user should weigh in on>
+1. <Phase 5's "Worth discussing" items, 3–5 bullets — specific events / guidance / KPI shifts the user should weigh in on>
 2. ...
 ```
 
-**Use the runtime's native interactive-input mechanism for the Continue / Discuss further choice** at the end of CP2. If the user picks "Discuss further," the follow-up dialogue is free-form text — this is the most conversation-heavy checkpoint, and the user often has a take on recent events that should color the projections. Engage substantively before continuing.
+**Use the runtime's native interactive-input mechanism for the Continue / Discuss further choice** at the end of Checkpoint 2. If the user picks "Discuss further," the follow-up dialogue is free-form text — this is the most conversation-heavy checkpoint, and the user often has a take on recent events that should color the projections. Engage substantively before continuing.
 
 ## Phase 8: Bull/Base/Bear projections
 
@@ -317,7 +317,7 @@ Format (rendered Markdown, not inside a code block):
 3. Probabilities — does the bull scenario require what you'd call "everything going right"? Should we push the base case probability up?
 ```
 
-**Use the runtime's native interactive-input mechanism for the Continue / Revise projections choice** at the end of CP3.
+**Use the runtime's native interactive-input mechanism for the Continue / Revise projections choice** at the end of Checkpoint 3.
 
 ## Phase 9: Verdict & price-action plan
 
@@ -379,7 +379,7 @@ Format (rendered Markdown, not inside a code block):
 4. Anything missing from `verdict.md`?
 ```
 
-**Use the runtime's native interactive-input mechanism for the Approve & commit / Push back choice** at the end of CP4.
+**Use the runtime's native interactive-input mechanism for the Approve & commit / Push back choice** at the end of Checkpoint 4.
 
 ## Phase 10: Commit & index
 

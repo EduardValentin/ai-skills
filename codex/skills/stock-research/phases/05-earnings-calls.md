@@ -21,7 +21,7 @@ Produce these files in `<ticker_dir>/earnings-calls/`:
 - `<YYYY-Qn>-analysis.md` per quarter (your analysis) — 3 files (produced by sub-subagents)
 - `cross-call-themes.md` (you write this, aggregating across the 3)
 
-Return a **~500-word summary**: tone trajectory across the calls, dropped/added themes, key forward-looking guidance, anything CP2 should surface to the user.
+Return a **~500-word summary**: tone trajectory across the calls, dropped/added themes, key forward-looking guidance, anything Checkpoint 2 should surface to the user.
 
 ## Step 1: Determine the 3 quarters to fetch
 
@@ -98,7 +98,7 @@ Are they raising / lowering / holding guidance? Note any "we don't give guidance
 
 If management mentions specific operational KPIs (customer count, ARPU, store count, capacity utilization, take rate, etc.), list them across the 3 calls in a small table — same KPI mentioned each time with its values. This becomes a candidate watchlist for Phase 9.
 
-### 5. CP2 prep (what to surface to the user)
+### 5. What to surface at Checkpoint 2
 
 A short "things worth discussing at Checkpoint 2" list — 3–5 items that you think the user should weigh in on before projections. Examples:
 - "Mgmt is suddenly cautious about Q1 next year — they didn't explain why. Worth pressing."

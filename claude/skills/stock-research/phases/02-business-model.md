@@ -22,10 +22,10 @@ You are a research subagent for the `stock-research` skill. Your job is the busi
 Produce **one file**: `<ticker_dir>/business-and-moat.md` with the structure below.
 Return a **~500-word summary** to the orchestrator in this exact shape:
 
-- **First paragraph (3-5 sentences):** A genuine 5th-grader ELI5 of what the company does and its main business areas. Same banned-vocabulary rules as the file's ELI5 section (no ACV / ARR / TAM / NDR / platform-as-a-service / workflow OS / operating leverage / vertical / monetization / take rate / GAAP / non-GAAP / low-code etc.). If the term wouldn't survive a conversation with a 10-year-old, it doesn't belong in this paragraph.
+- **First paragraph (3-5 sentences):** A genuine 5th-grader-friendly explanation of what the company does and its main business areas. Same banned-vocabulary rules as the file's "Explain like I'm in 5th grade" section (no ACV / ARR / TAM / NDR / platform-as-a-service / workflow OS / operating leverage / vertical / monetization / take rate / GAAP / non-GAAP / low-code etc.). If the term wouldn't survive a conversation with a 10-year-old, it doesn't belong in this paragraph.
 - **Then technical findings (jargon OK):** segments + geographic mix with specific numbers, moat verdict + trajectory + evidence, CEO/leadership signal, top 2-3 risks worth flagging in later phases.
 
-The orchestrator pastes the ELI5 section from `business-and-moat.md` at CP1 verbatim, but the first paragraph of your *summary* is the fallback if anything goes wrong reading the file — so write it with the same discipline.
+The orchestrator pastes the "Explain like I'm in 5th grade" section from `business-and-moat.md` at Checkpoint 1 verbatim, but the first paragraph of your *summary* is the fallback if anything goes wrong reading the file — so write it with the same discipline.
 
 ## Inputs available
 
@@ -83,20 +83,20 @@ schema_version: 1
 
 Then the body. Sections must appear in this order:
 
-### 1. ELI5 — Explain Like I'm in 5th Grade
+### 1. Explain like I'm in 5th grade
 
 **Required opening section. Plain language. No jargon.** Imagine explaining this company to a smart 10-year-old. Cover every business area the company operates in. If they sell 4 things, describe all 4 in simple words. If they have 3 geographies that matter, mention them.
 
 Length: 3–6 short paragraphs.
 
-**Banned vocabulary in this section** (these words tell you you've slipped out of ELI5 voice — rewrite if you catch yourself using them):
+**Banned vocabulary in this section** (these words tell you you've slipped out of plain-English voice — rewrite if you catch yourself using them):
 - Pricing/business jargon: ACV, ARR, NDR, NRR, TAM, SAM, ASP, take rate, attach rate, monetization, monetize
 - "Workflow OS", "platform-as-a-service", "low-code", "platform layer", "operating system for X"
-- Margin/financial vocab in the ELI5 itself: operating leverage, GAAP, non-GAAP, GAAP-to-non-GAAP, gross margin %, EBITDA. (You'll have a separate financials section for those.)
+- Margin/financial vocab in the plain-English section itself: operating leverage, GAAP, non-GAAP, GAAP-to-non-GAAP, gross margin %, EBITDA. (You'll have a separate financials section for those.)
 - Industry buzzwords without translation: AI agent, agentic, secular tailwind, category leader, vertical, end-to-end, hyperscaler
 - Acronyms generally — if you must use one, spell it out and define it like you're talking to someone who's never heard it
 
-**The test:** read your ELI5 out loud. Could a curious 10-year-old who's never read a 10-K or an earnings call follow it? If they'd say "what does 'workflow' mean?", you're not done.
+**The test:** read your plain-English explanation out loud. Could a curious 10-year-old who's never read a 10-K or an earnings call follow it? If they'd say "what does 'workflow' mean?", you're not done.
 
 Anti-examples (do not write these):
 - "leading provider of SaaS solutions for enterprise customers" — what does that mean to a 10-year-old?
@@ -178,9 +178,9 @@ From the DEF 14A proxy:
 - File at `<ticker_dir>/business-and-moat.md`
 - Frontmatter as specified above
 - All 9 numbered sections present
-- ELI5 section is the first thing the user sees after frontmatter — must be plain language
+- The "Explain like I'm in 5th grade" section is the first thing the user sees after frontmatter — must be plain language
 - Cite specific numbers and dates where possible (e.g., "Services revenue $XX.YB in FY2024, +14% YoY") rather than vague claims ("growing services business")
-- ~500-word summary returned to orchestrator: first paragraph is a 3-5 sentence true ELI5 in plain language (same banned-vocabulary rules), then technical findings in subsequent paragraphs (jargon OK)
+- ~500-word summary returned to orchestrator: first paragraph is a 3-5 sentence true plain-English explanation (same banned-vocabulary rules), then technical findings in subsequent paragraphs (jargon OK)
 
 ## Failure modes
 
@@ -192,6 +192,6 @@ From the DEF 14A proxy:
   - Some segment data is missing (e.g., company recently restructured)
   - DEF 14A wasn't filed in the window (smaller / foreign companies)
   - Insider data is thin
-  Note the specific gaps in your summary; orchestrator decides whether to push to user at CP1.
+  Note the specific gaps in your summary; orchestrator decides whether to push to user at Checkpoint 1.
 
 - **Status `DONE`** if everything completed cleanly.

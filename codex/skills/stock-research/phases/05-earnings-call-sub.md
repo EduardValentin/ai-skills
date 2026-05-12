@@ -105,7 +105,7 @@ A 1-paragraph qualitative read:
 
 ### 6. Net read
 
-1 paragraph: what did THIS call tell you that you didn't know before? Worth flagging to the parent orchestrator for CP2?
+1 paragraph: what did THIS call tell you that you didn't know before? Worth flagging to the parent orchestrator for Checkpoint 2?
 
 ## Output contract (recap)
 
