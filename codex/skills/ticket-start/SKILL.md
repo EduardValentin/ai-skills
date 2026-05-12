@@ -156,7 +156,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The full diff.
    - The mode parameter: `backend` / `ui` / `mixed` per the diff (this is QA's mode, not the backend-only flag — even a mixed change runs QA in mixed mode).
    - The path/URL of the running app or service.
-   - Browser tooling (Playwright MCP) for UI mode; HTTP tooling for backend mode.
+   - Codex Browser plugin (`browser-use:browser` skill) for UI mode; HTTP tooling for backend mode.
    - The role-prompt content from `agents/qa.md`.
    Wait for the QA report.
 
@@ -170,13 +170,23 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The mode parameter: `parity` (personal workflow with React reference) or `consistency` (job workflow OR personal workflow without React reference).
    - For `parity`: paths/URLs to **both** the production app and the React reference app.
    - For `consistency`: path/URL to the production app.
-   - Browser tooling (Playwright MCP).
+   - Codex Browser plugin (`browser-use:browser` skill).
    - The role-prompt content from `agents/ui-ux.md`.
    Wait for the UI/UX report.
 
 6. **If UI/UX returns FINDINGS**, route through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **UI/UX re-runs scoped to affected states**.
 
-7. **When UI/UX returns CLEAN** (or is skipped), run the self-improvement extraction pass on UI/UX findings (or skip the UI/UX pass if skipped). Advance to Ship.
+6a. **Validate the UI/UX report's matched-element inventory before accepting any verdict.**
+
+   - Confirm the report has a `## Matched-element inventory` section.
+   - Spot-check exhaustiveness:
+     - From the diff, pick 2 changed UI files. List their rendered elements. Each one must appear in the inventory.
+     - From the running production app, sample 3 visible elements on the feature surface (one container, one text element, one interactive control). Each must appear in the inventory.
+     - From the prototype, sample 2 visible elements. Each must appear either as a matched pair or as `MISSING` in the inventory.
+   - If any sample is not in the inventory, the report is **structurally invalid**. Reject and re-dispatch UI/UX with the specific missing elements named.
+   - Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for inventory rows.
+
+7. **When UI/UX returns CLEAN** (or is skipped), and the inventory validation in step 6a has passed, run the self-improvement extraction pass on UI/UX findings (or skip the UI/UX pass if skipped). Advance to Ship.
 
 ## Ship
 
@@ -249,7 +259,9 @@ When done, report:
 - Editing `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md` without keeping them in sync.
 - Exceeding the 3-iteration bug-fix cap silently instead of producing the intervention report.
 - Continuing past a user-intervention condition without stopping and surfacing.
-- Claiming visual parity / consistency without `browser_evaluate` extraction.
+- Claiming visual parity / consistency without DOM computed-style and bounding-rect extraction from the live browser.
+- Accepting a UI/UX `CLEAN` verdict (or any verdict) whose Matched-element inventory section is missing, empty, or missing rows for elements visibly present on the feature surface.
+- UI/UX subagent restricting the inventory to "important" elements instead of every visible element in the feature surface.
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review — that path has no other end-of-feature review.
 - Letting `superpowers:finishing-a-development-branch` present its 4-option prompt to the user instead of returning to this skill's Review phase.
 - Merging the PR before the user explicitly approves.
