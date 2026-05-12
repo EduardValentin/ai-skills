@@ -35,6 +35,27 @@ End-to-end fundamentals research on a US-listed company, following a long-horizo
 
 3. **Research repo exists.** The skill writes artifacts to `/Users/trocaneduard/Documents/Personal/investing-research/`. If this directory doesn't exist, abort with the bootstrap instructions (see "Recovery" below).
 
+## Asking the user for input
+
+**When the workflow needs a decision among a small set of mutually exclusive options, use the runtime's native interactive-input capability rather than printing the choices as plain text and waiting for a typed reply.** Whatever the agent platform provides (Claude Code, Codex, or another runtime) for surfacing structured prompts to the user — a picker, a button row, a multiple-choice modal, an `ask_user`-style tool, etc. — use that mechanism so the user can pick instead of type.
+
+Apply this at every place in the workflow where the choice space is finite and enumerable:
+
+- **Phase 1 — existing-folder gate:** 3 options (Refresh / Archive & restart / Abort)
+- **Phase 1 — GVD lens:** 5 options (growth / quality-growth / value / dividend / speculative-growth)
+- **Phases 3–7 batch — per-failed-phase recovery:** 3 options (Retry / Skip & continue / Abort)
+- **Phase 5 transcript fallback:** 2 options (Paste transcript inline / Skip this quarter)
+- **Each checkpoint (CP1, CP2, CP3, CP4):** 2 options (Continue / Push back & revise) — when the user pushes back, the follow-up is free-form, not a picker
+- **Phase 10 — push to remote:** 2 options (Push now / Skip)
+
+**Do NOT use a picker for open-ended input.** Conversational dialogue stays as free-form text:
+- Phase 1 session-context one-liner
+- The projection brainstorm in Phase 8 (locking revenue/margin/share-count/P-E rows is a numeric negotiation, not a multiple-choice)
+- Drafting story-specific sell triggers and watch KPIs in Phase 9
+- Any "push back" or "discussion" follow-up after a checkpoint
+
+If the runtime doesn't offer a structured-input mechanism (or you're unsure), fall back to clearly enumerated plain text — but try the native mechanism first.
+
 ## Workflow overview
 
 Ten phases, four user checkpoints:
@@ -80,12 +101,12 @@ When the skill is invoked (slash command or description-triggered), the orchestr
 
 2. **Echo identity.** Show the user: ticker, name, sector (sector requires an extra yfinance lookup — `<scripts>/.venv/bin/python -c "import yfinance as yf; print(yf.Ticker('AAPL').info.get('sector'))"` or skip if it's slow). Estimate market cap from yfinance for context.
 
-3. **Check existing ticker folder.** If `/Users/trocaneduard/Documents/Personal/investing-research/tickers/<TICKER>/` exists, prompt the user:
+3. **Check existing ticker folder.** If `/Users/trocaneduard/Documents/Personal/investing-research/tickers/<TICKER>/` exists, prompt the user (**use the runtime's native interactive-input mechanism — see "Asking the user for input"**):
    - **Refresh** — re-run all phases, overwrite (commits as `update(TICKER)`)
    - **Archive & restart** — move existing to `archive/<TICKER>-<old-date>/`, start fresh (commits as `archive(TICKER)` then `research(TICKER)` v2)
    - **Abort** — leave it, suggest `stock-recap` for quarterly update
 
-4. **GVD lens declaration.** Ask the user:
+4. **GVD lens declaration.** Ask the user (**use the runtime's native interactive-input mechanism — this is a 5-option enum, perfect picker territory**):
    > "What GVD lens are we researching this through? Pick: **growth | quality-growth | value | dividend | speculative-growth**. This shapes Phase 8 (projections) and Phase 9 (verdict). The agent will challenge later if the data disagrees."
 
 5. **Session context** (optional, captured in THESIS.md). Ask:
@@ -139,10 +160,11 @@ Quick verification before we fan out the data-gathering batch:
 Reply with corrections, raise something different, or "continue" to proceed.
 ```
 
+**Use the runtime's native interactive-input mechanism for the Continue / Push back & revise choice** — printing the question block above and then surfacing two structured options. If the user picks "Push back & revise," the follow-up reply is free-form text.
+
 Wait for user input. Possible responses:
-- "continue" → proceed to Phases 3–7 batch
-- Corrections → relay them to a fresh Phase 2 subagent (re-dispatch with the user's corrections in the context) → return to Checkpoint 1
-- Free-form discussion → engage, then ask for an explicit "continue" before proceeding
+- "Continue" → proceed to Phases 3–7 batch
+- "Push back & revise" → engage free-form. Corrections get relayed to a fresh Phase 2 subagent (re-dispatch with the user's corrections in the context) → return to Checkpoint 1.
 
 ## Phases 3–7: parallel batch
 
@@ -162,8 +184,8 @@ Wait for all 5 to return.
 |---|---|
 | All 5 `DONE` | Proceed to Checkpoint 2 |
 | 1–2 `DONE_WITH_CONCERNS` | Proceed; flag concerns in Checkpoint 2 summary |
-| Any `BLOCKED` | Present to user: "Phase X failed because <reason>. Retry / skip-and-continue / abort?" |
-| Any `NEEDS_CONTEXT` (almost always from Phase 5's transcript scrapers) | Ask user to paste the missing transcript, re-dispatch only that single sub-subagent with `--manual`, then continue |
+| Any `BLOCKED` | Surface to user via **the runtime's native interactive-input mechanism**: "Phase X failed because <reason>." with 3 options — Retry / Skip & continue / Abort |
+| Any `NEEDS_CONTEXT` (almost always from Phase 5's transcript scrapers) | Surface to user via **native interactive input** with 2 options — Paste transcript inline / Skip this quarter. If "paste", read the transcript content as the next free-form message and re-dispatch only that single sub-subagent with `--manual`. |
 
 ## Checkpoint 2
 
@@ -181,7 +203,7 @@ Worth discussing before we move to projections:
 Reply with reactions, additional context, or "continue" to start the projection brainstorm.
 ```
 
-Wait for user input. This is the most conversation-heavy checkpoint — the user often has a take on recent events that should color the projections. Engage substantively before continuing.
+**Use the runtime's native interactive-input mechanism for the Continue / Discuss further choice** at the end of CP2. If the user picks "Discuss further," the follow-up dialogue is free-form text — this is the most conversation-heavy checkpoint, and the user often has a take on recent events that should color the projections. Engage substantively before continuing.
 
 ## Phase 8: Bull/Base/Bear projections
 
@@ -256,6 +278,8 @@ Quick sanity check:
 "continue" to construct the verdict, or push back.
 ```
 
+**Use the runtime's native interactive-input mechanism for the Continue / Revise projections choice** at the end of CP3.
+
 ## Phase 9: Verdict & price-action plan
 
 Read these references:
@@ -312,6 +336,8 @@ Final review before commit:
 
 "approve" to commit, or push back.
 ```
+
+**Use the runtime's native interactive-input mechanism for the Approve & commit / Push back choice** at the end of CP4.
 
 ## Phase 10: Commit & index
 
@@ -372,7 +398,7 @@ After Checkpoint 4 approval:
    git tag <TICKER>/v1
    ```
 
-5. **Optional remote push** (if a remote is configured, ask the user "push to GitHub?"). Default: skip — let the user push when they want.
+5. **Optional remote push** (if a remote is configured): ask the user via **the runtime's native interactive-input mechanism** — 2 options: Push now / Skip. Default: skip — let the user push when they want.
 
 6. **Confirm completion** to the user:
    ```
