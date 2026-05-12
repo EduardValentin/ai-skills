@@ -71,6 +71,8 @@ At **any** point in the loop — not just at the cap — if the main agent hits 
 - Environmental blocker that cannot be diagnosed from the session (e.g., dev server crashes with no obvious cause).
 - A finding that requires changing the ticket's scope.
 
+When surfacing to the user, brief per `SKILL.md` → `## Dispatch → user briefing protocol` (handoff type 7: bug-fix loop architectural intervention) before asking the user to decide on direction. Present the relevant finding(s), the auditor's suggested fix if any, and the architectural tradeoff main agent sees, so the user can weigh in with the same context main agent has.
+
 ## Sequencing of re-runs
 
 **Gate order:** Reviewer → Security → QA → UI/UX (matches the phase order in `SKILL.md`).
