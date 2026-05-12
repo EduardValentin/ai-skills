@@ -302,7 +302,7 @@ When done, report:
 - Accepting a UI/UX `CLEAN` verdict (or any verdict) whose Matched-element inventory section is missing, empty, or missing rows for elements visibly present on the feature surface.
 - UI/UX subagent restricting the inventory to "important" elements instead of every visible element in the feature surface.
 - Main agent dispatching UI/UX in parity mode without supplying the expected matched-element inventory constructed in step 4a.
-- Scoping report's ## Prototype elements relevant to this feature section is empty or `_None._` for a parity-mode UI ticket — surface this at Setup, do not proceed to Brainstorm.
+- Scoping report's `## Prototype elements relevant to this feature` section is empty or `_None._` for a parity-mode UI ticket — surface this at Setup, do not proceed to Brainstorm.
 - UI/UX returns a verified inventory with rows that have blank `font-*`, `color/bg`, `box`, `layout`, `size`, or `verdict` cells. The DOM-evaluation work was skipped for those rows; reject the verdict at step 6a.
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review — that path has no other end-of-feature review.
 - Letting `superpowers:finishing-a-development-branch` present its 4-option prompt to the user instead of returning to this skill's Review phase.
