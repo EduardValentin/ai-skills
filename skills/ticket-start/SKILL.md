@@ -174,11 +174,31 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 4. **When QA returns CLEAN**, run the self-improvement extraction pass on QA findings.
 
+4a. **In parity mode, construct the expected matched-element inventory before dispatching UI/UX.** Skip this step in consistency mode (UI/UX runs with no supplied inventory and discovers as today). Parity mode means personal workflow with a runnable React reference app under `designs/`.
+
+   Combine:
+   - The Scoping report's `## Prototype elements relevant to this feature` rows (prototype side).
+   - Each plan task's `**Element mapping:**` block (the prototype↔production declaration).
+   - Actual post-diff production file:lines, resolved by walking `git diff origin/<default>..HEAD --name-only` for touched UI files and locating each plan-declared JSX declaration in the post-diff state (e.g., `grep -n` on a stable selector like `class="..."` or `data-testid="..."` from the plan's element mapping).
+
+   Produce a markdown table with one row per JSX declaration in scope. Column order matches the matched-element inventory in `agents/ui-ux.md` → `## Output format`:
+
+   | Pair | Prototype selector | Production selector | font-* | color/bg | box | layout | size | verdict |
+
+   For each row at dispatch:
+   - `Pair` cell carries the prototype:line ↔ production:line locator pair (or `(none)` on the side where the element is deliberately one-sided per the plan).
+   - `Prototype selector` and `Production selector` cells are filled with the JSX-derivable selector hint (component name, `data-testid`, or stable class).
+   - `font-*` through `size` cells are **blank** — UI/UX fills these by running DOM evaluation on each row's rendered atoms.
+   - `verdict` cell is **blank** — UI/UX sets it (MATCH / DRIFT / MISSING).
+
+   If construction fails (Scoping's prototype-elements section can't be parsed, a plan task's element-mapping block can't be matched to a Scoping row, the production-side post-diff lookup returns nothing), halt with `cannot dispatch UI/UX in parity mode — expected inventory could not be constructed` and name the specific parsing or matching error. Do not fall back to discovery-mode UI/UX in parity mode.
+
 5. **If backend-only flag is set: skip UI/UX. Otherwise, dispatch UI/UX subagent.** Load the role prompt from `agents/ui-ux.md`. Invoke a subagent with:
    - The ticket and approved plan.
    - The full diff.
    - The mode parameter: `parity` (personal workflow with React reference) or `consistency` (job workflow OR personal workflow without React reference).
    - For `parity`: paths/URLs to **both** the production app and the React reference app.
+   - For `parity`: the **expected matched-element inventory** table constructed in step 4a. UI/UX's job in parity mode is to fill in the verdict and computed-style cells, not to discover the inventory from scratch.
    - For `consistency`: path/URL to the production app.
    - Live-browser automation (navigation, clicks, keyboard input, viewport control, DOM evaluation, element-level screenshots, tab control). See `agents/ui-ux.md` → `## Browser bootstrap` for the fallback chain when a native browser capability is missing.
    - The role-prompt content from `agents/ui-ux.md`.
@@ -188,13 +208,22 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 6a. **Validate the UI/UX report's matched-element inventory before accepting any verdict.**
 
+   The check differs by mode:
+
+   **Parity mode (expected inventory was supplied at step 4a):** cross-check the verified inventory (returned by UI/UX) against the expected inventory (constructed at dispatch).
+   - Every row in the expected inventory must appear in the verified inventory.
+   - Every row in the verified inventory must have non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank cells mean UI/UX skipped the DOM-evaluation work for that row.
+   - Spot-check: sample 2 rows whose underlying file appears in the diff and 2 rows from the prototype enumeration. Each sampled row must be present in the verified inventory with non-blank cells.
+   - Verdicts of `MISSING` (production side) are accepted **only** for rows where the plan deliberately marked the element as not implemented in this ticket; otherwise a `MISSING` verdict is a finding.
+   - If any check fails, the report is **structurally invalid**. Reject and re-dispatch UI/UX with the specific gaps named (which rows are absent, which rows have blank cells).
+
+   **Consistency mode (no expected inventory was supplied):** apply today's spot-check against the running production app and the diff.
    - Confirm the report has a `## Matched-element inventory` section.
-   - Spot-check exhaustiveness:
-     - From the diff, pick 2 changed UI files. List their rendered elements. Each one must appear in the inventory.
-     - From the running production app, sample 3 visible elements on the feature surface (one container, one text element, one interactive control). Each must appear in the inventory.
-     - From the prototype, sample 2 visible elements. Each must appear either as a matched pair or as `MISSING` in the inventory.
+   - From the diff, pick 2 changed UI files. List their rendered elements. Each one must appear in the inventory.
+   - From the running production app, sample 3 visible elements on the feature surface. Each must appear in the inventory.
    - If any sample is not in the inventory, the report is **structurally invalid**. Reject and re-dispatch UI/UX with the specific missing elements named.
-   - Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for inventory rows.
+
+   In either mode, do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled inventory rows.
 
 7. **When UI/UX returns CLEAN** (or is skipped), and the inventory validation in step 6a has passed, run the self-improvement extraction pass on UI/UX findings (or skip the UI/UX pass if skipped). Advance to Ship.
 
@@ -272,6 +301,9 @@ When done, report:
 - Claiming visual parity / consistency without DOM computed-style and bounding-rect extraction from the live browser.
 - Accepting a UI/UX `CLEAN` verdict (or any verdict) whose Matched-element inventory section is missing, empty, or missing rows for elements visibly present on the feature surface.
 - UI/UX subagent restricting the inventory to "important" elements instead of every visible element in the feature surface.
+- Main agent dispatching UI/UX in parity mode without supplying the expected matched-element inventory constructed in step 4a.
+- Scoping report's ## Prototype elements relevant to this feature section is empty or `_None._` for a parity-mode UI ticket — surface this at Setup, do not proceed to Brainstorm.
+- UI/UX returns a verified inventory with rows that have blank `font-*`, `color/bg`, `box`, `layout`, `size`, or `verdict` cells. The DOM-evaluation work was skipped for those rows; reject the verdict at step 6a.
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review — that path has no other end-of-feature review.
 - Letting `superpowers:finishing-a-development-branch` present its 4-option prompt to the user instead of returning to this skill's Review phase.
 - Merging the PR before the user explicitly approves.
