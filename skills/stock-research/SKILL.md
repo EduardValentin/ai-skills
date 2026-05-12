@@ -168,16 +168,64 @@ Format (output exactly this Markdown shape — render it as Markdown in the chat
 
 ### Technical summary
 
-<3-5 sentences of load-bearing findings: segments + revenue mix with specific dollar/percent numbers, moat verdict + trajectory + key evidence, leadership/insider signal, top 2-3 risks. Jargon allowed here — this is the analyst voice.>
+The analyst-voice synthesis. Pull from `business-and-moat.md` — go deeper than 3-5 sentences. Jargon is allowed here; precision over plainness.
+
+#### Segments
+
+For each reportable segment (or product line if the company doesn't break out segments):
+
+- **<Segment name>** — $X.XB (Y% of revenue), growing Z% YoY.
+  - *What it does:* <1-2 sentences, specific.>
+  - *Target customers:* <enterprise / mid-market / SMB / consumer / government / developers / etc. Be specific — "Fortune 500 IT departments" not "businesses".>
+  - *Pricing model:* <subscription / per-seat / consumption / hardware + services attach / advertising / marketplace take rate / freemium-to-paid / etc.>
+  - *Margin profile if disclosed:* <gross margin, contribution margin, or qualitative read like "lower-margin than the company average" — pull from the 10-K MD&A if it breaks segment economics down.>
+  - *Recurring vs transactional:* <% recurring if disclosed, or qualitative read.>
+
+(Repeat for every segment. Don't skip one to keep the message short — the user wants the full picture.)
+
+#### Customer concentration & geography
+
+- **Top customers:** <Any single customer >10% of revenue per 10-K disclosure? Name them and quantify. If none, write "No single customer above 10%.">
+- **Customer count / scale:** <If disclosed: total customers, $1M+ ACV customers, enterprise vs mid-market split.>
+- **Geographic mix:** <Top 3 geographies by revenue % and any concentration risk (e.g., ">25% from a single country other than the home market" or "diversified — no geography above 30%").>
+
+#### Pricing power & moat — by dimension
+
+Address each dimension that's real for this business. Skip dimensions that don't apply — don't fabricate a network effect that doesn't exist.
+
+- **Pricing power:** <evidence — gross margin trend (improving = pricing power), price increases mentioned in earnings calls, renewal economics, retention rates, comparison to peer pricing.>
+- **Switching costs:** <how customers actually use this — data migration, retraining, integration depth, multi-year contracts, regulatory lock-in. Tie to who the customers are: enterprise IT has much higher switching costs than consumer apps. Quantify if possible.>
+- **Network effects:** <how value scales with users — marketplace liquidity, dev ecosystem, payment network reach. Or: "None.">
+- **Scale advantages:** <unit economics that improve with size — logistics density, R&D leverage, manufacturing scale. Or: "None.">
+- **Brand:** <premium pricing supported by brand, consumer surveys, NPS. Or: "Not a brand-driven moat.">
+- **Regulatory / structural:** <licenses, patents, geographic monopolies, network access. Or: "Not applicable.">
+
+**Moat verdict:** **wide** / **narrow** / **none**  
+**Trajectory over last 3 years:** **widening** / **stable** / **narrowing** — <specific evidence: margin trend, retention number, market share gain, R&D as % of revenue, etc.>
+
+#### Leadership & capital allocation
+
+- **CEO:** <name, years in role, prior background, what they're known for.>
+- **CEO ownership / skin in the game:** <% ownership, founder-led vs hired-gun, total insider ownership.>
+- **Insider trading pattern (trailing 12 months):** <net buying / selling, any large transactions worth flagging — or "no significant insider activity".>
+- **Capital allocation track record (5–10 years):** <one paragraph. What did they do with cumulative FCF? Reinvestment ROI, buyback discipline (did they buy back at reasonable prices?), dividend trajectory, M&A pattern. Note any deals that look value-destructive or value-creative.>
+
+#### Top risks to investigate downstream
+
+3–5 specific risks Phase 4's SWOR should investigate. Anchor each to evidence in the 10-K or earnings calls, not abstractions.
+
+1. <specific risk>
+2. <...>
+3. <...>
 
 ### Quick verification
 
-Before we fan out the data-gathering batch:
+Before we move to financials:
 
 1. Does the plain-English explanation match how YOU think about this business?
 2. Any segment, geography, or customer-concentration risk I missed?
-3. Moat — am I overrating or underrating any of pricing power / network / scale / brand?
-4. Anything you already know that should color the rest of the analysis?
+3. Moat — am I overrating or underrating any of pricing power / switching costs / network / scale / brand?
+4. Anything you already know about leadership or capital-allocation history that should color the rest of the analysis?
 ```
 
 **Use the runtime's native interactive-input mechanism for the Continue / Push back & revise choice** — printing the question block above and then surfacing two structured options. If the user picks "Push back & revise," the follow-up reply is free-form text.
