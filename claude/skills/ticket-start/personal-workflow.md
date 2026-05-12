@@ -33,6 +33,19 @@ Identify up front:
 
 These are passed to the UI/UX subagent during Verify.
 
+### Prototype parity dominates all other rules
+
+When the personal workflow has a runnable React reference app, **prototype visual parity is the highest-priority rule** for that ticket's visual surface. It overrides "use the design system's existing primitives" guidance, "match existing project patterns," and any other style heuristic.
+
+If a production design-system primitive does not reproduce the prototype's visual exactly:
+
+- **Right path:** add or extend the primitive so it matches the prototype. Surface the design-system gap during planning so the user can approve the new primitive.
+- **Wrong path:** silently substitute a "close-enough" production primitive (e.g., translating a prototype `<span>+✔` eyebrow into a production `Badge` component with pill background and shadow). That is parity drift dressed up as design-system discipline.
+
+When the prototype and the design system disagree, the prototype wins. The design system is a tool for achieving parity, not a replacement for it.
+
+This rule exists because of an observed failure mode where this exact substitution happened and the UI/UX agent accepted it as "design-system compliant."
+
 ## Verification — Mode mapping for QA and UI/UX
 
 The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the personal workflow.
@@ -47,7 +60,7 @@ Determined from the diff (main agent decides), same as the job workflow:
 
 ### UI/UX mode
 
-- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via `browser_evaluate`, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth.
+- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via `mcp__playwright__browser_evaluate`, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth.
 - **`consistency`** — fallback when `designs/` is missing or not runnable. Same as job-workflow consistency mode: stylistic consistency against existing analog elements in the production app.
 
 UI/UX is **skipped** if main agent determines the change is backend-only.
