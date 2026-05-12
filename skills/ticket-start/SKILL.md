@@ -101,6 +101,16 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 ## Plan
 
 1. **`superpowers:writing-plans`.** Produce a written implementation plan from the brainstorm outcome. The plan is a distinct artifact produced by that sub-skill — not a verbal summary of the brainstorm, not the brainstorm transcript itself, and not a mental model in your head.
+
+1a. **For parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`), each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype elements relevant to this feature` row from the Scoping report, and (b) the planned production file:line for the new/changed JSX declaration. Tasks that don't add/modify visible elements (state management, route handlers, backend stubs, infrastructure) omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to construct the expected matched-element inventory passed to UI/UX.
+
+   Example block inside a plan task body:
+   ```
+   **Element mapping:**
+   - Prototype: Scoping row `designs/components/Hero/Eyebrow.tsx:8` (`<span class="eyebrow">`)
+   - Planned production: `web/src/components/Hero/Eyebrow.tsx:12` (new `<span class="eyebrow">`)
+   ```
+
 2. Show the plan to the user as `superpowers:writing-plans` directs. Wait for explicit user approval of the *plan itself* before writing any code.
 3. **No code between brainstorm convergence and plan approval.** Not exploratory edits. Not scaffolding. Not "drafting what the plan would say in code." Not small or obvious changes. Not "let me just sketch the structure." File-edit capabilities are off-limits until the written plan exists and the user has explicitly approved it.
 
