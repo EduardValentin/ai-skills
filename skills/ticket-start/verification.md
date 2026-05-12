@@ -14,9 +14,11 @@ Two distinct verifications. Both are required. Both are reported separately at c
 1. Start both apps locally:
    - The production app on its dev server.
    - The `designs/` React reference app on its dev server.
-2. Open both apps in the browser session. Use `mcp__playwright__browser_tabs` to switch between them; do not rely on a compressed side-by-side view to spot small differences.
-3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison, screenshot, or `mcp__playwright__browser_evaluate` call.
+2. Open both apps in the live browser. Switch between tabs to compare side-by-side; do not rely on a compressed side-by-side view to spot small differences.
+3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison, screenshot, or DOM-evaluation call.
 4. If either app cannot be started, the feature cannot be exercised in both apps, or screenshots cannot be captured: stop, report the blocker explicitly, and do not claim parity was verified.
+
+Browser-automation capability and fallback chain are defined in `agents/ui-ux.md` → `## Browser bootstrap`. The protocol below is the same regardless of which level of the fallback chain is in use.
 
 ## Pass 1 — Visual Parity
 
@@ -54,49 +56,16 @@ For each important UI state, at every relevant breakpoint plus the widths immedi
 
 1. **Drive both apps into the same state.** Same route, same data, same interaction depth, same viewport, same device scale, same zoom.
 
-2. **Element-level screenshots per matched pair.** Use `mcp__playwright__browser_take_screenshot` with an element selector for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
+2. **Element-level screenshots per matched pair.** Capture an element-level screenshot for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
 
-3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair, run `mcp__playwright__browser_evaluate` in both apps to read computed styles and bounding rects:
+3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair, evaluate the extraction snippet at `scripts/extract-element-style.browser.js` against the DOM in both apps. The snippet returns a single JSON-serialisable object per element containing the computed-style and bounding-rect fields the matched-element inventory needs:
 
-   ```js
-   ((selector) => {
-     const el = document.querySelector(selector);
-     if (!el) return { missing: true, selector };
-     const cs = getComputedStyle(el);
-     const rect = el.getBoundingClientRect();
-     return {
-       font: {
-         family: cs.fontFamily,
-         size: cs.fontSize,
-         weight: cs.fontWeight,
-         style: cs.fontStyle,
-         lineHeight: cs.lineHeight,
-         letterSpacing: cs.letterSpacing,
-         textTransform: cs.textTransform,
-         textDecoration: cs.textDecorationLine,
-       },
-       color: { fg: cs.color, bg: cs.backgroundColor, opacity: cs.opacity },
-       box: {
-         padding: cs.padding,
-         margin: cs.margin,
-         border: cs.border,
-         borderRadius: cs.borderRadius,
-         boxShadow: cs.boxShadow,
-         outline: cs.outline,
-       },
-       layout: {
-         display: cs.display,
-         flexDirection: cs.flexDirection,
-         alignItems: cs.alignItems,
-         justifyContent: cs.justifyContent,
-         gap: cs.gap,
-         position: cs.position,
-       },
-       size: { width: rect.width, height: rect.height },
-       transform: cs.transform,
-     };
-   })('YOUR_SELECTOR')
-   ```
+   - `font.*` — `family`, `size`, `weight`, `style`, `lineHeight`, `letterSpacing`, `textTransform`, `textDecoration`.
+   - `color.*` — `fg`, `bg`, `opacity`.
+   - `box.*` — `padding`, `margin`, `border`, `borderRadius`, `boxShadow`, `outline`.
+   - `layout.*` — `display`, `flexDirection`, `alignItems`, `justifyContent`, `gap`, `position`.
+   - `size.*` — `width`, `height` (from `getBoundingClientRect()`).
+   - `transform`.
 
    Compare property-by-property, prototype against production. Any divergence is a mismatch unless it is a deliberate, documented divergence raised during planning (rare).
 
@@ -124,7 +93,7 @@ If any one of these is not true, parity is **not** clean. Do not declare visual 
 ### Forbidden shortcuts
 
 - Declaring parity off full-page screenshots alone.
-- Skipping `mcp__playwright__browser_evaluate` because the screenshots "look the same."
+- Skipping DOM evaluation because the screenshots "look the same."
 - Restricting the matched-element inventory to elements named in the ticket — the inventory covers every visible region of the feature.
 - Tolerating "small" numeric differences. There is no tolerance budget — different numbers mean different rendering.
 - Re-running only the state that surfaced the bug instead of every state where the changed property could affect rendering.

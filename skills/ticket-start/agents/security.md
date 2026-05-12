@@ -15,7 +15,7 @@ Security audit of the final diff. Cover, in priority order:
 5. **Persistence and file handling** — safe defaults, atomicity, file-upload safety, content-type confusion.
 6. **External requests** — outbound calls, redirect chains, certificate validation, timeout/retry safety.
 7. **Privileged actions** — what requires elevation and whether elevation is properly checked.
-8. **Dependencies** — new packages added in this diff, version pins, known-vulnerable versions. Read manifests/lockfiles.
+8. **Dependencies** — new packages added in this diff, version pins, known-vulnerable versions. Inspect manifests/lockfiles.
 9. **Client-side trust** — anything that should not be enforced only in the browser.
 
 You do **not** cover code style, performance, behavior, or visual. If you spot something there, note it as out-of-scope for the appropriate agent.

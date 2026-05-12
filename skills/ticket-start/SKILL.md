@@ -24,8 +24,8 @@ Implementation work driven by a ticket. The skill is a **hybrid orchestrator**: 
 
 Choose one before reading any detail file:
 
-- **Job workflow** — ticket comes from Jira or is pasted by the user. Read `job-workflow.md`.
-- **Personal workflow** — ticket comes from Linear; project has `PRD.md` and a `designs/` reference app. Read `personal-workflow.md` (which loads `react-parity.md` when applicable).
+- **Job workflow** — ticket comes from Jira or is pasted by the user. Load `job-workflow.md`.
+- **Personal workflow** — ticket comes from Linear; project has `PRD.md` and a `designs/` reference app. Load `personal-workflow.md` (which loads `react-parity.md` when applicable).
 
 If the workflow is ambiguous, ask the user before loading anything else.
 
@@ -74,7 +74,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 4. **Workflow-specific reading.** Read the workflow file selected above. Stop when the relevant facts are gathered — do not push past the Brainstorm gate without them.
 
-5. **Dispatch Scoping subagent.** Read `agents/scoping.md` for the role prompt. Invoke a subagent on the host platform's native subagent API with:
+5. **Dispatch Scoping subagent.** Load the role prompt from `agents/scoping.md`. Invoke a subagent on the host platform's native subagent API with:
    - The ticket title, description, AC.
    - The repo's `AGENTS.md` and `CLAUDE.md`.
    - For personal workflow: the scoped slices of `PRD.md` and `designs/` identified above.
@@ -85,7 +85,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 ## Brainstorm
 
-1. **Dispatch Architect subagent.** Read `agents/architect.md` for the role prompt. Invoke a subagent with:
+1. **Dispatch Architect subagent.** Load the role prompt from `agents/architect.md`. Invoke a subagent with:
    - The ticket and AC.
    - The Scoping report.
    - The repo's `AGENTS.md` / `CLAUDE.md`.
@@ -102,7 +102,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 1. **`superpowers:writing-plans`.** Produce a written implementation plan from the brainstorm outcome. The plan is a distinct artifact produced by that sub-skill — not a verbal summary of the brainstorm, not the brainstorm transcript itself, and not a mental model in your head.
 2. Show the plan to the user as `superpowers:writing-plans` directs. Wait for explicit user approval of the *plan itself* before writing any code.
-3. **No code between brainstorm convergence and plan approval.** Not exploratory edits. Not scaffolding. Not "drafting what the plan would say in code." Not small or obvious changes. Not "let me just sketch the structure." Edit tools are off-limits until the written plan exists and the user has explicitly approved it.
+3. **No code between brainstorm convergence and plan approval.** Not exploratory edits. Not scaffolding. Not "drafting what the plan would say in code." Not small or obvious changes. Not "let me just sketch the structure." File-edit capabilities are off-limits until the written plan exists and the user has explicitly approved it.
 
 ## Implement
 
@@ -114,7 +114,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 ## Review
 
-1. **Dispatch Reviewer subagent.** Read `agents/reviewer.md` for the role prompt. Invoke a subagent with:
+1. **Dispatch Reviewer subagent.** Load the role prompt from `agents/reviewer.md`. Invoke a subagent with:
    - The full diff (`git diff origin/<default>..HEAD`).
    - The ticket, AC, and approved plan.
    - The Architect proposals — specifically the recommended option that was chosen during brainstorm.
@@ -129,7 +129,7 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 ## Security
 
-1. **Dispatch Security subagent.** Read `agents/security.md` for the role prompt. Invoke a subagent with:
+1. **Dispatch Security subagent.** Load the role prompt from `agents/security.md`. Invoke a subagent with:
    - The full diff.
    - The ticket and AC.
    - Package manifests / lockfiles for dependency analysis.
@@ -151,12 +151,12 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - No matches but uncertainty (config files affecting render, shared utilities used by both backend and UI) → ask the user.
    - Default on uncertainty: **do not skip** UI/UX (running it unnecessarily is cheap; skipping it incorrectly is expensive).
 
-2. **Dispatch QA subagent.** Read `agents/qa.md` for the role prompt. Invoke a subagent with:
+2. **Dispatch QA subagent.** Load the role prompt from `agents/qa.md`. Invoke a subagent with:
    - The ticket, AC, and approved plan.
    - The full diff.
    - The mode parameter: `backend` / `ui` / `mixed` per the diff (this is QA's mode, not the backend-only flag — even a mixed change runs QA in mixed mode).
    - The path/URL of the running app or service.
-   - Codex Browser plugin (`browser-use:browser` skill) for UI mode; HTTP tooling for backend mode.
+   - Live-browser automation (navigation, clicks, keyboard input, viewport control, DOM evaluation, element-level screenshots, tab control) for UI mode; HTTP tooling for backend mode. See `agents/qa.md` → `## Browser bootstrap` for the fallback chain when a native browser capability is missing.
    - The role-prompt content from `agents/qa.md`.
    Wait for the QA report.
 
@@ -164,13 +164,13 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 4. **When QA returns CLEAN**, run the self-improvement extraction pass on QA findings.
 
-5. **If backend-only flag is set: skip UI/UX. Otherwise, dispatch UI/UX subagent.** Read `agents/ui-ux.md` for the role prompt. Invoke a subagent with:
+5. **If backend-only flag is set: skip UI/UX. Otherwise, dispatch UI/UX subagent.** Load the role prompt from `agents/ui-ux.md`. Invoke a subagent with:
    - The ticket and approved plan.
    - The full diff.
    - The mode parameter: `parity` (personal workflow with React reference) or `consistency` (job workflow OR personal workflow without React reference).
    - For `parity`: paths/URLs to **both** the production app and the React reference app.
    - For `consistency`: path/URL to the production app.
-   - Codex Browser plugin (`browser-use:browser` skill).
+   - Live-browser automation (navigation, clicks, keyboard input, viewport control, DOM evaluation, element-level screenshots, tab control). See `agents/ui-ux.md` → `## Browser bootstrap` for the fallback chain when a native browser capability is missing.
    - The role-prompt content from `agents/ui-ux.md`.
    Wait for the UI/UX report.
 

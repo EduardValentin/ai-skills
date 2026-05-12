@@ -60,7 +60,7 @@ Determined from the diff (main agent decides), same as the job workflow:
 
 ### UI/UX mode
 
-- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via the Codex Browser plugin's Playwright APIs, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth.
+- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via DOM evaluation against the live browser, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth.
 - **`consistency`** — fallback when `designs/` is missing or not runnable. Same as job-workflow consistency mode: stylistic consistency against existing analog elements in the production app.
 
 UI/UX is **skipped** if main agent determines the change is backend-only.

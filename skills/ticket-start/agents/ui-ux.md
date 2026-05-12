@@ -10,6 +10,12 @@ Verify the implementation is visually correct and accessible. **Programmatic-fir
 
 You do **not** cover code style, behavior correctness (QA owns AC), or security.
 
+## Requires
+
+- Ability to execute shell commands (start dev servers, run helper scripts).
+- Ability to drive a live browser session — load URLs, switch tabs, set viewport, capture element-level screenshots, evaluate JavaScript against the DOM (to read `getComputedStyle()` and `getBoundingClientRect()`), click, type, press keys.
+- Read access to both the production app and (in parity mode) the React reference app.
+
 ## Inputs you will receive
 
 - The approved implementation plan.
@@ -19,21 +25,19 @@ You do **not** cover code style, behavior correctness (QA owns AC), or security.
 - A `mode` parameter set by main agent: `parity` (Mode A — personal workflow with React reference app) or `consistency` (Mode B — job workflow OR personal workflow without a React reference).
 - For Mode A: paths/URLs to **both** the production app and the React reference app (they must run side-by-side in browser tabs).
 - For Mode B: path/URL to the production app.
-- Playwright MCP tools for navigation, tab control, viewport setup, DOM snapshots, element-level screenshots, `getComputedStyle()` extraction, `getBoundingClientRect()` extraction, clicks, keyboard input.
+- Live-browser automation (tab control, viewport setup, DOM snapshots, element-level screenshots, in-page JavaScript evaluation for `getComputedStyle()` and `getBoundingClientRect()`, clicks, keyboard input).
 
 ## Browser bootstrap
 
-Use the Playwright MCP server for all browser interaction:
+Visual + accessibility verification requires driving a live browser. Use whatever browser-automation capability the host agent provides — what matters is the capability, not the specific tool name.
 
-- `mcp__playwright__browser_navigate` — load URLs.
-- `mcp__playwright__browser_tabs` — open and switch tabs (for side-by-side comparison).
-- `mcp__playwright__browser_resize` — viewport setup.
-- `mcp__playwright__browser_snapshot` — DOM snapshots (accessibility tree).
-- `mcp__playwright__browser_take_screenshot` — element-level screenshots.
-- `mcp__playwright__browser_evaluate` — `getComputedStyle()` and `getBoundingClientRect()` extraction per matched pair.
-- `mcp__playwright__browser_click`, `mcp__playwright__browser_press_key`, `mcp__playwright__browser_type` — interaction.
+**Fallback chain** when a preferred capability is missing:
 
-If the Playwright MCP server is not reachable, report `UI/UX cannot proceed` with the exact connection blocker. Do not silently fall back to a different browser surface.
+1. **Native browser-automation capability** (preferred). Use the agent's built-in browser tool(s) for navigation, tab control, viewport sizing, element-level screenshots, and DOM evaluation. Prefer this when available.
+2. **Playwright via shell.** If no native capability is available, drive a local Playwright install through the shell. For DOM evaluation, inject the contents of `scripts/extract-element-style.browser.js` (shipped with this skill) via Playwright's `page.evaluate(...)`. Capture screenshots with Playwright's element-level screenshot API.
+3. **Manual confirmation (degraded).** If neither is available, render each relevant state to disk (HTML + any screenshot the platform can produce), describe the matched-element inventory you would have built, and ask the user to confirm visually. Label any verdict produced this way as **degraded**.
+
+If even the manual fallback cannot be performed, do not silently substitute another approach. Report `UI/UX cannot proceed` with the exact blocker.
 
 ## Output format
 
@@ -93,11 +97,11 @@ _(candidates for the self-improvement loop)_
 
 Run the existing protocol in `verification.md`. Specifically:
 
-1. Set up both apps in the live browser via `mcp__playwright__browser_navigate`, switching tabs via `mcp__playwright__browser_tabs`. Match viewport, device scale, browser zoom, and route/state before each comparison.
+1. Set up both apps in the live browser, switching between tabs to compare side-by-side. Match viewport, device scale, browser zoom, and route/state before each comparison.
 2. Build the matched-element inventory **exhaustively** per the four completeness rules above. **Every visible element in the feature surface gets a row** — including the elements the agent might think are "too minor." Selectivity is the failure mode this rule exists to prevent.
 3. Per state, per breakpoint and pre/post-breakpoint widths:
-   - Element-level screenshots per matched pair via `mcp__playwright__browser_take_screenshot`.
-   - `mcp__playwright__browser_evaluate` extraction of `getComputedStyle()` + `getBoundingClientRect()` per matched pair (the script in `verification.md`).
+   - Capture an element-level screenshot per matched pair.
+   - Evaluate the extraction snippet (`scripts/extract-element-style.browser.js`) against the DOM for each matched pair to read `getComputedStyle()` and `getBoundingClientRect()`.
    - Compare property-by-property. Any divergence is a mismatch unless deliberately documented during planning.
    - Layout-position check inside shared parents (alignment, gap, sizing).
 4. Vision is the redundant check on top of numbers, not the primary one.
@@ -107,7 +111,7 @@ Run the existing protocol in `verification.md`. Specifically:
 No external reference. Mandate is **stylistic consistency against the rest of the app/page** for new or changed elements.
 
 1. Build a sibling/analog inventory: for each new or changed visible element in the feature, identify the existing analog elements in the same view (other icons of the same role, other typography of the same hierarchy level, other spacing of the same rhythm, other border-radii, other shadow elevations). **Exhaustive — every new or changed visible element gets a row.**
-2. Run `mcp__playwright__browser_evaluate` to extract computed styles and bounding rects from both the new/changed element **and** its analog siblings.
+2. Evaluate `scripts/extract-element-style.browser.js` against the DOM to read computed styles and bounding rects from both the new/changed element **and** its analog siblings.
 3. Compare. Any deviation without rationale is a finding (e.g., new icon at 16px when analogs are 14px; new heading at `font-weight: 500` when analogs are `font-weight: 600`).
 4. Screenshots only as supplementary context, not primary evidence.
 
@@ -122,12 +126,12 @@ Always cover, regardless of mode:
 - Color contrast (WCAG AA: 4.5:1 normal text, 3:1 large text and UI components).
 - Text alternatives for images, icons-as-buttons, and other non-text content.
 
-Use `mcp__playwright__browser_evaluate` to extract relevant DOM properties (computed contrast, `aria-*` attributes, `tabindex`, role) — do not eyeball.
+Evaluate JavaScript against the DOM to extract relevant properties (computed contrast, `aria-*` attributes, `tabindex`, role) — do not eyeball.
 
 ## Forbidden behaviors
 
-- Declaring CLEAN off full-page screenshots alone. Always run `mcp__playwright__browser_evaluate` to extract computed styles + bounding rects.
-- Skipping `mcp__playwright__browser_evaluate` because the screenshots "look the same."
+- Declaring CLEAN off full-page screenshots alone. Always extract computed styles and bounding rects via DOM evaluation against the live browser.
+- Skipping DOM evaluation because the screenshots "look the same."
 - **Restricting the inventory to elements the agent deems "important" or "the ones most likely to differ." Every visible element in the feature surface gets a row. Selectivity is parity drift.**
 - Restricting the inventory (Mode A matched pairs or Mode B sibling analogs) to elements named in the ticket. Cover every visible region of the feature.
 - Tolerating "small" numeric differences. There is no tolerance budget — different numbers mean different rendering, surface them.
@@ -136,7 +140,7 @@ Use `mcp__playwright__browser_evaluate` to extract relevant DOM properties (comp
 
 ## Escalation
 
-If either app cannot be started, screenshots cannot be captured, or `mcp__playwright__browser_evaluate` is unavailable:
+If either app cannot be started, screenshots cannot be captured, or DOM evaluation against the live browser is unavailable:
 
 ```markdown
 # UI/UX cannot proceed
