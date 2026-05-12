@@ -260,24 +260,78 @@ Wait for all 4 to return.
 
 ## Checkpoint 3
 
+This checkpoint synthesizes the entire Phase 4–7 batch into a single picture: competitors, earnings calls, valuation, and market expectations. The user should leave this checkpoint with a clear read on **how the company stacks up against peers, what management is signaling, where the stock sits valuation-wise, and what the market expects** — before they start building their own projections in Phase 8.
+
+**Before rendering Checkpoint 3: read the four artifact files written by the batch:**
+- `<ticker_dir>/competitors.md` and `<ticker_dir>/swor.md` (Phase 4)
+- `<ticker_dir>/earnings-calls/cross-call-themes.md` (Phase 5)
+- `<ticker_dir>/valuation.md` (Phase 6)
+- `<ticker_dir>/market-expectations.md` (Phase 7)
+
+Also pull the ~500-word summaries returned by each batch subagent. The checkpoint's job is to compress the load-bearing parts of each into a single readable synthesis.
+
 Format (rendered Markdown, not inside a code block):
 
 ```markdown
-## Checkpoint 3 — Earnings Calls: Tone, Direction, Recent Events
+## Checkpoint 3 — Batch Synthesis: Competitors, Calls, Valuation, Market Expectations
 
-*Last 3 calls analyzed at `<ticker_dir>/earnings-calls/`. Cross-call themes at `<ticker_dir>/earnings-calls/cross-call-themes.md`.*
+*Four artifacts written under `<ticker_dir>/`: `competitors.md`, `swor.md`, `earnings-calls/cross-call-themes.md`, `valuation.md`, `market-expectations.md`. The summary below is the load-bearing distillation; open the files for the full detail.*
 
-### Tone & cross-call summary
+### 🏟️ Competitive positioning
 
-<Paste Phase 5's tone-trajectory + cross-call summary — 2-4 paragraphs. Use blockquotes for any verbatim mgmt quotes you cite.>
+<2-3 sentence positioning verdict from Phase 4's summary: where the company sits, who's pulling ahead, the moat-vs-competitor read.>
 
-### Worth discussing before projections
+<Compact competitor table — pull the top 3-4 rows from competitors.md, NOT all the metrics, just the ones that tell the story (market cap, revenue, growth, op margin, P/E):>
 
-1. <Phase 5's "Worth discussing" items, 3–5 bullets — specific events / guidance / KPI shifts the user should weigh in on>
-2. ...
+| Ticker | Market cap | Revenue (TTM) | Rev growth (3-yr) | Op margin | P/E (TTM) |
+|---|---|---|---|---|---|
+| **<TICKER>** | $X.XB | $Y.YB | XX% | XX.X% | XX.X× |
+| ... | ... | ... | ... | ... | ... |
+
+<Top 2-3 SWOR risks the user should know about, taken from `swor.md`'s Risks section — specifically the ones flagged by the year-over-year risk-factor diff (NEW risks mgmt added). One sentence each.>
+
+### 📞 Earnings calls — tone & direction
+
+<Paste Phase 5's tone-trajectory + cross-call themes, 2-4 paragraphs. Use blockquotes for any verbatim mgmt quote you cite. Note any guidance trajectory (raising / holding / lowering across the 3 calls) and emerging themes.>
+
+### 💰 Valuation snapshot
+
+| Metric | Value | Note |
+|---|---|---|
+| **Current price** | $XXX.XX | as of <today> |
+| **P/E (TTM)** | XX.X× | <position vs historical 10-yr band: above median / below 25th / etc.> |
+| **Current P/E percentile** (10-yr) | XX% | |
+| **P/S (TTM)** | X.X× | |
+| **P/FCF (TTM)** | XX.X× | |
+| **Reverse-DCF implied growth** | XX% / yr | <plausible / aggressive / conservative for this bucket> |
+
+<1-2 sentence verdict from valuation.md: expensive / fair / cheap, and why.>
+
+### 📊 Market expectations (calibration for Phase 8)
+
+| Field | Value |
+|---|---|
+| **Analyst coverage** | N analysts |
+| **Consensus price target** | low $XXX / mean $XXX / high $XXX |
+| **Implied upside (mean)** | +XX% |
+| **Ratings** | XX% Buy / XX% Hold / XX% Sell |
+| **EPS estimate trend (90 days)** | ⬆ rising / ⬇ falling / ↔ flat |
+| **Consensus 5-yr growth** | XX% / yr |
+
+> <Paste Phase 7's calibration prompt verbatim — the one that frames "consensus expects X / Y / Z, what do you know that they don't?" This anchors the Phase 8 brainstorm.>
+
+### 🎯 Worth discussing before projections
+
+<3-7 bullets pulled across the four phases — anything the user should weigh in on before we move to the projection brainstorm. Examples:
+- "Competitive: Microsoft's Copilot pricing undercuts the company's services tier — Phase 5 calls mentioned this twice. Real moat compression risk."
+- "Earnings tone: mgmt's services growth guidance dropped from 'high-teens' (Q1) to 'low-teens' (Q3). Worth pressing on what changed."
+- "Valuation: current P/E at 76th percentile of 10-yr band, but reverse-DCF implies 14%/yr growth — slightly above the 11% historical CAGR. Modestly expensive but not heroic."
+- "Market expectations: consensus expects +12% revenue next year vs the company's own guide of +10%. Either consensus is too high or the company is sandbagging."
+
+Pull from each phase's summary — these are the items each phase flagged as 'worth discussing'.>
 ```
 
-**Use the runtime's native interactive-input mechanism for the Continue / Discuss further choice** at the end of Checkpoint 3. If the user picks "Discuss further," the follow-up dialogue is free-form text — this is the most conversation-heavy checkpoint, and the user often has a take on recent events that should color the projections. Engage substantively before continuing.
+**Use the runtime's native interactive-input mechanism for the Continue / Discuss further choice** at the end of Checkpoint 3. If the user picks "Discuss further," the follow-up dialogue is free-form text — this is the most conversation-heavy checkpoint, and the user often has a take on recent events, peer dynamics, or valuation context that should color the projections. Engage substantively before continuing.
 
 ## Phase 8: Bull/Base/Bear projections
 
