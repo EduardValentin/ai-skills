@@ -46,6 +46,8 @@ When the prototype and the design system disagree, the prototype wins. The desig
 
 This rule exists because of an observed failure mode where this exact substitution happened and the UI/UX agent accepted it as "design-system compliant."
 
+**Corollary:** prototype enumeration in Scoping is mandatory in parity mode. The parity-dominance rule depends on having an authoritative list of what to maintain parity with; Scoping's `## Prototype elements relevant to this feature` section is that list. An empty section is a Scoping failure, not a clean report — see `agents/scoping.md` → forbidden behaviors.
+
 ## Verification — Mode mapping for QA and UI/UX
 
 The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the personal workflow.
@@ -60,7 +62,7 @@ Determined from the diff (main agent decides), same as the job workflow:
 
 ### UI/UX mode
 
-- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via DOM evaluation against the live browser, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth.
+- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via DOM evaluation against the live browser, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth. Main agent constructs the **expected matched-element inventory** at Verify dispatch (per `SKILL.md`'s Verify step 4a) from Scoping's prototype-element enumeration + the plan's `**Element mapping:**` blocks + the actual diff, and passes it to UI/UX as input.
 - **`consistency`** — fallback when `designs/` is missing or not runnable. Same as job-workflow consistency mode: stylistic consistency against existing analog elements in the production app.
 
 UI/UX is **skipped** if main agent determines the change is backend-only.
