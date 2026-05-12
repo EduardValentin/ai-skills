@@ -14,8 +14,8 @@ Two distinct verifications. Both are required. Both are reported separately at c
 1. Start both apps locally:
    - The production app on its dev server.
    - The `designs/` React reference app on its dev server.
-2. Open both apps in the browser session. Use `browser_tabs` to switch between them; do not rely on a compressed side-by-side view to spot small differences.
-3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison, screenshot, or `browser_evaluate` call.
+2. Open both apps in the browser session. Use `mcp__playwright__browser_tabs` to switch between them; do not rely on a compressed side-by-side view to spot small differences.
+3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison, screenshot, or `mcp__playwright__browser_evaluate` call.
 4. If either app cannot be started, the feature cannot be exercised in both apps, or screenshots cannot be captured: stop, report the blocker explicitly, and do not claim parity was verified.
 
 ## Pass 1 — Visual Parity
@@ -38,6 +38,8 @@ Cover every state the feature surfaces:
 
 ### Matched-element inventory (do this first)
 
+**REQUIRED + EXHAUSTIVE.** Every visible element in the feature's surface gets a row. Selectivity is forbidden — "I checked the important ones" is parity drift. The completeness rules are detailed in `agents/ui-ux.md` → `## Determining completeness`; the four checks (diff-driven coverage, production-DOM coverage, prototype-DOM coverage, sibling/parent geometry) all apply here.
+
 Before any comparison, enumerate matched element pairs for the feature. For every visible region — header, button, input, label, card, list item, icon, badge, link, divider, container — identify the matching element in both apps. Match by role, accessible name, text content, or `data-testid`. Record:
 
 - the selector you will use in each app
@@ -52,9 +54,9 @@ For each important UI state, at every relevant breakpoint plus the widths immedi
 
 1. **Drive both apps into the same state.** Same route, same data, same interaction depth, same viewport, same device scale, same zoom.
 
-2. **Element-level screenshots per matched pair.** Use `browser_take_screenshot` with an element selector for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
+2. **Element-level screenshots per matched pair.** Use `mcp__playwright__browser_take_screenshot` with an element selector for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
 
-3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair, run `browser_evaluate` in both apps to read computed styles and bounding rects:
+3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair, run `mcp__playwright__browser_evaluate` in both apps to read computed styles and bounding rects:
 
    ```js
    ((selector) => {
@@ -122,7 +124,7 @@ If any one of these is not true, parity is **not** clean. Do not declare visual 
 ### Forbidden shortcuts
 
 - Declaring parity off full-page screenshots alone.
-- Skipping `browser_evaluate` because the screenshots "look the same."
+- Skipping `mcp__playwright__browser_evaluate` because the screenshots "look the same."
 - Restricting the matched-element inventory to elements named in the ticket — the inventory covers every visible region of the feature.
 - Tolerating "small" numeric differences. There is no tolerance budget — different numbers mean different rendering.
 - Re-running only the state that surfaced the bug instead of every state where the changed property could affect rendering.
