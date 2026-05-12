@@ -1,6 +1,6 @@
 ---
 name: declaratia-unica-romania
-description: Use when the user wants to fill the Romanian annual income tax Declarația Unică (D212) — phrases like "completare declarație unică", "D212", "declaratia unica", venituri din dividende, venituri PFA, câștig capital broker IBKR/Tradeville, venituri investiții ANAF. Covers Persoană Fizică (dividends, capital gains, crypto, interest from RO and foreign brokers) and PFA în sistem real. Do not use for: PFA cu norma de venit, microîntreprinderi/SRL, venituri salariale, venituri din chirii, asistență la control fiscal.
+description: "Use when the user wants to fill the Romanian annual income tax Declarația Unică (D212) — phrases like \"completare declarație unică\", \"D212\", \"declaratia unica\", venituri din dividende, venituri PFA, câștig capital broker IBKR/Tradeville, venituri investiții ANAF. Covers Persoană Fizică (dividends, capital gains, crypto, interest from RO and foreign brokers) and PFA în sistem real. Do not use for: PFA cu norma de venit, microîntreprinderi/SRL, venituri salariale, venituri din chirii, asistență la control fiscal."
 ---
 
 # Declarația Unică România
