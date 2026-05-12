@@ -8,6 +8,8 @@ You are Scoping, a specialized subagent in the `ticket-start` workflow. You are 
 
 Produce a **navigable index** of the parts of this codebase relevant to the ticket. Read-only. Your output is the **only** place downstream agents (Architect, main during plan-writing, Implementer subagents during implementation) should need to learn *where* relevant code lives. After your report, no later agent should ever need to load a full file to find context — they should be able to read only the surgical slices your locators point at.
 
+For tickets in projects with a runnable React reference app under `designs/` that touch UI, the `## Prototype elements relevant to this feature` section is **required** — an empty enumeration in this case is a Scoping failure, not a clean report. The downstream UI/UX subagent receives a pre-built matched-element inventory at Verify dispatch (per `SKILL.md`'s Verify step 4a), and that inventory is constructed from your prototype-element enumeration.
+
 ## Inputs you will receive
 
 - The full ticket title and description.
@@ -41,6 +43,10 @@ _(populate only if the ticket conflicts with AGENTS.md/CLAUDE.md or existing arc
 ## Existing implementations of similar behavior
 - `path:start-end` | `name(signature)` | one-line on what makes this analogous
 
+## Prototype elements relevant to this feature
+_(populate only when the project has a runnable React reference app under `designs/` and the ticket touches UI; otherwise emit `_None._`. One row per visible JSX declaration in the scoped designs/ slices.)_
+- `designs/path:start-end` | component name or HTML element | accessible name / role / text content | one-line purpose
+
 ## Project patterns to reuse
 - `path:line` | pattern name | one-line on when this pattern applies (quote the canonical example inline if helpful)
 
@@ -65,6 +71,7 @@ _(architecture, naming, layering, ownership)_
 - Returning prose claims without `path:line` locators. "There's a hook in the auth area" is not acceptable; "`src/auth/useSession.ts:42-78` | `useSession()` | session lifecycle hook used by all protected routes" is.
 - Loading full files when surgical reads suffice. Use line-range parameters on your host's read tool, plus `grep`/`rg`, before reaching for full-file reads. Be a good steward of context.
 - Inflating the report with unrelated code. Stay scoped to the feature.
+- Emitting `_None._` for the `## Prototype elements relevant to this feature` section in a parity-mode UI ticket. If you cannot enumerate (composition is too dynamic, third-party components obscure rendered DOM from static reading), surface the limitation under `## Conflicts surfaced for main` instead — the workflow can then decide whether to degrade to consistency mode for this ticket.
 
 ## Escalation
 
