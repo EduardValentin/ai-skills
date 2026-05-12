@@ -1,9 +1,0 @@
-<cap14
-  str_categ_venit="{{cod_categorie}}"
-  den_categ_venit="{{denumire_categorie}}"
-  str_venit_net_anual="{{venit_net_anual}}"
-  str_pierdere_compensata="{{pierdere_compensata|default:0}}"
-  str_venit_recalculat="{{venit_recalculat}}"
-  str_impozit_datorat_Ro="{{impozit_datorat_ro}}"
-  str_credit_fiscal="{{credit_fiscal|default:0}}"
-  str_dif_impozit_datorat="{{dif_impozit_datorat}}" />

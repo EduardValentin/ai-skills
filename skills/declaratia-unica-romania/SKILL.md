@@ -9,6 +9,10 @@ description: Use when the user wants to fill the Romanian annual income tax Decl
 
 Skill orchestrator pentru completarea anuală a D212 cu **disciplină strictă de citare** din surse oficiale (ANAF, MF, Monitor Oficial, Codul Fiscal) și separare clară între cunoștințe statice (skill) și fapte anuale (cache local). Skill-ul refuză surse neoficiale, refuză să inventeze fapte fiscale și emite **un XML importabil în duf.anaf.ro** + **un raport markdown auditabil**.
 
+## Preconditions
+
+Skill-ul presupune: citire/scriere fișiere pe disc; execuție shell (`rsync` pentru `_sync.sh`, `python3` stdlib pentru validare XML); fetch de pagini web cu fallback la `curl`/`wget` (vezi `workflow/freshness-check.md` pentru ladder); opțional, dispatch de sesiune izolată pentru testele din `tests/` (cu fallback la sesiuni CLI separate). Fără primele două capabilități, escaladează.
+
 ## When To Use
 
 - Utilizatorul cere completarea declarației unice / D212.
@@ -40,7 +44,7 @@ Nu se avansează silențios; fiecare gate are condiție explicită.
 
 2. **Citare obligatorie**: fiecare valoare numerică din worklog și raport are referință inline către `_legi/{an}/{modul}.md#ancora`.
 
-3. **Mirror sync**: orice modificare la fișiere skill se oglindește în `~/.{claude,codex}/skills/declaratia-unica-romania/` prin `_sync.sh`. Vezi `_sync.sh --help`.
+3. **Mirror sync**: orice edit în skill-ul canonic se propagă simultan în AMBELE install dirs (claude + codex) prin `_sync.sh push`. Mutații runtime în install dir → `_sync.sh pull <agent>`. Vezi `_sync.sh` pentru detalii.
 
 4. **Conversie valutară V2**: cursbnr.ro media anuală + cross-check BNR 3-puncte. Notă obligatorie în raport: "V2 vs per-tranzacție Cod Fiscal art. 76 alin. (2)". Vezi `workflow/currency-conversion.md`.
 
@@ -50,7 +54,7 @@ Toată comunicarea cu utilizatorul, fișierele cache, raportul final și instruc
 
 ## Locații
 
-- Cache legi: `/Users/trocaneduard/Documents/Personal/declaratii-unice/_legi/{an}/`
-- Sesiuni: `/Users/trocaneduard/Documents/Personal/declaratii-unice/{an_fiscal}/sesiuni/{date}_{persoana}/`
-- Skill repo: `/Users/trocaneduard/Documents/Personal/ai-skills/{claude,codex}/skills/declaratia-unica-romania/`
-- Install dirs: `~/.{claude,codex}/skills/declaratia-unica-romania/`
+- Cache legi (state local, out-of-repo): `/Users/trocaneduard/Documents/Personal/declaratii-unice/_legi/{an}/`
+- Sesiuni (state local, out-of-repo): `/Users/trocaneduard/Documents/Personal/declaratii-unice/{an_fiscal}/sesiuni/{date}_{persoana}/`
+- Skill canonic (versionat în git): `<AI_SKILLS_REPO>/skills/declaratia-unica-romania/` (default `/Users/trocaneduard/Documents/Personal/ai-skills/skills/declaratia-unica-romania/`)
+- Install dirs (oglinzi runtime, sincronizate via `_sync.sh`): `~/.claude/skills/declaratia-unica-romania/` și `~/.codex/skills/declaratia-unica-romania/`

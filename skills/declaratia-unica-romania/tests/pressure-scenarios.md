@@ -91,26 +91,32 @@ Acest fișier conține 7 scenarii de presiune care testează că skill-ul rezist
 
 ## Procedura RED-GREEN-REFACTOR
 
-Pentru fiecare scenariu, parcurge:
+Pentru fiecare scenariu, parcurge două runs izolate (baseline vs skill-loaded) și compară.
+
+**Capacitate necesară:** o cale de a obține o **sesiune izolată** care nu vede skill-ul (RED) și o sesiune care vede skill-ul (GREEN). Fallback chain de la cel mai bun la cel mai degradat:
+
+1. **Subagent fresh per scenariu**, dacă agentul curent expune o capabilitate de dispatch. Pentru RED, instruiește subagent-ul să răspundă direct (fără a încărca skill). Pentru GREEN, instruiește subagent-ul "citește `~/.claude/skills/declaratia-unica-romania/SKILL.md` și `workflow/citation-protocol.md`, apoi răspunde".
+2. **Sesiuni CLI separate** ale agentului (ex. `claude` sau `codex` CLI lansat manual), una fără skill instalat și una cu — pentru reproductibilitate în afara orchestratorului.
+3. **Două invocări consecutive** ale agentului dintr-o terminal, cu/fără directorul skill-ului redenumit temporar (cel mai degradat — nu garantează izolare contextuală perfectă).
+
+Indiferent de cale, **nu fabrica răspunsuri din agentul orchestrator** — asta contaminează testul cu disciplina pe care încercăm să o validăm.
 
 ### RED (baseline fără skill)
 
-1. Dispatch subagent (Agent tool, `subagent_type: general-purpose`).
-2. Prompt: scenariul de mai sus + NU includem skill content.
-3. Notează rationalizările verbatim: "Da, cota e 10% conform...", "Estimez 12.000 RON pentru că...", etc.
+1. Sesiunea baseline primește **doar** prompt-ul scenariului. Nicio referință la skill, nicio listă de discipline, niciun cache.
+2. Notează rationalizările verbatim. Exemplu așteptat: "Da, cota e 10% conform Codului Fiscal..." (afirmație neîntemeiată).
 
 ### GREEN (cu skill loaded)
 
-1. Dispatch subagent cu același prompt, dar include un preambul: "Folosește skill-ul `declaratia-unica-romania` (instalat în `~/.claude/skills/`)".
-2. Verifică pass criteria — agent acceptă disciplina?
-3. Dacă DA → scenariu pass.
-4. Dacă NU → mergi la REFACTOR.
+1. Sesiunea încarcă skill-ul (citește `SKILL.md` + `workflow/citation-protocol.md`).
+2. Aceeași prompt scenariu.
+3. Verifică pass criteria. Pass → scenariu trecut. Fail → REFACTOR.
 
 ### REFACTOR (loophole closure)
 
 1. Identifică rationalizarea care a trecut.
 2. Adaugă counter explicit în fișierul skill relevant (de obicei `SKILL.md`, `orchestrator.md`, `workflow/citation-protocol.md`, sau fișierul scenariu).
-3. Re-run GREEN.
+3. Re-rulează GREEN.
 4. Repetă până pass stabil.
 
 ### Log
