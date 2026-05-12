@@ -1,8 +1,8 @@
 # Context Digest — Subagent Prompt
 
-Use this template when dispatching the Agent for project-context gathering at the start of a design-studio session (Prerequisites Step 2). The subagent reads the project artifacts and returns a single structured digest so the main agent's context stays clean.
+Use this template when dispatching a subagent for project-context gathering at the start of a design-studio session (Prerequisites Step 2). The subagent reads the project artifacts and returns a single structured digest so the main agent's context stays clean. If subagent dispatch is unavailable in the current agent, the main agent runs the same prompt itself inline — the prompt body below is identical either way.
 
-**Inputs to fill in before dispatching:**
+**Inputs to fill in before dispatching (or before running inline):**
 
 - `<project-root>` — absolute path to the project root.
 - `<app-root>` — absolute path to the located React reference app.
@@ -121,7 +121,7 @@ Use this template when dispatching the Agent for project-context gathering at th
 
 ---
 
-## After the subagent returns
+## After the digest is produced
 
 The main agent should:
 
@@ -129,7 +129,7 @@ The main agent should:
    - `DESIGN.md` missing → ask the user for design direction and create DESIGN.md before any design work begins.
    - `brand-voice.md` missing → note it; default to clear, direct, human language for any copy gate.
    - `PRD.md` missing → see `prd-generation.md` and offer to generate one.
-   - Tailwind theme missing or components directory missing → ask the user where they live, then re-dispatch the digest.
+   - Tailwind theme missing or components directory missing → ask the user where they live, then re-run the digest.
 2. **Surface Mismatches.** Raise each one with the user and apply the conflict rule: the Tailwind theme is authoritative; offer to update DESIGN.md as part of the current task.
 3. **Use the digest as the working reference** for the rest of the session. Do not re-read the underlying files in the main agent.
-4. **Re-dispatch the digest** when (a) any of the source artifacts has been edited since the last digest, or (b) the active task shifts enough that the PRD slice no longer covers it. Pass a refreshed `<task-summary>` in case (b).
+4. **Re-run the digest** (via subagent dispatch when available, otherwise inline) when (a) any of the source artifacts has been edited since the last digest, or (b) the active task shifts enough that the PRD slice no longer covers it. Pass a refreshed `<task-summary>` in case (b).

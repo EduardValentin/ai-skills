@@ -4,13 +4,13 @@ If no `PRD.md` exists at the project root, offer to generate one:
 
 > "I noticed there's no `PRD.md` in this project. The PRD is the source of truth for business rules, user flows, and functional requirements — it's what production user stories get created from. Want me to generate one by analyzing the current state of the reference app?"
 
-If the user **declines**, note that PRD sync (Phase 6) will be skipped for the rest of the session, and proceed.
+If the user **declines**, note that PRD sync will be skipped for the rest of the session, and proceed.
 
-If the user **accepts**, follow the steps below. Use sub-agents for both code analysis and PRD writing so the main agent's context stays clean.
+If the user **accepts**, follow the steps below. Prefer subagent dispatch for both code analysis and PRD writing so the main agent's context stays clean. If subagent dispatch is unavailable, run each prompt inline as the main agent — the prompt bodies are identical either way.
 
-## Step 1 — Spawn a code analysis sub-agent
+## Step 1 — Code-analysis pass
 
-Dispatch a sub-agent (Agent tool) with this prompt:
+Dispatch a subagent with this prompt (or run it yourself inline):
 
 > **Task: Analyze the React reference app and catalog all user flows, features, and business logic**
 >
@@ -38,20 +38,18 @@ Dispatch a sub-agent (Agent tool) with this prompt:
 
 ## Step 2 — Capture screenshots of the main pages
 
-Use the internal browser (or browser automation MCP) to navigate the primary routes and screenshot each page. These give visual context for understanding the app's structure, layout, and feature set.
+Capture screenshots of the primary routes — these give visual context for understanding the app's structure, layout, and feature set. Use whichever visual-output capability is available per `browser-fallback.md`.
 
-If neither is available, ask the user for screenshots — see `browser-fallback.md`.
+## Step 3 — PRD-writing pass
 
-## Step 3 — Spawn a PRD writing sub-agent
-
-Once the analysis report and screenshots are ready, dispatch a second sub-agent with this prompt:
+Once the analysis report and screenshots are ready, dispatch a second subagent (or run inline) with this prompt:
 
 > **Task: Write a PRD.md based on the app analysis**
 >
 > You are writing a Product Requirements Document for a product whose reference app has already been built. The PRD must serve as the **source of truth for creating production user stories** — it defines what the product does, its business rules, user flows, and functional requirements.
 >
 > **Inputs:**
-> - App analysis report: [paste the code analysis sub-agent's output]
+> - App analysis report: [paste the Step 1 output]
 > - Screenshot observations: [describe what each screenshot shows — pages, layouts, key UI elements, user flows visible]
 >
 > **Writing guidelines:**
@@ -66,4 +64,4 @@ Once the analysis report and screenshots are ready, dispatch a second sub-agent 
 
 ## Step 4 — Save and hand off
 
-Save the sub-agent's output as `PRD.md` at the project root. Briefly summarize for the user what was documented and invite them to flag anything that needs correction. Then proceed with the design task.
+Save the Step 3 output as `PRD.md` at the project root. Briefly summarize for the user what was documented and invite them to flag anything that needs correction. Then proceed with the design task.
