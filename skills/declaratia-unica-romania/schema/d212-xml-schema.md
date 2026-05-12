@@ -34,10 +34,10 @@ Atribute (toate obligatorii):
 | `an_r` | string anul (`"2026"` = anul calendaristic al depunerii) | sesiune (`{an_fiscal} + 1`) |
 | `luna_r` | `"12"` (luna de referință închidere an fiscal) | constant |
 | `d_rec`, `rectif1`, `rectif2` | flag-uri rectificare; `"0"` la declarație inițială | sesiune |
-| `totalPlata_A` | total de plată în lei | calculat |
+| `totalPlata_A` | **checksum CNP** — suma cifrelor din `cif`, NU totalul fiscal de plată. Pentru CNP `1960828284541` → 58; pentru `2970422284573` → 55. Totalul fiscal real e în `<oblig_realizat>` la `dif_de_plata` / `oblimpoz_real_dif_deplata`. | calculat: `sum(int(c) for c in cif)` |
 | `bifa_conformare`, `bifa18`, `bifa19`, `bifa23` | bife procedură; default `"0"` | sesiune |
 | `anulare_litA`, `anulare_litB` | flag anulare; `"0"` la declarație inițială | sesiune |
-| `bifa111`, `bifa112`, `bifa113`, `bifa121`, `bifa122`, `bifa131`, `bifa132`, `bifa14`, `bifa15` | bife subcapitole; `"1"` activează secțiunea corespunzătoare | sesiune (per scenariu) |
+| `bifa111`, `bifa112`, `bifa113`, `bifa121`, `bifa122`, `bifa131`, `bifa132`, `bifa14`, `bifa15` | bife subcapitole controlate de DUF după logică internă. **Skill-ul nu le poate seta determinist** — default `"0"` și rely pe DUF re-export pentru forma canonică. Vezi `workflow/duf-roundtrip.md`. | default `"0"`; DUF normalizează |
 | `nume_c`, `initiala_c`, `prenume_c` | identitate fiscală | persoană sesiune |
 | `cif` | CNP / CIF persoană | persoană sesiune |
 | `cont_bancar` | IBAN pentru restituiri | persoană sesiune |
@@ -45,12 +45,11 @@ Atribute (toate obligatorii):
 | `nerezident` | `"0"` rezident, `"1"` nerezident | persoană sesiune |
 | `xmlns`, `xmlns:xsi`, `xsi:schemaLocation` | namespaces (constante) | constant |
 
-**Mapare bife → subcapitole** (de actualizat prin re-verificare DUF dacă schimbă):
-- `bifa121="1"` — Cap. I.1 (venituri realizate din România)
-- `bifa122="1"` — Cap. I.2 (venituri realizate din străinătate)
-- `bifa131="1"` — Cap. I.3 (CAS estimat anul curent)
-- `bifa132="1"` — Cap. I.4 / Date CASS pentru venituri investiții
-- (alte bife: verifică Instrucțiunile PDF anuale)
+**Mapare bife → subcapitole — DEPRECATED.** Inițial am încercat să mapăm bifele după prezența cap14 cu/fără `str_stat_realiz_v`, dar DUF live a contrazis ipotezele în testarea reală:
+- Test reproducând cap14 cu `str_stat_realiz_v="US"` (venituri străinătate): DUF a generat `bifa121="1", bifa122="0", bifa132="0"` (nu `bifa122="1"` cum ar fi sugerat numele atributului).
+- Bifele includ logică despre regim CASS, conformare, CAS estimat etc. — nu doar "ce capitole sunt populate". Reguli interne DUF nedocumentate.
+
+**Regulă curentă:** skill-ul setează **toate bifele la `"0"`** în XML-ul generat. Forma canonică = XML re-exportat de DUF după import. Vezi `workflow/duf-roundtrip.md`.
 
 ## Element `<oblig_realizat>`
 

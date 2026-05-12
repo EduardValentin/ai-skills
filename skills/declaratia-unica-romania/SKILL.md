@@ -26,8 +26,9 @@ Skill-ul presupune: citire/scriere fișiere pe disc; execuție shell (`rsync` pe
 Citește `orchestrator.md` pentru detaliu complet. Phase order strict:
 
 ```
-1. Identificare sesiune → 2. Freshness schema → 3. Cache legi → 4. Preflight docs
-   → 5. Calcul + citare → 6. Generare D212.xml + raport → 7. Review user → 8. Close
+1. Identificare → 2. Freshness schema → 3. Cache legi → 4. Preflight docs
+   → 5. Calcul + citare → 6. Generare D212.xml + raport
+   → 6.5 DUF round-trip → 7. Review user → 8. Close
 ```
 
 Nu se avansează silențios; fiecare gate are condiție explicită.

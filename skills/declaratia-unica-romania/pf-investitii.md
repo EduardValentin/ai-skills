@@ -173,8 +173,8 @@ Pași:
 
 ## Bife XML root pentru PF investiții
 
-- `bifa121 = "0"` (venituri RO realizate) → `"1"` dacă există cap14 fără `str_stat_realiz_v`
-- `bifa122 = "1"` dacă există cap14 cu `str_stat_realiz_v` (venituri străinătate)
-- `bifa132 = "1"` (declarăm CASS din venituri investiții)
+**Toate bifele la `"0"`.** Reguli inițiale ipotetice ("bifa122=1 pentru venituri străinătate", "bifa132=1 pentru CASS investiții") s-au dovedit greșite la testarea cu DUF live — vezi `schema/d212-xml-schema.md` §Mapare bife pentru detalii. DUF rescrie bifele după logică internă la import + re-export. Skill-ul nu încearcă să le seteze.
+
+Procesul corect (vezi `workflow/duf-roundtrip.md`): generăm XML cu toate bifele "0" → import în DUF → re-export → XML-ul DUF este forma canonică.
 
 Verifică restul bifelor în `schema/d212-xml-schema.md` la freshness check.

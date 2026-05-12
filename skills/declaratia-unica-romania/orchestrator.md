@@ -99,6 +99,16 @@ Hard-stop pe eroare.
 
 Procedură generare raport: vezi structura fixă din spec Secțiunea 5.2 (frontmatter, sumar, detalii per categorie, instrucțiuni completare DUF, surse, avertismente).
 
+## Phase 6.5 — DUF round-trip (forma canonică)
+
+**Gate (recomandat, nu strict obligatoriu):** există `outputs/D212.canonical.xml` re-exportat din DUF după importul `outputs/D212.xml`.
+
+XML-ul nostru e *importabil* dar nu *canonic* — DUF normalizează silentios `totalPlata_A`, bifele, și câmpurile CASS detaliate după logică internă. Pentru audit trail clar la control fiscal, treci prin DUF înainte de submit.
+
+Procedură: vezi `workflow/duf-roundtrip.md`. Pe scurt: utilizatorul importă `D212.xml` în `duf.anaf.ro`, lasă DUF să normalizeze, exportă XML-ul re-generat ca `D212.canonical.xml`. Skill-ul rulează diff-ul de atribute și actualizează `raport-completare.md` cu lista normalizărilor.
+
+Skip permis dacă: nu există intenție de submit electronic; DUF e indisponibil; user-ul confirmă explicit (waiver în worklog).
+
 ## Phase 7 — Review utilizator
 
 **Gate:** user răspunde "OK" sau cere corecție.

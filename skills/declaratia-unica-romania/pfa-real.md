@@ -100,11 +100,9 @@ Similar pentru CAS și CASS.
 
 ## Bife XML pentru PFA real
 
-(Verifică din schema PDF anuală la freshness check; valorile de mai jos sunt indicative.)
+**Toate bifele la `"0"`.** La testarea cu DUF live pentru PF investiții, regulile inițiale despre bife (de ex. "bifa122=1 pentru străinătate") s-au dovedit greșite. Probabilitate similară pentru PFA — DUF rescrie bifele după logică internă. Skill-ul nu încearcă să le seteze, ci se bazează pe **DUF round-trip** (vezi `workflow/duf-roundtrip.md`): importăm XML-ul cu bifele "0" în DUF, lăsăm DUF să normalizeze, re-exportăm — XML-ul re-exportat e forma canonică.
 
-- `bifa111 = "1"` (venituri PFA realizate din România în sistem real)
-- `bifa131 = "1"` dacă declarăm CAS estimat anul curent
-- `bifa14 = "1"` dacă cerem bonificație impozit
+Excepție: `bifa_cass_real` / `bifa_cass_datorat_*` din `<oblig_realizat>` rămân setate explicit pentru că definesc regimul CASS, nu un capitol; vezi mai jos.
 
 ## Atribute `<oblig_realizat>` specifice PFA
 
