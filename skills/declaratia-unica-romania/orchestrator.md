@@ -97,7 +97,17 @@ python3 -c "import xml.etree.ElementTree as ET; ET.parse('outputs/D212.xml'); pr
 
 Hard-stop pe eroare.
 
-Procedură generare raport: vezi structura fixă din spec Secțiunea 5.2 (frontmatter, sumar, detalii per categorie, instrucțiuni completare DUF, surse, avertismente).
+Procedură generare raport: urmează **strict** `workflow/raport-template.md`. Secțiunile sunt obligatorii, nu opționale:
+
+1. Frontmatter cu persoană, an fiscal, scenarii, agent, conversie V2, platform_version DUF
+2. **Sumar fiscal** — tabel cu impozit, CAS, CASS, diferență de plată
+3. **Detalii per linie de venit** — pentru fiecare cap14: raw input, conversie, citații lege, calcul pas cu pas
+4. **Instrucțiuni completare manuală în DUF** — pas-cu-pas în browser pe `duf.anaf.ro`: pentru fiecare cap14, tabel `Câmp DUF | Valoare` cu valorile concrete pe care utilizatorul le introduce; câmpurile auto-calculate de DUF marcate cu italic. Aceasta este secțiunea principală a raportului — utilizatorul ține raportul deschis lângă browser și completează linie cu linie.
+5. Surse citate (URL + accessed_on per fapt)
+6. Pași finali (DUF round-trip, submit SPV, plată)
+7. Avertismente (V2, bife, totalPlata_A, asumări specifice)
+
+Hard-stop la generare raport dacă §4 nu conține un sub-pas dedicat pentru fiecare `<cap14>` din XML. Lipsa instrucțiunilor manuale face raportul inutilizabil pentru completare in-browser.
 
 ## Phase 6.5 — DUF round-trip (forma canonică)
 
