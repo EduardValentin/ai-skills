@@ -56,14 +56,9 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 ## Setup
 
-1. **Worktree first.** Before reading the ticket body, before exploring code, create an isolated worktree from the freshest remote default branch. Do not work in the primary checkout. Identifying which workflow applies (Job vs Personal) requires only knowing the ticket's source system, not its contents — that minimal awareness is allowed before the worktree is in place.
-   - Detect the upstream default branch (`main` or `master`).
-   - `git fetch origin` to refresh remotes.
-   - Base the new worktree off `origin/<default>`, not the local branch.
-   - **REQUIRED SUB-SKILL:** `superpowers:using-git-worktrees` for the exact procedure and safety checks.
-   - If `git fetch` fails, surface the blocker and stop. Do not silently fall back to a stale local branch.
+1. **Worktree discipline.** REQUIRED SUB-SKILL: `superpowers:using-git-worktrees`. Base the worktree off `origin/<default>` (not the local branch). Halt on `git fetch` failure — do not fall back to stale local state.
 
-2. **Repository instructions.** Inside the worktree, read the nearest applicable `AGENTS.md` first, then load only the additional instruction files and project docs that materially affect the task.
+2. **Subagent context discipline.** When dispatching subagents, explicitly forward `AGENTS.md` and any workflow-relevant project docs as inputs — subagent context does not always inherit the main session's auto-loaded files, and explicit forwarding is the host-agnostic discipline.
 
 3. **Freshness — treat memory as stale.** Memory, prior chat context, old plans, and earlier tool results are hints, not facts. Before any substantive answer about scope, status, blockers, related tickets, progress, PR readiness, or git state, fetch current facts from the source of truth:
    - **Linear tickets:** read the current ticket via Linear MCP. If blocked/blocking/related/duplicate/parent/child tickets matter, read each one too — do not infer from relation names or earlier context.
