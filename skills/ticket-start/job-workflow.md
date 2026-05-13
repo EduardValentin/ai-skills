@@ -63,7 +63,7 @@ For the job workflow, the UI/UX agent always runs in **`consistency` mode**:
 
 - No external reference (job apps in this workflow do not have a React reference app in `designs/`).
 - Mandate is stylistic consistency against existing analog elements in the same view: icon sizing rhythm, typography scale, spacing rhythm, color tokens, border radii, shadow elevation, alignment.
-- Programmatic-first: extract computed styles and bounding rects via `browser_evaluate`. Screenshots only as supplementary context.
+- Programmatic-first: extract computed styles and bounding rects via DOM evaluation against the live browser (the snippet at `scripts/extract-element-style.browser.js` returns the inventory's column set). Screenshots only as supplementary context.
 - Accessibility checks always apply.
 
 UI/UX is **skipped** if main agent determines the change is backend-only (no UI files in the diff) per `SKILL.md`'s backend-only detection.

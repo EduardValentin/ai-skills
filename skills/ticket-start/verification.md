@@ -14,9 +14,11 @@ Two distinct verifications. Both are required. Both are reported separately at c
 1. Start both apps locally:
    - The production app on its dev server.
    - The `designs/` React reference app on its dev server.
-2. Open both apps in the browser session. Use `browser_tabs` to switch between them; do not rely on a compressed side-by-side view to spot small differences.
-3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison, screenshot, or `browser_evaluate` call.
+2. Open both apps in the live browser. Switch between tabs to compare side-by-side; do not rely on a compressed side-by-side view to spot small differences.
+3. Set both browser views to the same viewport size, device scale factor, browser zoom, and route/state before each comparison, screenshot, or DOM-evaluation call.
 4. If either app cannot be started, the feature cannot be exercised in both apps, or screenshots cannot be captured: stop, report the blocker explicitly, and do not claim parity was verified.
+
+Browser-automation capability and fallback chain are defined in `agents/ui-ux.md` → `## Browser bootstrap`. The protocol below is the same regardless of which level of the fallback chain is in use.
 
 ## Pass 1 — Visual Parity
 
@@ -38,7 +40,15 @@ Cover every state the feature surfaces:
 
 ### Matched-element inventory (do this first)
 
-Before any comparison, enumerate matched element pairs for the feature. For every visible region — header, button, input, label, card, list item, icon, badge, link, divider, container — identify the matching element in both apps. Match by role, accessible name, text content, or `data-testid`. Record:
+**REQUIRED + EXHAUSTIVE.** Every visible element in the feature's surface gets a row. Selectivity is forbidden — "I checked the important ones" is parity drift.
+
+In **parity mode**, the inventory is **supplied by main agent at Verify dispatch** (see `SKILL.md` → Verify step 4a). Your job is to verify each supplied row by running DOM evaluation against the live browsers and filling in the verdict + computed-style cells per row. If during verification you observe a visible element on either side that wasn't in the supplied inventory, add it to `### Rows added beyond the supplied inventory` in your report — it represents a Scoping/Plan enumeration gap, not a row to silently drop.
+
+In **consistency mode**, you build the sibling/analog inventory yourself per `agents/ui-ux.md` → `## Determining completeness — consistency mode`.
+
+The four completeness checks (diff-driven coverage, production-DOM coverage, prototype-DOM coverage, sibling/parent geometry) detailed in `agents/ui-ux.md` apply in both modes — they're built into the supplied inventory in parity mode and built by you in consistency mode.
+
+Before any comparison, ensure the inventory is in hand (parity mode: supplied; consistency mode: built). For every visible region — header, button, input, label, card, list item, icon, badge, link, divider, container — identify the matching element in both apps (parity mode: per the supplied row; consistency mode: by inspection). Match by role, accessible name, text content, or `data-testid`. Record:
 
 - the selector you will use in each app
 - which prototype element maps to which production element
@@ -52,49 +62,16 @@ For each important UI state, at every relevant breakpoint plus the widths immedi
 
 1. **Drive both apps into the same state.** Same route, same data, same interaction depth, same viewport, same device scale, same zoom.
 
-2. **Element-level screenshots per matched pair.** Use `browser_take_screenshot` with an element selector for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
+2. **Element-level screenshots per matched pair.** Capture an element-level screenshot for each pair in each app. Do not rely on full-page screenshots for parity judgments — they compress detail.
 
-3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair, run `browser_evaluate` in both apps to read computed styles and bounding rects:
+3. **Programmatic style and layout extraction (REQUIRED).** For each matched pair (parity mode: each supplied row; consistency mode: each row of the sibling/analog inventory you built), evaluate the extraction snippet at `scripts/extract-element-style.browser.js` against the DOM in both apps. The snippet returns a single JSON-serialisable object per element containing the computed-style and bounding-rect fields the matched-element inventory needs:
 
-   ```js
-   ((selector) => {
-     const el = document.querySelector(selector);
-     if (!el) return { missing: true, selector };
-     const cs = getComputedStyle(el);
-     const rect = el.getBoundingClientRect();
-     return {
-       font: {
-         family: cs.fontFamily,
-         size: cs.fontSize,
-         weight: cs.fontWeight,
-         style: cs.fontStyle,
-         lineHeight: cs.lineHeight,
-         letterSpacing: cs.letterSpacing,
-         textTransform: cs.textTransform,
-         textDecoration: cs.textDecorationLine,
-       },
-       color: { fg: cs.color, bg: cs.backgroundColor, opacity: cs.opacity },
-       box: {
-         padding: cs.padding,
-         margin: cs.margin,
-         border: cs.border,
-         borderRadius: cs.borderRadius,
-         boxShadow: cs.boxShadow,
-         outline: cs.outline,
-       },
-       layout: {
-         display: cs.display,
-         flexDirection: cs.flexDirection,
-         alignItems: cs.alignItems,
-         justifyContent: cs.justifyContent,
-         gap: cs.gap,
-         position: cs.position,
-       },
-       size: { width: rect.width, height: rect.height },
-       transform: cs.transform,
-     };
-   })('YOUR_SELECTOR')
-   ```
+   - `font.*` — `family`, `size`, `weight`, `style`, `lineHeight`, `letterSpacing`, `textTransform`, `textDecoration`.
+   - `color.*` — `fg`, `bg`, `opacity`.
+   - `box.*` — `padding`, `margin`, `border`, `borderRadius`, `boxShadow`, `outline`.
+   - `layout.*` — `display`, `flexDirection`, `alignItems`, `justifyContent`, `gap`, `position`.
+   - `size.*` — `width`, `height` (from `getBoundingClientRect()`).
+   - `transform`.
 
    Compare property-by-property, prototype against production. Any divergence is a mismatch unless it is a deliberate, documented divergence raised during planning (rare).
 
@@ -122,7 +99,7 @@ If any one of these is not true, parity is **not** clean. Do not declare visual 
 ### Forbidden shortcuts
 
 - Declaring parity off full-page screenshots alone.
-- Skipping `browser_evaluate` because the screenshots "look the same."
+- Skipping DOM evaluation because the screenshots "look the same."
 - Restricting the matched-element inventory to elements named in the ticket — the inventory covers every visible region of the feature.
 - Tolerating "small" numeric differences. There is no tolerance budget — different numbers mean different rendering.
 - Re-running only the state that surfaced the bug instead of every state where the changed property could affect rendering.

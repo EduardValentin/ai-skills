@@ -10,6 +10,13 @@ Exhaustive **behavior** verification of the running app or service. Find bugs. Y
 
 You do **not** cover code style, security audits, or visual/a11y verification.
 
+## Requires
+
+- Ability to execute shell commands (start dev servers, run HTTP clients, run helper scripts).
+- For UI mode: ability to drive a live browser session — load URLs, click, type, press keys, set viewport, capture element-level screenshots, evaluate JavaScript against the DOM, and switch between tabs.
+- For backend mode: ability to make HTTP requests against the running service.
+- Read access to the running app or service (and to project manifests for HTTP-client discovery).
+
 ## Inputs you will receive
 
 - The approved implementation plan.
@@ -18,7 +25,19 @@ You do **not** cover code style, security audits, or visual/a11y verification.
 - The full diff (so you know what changed).
 - A `mode` parameter set by main agent: `backend` (Mode A), `ui` (Mode B), or `mixed` (Mode C).
 - The path/URL where the running app or service is reachable.
-- Browser tooling (Playwright MCP) for UI mode; HTTP tooling (curl, project HTTP client, or HTTP MCP) for backend mode.
+- Live-browser automation (navigation, clicks, keyboard input, viewport control, DOM evaluation, element-level screenshots) for UI mode; HTTP tooling (curl, the project's HTTP client, or any equivalent shell-invokable HTTP capability) for backend mode.
+
+## Browser bootstrap
+
+UI verification requires driving a live browser. Use whatever browser-automation capability the host agent provides — what matters is the capability, not the specific tool name.
+
+**Fallback chain** when a preferred capability is missing:
+
+1. **Native browser-automation capability** (preferred). Use the agent's built-in browser tool(s) for navigation, clicks, keyboard input, viewport sizing, element-level screenshots, and DOM evaluation. Examples include any native browser tool, a connected MCP browser server, or an agent-managed headless browser. Prefer this when available.
+2. **Playwright via shell.** If no native capability is available, drive a local Playwright install through the shell (`npx playwright`, a project-local Playwright script, or similar). Use a small `page.evaluate(...)` script for DOM-level reads; capture screenshots with Playwright's screenshot API.
+3. **Manual confirmation (degraded).** If neither is available, render each relevant state to disk (HTML + any screenshot the platform can produce), describe what should be true at each state in the report, and ask the user to confirm visually. Label any verdict produced this way as **degraded**.
+
+If even the manual fallback cannot be performed (e.g., the production app cannot be started, no shell access for screenshots), do not silently substitute another approach. Report `QA cannot proceed` with the exact blocker.
 
 ## Output format
 
@@ -85,7 +104,7 @@ _(candidates for the self-improvement loop)_
    - Adversarial input: invalid values, out-of-range values, rapid clicks, double submits, navigating mid-action.
    - Cross-feature impact on adjacent flows visible from the feature's surface area.
    - Responsive behavior at relevant breakpoints, including widths immediately before and after each breakpoint.
-3. After each meaningful action, inspect the UI to confirm it still looks correct and behaves correctly. Use browser snapshot/screenshot tools rather than guessing from console output.
+3. After each meaningful action, inspect the rendered page to confirm it still looks correct and behaves correctly. Use the browser-automation capability's snapshot/screenshot output rather than guessing from console output.
 4. Each AC must map to a concrete browser observation.
 
 ## Mode C — Mixed
@@ -102,7 +121,7 @@ Run Mode A and Mode B both. The feature is not verified until both are clean.
 
 ## Escalation
 
-If the app / service cannot be brought up, the browser session cannot be reached, or a critical dependency (e.g., backing database, third-party sandbox) is unavailable:
+If the app / service cannot be brought up, the live browser session cannot be reached, or a critical dependency (e.g., backing database, third-party sandbox) is unavailable:
 
 ```markdown
 # QA cannot proceed
