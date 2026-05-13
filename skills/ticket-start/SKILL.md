@@ -7,7 +7,7 @@ description: Use when the user wants to start implementation work from a ticket 
 
 ## Overview
 
-Implementation work driven by a ticket. The skill is a **hybrid orchestrator**: the main agent owns user dialogue, plan-writing, and phase gating; six specialized subagents own the deep work (Scoping, Architect, Reviewer, Security, QA, UI/UX). The skill enforces a strict phase order with explicit gates: Setup → Brainstorm → Plan → Implement → Review → Security → Verify → Ship. Brainstorm, Plan, and Implement defer to the superpowers methodology — the relevant skills auto-trigger from their own descriptions; this skill adds explicit dispatch and override points where its workflow diverges. Workflow- and phase-specific detail files are loaded only when they apply, to keep context lean.
+Implementation work driven by a ticket. The skill is a **hybrid orchestrator**: the main agent owns user dialogue, plan-writing, and phase gating; six specialized subagents own the deep work (Scoping, Architect, Reviewer, Security, QA, UI/UX). The skill enforces a strict phase order with explicit gates: Setup → Solution Exploration → Brainstorm → Plan → Implement → Review → Security → Verify → Ship. Brainstorm, Plan, and Implement defer to the superpowers methodology — the relevant skills auto-trigger from their own descriptions; this skill adds explicit dispatch and override points where its workflow diverges. Workflow- and phase-specific detail files are loaded only when they apply, to keep context lean.
 
 **Context-economy contract:** every subagent's report is a navigable index, not a transcript. Downstream agents read only the surgical slices upstream reports point at. Main agent never reloads full files when a Scoping locator suffices.
 
@@ -34,21 +34,22 @@ If the workflow is ambiguous, ask the user before loading anything else.
 Each phase is a gate. Do not advance until the prior gate is satisfied. Each named sub-skill below is **REQUIRED** — invoke it, do not paraphrase its workflow.
 
 ```
-Setup → Brainstorm → Plan → Implement → Review → Security → Verify → Ship
-                                            │        │         │
-                                        Reviewer Security  QA → UI/UX
-                                                          (UI/UX skipped
-                                                          on backend-only)
+Setup → Solution Exploration → Brainstorm → Plan → Implement → Review → Security → Verify → Ship
+                                                                  │        │         │
+                                                              Reviewer Security  QA → UI/UX
+                                                                                (UI/UX skipped
+                                                                                on backend-only)
 ```
 
-1. **Setup** — see "Setup" below. Includes Scoping subagent dispatch.
-2. **Brainstorm** — Architect subagent dispatch, then `superpowers:brainstorming`. See "Brainstorm" below.
-3. **Plan** — `superpowers:writing-plans`. See "Plan" below.
-4. **Implement** — execute via `superpowers:subagent-driven-development` (auto-triggers TDD + per-task review) or `superpowers:executing-plans` fallback. See "Implement" below.
-5. **Review** — Reviewer subagent dispatch. See "Review" below.
-6. **Security** — Security subagent dispatch (sequential after Reviewer). See "Security" below.
-7. **Verify** — QA subagent dispatch, then UI/UX subagent dispatch (or UI/UX skipped on backend-only). See "Verify" below.
-8. **Ship** — see "Ship" below.
+1. **Setup** — see "Setup" below. Includes Scoping subagent dispatch and the pre-Architect understanding dialogue.
+2. **Solution Exploration** — Architect subagent dispatch (with the pre-Architect brainstorm summary as input). See "Solution Exploration" below.
+3. **Brainstorm** — user-facing convergence on Architect's proposals via a question-driven dialogue. See "Brainstorm" below.
+4. **Plan** — `superpowers:writing-plans`. See "Plan" below.
+5. **Implement** — execute via `superpowers:subagent-driven-development` (auto-triggers TDD + per-task review) or `superpowers:executing-plans` fallback. See "Implement" below.
+6. **Review** — Reviewer subagent dispatch. See "Review" below.
+7. **Security** — Security subagent dispatch (sequential after Reviewer). See "Security" below.
+8. **Verify** — QA subagent dispatch, then UI/UX subagent dispatch (or UI/UX skipped on backend-only). See "Verify" below.
+9. **Ship** — see "Ship" below.
 
 After **every** auditor agent (Reviewer, Security, QA, UI/UX), the **self-improvement extraction pass** runs. See `self-improvement.md`.
 
@@ -84,20 +85,23 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
    Capture the outcome as a short **brainstorm summary** that will be passed to the Architect as a new input in Solution Exploration. The summary covers the user's stated intent, the constraints they surfaced, and any preferences they expressed.
 
-## Brainstorm
+## Solution Exploration
 
 1. **Dispatch Architect subagent.** Load the role prompt from `agents/architect.md`. Invoke a subagent with:
    - The ticket and AC.
    - The Scoping report.
    - The repo's `AGENTS.md` / `CLAUDE.md`.
+   - The **pre-Architect brainstorm summary** from Setup step 7 (the user's stated intent, constraints, and preferences). Treat as authoritative on questions the ticket and AC don't cover.
    - The role-prompt content from `agents/architect.md`.
    Wait for the Architect's proposals (2–3 candidate solutions with tradeoffs, per the role-prompt's output format).
 
-2. **Brief per `## Dispatch → user briefing protocol` (handoff type 2: Architect → Brainstorm dialogue), then run `superpowers:brainstorming` with the user.** Brief BEFORE the first brainstorming question — present the Architect's recommended approach + rationale, alternatives + tradeoffs, and any open questions with their motivating context, as a single message. Only after this synthesis is in the user's view, start the standard one-question-at-a-time dialogue. Converge on a chosen direction.
+## Brainstorm
 
-3. **On-demand re-dispatch.** If a follow-up architectural question arises mid-brainstorm that the original proposals didn't cover, re-dispatch the Architect with the focused question (per `agents/architect.md`'s follow-up handling) and bring the answer back into the conversation. When you bring the re-dispatched Architect's answer back, brief the user on what the Architect found (recommended adjustment + rationale + any new tradeoffs) before continuing the brainstorming dialogue.
+1. **Brief per `## Dispatch → user briefing protocol` (handoff type 2: Architect → Brainstorm dialogue), then explore the Architect's proposals with the user via a question-driven dialogue.** Brief BEFORE the first question — present the Architect's recommended approach + rationale, alternatives + tradeoffs, and any open questions with their motivating context, as a single message. Only after this synthesis is in the user's view, walk through the proposals with the user. Converge on a chosen direction.
 
-4. **Convergence is not plan approval.** When the brainstorm converges and the user says "yes, do it," "approved," "go ahead," or similar, that is approval of the *approach*. It is **not** approval of the plan. The plan still has to be written by `superpowers:writing-plans` and re-approved as its own artifact. Do not collapse the two.
+2. **On-demand Architect re-dispatch.** If during the dialogue a follow-up architectural question arises that the original proposals didn't cover, re-dispatch the Architect with the focused question (per `agents/architect.md`'s follow-up handling). When you bring the re-dispatched Architect's answer back, brief the user on what the Architect found (recommended adjustment + rationale + any new tradeoffs) before continuing the dialogue.
+
+3. **Convergence is not plan approval.** When the dialogue converges and the user says "yes, do it," "approved," "go ahead," or similar, that is approval of the *approach*. It is **not** approval of the plan. The plan still has to be written by `superpowers:writing-plans` and re-approved as its own artifact. Do not collapse the two.
 
 ## Plan
 
