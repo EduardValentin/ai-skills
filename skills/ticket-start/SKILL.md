@@ -59,27 +59,29 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 1. **Worktree discipline.** REQUIRED SUB-SKILL: `superpowers:using-git-worktrees`. Base the worktree off `origin/<default>` (not the local branch). Halt on `git fetch` failure — do not fall back to stale local state.
 
-2. **Subagent context discipline.** When dispatching subagents, explicitly forward `AGENTS.md` and any workflow-relevant project docs as inputs — subagent context does not always inherit the main session's auto-loaded files, and explicit forwarding is the host-agnostic discipline.
+2. **Activate bot identity (personal workflow only).** Before any further Setup work, run the two checks documented in `bot-identity.md` → `## Setup activation`: (a) mint a fresh GitHub installation token via `scripts/get-bot-gh-token.sh` and verify it with a no-op API call; (b) read the bot's git name and email from Keychain and apply them as per-worktree git config in the worktree. Any check failure: halt and point at the runbook section in `bot-identity.md` that fixes it. **Fail-closed** — the skill never falls back to personal GitHub credentials. Linear MCP stays under your personal identity (the bot identity is GitHub-only). Job workflow: skip this step entirely; job-workflow tickets continue to use personal credentials.
 
-3. **Freshness — treat memory as stale.** Memory, prior chat context, old plans, and earlier tool results are hints, not facts. Before any substantive answer about scope, status, blockers, related tickets, progress, PR readiness, or git state, fetch current facts from the source of truth:
+3. **Subagent context discipline.** When dispatching subagents, explicitly forward `AGENTS.md` and any workflow-relevant project docs as inputs — subagent context does not always inherit the main session's auto-loaded files, and explicit forwarding is the host-agnostic discipline.
+
+4. **Freshness — treat memory as stale.** Memory, prior chat context, old plans, and earlier tool results are hints, not facts. Before any substantive answer about scope, status, blockers, related tickets, progress, PR readiness, or git state, fetch current facts from the source of truth:
    - **Linear tickets:** read the current ticket via Linear MCP. If blocked/blocking/related/duplicate/parent/child tickets matter, read each one too — do not infer from relation names or earlier context.
    - **Job/Jira tickets:** prefer `acli jira workitem view <KEY> --json` (per `job-workflow.md`); fall back to user paste if `acli` is unavailable. Stale summaries and previously pasted excerpts are not current truth.
    - **Repo state:** inspect the current branch, working tree, relevant diffs, recent commits, and PR metadata when relevant.
    - **Repo docs and code:** re-read from disk before citing or depending on them.
    - If a source of truth is unavailable, say what could not be verified. Do not fill the gap from memory.
 
-4. **Workflow-specific reading.** Read the workflow file selected above. Stop when the relevant facts are gathered — do not push past the Brainstorm gate without them.
+5. **Workflow-specific reading.** Read the workflow file selected above. Stop when the relevant facts are gathered — do not push past the Brainstorm gate without them.
 
-5. **Dispatch Scoping subagent.** Load the role prompt from `agents/scoping.md`. Invoke a subagent on the host platform's native subagent API with:
+6. **Dispatch Scoping subagent.** Load the role prompt from `agents/scoping.md`. Invoke a subagent on the host platform's native subagent API with:
    - The ticket title, description, AC.
    - The repo's `AGENTS.md` and `CLAUDE.md`.
    - For personal workflow: the scoped slices of `PRD.md` and `designs/` identified above.
    - The role-prompt content from `agents/scoping.md` as the subagent's instruction set.
    Wait for the Scoping report (a Markdown document with locator-rich sections per the role-prompt's output format). Treat that report as the definitive map of the relevant code surface — do **not** re-read full files later when a Scoping locator points at the slice you need.
 
-6. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping. Before asking the user any clarifying question, brief per `## Dispatch → user briefing protocol` (handoff type 1: Scoping → user dialogue).
+7. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping. Before asking the user any clarifying question, brief per `## Dispatch → user briefing protocol` (handoff type 1: Scoping → user dialogue).
 
-7. **Pre-Architect understanding.** Before the Architect proposes a direction, explore user intent, constraints, and design preferences not captured in the ticket. Pursue a question-driven dialogue with the user covering: implicit preferences ("how should this feel?"), constraints not in the AC ("are there areas of the code we should avoid?"), domain-specific intuitions, design-language preferences, and any unknowns the ticket leaves open. Cover whatever ground the Architect would benefit from before generating proposals.
+8. **Pre-Architect understanding.** Before the Architect proposes a direction, explore user intent, constraints, and design preferences not captured in the ticket. Pursue a question-driven dialogue with the user covering: implicit preferences ("how should this feel?"), constraints not in the AC ("are there areas of the code we should avoid?"), domain-specific intuitions, design-language preferences, and any unknowns the ticket leaves open. Cover whatever ground the Architect would benefit from before generating proposals.
 
    Brief per `## Dispatch → user briefing protocol` (handoff type 1: Scoping → user dialogue) before the first question — surface the Scoping report's relevant findings (entry points, target module, prototype elements if any) so the user has the same context the Architect will get.
 
