@@ -76,7 +76,13 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/scoping.md` as the subagent's instruction set.
    Wait for the Scoping report (a Markdown document with locator-rich sections per the role-prompt's output format). Treat that report as the definitive map of the relevant code surface — do **not** re-read full files later when a Scoping locator points at the slice you need.
 
-6. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping. Before asking the user any clarifying question, brief per `## Dispatch → user briefing protocol` (handoff type 1: Scoping → user clarification).
+6. **Clarifications.** If acceptance criteria are missing, vague, or not testable, stop and ask before continuing. If the Scoping report surfaces a conflict between the ticket and existing architecture, surface the conflict before brainstorming. Ask concise clarifying questions when material ambiguity remains after Scoping. Before asking the user any clarifying question, brief per `## Dispatch → user briefing protocol` (handoff type 1: Scoping → user dialogue).
+
+7. **Pre-Architect understanding.** Before the Architect proposes a direction, explore user intent, constraints, and design preferences not captured in the ticket. Pursue a question-driven dialogue with the user covering: implicit preferences ("how should this feel?"), constraints not in the AC ("are there areas of the code we should avoid?"), domain-specific intuitions, design-language preferences, and any unknowns the ticket leaves open. Cover whatever ground the Architect would benefit from before generating proposals.
+
+   Brief per `## Dispatch → user briefing protocol` (handoff type 1: Scoping → user dialogue) before the first question — surface the Scoping report's relevant findings (entry points, target module, prototype elements if any) so the user has the same context the Architect will get.
+
+   Capture the outcome as a short **brainstorm summary** that will be passed to the Architect as a new input in Solution Exploration. The summary covers the user's stated intent, the constraints they surfaced, and any preferences they expressed.
 
 ## Brainstorm
 
