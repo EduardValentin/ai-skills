@@ -266,13 +266,13 @@ The principle: **the user must enter the dialogue with the same context the suba
 
 A briefing is always presented as a single user-facing message (or short paragraph at the top of a longer one), BEFORE the first question / decision / choice is asked. The minimum required contents differ by handoff type.
 
-### Handoff type 1 — Scoping → user clarification (Setup)
+### Handoff type 1 — Scoping → user dialogue (Setup)
 
-When Scoping returns with items under `## Conflicts surfaced for main` or with insufficient AC coverage and main agent needs the user to clarify:
+When Scoping returns and main agent dispatches a user dialogue — either reactively (Setup step 6: Scoping flagged a conflict, or AC is missing/vague/not testable) or proactively (Setup step 7: pre-Architect understanding):
 
-- The specific conflict or ambiguity Scoping flagged, quoted from the report.
-- The `path:line` evidence Scoping gave (so the user can drill in).
-- The clarification main agent is asking for, framed against the surfaced conflict.
+- The Scoping report's relevant findings (entry points, target module, prototype elements if any), as context for the user.
+- For reactive cases (step 6): the specific conflict or ambiguity quoted from the report + the `path:line` evidence Scoping gave (so the user can drill in).
+- The clarification or open question main agent is bringing to the dialogue, framed against the surfaced conflict (reactive) or against the Setup-phase context (proactive).
 
 ### Handoff type 2 — Architect → Brainstorm dialogue
 
