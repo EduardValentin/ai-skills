@@ -22,20 +22,22 @@ Use for frontend PR testing, bug-fix verification, browser acceptance testing, P
 
 ## Required Flow
 
-1. Read ticket and PR metadata. Prefer authenticated APIs, CLIs, or connectors if web login blocks PR details.
-2. Extract PR testing instructions. If present, follow them first and map them to ticket criteria.
-3. If PR testing instructions are absent or vague, dispatch a read-only scoping subagent before browser testing. It must inspect the diff, ticket, changed files, UI entry points, setup, data needs, and focused tests. If subagents are unavailable, state that and do the same scoping locally before starting the UI.
-4. Start the app exactly as the repo or user specifies, including requested environment flags.
-5. Use the browser for acceptance behavior. Stop for manual login if authentication appears.
-6. Isolate the scenario: enable only the relevant module, panel, toggle, layer, filter, or mode.
-7. If a visual target is hard to hit, screenshot, estimate coordinates or landmarks, then hover/click and verify rendered content.
-8. Run focused tests near the changed code, but never substitute passing tests for browser acceptance.
-9. Report pass/fail per criterion, commands, data gaps, and server status.
+1. Always fetch the latest PR branch and base branch updates before starting test setup, then confirm the local checkout includes the branch state being verified.
+2. Read ticket and PR metadata. Prefer authenticated APIs, CLIs, or connectors if web login blocks PR details.
+3. Extract PR testing instructions. If present, follow them first and map them to ticket criteria.
+4. If PR testing instructions are absent or vague, dispatch a read-only scoping subagent before browser testing. It must inspect the diff, ticket, changed files, UI entry points, setup, data needs, and focused tests. If subagents are unavailable, state that and do the same scoping locally before starting the UI.
+5. Start the app exactly as the repo or user specifies, including requested environment flags.
+6. Use the browser for acceptance behavior. Stop for manual login if authentication appears.
+7. Isolate the scenario: enable only the relevant module, panel, toggle, layer, filter, or mode.
+8. If a visual target is hard to hit, screenshot, estimate coordinates or landmarks, then hover/click and verify rendered content.
+9. Run focused tests near the changed code, but never substitute passing tests for browser acceptance.
+10. Report pass/fail per criterion, commands, data gaps, and server status.
 
 ## Quick Reference
 
 | Situation | Required move |
 | --- | --- |
+| Before testing starts | Fetch latest PR branch and base branch updates |
 | PR has explicit testing instructions | Execute them first; cover missed ticket criteria |
 | PR has no useful testing instructions | Dispatch scoping subagent before UI testing |
 | Login appears | Stop and ask the user to log in manually |
