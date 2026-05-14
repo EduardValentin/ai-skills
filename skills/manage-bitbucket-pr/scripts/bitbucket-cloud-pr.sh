@@ -8,6 +8,7 @@ usage() {
   cat <<'USAGE'
 Usage:
   bitbucket-cloud-pr.sh [--dry-run] pr-details <workspace> <repo_slug> <pull_request_id>
+  bitbucket-cloud-pr.sh [--dry-run] find-prs-for-branch <workspace> <repo_slug> <branch_name> [state]
   bitbucket-cloud-pr.sh [--dry-run] read-comments <workspace> <repo_slug> <pull_request_id>
   bitbucket-cloud-pr.sh [--dry-run] post-comment <workspace> <repo_slug> <pull_request_id> <comment text>
   bitbucket-cloud-pr.sh [--dry-run] merge <workspace> <repo_slug> <pull_request_id>
@@ -32,6 +33,23 @@ json_string() {
   value=${value//$'\r'/\\r}
   value=${value//$'\t'/\\t}
   printf '"%s"' "$value"
+}
+
+url_encode() {
+  local value=$1
+  local encoded=""
+  local char
+
+  for ((i = 0; i < ${#value}; i++)); do
+    char=${value:i:1}
+    case "$char" in
+      [a-zA-Z0-9.~_-]) encoded+="$char" ;;
+      " ") encoded+="+" ;;
+      *) printf -v encoded '%s%%%02X' "$encoded" "'$char" ;;
+    esac
+  done
+
+  printf '%s' "$encoded"
 }
 
 require_args() {
@@ -100,6 +118,15 @@ case "$command" in
   pr-details)
     require_args 3 "$#"
     request GET "$BASE_URL/repositories/$1/$2/pullrequests/$3"
+    ;;
+  find-prs-for-branch)
+    require_args 3 "$#"
+    workspace=$1
+    repo_slug=$2
+    branch_name=$3
+    state=${4:-OPEN}
+    query=$(url_encode "source.branch.name = \"$branch_name\" AND state = \"$state\"")
+    request GET "$BASE_URL/repositories/$workspace/$repo_slug/pullrequests?q=$query"
     ;;
   read-comments)
     require_args 3 "$#"

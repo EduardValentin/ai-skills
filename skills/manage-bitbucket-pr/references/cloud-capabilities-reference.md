@@ -1,6 +1,6 @@
-# Bitbucket Cloud Pull Request REST Reference
+# Bitbucket Cloud Capabilities Reference
 
-This is the supported local reference for Bitbucket Cloud PR details, comments, and merge operations. If an operation is missing, treat it as out of scope until the user approves expanding the skill.
+This is the supported local reference for Bitbucket Cloud endpoints and payload shapes used by the helper script. If an operation is missing, treat it as out of scope until the user approves expanding the skill.
 
 Base URL:
 
@@ -16,10 +16,11 @@ Use least privilege. These common operations need pull-request read scope for re
 
 ## Script Usage
 
-Prefer the script over ad hoc curl for supported Cloud operations:
+Prefer the script over ad hoc curl for supported Cloud operations. It authenticates from `BITBUCKET_TOKEN` or `BITBUCKET_EMAIL` + `BITBUCKET_API_TOKEN` and can also be used as the route/body reference for direct HTTPS calls:
 
 ```bash
 scripts/bitbucket-cloud-pr.sh pr-details acme widget 42
+scripts/bitbucket-cloud-pr.sh find-prs-for-branch acme widget feature/auth
 scripts/bitbucket-cloud-pr.sh read-comments acme widget 42
 scripts/bitbucket-cloud-pr.sh post-comment acme widget 42 "QA passed on staging"
 scripts/bitbucket-cloud-pr.sh merge acme widget 42
@@ -33,6 +34,7 @@ Add `--dry-run` before the subcommand to print method, URL, and body without cre
 | Need | Endpoint |
 | --- | --- |
 | PR details | `GET /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}` |
+| Find PRs for source branch | `GET /repositories/{workspace}/{repo_slug}/pullrequests?q=source.branch.name = "{branch}" AND state = "OPEN"` |
 | Read comments | `GET /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments` |
 | Post comment | `POST /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/comments` |
 | Merge | `POST /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/merge` |
@@ -48,4 +50,4 @@ Comment body shape:
 }
 ```
 
-Bitbucket paginates comments. Follow the `next` URL until the needed comments are complete. For writes, fetch the PR first and verify the current state, destination branch, requested side effect, and payload before mutating.
+Bitbucket paginates comments. Follow the `next` URL until the needed comments are complete. Atlassian documents filtering Bitbucket Cloud 2.0 collections with the `q` query parameter; keep the query URL-encoded in scripts and logs.

@@ -7,7 +7,7 @@ description: Use when reading Bitbucket PR metadata/comments, posting PR comment
 
 ## Overview
 
-Manage Bitbucket PR REST operations. Built-in endpoints are limited to PR details, comments, and merge.
+Manage Bitbucket PR operations for PR details, source-branch lookup, comments, and merge.
 
 ## Preconditions
 
@@ -25,16 +25,17 @@ Never print, paste, commit, or place credentials in URLs. Read secrets from an a
 
 ## Authentication
 
-Prefer existing approved credentials; otherwise ask how to authenticate. For Bitbucket Cloud, API tokens use Basic auth with Atlassian email as username and token as password; OAuth/access-token flows use `Authorization: Bearer <token>`. App passwords are deprecated.
+Prefer existing approved credentials before asking how to authenticate. Check environment variables, the Git credential helper for `bitbucket.org`, and approved company CLI/keychain flows before concluding Bitbucket auth is unavailable.
 
-Use read scope for PR details/comments and write scope for posting comments or merging. For supported Cloud operations, prefer `scripts/bitbucket-cloud-pr.sh`; use `--dry-run` to inspect the method, URL, and body before live calls.
+For supported Cloud operations, prefer `scripts/bitbucket-cloud-pr.sh` when its env-var auth path is available. If credentials exist through another approved source, use the documented endpoints through a direct HTTPS request instead of abandoning the PR lookup. See `references/cloud-capabilities-reference.md` for auth mechanics, scopes, endpoints, and payload shapes.
 
 ## Read Workflow
 
 1. Parse or confirm `workspace`, `repo_slug`, and `pull_request_id`.
-2. Run `scripts/bitbucket-cloud-pr.sh pr-details ...` before related reads.
-3. For comments, run `scripts/bitbucket-cloud-pr.sh read-comments ...` and follow `next` pagination until complete.
-4. Report unavailable fields or permission failures.
+2. If the user gives a branch instead of a PR ID, derive `workspace` and `repo_slug` from the Bitbucket remote when possible, then run `scripts/bitbucket-cloud-pr.sh find-prs-for-branch ...`. If there is not exactly one clear candidate, show the candidates and ask the user to choose.
+3. Run `scripts/bitbucket-cloud-pr.sh pr-details ...` before related reads or writes.
+4. For comments, run `scripts/bitbucket-cloud-pr.sh read-comments ...` and follow `next` pagination until complete.
+5. Report unavailable fields or permission failures.
 
 ## Write Workflow
 
@@ -47,7 +48,7 @@ Use read-before-write. Before any mutation, verify:
 
 If any part is vague, draft the intended action and ask for approval. Never merge or post comments based on implication alone.
 
-For Cloud, use `post-comment`, `merge`, and `merge-status` subcommands. If merge returns a task ID, poll merge task status until success or failure.
+For Cloud, use `find-prs-for-branch`, `post-comment`, `merge`, and `merge-status` subcommands. If merge returns a task ID, poll merge task status until success or failure.
 
 ## Output
 
@@ -65,8 +66,7 @@ For writes, report:
 
 | Mistake | Correction |
 | --- | --- |
-| Treating a Bitbucket web URL as enough to mutate | Parse identifiers, fetch the PR, and verify state first. |
-| Skipping pagination | Follow `next` until the needed set is complete. |
+| Treating "this branch" as a PR ID | Look up PR candidates for the source branch, then verify the exact PR before reading or mutating. |
 | Posting a guessed comment or merging by implication | Mutate only after the user requested the exact side effect. |
 | Applying Cloud routes to self-hosted Bitbucket | Detect host type first; ask before expanding beyond the Cloud mini-reference. |
 
