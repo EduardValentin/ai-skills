@@ -75,7 +75,7 @@ UI/UX is **skipped** if main agent determines the change is backend-only.
 
 ## Hand-off to Brainstorm
 
-When ticket intake, scoped PRD/designs reading, and the Scoping subagent's report are complete, return to `SKILL.md` and proceed to the Brainstorm gate. Architect dispatch happens there. Use the brainstorm to map the prototype design into the production app — do not re-litigate copy, design, UI interactions, or animations already settled by the prototype unless the ticket or PRD conflicts with it.
+When ticket intake, scoped PRD/designs reading, and the Scoping subagent's report are complete, return to `SKILL.md` and proceed to the Brainstorm gate. Use the brainstorm to map the prototype design into the production app — do not re-litigate copy, design, UI interactions, or animations already settled by the prototype unless the ticket or PRD conflicts with it.
 
 ## Linear State Transitions
 
