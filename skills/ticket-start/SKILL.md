@@ -183,6 +183,7 @@ When skipped, record the skip rationale in the closeout report.
 
 1. **Personal workflow:** open the PR with `gh`, then move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
 2. **Job workflow:** follow the team's PR conventions from repository instructions.
+   - If the repository uses Bitbucket PRs and the work requires reading PR metadata, reading or posting comments, or merging via the REST API, treat that portion as Bitbucket PR REST work.
 3. Wait for the user's explicit approval before merging.
 4. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
 5. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
