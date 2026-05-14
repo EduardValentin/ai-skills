@@ -191,6 +191,17 @@ When skipped, record the skip rationale in the closeout report.
 5. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
 6. If PR creation, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
 
+## Premature Ship recovery
+
+If any Ship action happened before Review, Security decision, QA, UI/UX if applicable, inventory validation, and self-improvement passes were complete, stop and recover external state before continuing:
+
+- Mark the PR back to draft / not-ready-for-review when the platform supports it.
+- Move the ticket back to the pre-review working state (`In Progress` for personal Linear workflow) when the workflow's state model supports it.
+- Report any recovery action that could not be performed and why.
+- Then run the missing gates in order from the earliest incomplete phase.
+
+Local verification, green CI, or a clean merge state does not retroactively satisfy missing gates.
+
 ## Bug-fix loop
 
 When any auditor (Reviewer / Security / QA / UI/UX) returns a non-clean verdict, route through `bug-fix-loop.md`. That file defines complexity tiers, per-agent re-review scope, the 3-iteration cap with intervention report, the always-on user-intervention principle, and sequencing rules.
