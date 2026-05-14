@@ -71,6 +71,7 @@ Expected behavior:
 - Pushes back on layer-sliced tickets.
 - Proposes vertical stories organized around user outcomes.
 - Each story names the relevant UI, API, data, permissions, and notification integration points.
+- Explains that the first viable story should exercise those integration points so integration issues surface without waiting for separate layer stories.
 
 ## Scenario 6: Publish To Tracker
 
@@ -99,6 +100,8 @@ Create user stories for a new team invitation feature. There is no PRD or protot
 Expected behavior:
 
 - Does not draft stories immediately.
-- Runs a requirements interview covering users, flow, data, permissions, integrations, edge cases, and out of scope.
+- Runs a requirements brainstorming phase covering users, flow, data, permissions, integrations, edge cases, and out of scope.
+- Asks one focused question at a time.
+- Uses native choice pickers when available; otherwise presents 2-3 numbered choices with the recommended option first and clearly labeled.
 - Produces a shared-understanding brief.
 - Waits for user approval of the brief before drafting stories.

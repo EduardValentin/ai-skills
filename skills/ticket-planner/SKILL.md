@@ -8,17 +8,17 @@ compatibility: Requires filesystem access for project context. No issue-tracker 
 
 ## Overview
 
-Turn product context into clean, platform-neutral epics and user stories. A good story is a vertical slice: one user-observable outcome plus the integration points needed end to end.
+Turn product context into clean, platform-neutral epics and user stories. A good story is a vertical slice: one user-observable outcome that exercises the feature's relevant integration points early, so integration issues surface without waiting for separate layer stories.
 
 PRD owns business rules; prototype owns UI, interaction details, and visible copy.
 
 ## Required Rules
 
 - Stay issue-tracker neutral while planning; publishing belongs to a separate tracker-specific skill.
-- PRD and prototype are optional inputs. If product context is missing or thin, run a requirements interview before drafting.
+- PRD and prototype are optional inputs. If product context is missing or thin, run a requirements brainstorming phase before drafting.
 - Draft no stories from guesses; first get user approval on a shared-understanding brief.
 - Slice stories by user outcome and integration path, not by UI component, layer, or technical task.
-- Cover relevant integration points: UI/API/data/permissions/external systems/notifications/analytics.
+- Cover relevant integration points in the first viable story for a feature: UI/API/data/permissions/external systems/notifications/analytics.
 - Edit no `PRD.md` content until the user approves the proposed business-rule additions.
 - Reference prototype routes/screens/states instead of repeating prototype copy, layout, or styling.
 - Include exact UI copy only when business-critical, absent from prototype, or explicitly requested.

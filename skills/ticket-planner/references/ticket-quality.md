@@ -33,6 +33,8 @@ Good vertical slices:
 
 - Deliver one user-visible outcome.
 - Include all work needed across UI, service/API, data, permissions, and integrations when those layers are relevant.
+- Exercise the feature's integration path early enough to surface product, technical, permission, data, and external-system issues in that story.
+- Do not require completing additional layer-specific stories before integration problems become visible.
 - Can be tested through public behavior.
 - Leave the product in a coherent state if shipped independently.
 
@@ -43,7 +45,7 @@ Avoid layer slices:
 - "Implement frontend screen"
 - "Wire up state management"
 
-If a layer has no user-observable value by itself, capture it as part of the story's delivery notes or split it only when risk/dependency requires a separate enabling story.
+If a layer has no user-observable value by itself, capture it as part of the story's delivery notes or split it only when risk/dependency requires a separate enabling story. When an enabling story is unavoidable, name the first follow-up vertical story that will exercise it.
 
 ## Integration Coverage
 
@@ -56,7 +58,7 @@ For each story, scan the feature end to end and include the relevant integration
 - **External effects:** Messages, notifications, billing, audit logs, analytics, imports/exports, or third-party calls.
 - **Failure handling:** What happens when validation, permissions, persistence, or external calls fail.
 
-Do not invent integration points that the PRD/prototype does not imply. Ask when an integration would change scope or business behavior.
+Do not invent integration points that the source context does not imply. Ask when an integration would change scope or business behavior.
 
 ## Epic Template
 
