@@ -85,4 +85,4 @@ For writes, report:
 
 ## Test Prompts
 
-Keep scenarios in `tests/pressure-scenarios.md` and update `tests/test-log.md` whenever the skill changes materially.
+Use `tests/pressure-scenarios.md` when changing this skill.
