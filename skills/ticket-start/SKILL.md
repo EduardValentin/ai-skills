@@ -31,27 +31,27 @@ If the workflow is ambiguous, ask the user before loading anything else.
 
 ## Phase Order (Hard Gates)
 
-Each phase is a gate. Do not advance until the prior gate is satisfied. Each named sub-skill below is **REQUIRED** — invoke it, do not paraphrase its workflow.
+Each phase is a gate. Do not advance until the prior gate is satisfied. Each named sub-skill below is **REQUIRED** — invoke it, do not paraphrase its workflow. Where a phase is conditional (Solution Exploration's Architect; Security), the **triage decision is required** even when dispatch is skipped — record the outcome and rationale for the closeout report.
 
 ```
 Setup → Solution Exploration → Brainstorm → Plan → Implement → Review → Security → Verify → Ship
-                                                                  │        │         │
-                                                              Reviewer Security  QA → UI/UX
-                                                                                (UI/UX skipped
-                                                                                on backend-only)
+        (Architect — conditional)                                  │     (conditional)  │
+                                                              Reviewer  Security    QA → UI/UX
+                                                                                    (UI/UX skipped
+                                                                                    on backend-only)
 ```
 
 1. **Setup** — see "Setup" below. Includes Scoping subagent dispatch and the pre-Architect understanding dialogue.
-2. **Solution Exploration** — Architect subagent dispatch (with the pre-Architect brainstorm summary as input). See "Solution Exploration" below.
-3. **Brainstorm** — user-facing convergence on Architect's proposals via a question-driven dialogue. See "Brainstorm" below.
+2. **Solution Exploration** — Architect triage; dispatch only when architectural ambiguity survives Setup step 8. See "Solution Exploration" below.
+3. **Brainstorm** — user-facing dialogue; shape depends on whether Architect fired (converge on its proposals when it did; confirm the Setup step 8 direction when it did not). See "Brainstorm" below.
 4. **Plan** — `superpowers:writing-plans`. See "Plan" below.
 5. **Implement** — execute via `superpowers:subagent-driven-development` (auto-triggers TDD + per-task review) or `superpowers:executing-plans` fallback. See "Implement" below.
 6. **Review** — Reviewer subagent dispatch. See "Review" below.
-7. **Security** — Security subagent dispatch (sequential after Reviewer). See "Security" below.
+7. **Security** — Security triage; dispatch only when the diff has security-relevant surface. See "Security" below.
 8. **Verify** — QA subagent dispatch, then UI/UX subagent dispatch (or UI/UX skipped on backend-only). See "Verify" below.
 9. **Ship** — see "Ship" below.
 
-After **every** auditor agent (Reviewer, Security, QA, UI/UX), the **self-improvement extraction pass** runs. See `self-improvement.md`.
+After **every auditor agent that ran** (Reviewer, Security if not skipped, QA, UI/UX if not skipped), the **self-improvement extraction pass** runs. See `self-improvement.md`.
 
 If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `bug-fix-loop.md`.
 
@@ -89,19 +89,42 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 ## Solution Exploration
 
-1. **Dispatch Architect subagent.** Load the role prompt from `agents/architect.md`. Invoke a subagent with:
+1. **Architect triage.** Decide whether to dispatch Architect, using the Setup step 8 brainstorm summary and the Scoping report as input. Dispatch only when **all** of the following are true:
+   - There are ≥2 plausible integration approaches with materially different module boundaries, data models, or persistence implications.
+   - The user has **not** pinned a direction during Setup step 8.
+   - The Scoping report does not show a single obvious extension point that repo patterns mandate.
+
+   Skip otherwise. When in doubt, dispatch — Architect cost is low; missed architectural debate is expensive. Record the triage decision (run / skip) and, when skipped, the specific rationale (which condition failed, with citations to Scoping locators and the Setup step 8 summary). These surface in the closeout report.
+
+   Examples of legitimate skip:
+   - The user pinned a specific integration during Setup step 8 ("extend the existing X service via pattern Y").
+   - Parity-mode UI work where the prototype dictates the implementation shape.
+   - Scoping shows a single obvious extension point and the repo's patterns mandate how to hook into it.
+
+   Examples that require dispatch:
+   - New data persistence is needed and there are ≥2 reasonable backing stores in the repo.
+   - The feature spans multiple modules and the boundary between them is genuinely contested.
+   - The user surfaced a tradeoff during Setup step 8 they explicitly want an outside opinion on.
+
+2. **Dispatch Architect subagent (only when triage said run).** Load the role prompt from `agents/architect.md`. Invoke a subagent with:
    - The ticket and AC.
    - The Scoping report.
    - The repo's `AGENTS.md` / `CLAUDE.md`.
-   - The **pre-Architect brainstorm summary** from Setup step 7 (the user's stated intent, constraints, and preferences). Treat as authoritative on questions the ticket and AC don't cover.
+   - The **pre-Architect brainstorm summary** from Setup step 8 (the user's stated intent, constraints, and preferences). Treat as authoritative on questions the ticket and AC don't cover.
    - The role-prompt content from `agents/architect.md`.
    Wait for the Architect's proposals (2–3 candidate solutions with tradeoffs, per the role-prompt's output format).
 
 ## Brainstorm
 
-1. **Brief per `## Dispatch → user briefing protocol` (handoff type 2: Architect → Brainstorm dialogue), then explore the Architect's proposals with the user via a question-driven dialogue.** Brief BEFORE the first question — present the Architect's recommended approach + rationale, alternatives + tradeoffs, and any open questions with their motivating context, as a single message. Only after this synthesis is in the user's view, walk through the proposals with the user. Converge on a chosen direction.
+The Brainstorm phase **always** runs. Its shape depends on whether Architect fired in Solution Exploration. Record which shape ran — that decision determines the briefing template applied below and surfaces in the closeout report.
 
-2. **On-demand Architect re-dispatch.** If during the dialogue a follow-up architectural question arises that the original proposals didn't cover, re-dispatch the Architect with the focused question (per `agents/architect.md`'s follow-up handling). When you bring the re-dispatched Architect's answer back, brief the user on what the Architect found (recommended adjustment + rationale + any new tradeoffs) before continuing the dialogue.
+1. **Brief and run the user-facing dialogue.**
+
+   - **Architect fired:** Brief per `## Dispatch → user briefing protocol` (handoff type 2: Architect → Brainstorm dialogue), then explore the Architect's proposals with the user via a question-driven dialogue. Brief BEFORE the first question — present the Architect's recommended approach + rationale, alternatives + tradeoffs, and any open questions with their motivating context, as a single message. Only after this synthesis is in the user's view, walk through the proposals with the user. Converge on a chosen direction.
+
+   - **Architect skipped:** Brief the user with (a) the implementation direction pinned during Setup step 8 — intent, constraints, preferences; (b) the Scoping locators that direction depends on (entry points, target modules, prototype elements if any); (c) any open questions main agent sees that Setup step 8 did not fully resolve. Present this as a single message BEFORE asking for confirmation. Then ask the user to confirm the direction or surface anything still unresolved. If material architectural ambiguity emerges during this confirmation — ≥2 plausible integration approaches with materially different module boundaries, data models, or persistence implications — return to Solution Exploration, re-run Architect triage, and dispatch Architect.
+
+2. **On-demand Architect re-dispatch.** If during the dialogue a follow-up architectural question arises — either uncovered by the original proposals (Architect-fired case) or surfaced fresh (Architect-skipped case) — re-dispatch the Architect with the focused question (per `agents/architect.md`'s follow-up handling). When you bring the re-dispatched Architect's answer back, brief the user on what the Architect found (recommended adjustment + rationale + any new tradeoffs) before continuing the dialogue. A mid-Brainstorm re-dispatch flips the triage outcome to "run" for the closeout record.
 
 3. **Convergence is not plan approval.** When the dialogue converges and the user says "yes, do it," "approved," "go ahead," or similar, that is approval of the *approach*. It is **not** approval of the plan. The plan still has to be written by `superpowers:writing-plans` and re-approved as its own artifact. Do not collapse the two.
 
@@ -146,7 +169,21 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
 
 ## Security
 
-1. **Dispatch Security subagent.** Load the role prompt from `agents/security.md`. Invoke a subagent with:
+1. **Security triage.** Before dispatching Security, classify the diff. Dispatch Security unless the diff is **exclusively** presentational by **all** of the following allowlist conditions:
+   - **Files** — only `.css`, `.scss`, `.sass`, `.less`, `.styl`, prose docs (`.md`, `.txt`, `.rst`, `.adoc`), static assets (images, fonts, icons), and markup-only edits to `.html` / `.tsx` / `.jsx` / `.vue` / `.svelte` / templates with **no** new or modified script blocks, event handlers, imports, or runtime expressions.
+   - **No** new or modified network calls (`fetch`, `XHR`, websocket, IPC, RPC, external service integrations).
+   - **No** persistence changes (SQL / ORM / migrations, localStorage / sessionStorage / IndexedDB / cookies, file I/O).
+   - **No** redirects, route changes that cross auth boundaries, or navigation across trust contexts.
+   - **No** file-handling changes (upload, download, parse, serialize, MIME-type handling).
+   - **No** changes to package manifests or lockfiles (`package.json`, `requirements.txt`, `Gemfile`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `*.lock`, etc.).
+   - **No** changes to authentication, authorization, session handling, CSP, CORS, security headers, or environment / secret handling.
+   - **No** new third-party scripts, iframes, embeds, or external resource references.
+
+   If **any** condition fails, dispatch Security. When in doubt, dispatch — Security cost is low compared to a missed regression. Record the triage decision (run / skip) and, when skipped, the specific allowlist conditions verified and the files they were verified against. These surface in the closeout report.
+
+   **The rule is whitelist, not blacklist.** Skip only when the diff matches the allowlist; do not skip on the basis that nothing suspicious was detected. Rare attack surfaces default to coverage.
+
+2. **Dispatch Security subagent (only when triage said run).** Load the role prompt from `agents/security.md`. Invoke a subagent with:
    - The full diff.
    - The ticket and AC.
    - Package manifests / lockfiles for dependency analysis.
@@ -155,9 +192,9 @@ If **any** auditor returns a non-clean verdict, the **bug-fix loop** runs. See `
    - The role-prompt content from `agents/security.md`.
    Wait for the Security report.
 
-2. **If Security returns CHANGES REQUIRED**, brief the user per `## Dispatch → user briefing protocol` (handoff types 3–6: auditor → fix decision) before routing through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **Reviewer + Security re-run on the full diff**.
+3. **If Security returns CHANGES REQUIRED**, brief the user per `## Dispatch → user briefing protocol` (handoff types 3–6: auditor → fix decision) before routing through `bug-fix-loop.md`. Per the loop's rules, after the fix lands, **Reviewer + Security re-run on the full diff** — re-run Security triage on the new diff; if it now matches the allowlist, Security may legitimately skip on the re-run.
 
-3. **When Security returns CLEAN**, run the self-improvement extraction pass on Security findings. Then advance to Verify.
+4. **When Security returns CLEAN**, run the self-improvement extraction pass on Security findings. Then advance to Verify. **When Security was skipped at triage**, no findings exist and the self-improvement pass is skipped (no source material); advance directly to Verify.
 
 ## Verify
 
@@ -327,7 +364,7 @@ If the change touches a third-party library, identify the exact version from man
 
 When done, report:
 - What changed.
-- What was validated and how — name each form of evidence explicitly: tests run; Reviewer report status; Security report status; QA mode and coverage; UI/UX mode and coverage (or skipped because backend-only). Omit only the ones that did not apply, and say so.
+- What was validated and how — name each form of evidence explicitly: tests run; **Architect triage outcome (run / skipped, with rationale if skipped)**; Brainstorm dialogue shape (Architect-fired vs. Architect-skipped); Reviewer report status; **Security triage outcome (run / skipped, with the specific allowlist conditions verified and files if skipped)** and the Security report status when it ran; QA mode and coverage; UI/UX mode and coverage (or skipped because backend-only). Omit only the ones that did not apply, and say so.
 - Rules promoted in this session, by destination (per `self-improvement.md`).
 - Bug-fix iterations consumed (out of 3 cap).
 - Any remaining risk, assumption, or follow-up.
@@ -346,7 +383,11 @@ When done, report:
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice. The Scoping report exists so this doesn't happen.
 - Running QA / UI/UX without dispatching the corresponding subagent (paraphrasing the protocol from memory instead).
-- Skipping the Security phase or merging it into Reviewer's pass.
+- Skipping the Security phase or merging it into Reviewer's pass **without recording a triage decision**. Conditional skip is allowed only via the Security triage step; "I'll skip Security on this one, it looks clean" without working the allowlist is the violation.
+- Skipping Security on a diff that includes new event handlers, network calls, persistence, redirects, file handling, auth / session / header changes, package-manifest changes, or anything else outside the Security-triage allowlist.
+- Using a **blacklist** rule for the Security triage ("nothing suspicious, skip") instead of the **whitelist** rule ("matches every allowlist condition, skip"). The whitelist is load-bearing; flipping it inverts the safety semantics.
+- Skipping Architect when Setup step 8 left ≥2 plausible integration approaches with materially different module boundaries, data models, or persistence implications unresolved.
+- Advancing past Brainstorm without recording which dialogue shape ran (Architect-fired vs. Architect-skipped). That decision determines the briefing template and the closeout record.
 - Skipping the self-improvement extraction pass after an auditor report.
 - Auto-applying any rule (repo or universal) without explicit user approval.
 - Editing `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md` without keeping them in sync.

@@ -15,7 +15,7 @@ Produce **2–3 candidate solution architectures** for the ticket, with explicit
 - The Scoping report (with locators — read only the surgical slices it points at).
 - Repository instructions (`AGENTS.md` / `CLAUDE.md`).
 - Optionally, a **focused follow-up question** if main is re-dispatching you mid-brainstorm. In that case, answer the focused question against the existing scoping context; do not redo the full proposal pass.
-- **Pre-Architect brainstorm summary:** A short markdown synthesis of the user's stated intent, constraints, and preferences surfaced during Setup step 7. Treat this as authoritative on questions the ticket and AC don't cover — it captures what the user expects that wasn't written down.
+- **Pre-Architect brainstorm summary:** A short markdown synthesis of the user's stated intent, constraints, and preferences surfaced during Setup step 8. Treat this as authoritative on questions the ticket and AC don't cover — it captures what the user expects that wasn't written down.
 
 ## Output format
 
