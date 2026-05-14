@@ -9,8 +9,8 @@ Prompt: "Summarize the discussion on this Bitbucket PR: `https://bitbucket.org/a
 Expected behavior:
 - Recognizes Bitbucket Cloud.
 - Parses `workspace=acme`, `repo_slug=widget`, `pull_request_id=42`.
-- Reads PR details before comments.
-- Fetches comments and follows pagination until the needed comment set is complete.
+- Uses `scripts/bitbucket-cloud-pr.sh pr-details acme widget 42` before comments.
+- Uses `scripts/bitbucket-cloud-pr.sh read-comments acme widget 42` and follows pagination until the needed comment set is complete.
 - Reports unavailable data explicitly.
 - Does not mutate the PR.
 
@@ -19,9 +19,9 @@ Expected behavior:
 Prompt: "On Bitbucket PR 42 in acme/widget, post the comment `QA passed on staging`."
 
 Expected behavior:
-- Fetches the PR first and verifies it is the intended target.
+- Uses `scripts/bitbucket-cloud-pr.sh pr-details acme widget 42` first and verifies it is the intended target.
 - Treats the exact comment as an explicit requested side effect.
-- Posts only that comment, without adding unasked commentary.
+- Uses `scripts/bitbucket-cloud-pr.sh post-comment acme widget 42 "QA passed on staging"` without adding unasked commentary.
 - Reports the API result and comment identity if available.
 
 ## Scenario 3 — Vague merge request
@@ -30,9 +30,9 @@ Prompt: "Can you take care of merging the Bitbucket PR for this branch?"
 
 Expected behavior:
 - Resolves the branch to candidate PRs, then verifies the exact PR with the user if ambiguous.
-- Reads PR state and destination branch before any merge.
+- Uses `scripts/bitbucket-cloud-pr.sh pr-details ...` to read PR state and destination branch before any merge.
 - Does not merge until the exact PR and operation are explicit.
-- If a merge returns an async task, polls the merge task status and reports the final result.
+- Uses `scripts/bitbucket-cloud-pr.sh merge ...`; if merge returns an async task, polls with `merge-status` and reports the final result.
 
 ## Scenario 4 — Self-hosted Bitbucket URL
 

@@ -14,34 +14,19 @@ API tokens use Basic auth with Atlassian email as username and the API token as 
 
 Use least privilege. These common operations need pull-request read scope for reads and write-capable pull-request scope for comment creation and merge.
 
-## Shell Helpers
+## Script Usage
 
-Use a local helper pattern so operations are auditable and token handling stays centralized:
+Prefer the script over ad hoc curl for supported Cloud operations:
 
 ```bash
-bb_cloud_get() {
-  url="$1"
-  curl --fail --silent --show-error --location \
-    --header "Accept: application/json" \
-    --header "Authorization: Bearer ${BITBUCKET_TOKEN}" \
-    "$url"
-}
-
-bb_cloud_json() {
-  method="$1"
-  url="$2"
-  body="$3"
-  curl --fail --silent --show-error --location \
-    --request "$method" \
-    --header "Accept: application/json" \
-    --header "Content-Type: application/json" \
-    --header "Authorization: Bearer ${BITBUCKET_TOKEN}" \
-    --data "$body" \
-    "$url"
-}
+scripts/bitbucket-cloud-pr.sh pr-details acme widget 42
+scripts/bitbucket-cloud-pr.sh read-comments acme widget 42
+scripts/bitbucket-cloud-pr.sh post-comment acme widget 42 "QA passed on staging"
+scripts/bitbucket-cloud-pr.sh merge acme widget 42
+scripts/bitbucket-cloud-pr.sh merge-status acme widget 42 task-id
 ```
 
-When using an API token instead of a bearer token, replace the authorization header with Basic auth using the Atlassian email and token from approved secret storage.
+Add `--dry-run` before the subcommand to print method, URL, and body without credentials or network calls.
 
 ## Essential Endpoints
 

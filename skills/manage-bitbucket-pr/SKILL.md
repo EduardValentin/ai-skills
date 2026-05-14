@@ -1,21 +1,21 @@
 ---
 name: manage-bitbucket-pr
-description: Use when reading Bitbucket pull request metadata, reading or posting PR comments, or merging Bitbucket pull requests through the REST API; triggers on Bitbucket PR URLs, pull request IDs, workspace/repo PR metadata, comments, or merge operations.
+description: Use when reading Bitbucket PR metadata/comments, posting PR comments, or merging Bitbucket PRs through the REST API; triggers on Bitbucket PR URLs, pull request IDs, workspace/repo PR metadata, comments, or merge operations.
 ---
 
 # Manage Bitbucket PR
 
 ## Overview
 
-Manage Bitbucket pull request REST operations with read-before-write discipline. Built-in endpoint support is limited to PR details, comments, and merge operations.
+Manage Bitbucket PR REST operations. Built-in endpoints are limited to PR details, comments, and merge.
 
 ## Preconditions
 
 - HTTPS request capability.
 - Least-privilege Bitbucket credentials.
-- A PR URL or enough identifiers to resolve one.
+- A PR URL or resolvable identifiers.
 
-Never print, paste, commit, or place credentials in URLs. Read secrets from the user's approved secret store or environment, and redact tokens in every report.
+Never print, paste, commit, or place credentials in URLs. Read secrets from an approved store or environment, and redact tokens in reports.
 
 ## Host Detection And Scope
 
@@ -25,15 +25,15 @@ Never print, paste, commit, or place credentials in URLs. Read secrets from the 
 
 ## Authentication
 
-Prefer existing project or user-approved credentials; otherwise ask how to authenticate. For Bitbucket Cloud, API tokens use Basic auth with Atlassian email as username and token as password; OAuth/access-token flows use `Authorization: Bearer <token>`. App passwords are deprecated.
+Prefer existing approved credentials; otherwise ask how to authenticate. For Bitbucket Cloud, API tokens use Basic auth with Atlassian email as username and token as password; OAuth/access-token flows use `Authorization: Bearer <token>`. App passwords are deprecated.
 
-Use read scope for PR details/comments and write scope for posting comments or merging. Use `references/cloud-pullrequests.md` for all supported Cloud requests.
+Use read scope for PR details/comments and write scope for posting comments or merging. For supported Cloud operations, prefer `scripts/bitbucket-cloud-pr.sh`; use `--dry-run` to inspect the method, URL, and body before live calls.
 
 ## Read Workflow
 
 1. Parse or confirm `workspace`, `repo_slug`, and `pull_request_id`.
-2. Fetch PR details first.
-3. Fetch only requested comments, following `next` pagination until complete.
+2. Run `scripts/bitbucket-cloud-pr.sh pr-details ...` before related reads.
+3. For comments, run `scripts/bitbucket-cloud-pr.sh read-comments ...` and follow `next` pagination until complete.
 4. Report unavailable fields or permission failures.
 
 ## Write Workflow
@@ -47,7 +47,7 @@ Use read-before-write. Before any mutation, verify:
 
 If any part is vague, draft the intended action and ask for approval. Never merge or post comments based on implication alone.
 
-Use `references/cloud-pullrequests.md` for Cloud comments and merge. If merge returns a task ID, poll merge task status until success or failure.
+For Cloud, use `post-comment`, `merge`, and `merge-status` subcommands. If merge returns a task ID, poll merge task status until success or failure.
 
 ## Output
 
@@ -69,8 +69,7 @@ For writes, report:
 | Skipping pagination | Follow `next` until the needed set is complete. |
 | Posting a guessed comment or merging by implication | Mutate only after the user requested the exact side effect. |
 | Applying Cloud routes to self-hosted Bitbucket | Detect host type first; ask before expanding beyond the Cloud mini-reference. |
-| Exposing tokens in shell history or output | Use approved secret storage or environment variables and redact reports. |
 
 ## Test Prompts
 
-Use `tests/pressure-scenarios.md` when changing this skill.
+Use `tests/pressure-scenarios.md` and `tests/test-bitbucket-cloud-pr.sh` when changing this skill.
