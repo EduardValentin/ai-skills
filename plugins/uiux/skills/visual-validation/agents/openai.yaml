@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual Validation"
+  short_description: "Verify responsive visual UI quality"
+  default_prompt: "Validate this frontend change visually"

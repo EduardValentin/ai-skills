@@ -1,6 +1,6 @@
-# PRD Sync — Background Subagent Prompt
+# PRD Sync Prompt
 
-Use this template for PRD sync. Prefer dispatching a background subagent so the main agent's work continues unblocked. If subagent dispatch is unavailable in the current agent, the main agent runs the same prompt synchronously after the design work completes — the prompt body is identical either way. Replace the `[summary]` placeholder with a clear, business-level description of what changed (what the user can now DO, not how it looks).
+Use this template for PRD sync. Run it inline or delegate it when the current environment supports that. Replace the `[summary]` placeholder with a clear, business-level description of what changed (what the user can now DO, not how it looks).
 
 ---
 

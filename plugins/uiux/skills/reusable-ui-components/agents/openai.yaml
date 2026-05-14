@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reusable UI Components"
+  short_description: "Design clean reusable component APIs"
+  default_prompt: "Refactor this UI into reusable components"
