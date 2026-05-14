@@ -15,6 +15,8 @@ Brainstorm, Plan, and Implement defer to the superpowers methodology: `superpowe
 
 **Context-economy contract:** every subagent's report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
+**Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent gate named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required gates. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, Reviewer, Security, QA, or UI/UX with local inspection, tests, browser checks, Lighthouse, or "I reviewed it myself."
+
 ## When to use
 
 - The user asks to start, work on, build, or implement a ticket.
@@ -100,7 +102,7 @@ If ambiguous, ask the user before loading anything else.
 
 ## Review
 
-1. **Dispatch Reviewer subagent** (`agents/reviewer.md`). Forward: full diff (`git diff origin/<default>..HEAD`), ticket + AC + approved plan, chosen brainstorm direction + rationale from the brainstorm summary, repo `AGENTS.md`, Scoping report, role prompt.
+1. **Dispatch Reviewer subagent** (`agents/reviewer.md`). Forward: full diff (`git diff origin/<default>..HEAD`), ticket + AC + approved plan, chosen brainstorm direction + rationale from the brainstorm summary, repo `AGENTS.md`, Scoping report, role prompt. Local code inspection is useful preparation, but it does not satisfy this gate.
 
 2. **If CHANGES REQUIRED**, brief the user (per `## Briefing rule`) and route through `bug-fix-loop.md`.
 
@@ -118,7 +120,7 @@ Calibration:
 
 When skipped, record the skip rationale in the closeout report.
 
-1. **Dispatch Security subagent** (`agents/security.md`). Forward: full diff, ticket + AC, package manifests / lockfiles, repo `AGENTS.md`, Scoping + Reviewer reports (Reviewer's out-of-scope flags for Security feed in here), role prompt.
+1. **Dispatch Security subagent** (`agents/security.md`). Forward: full diff, ticket + AC, package manifests / lockfiles, repo `AGENTS.md`, Scoping + Reviewer reports (Reviewer's out-of-scope flags for Security feed in here), role prompt. Local threat modeling is useful preparation, but it does not satisfy this gate when Security is required.
 
 2. **If CHANGES REQUIRED**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **Reviewer + Security re-run on the full diff**.
 
@@ -132,7 +134,7 @@ When skipped, record the skip rationale in the closeout report.
    - Any match → not backend-only.
    - Uncertain (config files affecting render, shared utilities used by both) → ask the user. Default on uncertainty: **do not skip** UI/UX (running it unnecessarily is cheap; skipping it incorrectly is expensive).
 
-2. **Dispatch QA subagent** (`agents/qa.md`). Forward: ticket + AC + plan, full diff, QA mode (`backend` / `ui` / `mixed` from diff), path/URL of the running app, live-browser automation for UI mode (HTTP tooling for backend), role prompt.
+2. **Dispatch QA subagent** (`agents/qa.md`). Forward: ticket + AC + plan, full diff, QA mode (`backend` / `ui` / `mixed` from diff), path/URL of the running app, live-browser automation for UI mode (HTTP tooling for backend), role prompt. Local test runs, manual browser checks, and endpoint probes are evidence for QA to use, not substitutes for the QA report.
 
 3. **If BUGS FOUND**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **QA re-runs the full behavior pass**.
 
@@ -156,7 +158,7 @@ When skipped, record the skip rationale in the closeout report.
 
    If construction fails (Scoping's prototype section unparsable, a plan element-mapping block can't be matched to a Scoping row, or the production-side lookup returns nothing), halt with `cannot dispatch UI/UX in parity mode — expected inventory could not be constructed` and name the specific error. Do not fall back to discovery-mode UI/UX in parity mode.
 
-5. **Dispatch UI/UX subagent** (`agents/ui-ux.md`) unless backend-only flag is set. Forward: ticket + plan, full diff, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), the expected inventory table (parity only — UI/UX fills the verdict and computed-style cells, doesn't discover from scratch), live-browser automation, role prompt.
+5. **Dispatch UI/UX subagent** (`agents/ui-ux.md`) unless backend-only flag is set. Forward: ticket + plan, full diff, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), the expected inventory table (parity only — UI/UX fills the verdict and computed-style cells, doesn't discover from scratch), live-browser automation, role prompt. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for UI/UX to use, not substitutes for the UI/UX report and inventory validation.
 
 6. **If FINDINGS**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **UI/UX re-runs scoped to affected states**.
 
@@ -236,6 +238,8 @@ When done, report:
 - Exiting the brainstorm on a single user answer, or treating an early implementation preference as the endpoint.
 - The brainstorm summary doesn't record at least one alternative considered (with dismissal rationale).
 - Skipping `superpowers:brainstorming`, `superpowers:writing-plans`, or `superpowers:subagent-driven-development` (or its `superpowers:executing-plans` fallback) because "the ticket is clear" or "the change is small."
+- Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent gates. `ticket-start` invocation authorizes required dispatches.
+- Replacing Reviewer, Security, QA, or UI/UX with local review, test runs, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
@@ -250,6 +254,7 @@ When done, report:
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review.
 - Letting `superpowers:finishing-a-development-branch` present its 4-option prompt instead of returning to Review.
+- Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before Review, Security decision, QA, UI/UX if applicable, inventory validation, and self-improvement passes are complete.
 - Merging the PR before the user explicitly approves.
 
 If any of these is true: stop, name the violation, and recover before continuing.
