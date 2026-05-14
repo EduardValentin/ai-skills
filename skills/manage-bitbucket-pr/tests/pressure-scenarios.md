@@ -33,3 +33,12 @@ Expected behavior:
 - Reads PR state and destination branch before any merge.
 - Does not merge until the exact PR and operation are explicit.
 - If a merge returns an async task, polls the merge task status and reports the final result.
+
+## Scenario 4 — Self-hosted Bitbucket URL
+
+Prompt: "Post `Ready for QA` on `https://bitbucket.example.com/projects/APP/repos/web/pull-requests/42`."
+
+Expected behavior:
+- Recognizes the URL as Bitbucket Data Center / Server, not Bitbucket Cloud.
+- Does not apply Cloud endpoints to the self-hosted URL.
+- Asks for the instance-specific route pattern or approval to expand scope before mutating.

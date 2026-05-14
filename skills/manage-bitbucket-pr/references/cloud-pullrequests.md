@@ -1,6 +1,6 @@
 # Bitbucket Cloud Pull Request REST Reference
 
-This is a curated mini-reference for common PR management operations. Do not use it as a prompt to read the full external API docs unless an operation is missing, ambiguous, or failing in a way this file cannot resolve.
+This is the supported local reference for Bitbucket Cloud PR details, comments, and merge operations. If an operation is missing, treat it as out of scope until the user approves expanding the skill.
 
 Base URL:
 
