@@ -1,0 +1,19 @@
+{
+  "name": "uiux-local",
+  "description": "Local UIUX plugin marketplace.",
+  "owner": {
+    "name": "Eduard Trocan"
+  },
+  "plugins": [
+    {
+      "name": "uiux",
+      "version": "0.1.0",
+      "description": "UI/UX craft skills for accessible frontend design, semantic design tokens, reusable components, visual validation, design direction, and brand-voice web copy.",
+      "author": {
+        "name": "Eduard Trocan"
+      },
+      "category": "design",
+      "source": "./"
+    }
+  ]
+}

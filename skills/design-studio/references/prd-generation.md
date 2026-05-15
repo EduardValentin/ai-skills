@@ -6,11 +6,11 @@ If no `PRD.md` exists at the project root, offer to generate one:
 
 If the user **declines**, note that PRD sync will be skipped for the rest of the session, and proceed.
 
-If the user **accepts**, follow the steps below. Prefer subagent dispatch for both code analysis and PRD writing so the main agent's context stays clean. If subagent dispatch is unavailable, run each prompt inline as the main agent — the prompt bodies are identical either way.
+If the user **accepts**, follow the steps below. Prefer delegation to a context-isolated worker/subagent for the code-analysis pass when available; otherwise run the prompt inline. The prompt body is identical either way, but the main session should receive the structured analysis report rather than raw app files.
 
 ## Step 1 — Code-analysis pass
 
-Dispatch a subagent with this prompt (or run it yourself inline):
+Run this prompt:
 
 > **Task: Analyze the React reference app and catalog all user flows, features, and business logic**
 >
@@ -42,7 +42,7 @@ Capture screenshots of the primary routes — these give visual context for unde
 
 ## Step 3 — PRD-writing pass
 
-Once the analysis report and screenshots are ready, dispatch a second subagent (or run inline) with this prompt:
+Once the analysis report and screenshots are ready, run this prompt:
 
 > **Task: Write a PRD.md based on the app analysis**
 >

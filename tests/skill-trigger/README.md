@@ -1,6 +1,7 @@
 # Skill Trigger Tests
 
-This directory keeps global trigger coverage for canonical skills under `skills/`.
+This directory keeps global trigger coverage for canonical skills under `skills/`
+and plugin-packaged skills under `plugins/*/skills/`.
 
 ## Static Contract
 
@@ -12,8 +13,8 @@ python3 tests/skill-trigger/static_contract.py
 
 The static contract is deterministic. It verifies:
 
-- every canonical `skills/*/SKILL.md` has at least one trigger scenario;
-- every scenario references an existing canonical skill;
+- every `skills/*/SKILL.md` and `plugins/*/skills/*/SKILL.md` has at least one trigger scenario;
+- every scenario references an existing skill;
 - the declared skill name matches its folder;
 - descriptions start with `Use when`;
 - scenario-specific trigger terms appear in the description or skill body;

@@ -8,6 +8,47 @@ from pathlib import Path
 from typing import Any, Optional
 
 
+def discover_skill_files(repo_root: Path) -> dict[str, Path]:
+    """Return canonical and plugin skill files keyed by declared skill name."""
+
+    skill_files = [
+        *sorted((repo_root / "skills").glob("*/SKILL.md")),
+        *sorted((repo_root / "plugins").glob("*/skills/*/SKILL.md")),
+    ]
+    discovered: dict[str, Path] = {}
+
+    for skill_file in skill_files:
+        frontmatter = parse_frontmatter(skill_file.read_text(encoding="utf-8"))
+        skill_name = frontmatter.get("name", skill_file.parent.name)
+        existing = discovered.get(skill_name)
+        if existing is not None:
+            raise ValueError(
+                f"duplicate skill name {skill_name!r}: {existing.relative_to(repo_root)} "
+                f"and {skill_file.relative_to(repo_root)}"
+            )
+        discovered[skill_name] = skill_file
+
+    return discovered
+
+
+def parse_frontmatter(skill_doc: str) -> dict[str, str]:
+    if not skill_doc.startswith("---\n"):
+        return {}
+
+    try:
+        _, body, _ = skill_doc.split("---\n", 2)
+    except ValueError:
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in body.splitlines():
+        if ":" not in raw_line:
+            continue
+        key, value = raw_line.split(":", 1)
+        values[key.strip()] = value.strip().strip('"')
+    return values
+
+
 def load_scenarios(path: Path) -> list[dict[str, Any]]:
     try:
         import tomllib  # type: ignore[attr-defined]

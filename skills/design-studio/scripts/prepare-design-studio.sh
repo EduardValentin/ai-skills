@@ -12,7 +12,7 @@ Options:
   --app-root PATH       React reference app root. Defaults to auto-detecting under designs/.
   --port PORT           Preview port. Defaults to 5173.
   --force-install       Install dependencies even outside a worktree.
-  --skip-install        Create launch config without installing dependencies.
+  --skip-install        Skip dependency installation.
   --skip-node-check     Do not activate or validate the project Node version.
   -h, --help            Show this help.
 USAGE
@@ -232,14 +232,11 @@ ensure_package_manager() {
   esac
 }
 
-is_claude_worktree() {
+is_linked_worktree() {
   local project_root="$1"
   if [ -f "$project_root/.git" ]; then
     return 0
   fi
-  case "$project_root" in
-    */.claude/worktrees/*) return 0 ;;
-  esac
   return 1
 }
 
@@ -272,7 +269,7 @@ install_dependencies() {
   )
 }
 
-write_launch_json() {
+build_dev_command() {
   local project_root="$1"
   local app_root="$2"
   local pm="$3"
@@ -280,7 +277,6 @@ write_launch_json() {
   local node_version="$5"
   local port="$6"
   local dev_script="$7"
-  local launch_file="$project_root/.claude/launch.json"
   local command_parts=()
   local run_dev_command="$pm run dev"
 
@@ -313,51 +309,7 @@ write_launch_json() {
     fi
   done
 
-  mkdir -p "$project_root/.claude"
-
-  LAUNCH_FILE="$launch_file" \
-  APP_ROOT="$app_root" \
-  PORT="$port" \
-  LAUNCH_COMMAND="$launch_command" \
-  node <<'NODE'
-const fs = require("fs");
-const path = require("path");
-
-const launchFile = process.env.LAUNCH_FILE;
-const appRoot = process.env.APP_ROOT;
-const port = Number(process.env.PORT || "5173");
-const launchCommand = process.env.LAUNCH_COMMAND;
-
-let data = { version: "0.0.1", configurations: [] };
-if (fs.existsSync(launchFile)) {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(launchFile, "utf8"));
-    if (parsed && typeof parsed === "object") data = parsed;
-  } catch {
-    data = { version: "0.0.1", configurations: [] };
-  }
-}
-
-const existing = Array.isArray(data.configurations) ? data.configurations : [];
-const nextConfig = {
-  name: "design-reference",
-  runtimeExecutable: "/bin/zsh",
-  runtimeArgs: ["-lc", launchCommand],
-  port,
-  cwd: appRoot,
-};
-
-data.version = data.version || "0.0.1";
-data.configurations = [
-  ...existing.filter((config) => config && config.name !== "design-reference"),
-  nextConfig,
-];
-
-fs.mkdirSync(path.dirname(launchFile), { recursive: true });
-fs.writeFileSync(launchFile, `${JSON.stringify(data, null, 2)}\n`);
-NODE
-
-  log "Wrote $launch_file"
+  printf '%s' "$launch_command"
 }
 
 PROJECT_ROOT=""
@@ -437,7 +389,7 @@ ensure_package_manager "$PM" "$PM_VERSION"
 NEED_INSTALL=0
 if [ "$FORCE_INSTALL" = "1" ]; then
   NEED_INSTALL=1
-elif is_claude_worktree "$PROJECT_ROOT"; then
+elif is_linked_worktree "$PROJECT_ROOT"; then
   NEED_INSTALL=1
 elif [ ! -d "$APP_ROOT/node_modules" ]; then
   NEED_INSTALL=1
@@ -451,6 +403,8 @@ else
   log "Dependencies already present; skipping install"
 fi
 
-write_launch_json "$PROJECT_ROOT" "$APP_ROOT" "$PM" "$PM_VERSION" "$NODE_VERSION" "$PORT" "$DEV_SCRIPT"
+DEV_COMMAND="$(build_dev_command "$PROJECT_ROOT" "$APP_ROOT" "$PM" "$PM_VERSION" "$NODE_VERSION" "$PORT" "$DEV_SCRIPT")"
 
 log "Ready: app=$APP_ROOT package_manager=$PM node=${NODE_VERSION:-active} port=$PORT"
+log "Dev command:"
+printf '%s\n' "$DEV_COMMAND"

@@ -1,0 +1,20 @@
+{
+  "name": "ai-skills-local",
+  "interface": {
+    "displayName": "AI Skills Local Plugins"
+  },
+  "plugins": [
+    {
+      "name": "uiux",
+      "source": {
+        "source": "local",
+        "path": "./plugins/uiux"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Design"
+    }
+  ]
+}

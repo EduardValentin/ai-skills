@@ -19,6 +19,18 @@ skills/
     ├── scripts/
     ├── references/
     └── adapters/        # only if truly needed; see rule 5 below
+
+plugins/
+└── <plugin-name>/
+    ├── skills/
+    │   └── <skill-name>/
+    │       ├── SKILL.md
+    │       ├── scripts/
+    │       ├── references/
+    │       ├── tests/
+    │       └── agents/   # optional thin harness metadata only
+    ├── .codex-plugin/
+    └── .claude-plugin/
 ```
 
 Until the migration is complete, the legacy `claude/skills/` and `codex/skills/` trees may still contain skills. New skills should be authored in the canonical location.
@@ -41,21 +53,89 @@ Treat the sync as part of the edit — not a follow-up. If a change lands in the
 
 For legacy skills that still live under `claude/skills/` or `codex/skills/`, the same applies: the edit in the repo and the corresponding update under `~/.claude/skills/` or `~/.codex/skills/` must happen together.
 
-### 3. Prefer Python for repo automation
+### 3. Plugin packaging and harness-specific plumbing
+
+Plugin-packaged skills follow the same one-canonical-copy rule. The portable skill content lives under `plugins/<plugin-name>/skills/<skill-name>/`; do not duplicate those `SKILL.md` files into per-agent source folders.
+
+Treat these paths as generic, portable plugin content:
+
+- `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`
+- `plugins/<plugin-name>/skills/<skill-name>/scripts/`
+- `plugins/<plugin-name>/skills/<skill-name>/references/`
+- `plugins/<plugin-name>/skills/<skill-name>/tests/`
+- plugin-level docs or evaluations under `plugins/<plugin-name>/`
+
+Treat these paths as harness-specific distribution metadata:
+
+- `plugins/<plugin-name>/.codex-plugin/plugin.json` for Codex plugin discovery.
+- `.agents/plugins/marketplace.json` for the repo-local Codex marketplace registry. Add or update entries here when a plugin should be available from this repo.
+- `plugins/<plugin-name>/skills/<skill-name>/agents/openai.yaml` for optional OpenAI/Codex skill interface metadata. Keep this declarative and thin.
+- `plugins/<plugin-name>/.claude-plugin/plugin.json` for Claude Code plugin metadata.
+- `plugins/<plugin-name>/.claude-plugin/marketplace.json` for the Claude Code local plugin marketplace entry.
+
+Harness metadata is not the skill's domain knowledge. Keep it minimal, declarative, and synchronized with the actual plugin name, version, description, and skill list. If metadata begins to contain process guidance, move that guidance back into the canonical skill.
+
+Do not edit installed plugin caches as source of truth. Paths such as `~/.codex/plugins/cache/...` and `~/.claude/plugins/cache/...` are derived install artifacts; refresh them from the repo or local plugin source instead.
+
+### 4. Installing or refreshing plugins across harnesses
+
+When adding or updating a plugin, handle all three layers in the same change:
+
+1. Update the canonical repo source under `plugins/<plugin-name>/`.
+2. Update harness metadata for every supported harness in the repo.
+3. Refresh the local installs that agents actually read.
+
+For Codex availability:
+
+- Keep `plugins/<plugin-name>/.codex-plugin/plugin.json` in the plugin root.
+- Keep `.agents/plugins/marketplace.json` pointing at the repo plugin source, usually `./plugins/<plugin-name>`.
+- For repo-local testing, the Codex marketplace root is the repo root because `.agents/plugins/marketplace.json` lives there.
+- For user-wide local installation, copy the plugin to `~/plugins/<plugin-name>/`, keep `~/.agents/plugins/marketplace.json` pointing at `./plugins/<plugin-name>`, then add or upgrade the `~` marketplace root.
+- Refresh `~/.codex/skills/<skill-name>/` for each plugin skill when Codex sessions also rely on direct skill discovery.
+
+For Claude Code availability:
+
+- Keep `plugins/<plugin-name>/.claude-plugin/plugin.json` and `plugins/<plugin-name>/.claude-plugin/marketplace.json` in the plugin root.
+- Validate the plugin before claiming it is installable.
+- Refresh the durable local plugin copy, usually `~/plugins/<plugin-name>/`.
+- Add or update the Claude marketplace source that contains `.claude-plugin/marketplace.json`, then install or update the plugin from that marketplace.
+- Refresh `~/.claude/skills/<skill-name>/` for each plugin skill when Claude sessions also rely on direct skill discovery.
+
+For direct skill install directories, copy the canonical skill folder exactly, including scripts, references, tests, and thin `agents/` metadata if present. Do not hand-edit the installed copy and then forget to pull it back into the repo.
+
+Useful local refresh commands for the current plugin convention:
+
+```bash
+rsync -a --delete plugins/<plugin-name>/ "$HOME/plugins/<plugin-name>/"
+rsync -a --delete plugins/<plugin-name>/skills/<skill-name>/ "$HOME/.codex/skills/<skill-name>/"
+rsync -a --delete plugins/<plugin-name>/skills/<skill-name>/ "$HOME/.claude/skills/<skill-name>/"
+
+codex plugin marketplace add "$HOME"
+codex plugin marketplace upgrade local
+
+claude plugin validate "$HOME/plugins/<plugin-name>"
+claude plugin marketplace add "$HOME/plugins/<plugin-name>"
+claude plugin install <plugin-name>@<marketplace-name> --scope user
+claude plugin update <plugin-name> --scope user
+```
+
+Use the install command for a new Claude plugin and the update command for an already installed one. If a command reports the marketplace or plugin already exists, run the corresponding update/upgrade command instead of creating a duplicate entry.
+
+### 5. Prefer Python for repo automation
 
 Use Python stdlib for repo-level automation with branching logic, validation, or filesystem mutation. Reserve shell scripts for tiny command wrappers.
 
-### 4. Authoring rules
+### 6. Authoring rules
 
 All skills authored or modified in this repository must follow the [Rules for Writing Cross-Agent Skills](#rules-for-writing-cross-agent-skills) below.
 
-### 4. Trigger scenarios for every skill change
+### 7. Trigger scenarios for every skill change
 
 Every new skill and every update to an existing skill must add or update trigger coverage in `tests/skill-trigger/scenarios.toml`. The scenario should capture the real user phrasing, repository context, provider/tool context, or failure mode that should make the skill get picked up.
 
 Do not treat trigger testing as optional documentation. If a skill's `description`, "When to Use" section, scope, or invocation behavior changes, update the trigger scenario registry in the same change.
 
-### 5. Run trigger tests before PR creation
+### 8. Run trigger tests before PR creation
 
 Before creating a PR for any skill addition or skill update, run the deterministic trigger contract and the behavioral trigger pressure suite:
 

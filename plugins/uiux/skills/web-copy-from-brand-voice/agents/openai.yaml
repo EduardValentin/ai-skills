@@ -1,0 +1,4 @@
+interface:
+  display_name: "Web Copy From Brand Voice"
+  short_description: "Write UI copy from brand voice and audience"
+  default_prompt: "Write page copy from this brand voice"

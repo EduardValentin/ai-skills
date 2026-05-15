@@ -1,0 +1,4 @@
+interface:
+  display_name: "Semantic Design Tokens"
+  short_description: "Keep UI styling token-first and coherent"
+  default_prompt: "Audit this UI for semantic token usage"
