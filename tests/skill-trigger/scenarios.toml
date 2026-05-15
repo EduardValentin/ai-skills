@@ -119,9 +119,9 @@ forbidden_terms = []
 [[scenario]]
 id = "uiux-design-direction-ambiguous-premium"
 skill = "design-direction-brainstorming"
-prompt = "Make the dashboard feel more premium and less cluttered; the target audience and emotional tone are not clear yet."
-description_terms = ["multiple plausible design directions", "unclear audience", "emotional tone", "make it better"]
-skill_terms = ["Align on the design's job before choosing pixels", "Chosen direction"]
+prompt = "I want to change the visual direction of this dashboard so it feels more premium and less cluttered; the target audience and emotional tone are not clear yet."
+description_terms = ["changes the visual direction", "multiple plausible design directions", "unclear audience", "emotional tone"]
+skill_terms = ["relentless collaborative interview", "Shared design direction"]
 forbidden_terms = []
 
 [[scenario]]

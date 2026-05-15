@@ -63,7 +63,7 @@ Deadlines do not relax these priorities. If the requested timeline conflicts wit
 ## Flow A: Build From Scratch
 
 1. Clarify scope, affected pages/components/tokens, audience, and success criteria.
-2. If multiple design directions are plausible, pause for design-direction alignment: audience, goal, desired impression, constraints, and tradeoffs.
+2. If multiple design directions are plausible, run a persistent design-direction brainstorm: audience, goal, desired impression, constraints, tradeoffs, options, recommendation, and shared understanding.
 3. Run the business-logic gate from Rule 8.
 4. Plan the implementation: reused components, new or extended variants, token needs, responsive behavior, accessibility considerations, visual validation, and documentation sync.
 5. Get user approval on the plan before editing code.

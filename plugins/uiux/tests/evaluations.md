@@ -36,9 +36,9 @@ Expected behavior:
 Prompt: "Make the dashboard feel more premium and less cluttered."
 
 Expected behavior:
-- Pauses to align on audience, goal, desired impression, and constraints.
-- Presents distinct design directions with tradeoffs.
-- Waits for direction before implementation.
+- Runs a persistent brainstorm interview until audience, goal, desired impression, constraints, and things to avoid are clear.
+- Presents distinct design directions with tradeoffs plus a recommended option.
+- Waits for shared understanding before implementation.
 
 ## Evaluation 5: Brand-Voice Copy
 
