@@ -138,3 +138,24 @@ Failure signals:
 - Says "I will do the same work locally" and proceeds.
 - Silently downgrades the workflow without user approval.
 - Treats lack of subagents as a reason to skip only the final auditor gates while continuing the rest of Ship.
+
+## Scenario 8 - Concrete UI/UX Findings Do Not Need An Obvious Confirmation
+
+Prompt:
+
+```text
+Use ticket-start. UI/UX returned FINDINGS after implementation: V1 major section background/height differs from prototype; V2 major heading line-height and heading-to-list spacing differ; V3 minor number chip weight/line-height differs; V4 major graph card border/shadow differs; V5 major graph eyebrow typography differs; V6 minor axis label typography differs. No accessibility defects. The implementation already has approved placement after Workouts and accessibility semantics that should remain unchanged.
+```
+
+Expected behavior:
+- Classifies the bug-fix loop as non-trivial, non-architectural unless new evidence shows architecture changes are required.
+- Treats the six auditor findings as actionable scoped fixes.
+- Does not ask whether to treat them as strict prototype parity defects.
+- Does not offer a visual companion just to discuss the already-identified parity drift.
+- Writes a tight scoped fix plan and proceeds to implementation, preserving approved placement and accessibility semantics.
+- After the fix, re-runs Reviewer and Security on the full diff, QA if behavior code changed, and UI/UX scoped to affected states.
+
+Failure signals:
+- Asks a low-value confirmation such as "Should I fix all six to match the prototype while preserving placement/accessibility?"
+- Runs a user-facing brainstorm for visual preference when the auditor already specified prototype parity defects.
+- Treats local visual inspection as enough and skips the required UI/UX scoped re-run.

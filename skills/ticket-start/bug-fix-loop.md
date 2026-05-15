@@ -17,7 +17,7 @@ The main agent classifies each fix into one of three tiers. **The main agent dec
 | Tier | Definition | Path |
 |---|---|---|
 | **Trivial** | Typo, one-liner, mechanical change with no design implication. Examples: rename a private variable, fix a comment typo, swap a constant import path, correct a log-message string with no UI surface. | Straight to Implementer. **No** brainstorm, **no** plan. |
-| **Non-trivial, non-architectural** | Real change that doesn't alter the architecture of the solution. Examples: add a missing validation branch, restructure a function's control flow, fix an off-by-one bug, add error handling on an existing path. | Main re-runs `superpowers:brainstorming` + `superpowers:writing-plans` with the user. Scoped to the fix; the original brainstorm summary stays valid. |
+| **Non-trivial, non-architectural** | Real change that doesn't alter the architecture of the solution. Examples: add a missing validation branch, restructure a function's control flow, fix an off-by-one bug, add error handling on an existing path, correct visual parity drift already identified by UI/UX. | Main writes a tight scoped fix plan from the auditor findings, then implements. **No user-facing brainstorm or approval checkpoint** unless there is a material judgment call under `## User intervention principle`. The original brainstorm summary and approved plan stay valid. |
 | **Architectural** | Fix changes the solution's architecture: module boundaries, data model, integration approach, or what gets persisted. Examples: a fix requires extracting a shared service, changing a type that ripples across consumers, moving logic between layers. | Main re-runs `superpowers:brainstorming` + `superpowers:writing-plans` (full initial loop) — the relentless interview surfaces alternatives, the anti-collapse rule applies, and the new brainstorm summary must record the architectural choice and the alternatives considered. If the fix introduces a genuinely new architectural question that needs focused research, dispatch a focused research subagent ad-hoc during the brainstorm. |
 
 If a fix touches both a trivial typo and an architectural change, classify as architectural — the higher tier.
@@ -72,6 +72,23 @@ At **any** point in the loop — not just at the cap — if the main agent hits 
 - A finding that requires changing the ticket's scope.
 
 When surfacing to the user, brief per `SKILL.md` → `## Dispatch → user briefing protocol` (handoff type 7: bug-fix loop architectural intervention) before asking the user to decide on direction. Present the relevant finding(s), the auditor's suggested fix if any, and the architectural tradeoff main agent sees, so the user can weigh in with the same context main agent has.
+
+### Low-value checkpoint guard
+
+Do **not** stop to ask the user a question whose answer is already determined by the ticket, approved plan, prototype parity mode, auditor finding, or repository instructions. Auditor findings are actionable by default.
+
+Ask only when the answer would change the fix in a material way:
+- Two valid fixes trade off scope, architecture, semantics, accessibility, data behavior, or user-visible product intent.
+- The auditor finding conflicts with the approved plan, ticket, prototype, or another auditor.
+- The suggested fix would alter the feature's architecture, user flow, accessibility semantics, or accepted non-goals.
+- The environment blocks verification or implementation and the user must choose a path.
+
+Do not ask to confirm the obvious scoped path. Examples of forbidden low-value questions:
+- "Should I treat all UI/UX parity drifts as strict prototype-parity defects?"
+- "Should I preserve the approved placement and current accessibility semantics while fixing visual drift?"
+- "Should I implement the auditor's suggested fix for this concrete bug?"
+
+For concrete UI/UX parity findings in parity mode, default to strict prototype parity while preserving approved placement, behavior, and accessibility semantics unless the auditor or ticket says otherwise. Do not offer the visual companion or pause for a design preference question just to restate the auditor's report; fix the drift and re-run the required gates.
 
 ## Sequencing of re-runs
 
