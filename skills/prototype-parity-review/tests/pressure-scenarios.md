@@ -30,13 +30,14 @@ Ticket-start delegated the UI/UX gate to you. Mode is parity. You received produ
 ```
 
 Expected behavior:
-- Loads `prototype-parity-review` as the delegated reviewer protocol.
+- Picks up the reusable visual review protocol automatically from the delegated UI/UX prompt wording.
 - Treats every supplied inventory row as a contract.
 - Fills `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells with DOM evidence.
 - Adds any observed extra production or prototype elements under `Rows added beyond the supplied inventory`.
 
 Failure signals:
 - Rebuilds the inventory from scratch and drops supplied rows.
+- Requires the caller to name the skill explicitly before proceeding.
 - Returns CLEAN with blank computed-style cells.
 - Accepts "I checked the important elements" as a complete report.
 

@@ -7,13 +7,13 @@ description: Use when the user wants to start implementation work from a ticket 
 
 ## Overview
 
-Implementation work driven by a ticket. The main agent owns user dialogue, plan-writing, and phase gating; specialized subagents (Scoping, Reviewer, QA, and UI/UX via `prototype-parity-review`) own deep work. Phase order is a hard gate — do not advance until the prior gate is satisfied:
+Implementation work driven by a ticket. The main agent owns user dialogue, plan-writing, and phase gating; specialized subagents (Scoping, Reviewer, QA, and UI/UX) own deep work. Phase order is a hard gate — do not advance until the prior gate is satisfied:
 
 **Setup → Brainstorm → Plan → Implement → Review → Verify → Ship**
 
-Brainstorm, Plan, and Implement defer to the superpowers methodology: `superpowers:brainstorming`, `superpowers:writing-plans`, and `superpowers:subagent-driven-development`. Use `superpowers:subagent-driven-development` as the default implementation path so each task gets TDD, implementer self-review, spec-compliance review, code-quality review, and the final Superpowers review. Use `superpowers:executing-plans` only when subagent-driven implementation is genuinely unavailable or unsuitable, and record the reason. When this skill names a sub-skill as **REQUIRED**, invoke it — do not paraphrase its protocol from memory.
+Brainstorm, Plan, and Implement use trigger-aligned Superpowers methodology: explore user intent, requirements, constraints, and design before implementation; write a distinct implementation plan; then execute the approved plan with subagent-driven development as the default path. Use the parallel-session execution path only when subagent-driven implementation is genuinely unavailable or unsuitable, and record the reason.
 
-**Required skill dependency:** UI/UX verification is delegated to the reusable `prototype-parity-review` skill. `ticket-start` constructs the dispatch context and validates the returned report, but does not inline or locally perform the prototype parity review protocol.
+**UI/UX trigger discipline:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report, but does not name or inline a separate visual-review skill. The UI/UX subagent prompt must describe the actual review work in trigger-matching language: frontend UI, runnable prototype/reference app or production analogs, visual parity or consistency, matched-element inventory, DOM computed styles, bounding rects, and accessibility.
 
 **Context-economy contract:** every subagent's report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
@@ -37,7 +37,7 @@ If ambiguous, ask the user before loading anything else.
 
 ## Setup
 
-1. **Worktree.** REQUIRED SUB-SKILL: `superpowers:using-git-worktrees`. Base off `origin/<default>`, not local branch. Halt on `git fetch` failure — do not fall back to stale local state.
+1. **Worktree.** Start feature work in an isolated worktree. Base off `origin/<default>`, not local branch. Halt on `git fetch` failure — do not fall back to stale local state.
 
 2. **Bot identity (personal workflow only).** Run the two activation checks in `bot-identity.md` → `## Setup activation` — (a) mint a fresh GitHub installation token and verify it with a no-op API call, (b) apply the bot's git name/email as per-worktree git config. Halt on failure with a pointer at the runbook. Fail-closed — never fall back to personal GitHub credentials. Linear MCP stays under personal identity. Job workflow: skip this step.
 
@@ -56,7 +56,7 @@ If ambiguous, ask the user before loading anything else.
 
 ## Brainstorm
 
-**REQUIRED SUB-SKILL: `superpowers:brainstorming`.** A single relentless interview between main agent and the user. Alternatives are surfaced inside this dialogue, not by a separate Architect role.
+Explore user intent, requirements, constraints, and design before implementation through a single relentless interview between main agent and the user. Alternatives are surfaced inside this dialogue, not by a separate Architect role.
 
 1. **Open with a Scoping-grounded briefing.** Per `## Briefing rule` (Scoping → user), surface entry points, target module, prototype elements (if any), and any conflicts Scoping flagged. The user must enter the dialogue with the same context Scoping built.
 
@@ -74,13 +74,13 @@ If ambiguous, ask the user before loading anything else.
    - Ask the user to confirm each explicitly.
    - "Yes, do it" / "approved" / "go ahead" / similar is approval of the **approach**, not approval of the plan. They are separate artifacts — the plan still has to be written and re-approved.
 
-5. **Output: brainstorm summary.** A written artifact passed to `superpowers:writing-plans`. Captures intent, mechanism, constraints, alternatives considered (with dismissal rationale), non-goals, and any open questions for the planner.
+5. **Output: brainstorm summary.** A written artifact passed into plan-writing. Captures intent, mechanism, constraints, alternatives considered (with dismissal rationale), non-goals, and any open questions for the planner.
 
 ## Plan
 
-1. **REQUIRED SUB-SKILL: `superpowers:writing-plans`.** Produce a written plan from the brainstorm summary. The plan is a distinct artifact — not a verbal summary, not the brainstorm transcript, not a mental model.
+1. Produce a written implementation plan from the brainstorm summary before touching code. The plan is a distinct artifact — not a verbal summary, not the brainstorm transcript, not a mental model.
 
-2. **Parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`) — each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype elements relevant to this feature` row from the Scoping report, and (b) the planned production `file:line` for the new/changed JSX declaration. Tasks that don't add/modify visible elements omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to build the expected matched-element inventory passed to the UI/UX subagent running `prototype-parity-review`.
+2. **Parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`) — each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype elements relevant to this feature` row from the Scoping report, and (b) the planned production `file:line` for the new/changed JSX declaration. Tasks that don't add/modify visible elements omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to build the expected matched-element inventory passed to the UI/UX subagent.
 
    ```
    **Element mapping:**
@@ -88,7 +88,7 @@ If ambiguous, ask the user before loading anything else.
    - Planned production: `web/src/components/Hero/Eyebrow.tsx:12` (new `<span class="eyebrow">`)
    ```
 
-3. Show the plan as `superpowers:writing-plans` directs. Wait for **explicit user approval of the plan itself** before any code.
+3. Show the plan to the user for review. Wait for **explicit user approval of the plan itself** before any code.
 
 4. **No code between brainstorm convergence and plan approval.** Not exploratory edits, not scaffolding, not "drafting what the plan would say in code." File edits are off-limits until the plan exists and the user has explicitly approved it.
 
@@ -96,11 +96,11 @@ If ambiguous, ask the user before loading anything else.
 
 1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
 
-2. **REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`** (preferred; auto-bakes TDD + implementer self-review + per-task spec review + code-quality review + final review). Use **`superpowers:executing-plans`** only when subagent-driven implementation is unavailable or unsuitable. Let the chosen Superpowers skill run; do not duplicate its per-task review protocol in `ticket-start`.
+2. Execute the approved plan with **subagent-driven development** as the default path: TDD, implementer self-review, per-task spec review, code-quality review, and final review. Use a parallel-session execution path only when subagent-driven implementation is unavailable or unsuitable. Let the chosen Superpowers workflow run; do not duplicate its per-task review protocol in `ticket-start`.
 
 3. **Two overrides this skill adds:**
-   - On the `superpowers:executing-plans` fallback path, invoke `superpowers:requesting-code-review` after the final task and before Review — that path has no other end-of-feature review.
-   - When superpowers reaches `superpowers:finishing-a-development-branch`, accept its test-pass check but do **not** present its 4-option prompt (merge / PR / keep / discard). Return to this skill's Review phase. Ship replaces those options.
+   - On the parallel-session execution fallback path, request an end-of-feature code review after the final task and before Review — that path has no other end-of-feature review.
+   - When the implementation workflow reaches branch-finishing guidance, accept its test-pass check but do **not** present merge / PR / keep / discard options. Return to this skill's Review phase. Ship replaces those options.
 
 ## Review
 
@@ -124,14 +124,14 @@ If ambiguous, ask the user before loading anything else.
 
 4. **When QA CLEAN**, run the self-improvement pass on QA findings.
 
-4a. **Parity mode only — construct the expected matched-element inventory before UI/UX dispatch.** (Skip in consistency mode; `prototype-parity-review` builds the analog inventory.) Parity mode = personal workflow with a runnable React reference app under `designs/`.
+4a. **Parity mode only — construct the expected matched-element inventory before UI/UX dispatch.** (Skip in consistency mode; the UI/UX reviewer builds the analog inventory.) Parity mode = personal workflow with a runnable React reference app under `designs/`.
 
    Combine:
    - Scoping's `## Prototype elements relevant to this feature` rows.
    - Each plan task's `**Element mapping:**` block.
    - Actual post-diff production `file:line`s, resolved by walking `git diff --name-only` for touched UI files and locating each plan-declared JSX declaration (e.g., `grep -n` on a stable selector like `class="..."` or `data-testid="..."` from the mapping).
 
-   Produce a markdown table — column order matches `prototype-parity-review` → `## Output Format`:
+   Produce a markdown table with this column order:
 
    | Pair | Prototype selector | Production selector | font-* | color/bg | box | layout | size | verdict |
 
@@ -142,7 +142,12 @@ If ambiguous, ask the user before loading anything else.
 
    If construction fails (Scoping's prototype section unparsable, a plan element-mapping block can't be matched to a Scoping row, or the production-side lookup returns nothing), halt with `cannot dispatch UI/UX in parity mode — expected inventory could not be constructed` and name the specific error. Do not fall back to discovery-mode UI/UX in parity mode.
 
-5. **Dispatch UI/UX subagent with `prototype-parity-review`** unless backend-only flag is set. The subagent's first instruction is to load and follow `prototype-parity-review`; the main agent forwards only the compact inputs: ticket + plan, full diff, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), important UI states, the expected inventory table (parity only — the reviewer fills the verdict and computed-style cells), and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the reviewer to use, not substitutes for the `prototype-parity-review` report and inventory validation.
+5. **Dispatch UI/UX subagent** unless backend-only flag is set. Phrase the subagent prompt as a frontend UI verification task, not as an explicit skill invocation:
+   - "Review the implemented frontend UI against the runnable prototype/reference app for visual parity" in parity mode.
+   - "Review the implemented frontend UI against production sibling/analog elements for visual consistency" in consistency mode.
+   - Include: matched-element inventory, DOM computed styles, bounding rects, element-level screenshots as secondary evidence, keyboard/focus/contrast accessibility checks, and a Markdown report with verdict, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
+
+   Forward only the compact inputs: ticket + plan, full diff, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), important UI states, the expected inventory table (parity only — the reviewer fills the verdict and computed-style cells), and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the reviewer to use, not substitutes for the UI/UX report and inventory validation.
 
 6. **If FINDINGS**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **UI/UX re-runs scoped to affected states**.
 
@@ -153,13 +158,13 @@ If ambiguous, ask the user before loading anything else.
    - Every verified row has non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank = DOM-evaluation work was skipped for that row.
    - Spot-check: sample 2 rows whose file appears in the diff and 2 rows from the prototype enumeration; each must be present with non-blank cells.
    - `MISSING` (production side) is accepted only when the plan marked the element as not-implemented-this-ticket; otherwise a `MISSING` is a finding.
-   - Any failure → report is **structurally invalid**. Reject and re-dispatch UI/UX with `prototype-parity-review` and the specific gaps named.
+   - Any failure → report is **structurally invalid**. Reject and re-dispatch UI/UX with the same trigger-aligned review wording and the specific gaps named.
 
    **Consistency mode** (no expected inventory):
    - Confirm a `## Matched-element inventory` section exists.
    - From the diff, pick 2 changed UI files; their rendered elements must appear in the inventory.
    - From the running production app, sample 3 visible elements on the feature surface; each must appear.
-   - Any miss → structurally invalid. Reject and re-dispatch with `prototype-parity-review` and the specific missing elements named.
+   - Any miss → structurally invalid. Reject and re-dispatch UI/UX with the same trigger-aligned review wording and the specific missing elements named.
 
    Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
 
@@ -229,10 +234,10 @@ When done, report:
 - Treating brainstorm convergence ("yes, do it" / "approved" / "go") as plan approval. They are separate artifacts.
 - Exiting the brainstorm on a single user answer, or treating an early implementation preference as the endpoint.
 - The brainstorm summary doesn't record at least one alternative considered (with dismissal rationale).
-- Skipping `superpowers:brainstorming`, `superpowers:writing-plans`, or `superpowers:subagent-driven-development` (or its `superpowers:executing-plans` fallback) because "the ticket is clear" or "the change is small."
+- Skipping the brainstorm, written-plan, or subagent-driven implementation workflows because "the ticket is clear" or "the change is small."
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent gates. `ticket-start` invocation authorizes required dispatches.
 - Replacing Reviewer, QA, or UI/UX with local review, test runs, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
-- Inlining the reusable `prototype-parity-review` protocol into `ticket-start` instead of delegating UI/UX verification to that skill.
+- Naming a visual-review skill explicitly in the UI/UX subagent prompt instead of using trigger-matching review wording.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
@@ -242,11 +247,11 @@ When done, report:
 - Claiming visual parity/consistency without DOM computed-style and bounding-rect extraction from the live browser.
 - Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
 - Dispatching UI/UX in parity mode without the expected inventory constructed in step 4a.
-- Dispatching UI/UX without instructing the subagent to load and follow `prototype-parity-review`.
+- Dispatching UI/UX without the trigger-matching terms that identify the task: frontend UI, prototype/reference parity or production analog consistency, matched-element inventory, DOM computed styles, bounding rects, and accessibility.
 - Scoping's `## Prototype elements relevant to this feature` empty or `_None._` for a parity-mode UI ticket.
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
-- Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review.
-- Letting `superpowers:finishing-a-development-branch` present its 4-option prompt instead of returning to Review.
+- Using the parallel-session execution fallback path and skipping end-of-feature code review before advancing to Review.
+- Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Review.
 - Starting any Ship mutation without first completing the Ship preflight ledger from actual auditor/self-improvement outputs.
 - Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before Review, QA, UI/UX if applicable, inventory validation, and self-improvement passes are complete.
 - Merging the PR before the user explicitly approves.

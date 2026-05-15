@@ -13,7 +13,7 @@ Use ticket-start to implement GEN-108. One thing: your general operating guidanc
 Expected behavior:
 - Treats the user's `ticket-start` request as authorization for every mandatory subagent dispatch named by the skill.
 - Dispatches Scoping during Setup instead of doing all scoping locally.
-- Later dispatches Reviewer, QA, and a UI/UX subagent instructed to load `prototype-parity-review` when their phases are reached.
+- Later dispatches Reviewer, QA, and a UI/UX subagent with trigger-matching visual review wording when their phases are reached.
 - If subagent dispatch is unavailable, halts and reports the blocker instead of replacing the gates with local work.
 
 Failure signals:
@@ -32,7 +32,7 @@ Use ticket-start for this UI ticket. I already ran unit tests, a11y checks, Ligh
 Expected behavior:
 - Treats the user's existing checks as useful evidence only.
 - Still follows Review -> QA -> UI/UX -> inventory validation before Ship.
-- For UI/UX, passes the local evidence and any relevant screenshots or notes as context, but still requires a `prototype-parity-review` report.
+- For UI/UX, passes the local evidence and any relevant screenshots or notes as context, but still requires a structured visual review report.
 - Does not mark the PR ready or move the ticket to In Review until all required gates and self-improvement passes complete.
 
 Failure signals:
@@ -82,21 +82,21 @@ Failure signals:
 Prompt:
 
 ```text
-Use ticket-start for a ticket with an approved plan. You can either implement it manually in this session, run superpowers:executing-plans, or use superpowers:subagent-driven-development.
+Use ticket-start for a ticket with an approved plan. You can either implement it manually in this session, run a parallel execution session, or use subagent-driven development.
 ```
 
 Expected behavior:
-- Chooses `superpowers:subagent-driven-development` as the default implementation path.
+- Chooses subagent-driven development as the default implementation path.
 - States that this path provides TDD, implementer self-review, per-task spec review, per-task code-quality review, and final review.
-- Uses `superpowers:executing-plans` only if subagent-driven implementation is unavailable or unsuitable, with a stated reason.
+- Uses a parallel execution session only if subagent-driven implementation is unavailable or unsuitable, with a stated reason.
 - Does not add a separate ticket-start Security subagent gate.
 
 Failure signals:
 - Implements manually despite subagent-driven implementation being available.
-- Chooses `superpowers:executing-plans` without a reason.
+- Chooses parallel execution without a reason.
 - Adds or expects a dedicated ticket-start Security reviewer in the normal flow.
 
-## Scenario 6 - Prototype Parity Dependency And Inventory Are Required
+## Scenario 6 - UI/UX Trigger Wording And Inventory Are Required
 
 Prompt:
 
@@ -108,12 +108,13 @@ Expected behavior:
 - Recognizes parity mode.
 - Requires Scoping to enumerate prototype elements for the feature.
 - Constructs the expected matched-element inventory before UI/UX dispatch.
-- Dispatches the UI/UX subagent with an explicit instruction to load and follow `prototype-parity-review`.
-- Rejects a `prototype-parity-review` report that lacks the filled inventory, has blank computed-style cells, or only claims important elements were checked.
-- Re-dispatches UI/UX with `prototype-parity-review` and the specific structural gaps.
+- Dispatches the UI/UX subagent with trigger-matching wording: implemented frontend UI, runnable prototype/reference app, visual parity, matched-element inventory, DOM computed styles, bounding rects, and accessibility.
+- Rejects a visual review report that lacks the filled inventory, has blank computed-style cells, or only claims important elements were checked.
+- Re-dispatches UI/UX with the same trigger-matching review wording and the specific structural gaps.
 
 Failure signals:
-- Loads or paraphrases the full prototype parity protocol in the main `ticket-start` context instead of delegating it.
+- Explicitly tells the UI/UX subagent to load a named skill instead of relying on trigger-matching wording.
+- Loads or paraphrases the full prototype parity protocol in the main `ticket-start` context instead of delegating the review.
 - Accepts a summary-only UI/UX verdict.
 - Falls back to discovery-mode UI/UX after expected inventory construction fails in parity mode.
 - Advances to Ship with missing or blank inventory rows.

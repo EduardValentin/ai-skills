@@ -14,7 +14,7 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md", "prototype-parity-review"]
+skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md", "UI/UX trigger discipline"]
 forbidden_terms = []
 
 [[scenario]]
@@ -23,6 +23,20 @@ skill = "prototype-parity-review"
 prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before ship."
 description_terms = ["runnable prototype", "visual parity", "matched-element inventories", "DOM computed styles/bounding rects"]
 skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Consistency Mode"]
+forbidden_terms = []
+
+[[scenario]]
+id = "prototype-parity-review-delegated-uiux-gate"
+skill = "prototype-parity-review"
+prompt = """
+You are a UI/UX verification subagent in a ticket workflow. Mode is parity.
+Review the implemented frontend UI against the runnable prototype/reference app
+for visual parity. Use the expected matched-element inventory with blank computed-style
+cells, compare DOM computed styles and bounding rects for every row, check keyboard,
+focus, contrast, and accessibility, then return a structured verdict and findings.
+"""
+description_terms = ["implemented frontend UI", "visual parity", "DOM computed styles/bounding rects"]
+skill_terms = ["Parity Mode", "Accessibility", "supplied matched-element inventory"]
 forbidden_terms = []
 
 [[scenario]]
