@@ -1,0 +1,61 @@
+# Global trigger coverage for canonical skills under skills/.
+# Each scenario asserts that a user prompt should make one skill get picked up.
+
+[[scenario]]
+id = "declaratia-d212-investments"
+skill = "declaratia-unica-romania"
+prompt = "Complete my Romanian D212 for dividends from Romania and capital gains from IBKR."
+description_terms = ["Declarația Unică", "D212", "dividende", "IBKR"]
+skill_terms = ["duf.anaf.ro", "workflow/citation-protocol.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-start-linear"
+skill = "ticket-start"
+prompt = "Start Linear issue APP-123 and implement it in the repo."
+description_terms = ["start implementation work from a ticket", "Linear issue ID"]
+skill_terms = ["Setup → Solution Exploration", "personal-workflow.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "design-studio-visual-bug"
+skill = "design-studio"
+prompt = "Fix the mobile spacing bug in the React reference app dashboard and keep the prototype style intact."
+description_terms = ["UI/UX work", "React reference app", "visual bugs"]
+skill_terms = ["prepare-design-studio.sh", "references/browser-fallback.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "bitbucket-pr-ui-test"
+skill = "manage-bitbucket-pr"
+prompt = """
+Verify the UI changes in the current PR. The repo remote is
+https://bitbucket.org/acme/widget.git and the PR branch is feature/auth-panel.
+"""
+description_terms = ["Bitbucket-hosted pull request/repository", "testing or verifying PR behavior"]
+skill_terms = ["find-prs-for-branch", "Git credential helper for `bitbucket.org`"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "bitbucket-current-branch"
+skill = "manage-bitbucket-pr"
+prompt = "In the Bitbucket repo for acme/widget, check the current branch PR before I test it."
+description_terms = ["Bitbucket-hosted pull request/repository", "PR branches"]
+skill_terms = ["find-prs-for-branch", "PR or repository is hosted on Bitbucket"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "bitbucket-review-summary"
+skill = "manage-bitbucket-pr"
+prompt = "Summarize the review discussion and PR notes for https://bitbucket.org/acme/widget/pull-requests/42."
+description_terms = ["PR URLs", "writing summaries"]
+skill_terms = ["pr-details", "read-comments"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "bitbucket-merge-status"
+skill = "manage-bitbucket-pr"
+prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report blockers."
+description_terms = ["pull request IDs", "merge requests"]
+skill_terms = ["merge-status", "read-before-write"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]

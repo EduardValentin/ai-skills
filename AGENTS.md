@@ -40,7 +40,7 @@ All skills authored or modified in this repository must follow the [Rules for Wr
 
 ### 4. Trigger scenarios for every skill change
 
-Every new skill and every update to an existing skill must add or update trigger coverage in `tests/skill-trigger/scenarios.tsv`. The scenario should capture the real user phrasing, repository context, provider/tool context, or failure mode that should make the skill get picked up.
+Every new skill and every update to an existing skill must add or update trigger coverage in `tests/skill-trigger/scenarios.toml`. The scenario should capture the real user phrasing, repository context, provider/tool context, or failure mode that should make the skill get picked up.
 
 Do not treat trigger testing as optional documentation. If a skill's `description`, "When to Use" section, scope, or invocation behavior changes, update the trigger scenario registry in the same change.
 
@@ -49,9 +49,9 @@ Do not treat trigger testing as optional documentation. If a skill's `descriptio
 Before creating a PR for any skill addition or skill update, run the deterministic trigger contract and the behavioral trigger pressure suite:
 
 ```bash
-bash tests/skill-trigger/static-contract.sh
+python3 tests/skill-trigger/static_contract.py
 SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
-  bash tests/skill-trigger/behavioral-pressure.sh
+  python3 tests/skill-trigger/behavioral_pressure.py
 ```
 
 The behavioral command should use the target agent/runtime whose skill selection matters for the PR. If the behavioral suite cannot be run, do not silently proceed; report the exact blocker and get explicit user approval before creating the PR.
@@ -183,7 +183,7 @@ Before committing a skill, walk through this list:
 - [ ] Every capability that might not exist (screenshots, browser, network, MCP) has a fallback chain.
 - [ ] Required capabilities are declared at the top.
 - [ ] The skill has been run end-to-end on at least one target agent.
-- [ ] Trigger scenarios were added or updated in `tests/skill-trigger/scenarios.tsv`.
+- [ ] Trigger scenarios were added or updated in `tests/skill-trigger/scenarios.toml`.
 - [ ] The static trigger contract passed.
 - [ ] The behavioral trigger pressure suite passed for the target agent/runtime, or the user explicitly approved the documented blocker before PR creation.
 - [ ] No copy of this skill exists for a different agent. (If it does, merge them.)

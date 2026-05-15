@@ -16,12 +16,12 @@ Use this repository as the tracked source for your personal AI skills while keep
 Run deterministic skill-trigger contracts with:
 
 ```bash
-bash tests/skill-trigger/static-contract.sh
+python3 tests/skill-trigger/static_contract.py
 ```
 
 Behavioral trigger pressure tests are opt-in because they require an agent command:
 
 ```bash
 SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
-  bash tests/skill-trigger/behavioral-pressure.sh
+  python3 tests/skill-trigger/behavioral_pressure.py
 ```

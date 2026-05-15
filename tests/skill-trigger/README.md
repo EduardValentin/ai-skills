@@ -7,7 +7,7 @@ This directory keeps global trigger coverage for canonical skills under `skills/
 Run in CI:
 
 ```bash
-bash tests/skill-trigger/static-contract.sh
+python3 tests/skill-trigger/static_contract.py
 ```
 
 The static contract is deterministic. It verifies:
@@ -25,7 +25,7 @@ Run manually, nightly, or in a model-enabled CI job:
 
 ```bash
 SKILL_TRIGGER_AGENT_COMMAND='<agent command that reads stdin>' \
-  bash tests/skill-trigger/behavioral-pressure.sh
+  python3 tests/skill-trigger/behavioral_pressure.py
 ```
 
 The behavioral harness sends each scenario to an agent with the current skill
@@ -38,12 +38,12 @@ Run one scenario:
 ```bash
 SKILL_TRIGGER_SCENARIO=bitbucket-pr-ui-test \
 SKILL_TRIGGER_AGENT_COMMAND='<agent command that reads stdin>' \
-  bash tests/skill-trigger/behavioral-pressure.sh
+  python3 tests/skill-trigger/behavioral_pressure.py
 ```
 
 ## RED-GREEN-REFACTOR For Trigger Bugs
 
-1. RED: add or update a row in `scenarios.tsv` that captures the missed trigger.
+1. RED: add or update a `[[scenario]]` table in `scenarios.toml` that captures the missed trigger.
 2. GREEN: update the skill description/body until the static contract passes.
 3. REFACTOR: run the behavioral harness against an agent and tighten forbidden
    terms or prompt coverage if the agent still rationalizes past the skill.
