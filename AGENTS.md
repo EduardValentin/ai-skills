@@ -30,6 +30,13 @@ Every change to a canonical skill must be propagated to **both** agent install d
 - `~/.codex/skills/<skill-name>/`
 - `~/.claude/skills/<skill-name>/`
 
+Use the repo-level sync script; do not add per-skill `_sync.sh` wrappers:
+
+```bash
+scripts/sync-skill.sh push <skill-name>
+scripts/sync-skill.sh pull <skill-name> claude|codex
+```
+
 Treat the sync as part of the edit — not a follow-up. If a change lands in the repo but only one install dir gets updated, the agents are now running different versions of the skill, which is exactly the situation the single-canonical-copy rule exists to prevent.
 
 For legacy skills that still live under `claude/skills/` or `codex/skills/`, the same applies: the edit in the repo and the corresponding update under `~/.claude/skills/` or `~/.codex/skills/` must happen together.
