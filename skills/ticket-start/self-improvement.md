@@ -1,17 +1,17 @@
 # Self-Improvement Loop
 
-Loaded by the main agent after each auditor agent (Reviewer, Security, QA, UI/UX) returns its report — regardless of whether the report was CLEAN or routed through the bug-fix loop. This file defines how recurring lessons become codified rules.
+Loaded by the main agent after each auditor agent (Reviewer, QA, UI/UX) returns its report — regardless of whether the report was CLEAN or routed through the bug-fix loop. This file defines how recurring lessons become codified rules.
 
 ## Trigger
 
-After Reviewer, Security, QA, or UI/UX returns its report, main scans the report's `Patterns to codify next time` section. Each entry is a **candidate** for promotion to a rule.
+After Reviewer, QA, or UI/UX returns its report, main scans the report's `Patterns to codify next time` section. Each entry is a **candidate** for promotion to a rule.
 
 ## Rule promotion bar
 
 A candidate becomes a proposed rule **only if all** of these are true:
 
 - **Pattern-based** — applies to a class of changes, not just this one ticket.
-- **High-cost if violated** — security risk, performance regression, maintainability tax, behavioral correctness, or accessibility impact.
+- **High-cost if violated** — performance regression, maintainability tax, behavioral correctness, accessibility impact, or other production risk.
 - **Has a clear declarative form** — can be expressed as one or two sentences in instruction voice ("Always X" / "Never Y when Z").
 - **Not stylistic preference alone** — taste-only items don't qualify.
 - **Not already covered** — not an explicit duplicate or implicit consequence of an existing rule. Cross-check repo `AGENTS.md`, `~/.claude/CLAUDE.md`, and `~/.codex/AGENTS.md` before proposing.

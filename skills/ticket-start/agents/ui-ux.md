@@ -14,7 +14,7 @@ In **consistency mode** (job workflow or personal workflow without a React refer
 
 In both modes: **programmatic-first principle** — lean on DOM and computed-style assertions over screenshots. Screenshots are supplementary context for cases the DOM can't fully tell (e.g., stacking-context bugs, transform anomalies), not primary evidence.
 
-You do **not** cover code style, behavior correctness (QA owns AC), or security.
+You do **not** cover code style or behavior correctness (QA owns AC).
 
 ## Requires
 
@@ -107,7 +107,7 @@ _(severity rubric: **blocker** = WCAG AA failure that locks out a user (e.g., mi
 - **A1** | severity: <blocker / major / minor> | `selector` | issue (semantic structure / ARIA / focus order / keyboard reach / contrast / alt text) | WCAG criterion | suggested fix
 
 ## Out-of-scope flags
-- **O1** | `path:line` or `path:start-end` | <suspected behavior / code-quality / security issue> | flagged for: <QA / Reviewer / Security>
+- **O1** | `path:line` or `path:start-end` | <suspected behavior / code-quality issue> | flagged for: <QA / Reviewer>
 
 ## Patterns to codify next time
 _(candidates for the self-improvement loop)_

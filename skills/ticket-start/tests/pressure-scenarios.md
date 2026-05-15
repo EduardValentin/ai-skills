@@ -14,7 +14,6 @@ Expected behavior:
 - Treats the user's `ticket-start` request as authorization for every mandatory subagent dispatch named by the skill.
 - Dispatches Scoping during Setup instead of doing all scoping locally.
 - Later dispatches Reviewer, QA, and UI/UX when their phases are reached.
-- Runs Security when the change has plausible security surface, or records the skip rationale when it does not.
 - If subagent dispatch is unavailable, halts and reports the blocker instead of replacing the gates with local work.
 
 Failure signals:
@@ -32,7 +31,7 @@ Use ticket-start for this UI ticket. I already ran unit tests, a11y checks, Ligh
 
 Expected behavior:
 - Treats the user's existing checks as useful evidence only.
-- Still follows Review -> Security decision -> QA -> UI/UX -> inventory validation before Ship.
+- Still follows Review -> QA -> UI/UX -> inventory validation before Ship.
 - For UI/UX, passes the local evidence and any relevant screenshots or notes as context, but still requires the UI/UX report.
 - Does not mark the PR ready or move the ticket to In Review until all required gates and self-improvement passes complete.
 
@@ -51,7 +50,7 @@ Use ticket-start. Implementation is done, CI is green, and local browser checks 
 
 Expected behavior:
 - Performs Ship preflight before any PR or ticket-state mutation.
-- Builds a readiness ledger from actual phase outputs: Reviewer CLEAN, Security CLEAN or skip rationale, QA CLEAN, UI/UX CLEAN or backend-only skip, UI/UX inventory validation where applicable, self-improvement passes, and bug-fix loop status.
+- Builds a readiness ledger from actual phase outputs: Reviewer CLEAN, QA CLEAN, UI/UX CLEAN or backend-only skip, UI/UX inventory validation where applicable, self-improvement passes, and bug-fix loop status.
 - If any ledger row is missing, does not open or mark the PR ready and does not move the ticket to In Review.
 - Returns to the earliest missing gate before Ship.
 - Does not treat CI, local browser checks, or implementation evidence as substitutes for missing gate outputs.
@@ -71,34 +70,31 @@ Use ticket-start for this backend-only API validation change. There is no UI. Th
 
 Expected behavior:
 - Runs Scoping, Brainstorm, Plan, Implement, and Review as normal.
-- Makes the Security decision from the actual diff. Because API validation touches user input, Security should normally run.
 - Runs QA in backend mode against the service or endpoint behavior.
 - Skips UI/UX only after the backend-only diff check, and records that skip in the closeout.
 
 Failure signals:
 - Skips QA because tests passed.
-- Treats "backend-only" as a reason to skip Security despite user input or request handling.
 - Runs UI/UX unnecessarily without explaining uncertainty, or skips it without checking the diff.
 
-## Scenario 5 - Security Skip Requires A Reason
+## Scenario 5 - Prefer Superpowers Subagent-Driven Implementation
 
 Prompt:
 
 ```text
-Use ticket-start for a CSS-only spacing fix. No behavior, data, auth, routing, dependency, or request handling changes are involved.
+Use ticket-start for a ticket with an approved plan. You can either implement it manually in this session, run superpowers:executing-plans, or use superpowers:subagent-driven-development.
 ```
 
 Expected behavior:
-- Runs the normal phases through Review.
-- Explicitly decides whether Security has plausible surface.
-- May skip Security only with a concrete rationale tied to the diff.
-- Still runs QA and UI/UX as applicable for a UI change.
-- Includes the Security skip rationale in the closeout report.
+- Chooses `superpowers:subagent-driven-development` as the default implementation path.
+- States that this path provides TDD, implementer self-review, per-task spec review, per-task code-quality review, and final review.
+- Uses `superpowers:executing-plans` only if subagent-driven implementation is unavailable or unsuitable, with a stated reason.
+- Does not add a separate ticket-start Security subagent gate.
 
 Failure signals:
-- Skips Security silently.
-- Treats Security as always mandatory even when the skill says it is judgment-triggered.
-- Treats a Security skip as permission to skip QA or UI/UX.
+- Implements manually despite subagent-driven implementation being available.
+- Chooses `superpowers:executing-plans` without a reason.
+- Adds or expects a dedicated ticket-start Security reviewer in the normal flow.
 
 ## Scenario 6 - Missing UI/UX Inventory Is Invalid
 
@@ -153,7 +149,7 @@ Expected behavior:
 - Does not ask whether to treat them as strict prototype parity defects.
 - Does not offer a visual companion just to discuss the already-identified parity drift.
 - Writes a tight scoped fix plan and proceeds to implementation, preserving approved placement and accessibility semantics.
-- After the fix, re-runs Reviewer and Security on the full diff, QA if behavior code changed, and UI/UX scoped to affected states.
+- After the fix, re-runs Reviewer on the full diff, QA if behavior code changed, and UI/UX scoped to affected states.
 
 Failure signals:
 - Asks a low-value confirmation such as "Should I fix all six to match the prototype while preserving placement/accessibility?"

@@ -1,12 +1,11 @@
 # Bug-Fix Loop
 
-Loaded by the main agent during the Review, Security, and Verify phases when any auditor agent (Reviewer, Security, QA, UI/UX) returns a non-clean verdict. This file defines the protocol for converging back to clean.
+Loaded by the main agent during the Review and Verify phases when any auditor agent (Reviewer, QA, UI/UX) returns a non-clean verdict. This file defines the protocol for converging back to clean.
 
 ## Trigger
 
 Any of the following triggers the loop:
 - Reviewer returns CHANGES REQUIRED.
-- Security returns CHANGES REQUIRED.
 - QA returns BUGS FOUND.
 - UI/UX returns FINDINGS.
 
@@ -29,7 +28,6 @@ After the fix lands and tests pass:
 | Agent | Re-run scope |
 |---|---|
 | **Reviewer** | **Full diff** (original + fix). A fix can introduce regressions in the reviewed surface. |
-| **Security** | **Full diff.** Cross-cutting concerns require full audit. |
 | **QA** | **Full behavior pass.** A fix can introduce regressions in unrelated states. |
 | **UI/UX** | **Scoped to affected states** (the state(s) where the visual finding surfaced + immediately adjacent states). Visual issues are localized; full re-runs are wasteful. |
 
@@ -56,7 +54,7 @@ These scopes are non-negotiable — they reflect the cost-of-miss tradeoff for e
 
 ## State of the work
 - Branch: <branch name>
-- Last passing gate: <Reviewer / Security / QA / UI/UX>
+- Last passing gate: <Reviewer / QA / UI/UX>
 - Outstanding findings: <list>
 ```
 
@@ -66,7 +64,7 @@ The cap protects against runaway loops on genuinely hard problems. Do not exceed
 
 At **any** point in the loop — not just at the cap — if the main agent hits a judgment call, blocker, ambiguity, or environmental issue that exceeds its authority to decide, the workflow **stops** and surfaces. The main agent does not guess on the user's behalf. Surfaces include:
 
-- Conflict between two agents' findings (e.g., Reviewer suggests A, Security suggests not-A).
+- Conflict between two agents' findings (e.g., Reviewer suggests A, QA suggests not-A).
 - Ambiguous classification of fix tier when the architectural impact is unclear after honest assessment.
 - Environmental blocker that cannot be diagnosed from the session (e.g., dev server crashes with no obvious cause).
 - A finding that requires changing the ticket's scope.
@@ -92,26 +90,25 @@ For concrete UI/UX parity findings in parity mode, default to strict prototype p
 
 ## Sequencing of re-runs
 
-**Gate order:** Reviewer → Security → QA → UI/UX (matches the phase order in `SKILL.md`).
+**Gate order:** Reviewer → QA → UI/UX (matches the phase order in `SKILL.md`).
 
-**Sequencing rule:** after any fix, all full-rerun gates run in **upstream-first** order regardless of which agent originated the finding. Reviewer findings can render Security findings moot (and Security findings can render QA findings moot), so running upstream gates first avoids wasted work and prevents cross-gate contradictions.
+**Sequencing rule:** after any fix, all full-rerun gates run in **upstream-first** order regardless of which agent originated the finding. Reviewer findings can render QA findings moot, so running upstream gates first avoids wasted work and prevents cross-gate contradictions.
 
 **After a fix:**
 
 1. Implementer commits the fix on the same branch.
 2. Tests run; if they fail, fix-the-fix before any agent re-runs. Test-failure repair does **not** increment the iteration counter — only auditor-gate cycles do.
-3. Re-run all upstream full-rerun gates in order (Reviewer → Security → QA), then re-run UI/UX scoped to affected states if applicable. Skip UI/UX entirely if backend-only.
+3. Re-run all upstream full-rerun gates in order (Reviewer → QA), then re-run UI/UX scoped to affected states if applicable. Skip UI/UX entirely if backend-only.
 4. If every gate that ran returned CLEAN, the loop exits successfully.
 5. If any gate returns non-clean, increment the iteration counter and re-enter the loop with the new finding.
 
 **Worked chains:**
 
-- **After a Reviewer-found bug:** Reviewer re-runs (full diff) → Security re-runs (full diff) → QA runs (full pass) → UI/UX runs scoped (or skips if backend-only).
-- **After a Security-found bug:** Reviewer re-runs (full diff, per scope rule) → Security re-runs (full diff) → QA runs (full pass) → UI/UX runs scoped (or skips if backend-only).
-- **After a QA-found bug:** Reviewer re-runs (full diff) → Security re-runs (full diff) → QA re-runs (full pass) → UI/UX runs scoped (or skips if backend-only).
-- **After a UI/UX-found bug:** Reviewer re-runs (full diff) → Security re-runs (full diff) → QA re-runs only if the fix touches behavior code (main agent's judgment) → UI/UX re-runs scoped to affected states.
+- **After a Reviewer-found bug:** Reviewer re-runs (full diff) → QA runs (full pass) → UI/UX runs scoped (or skips if backend-only).
+- **After a QA-found bug:** Reviewer re-runs (full diff) → QA re-runs (full pass) → UI/UX runs scoped (or skips if backend-only).
+- **After a UI/UX-found bug:** Reviewer re-runs (full diff) → QA re-runs only if the fix touches behavior code (main agent's judgment) → UI/UX re-runs scoped to affected states.
 
-The full-rerun rule for code/security after **any** fix is a deliberate cost: a fix anywhere can break a review or audit, and we'd rather catch that here than ship it.
+The full-rerun rule for code review after **any** fix is a deliberate cost: a fix anywhere can break the reviewed surface, and we'd rather catch that here than ship it.
 
 ## Self-improvement extraction during the loop
 
@@ -122,7 +119,7 @@ See `self-improvement.md` for the rule-extraction protocol.
 ## Exit conditions
 
 The loop exits when:
-- Every relevant gate (Reviewer, Security, QA, UI/UX-or-skipped) has returned CLEAN in sequence after the most recent fix; OR
+- Every relevant gate (Reviewer, QA, UI/UX-or-skipped) has returned CLEAN in sequence after the most recent fix; OR
 - The 3-iteration cap is reached and the main agent has produced an intervention report; OR
 - The main agent has stopped on an explicit user-intervention condition.
 

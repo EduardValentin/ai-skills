@@ -7,15 +7,15 @@ description: Use when the user wants to start implementation work from a ticket 
 
 ## Overview
 
-Implementation work driven by a ticket. The main agent owns user dialogue, plan-writing, and phase gating; specialized subagents (Scoping, Reviewer, Security, QA, UI/UX) own deep work. Phase order is a hard gate — do not advance until the prior gate is satisfied:
+Implementation work driven by a ticket. The main agent owns user dialogue, plan-writing, and phase gating; specialized subagents (Scoping, Reviewer, QA, UI/UX) own deep work. Phase order is a hard gate — do not advance until the prior gate is satisfied:
 
-**Setup → Brainstorm → Plan → Implement → Review → Security? → Verify → Ship**
+**Setup → Brainstorm → Plan → Implement → Review → Verify → Ship**
 
-Brainstorm, Plan, and Implement defer to the superpowers methodology: `superpowers:brainstorming`, `superpowers:writing-plans`, and `superpowers:subagent-driven-development` (or `superpowers:executing-plans` fallback). When this skill names a sub-skill as **REQUIRED**, invoke it — do not paraphrase its protocol from memory.
+Brainstorm, Plan, and Implement defer to the superpowers methodology: `superpowers:brainstorming`, `superpowers:writing-plans`, and `superpowers:subagent-driven-development`. Use `superpowers:subagent-driven-development` as the default implementation path so each task gets TDD, implementer self-review, spec-compliance review, code-quality review, and the final Superpowers review. Use `superpowers:executing-plans` only when subagent-driven implementation is genuinely unavailable or unsuitable, and record the reason. When this skill names a sub-skill as **REQUIRED**, invoke it — do not paraphrase its protocol from memory.
 
 **Context-economy contract:** every subagent's report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
-**Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent gate named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required gates. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, Reviewer, Security, QA, or UI/UX with local inspection, tests, browser checks, Lighthouse, or "I reviewed it myself."
+**Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent gate named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required gates. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, Reviewer, QA, or UI/UX with local inspection, tests, browser checks, Lighthouse, or "I reviewed it myself."
 
 ## When to use
 
@@ -94,7 +94,7 @@ If ambiguous, ask the user before loading anything else.
 
 1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
 
-2. **REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`** (auto-bakes TDD + per-task spec + code-quality review), or **`superpowers:executing-plans`** for a parallel session. Let those skills run.
+2. **REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`** (preferred; auto-bakes TDD + implementer self-review + per-task spec review + code-quality review + final review). Use **`superpowers:executing-plans`** only when subagent-driven implementation is unavailable or unsuitable. Let the chosen Superpowers skill run; do not duplicate its per-task review protocol in `ticket-start`.
 
 3. **Two overrides this skill adds:**
    - On the `superpowers:executing-plans` fallback path, invoke `superpowers:requesting-code-review` after the final task and before Review — that path has no other end-of-feature review.
@@ -106,25 +106,7 @@ If ambiguous, ask the user before loading anything else.
 
 2. **If CHANGES REQUIRED**, brief the user (per `## Briefing rule`) and route through `bug-fix-loop.md`.
 
-3. **When CLEAN**, run the self-improvement extraction pass (per `self-improvement.md`). Advance.
-
-## Security (judgment-triggered)
-
-**Run Security whenever the change has any plausible security surface.** The bar to skip is *"no plausible security surface,"* not *"looks safe."* When in doubt, run. Main agent decides — there is no allowlist.
-
-Plausible surfaces include — non-exhaustively — auth/session, user input handling, data exposure, persistence, redirects, file handling, external requests, privileged actions, third-party deps, sensitive logging, and any change to **what users can see or do that they otherwise couldn't**. Soft signals count: a feature that reveals whether an email is already registered on the site has a security surface (account enumeration) and qualifies.
-
-Calibration:
-- **Skip:** CSS-only spacing fix; prose copy change; internal helper rename with no surface change; asset swap with no new request.
-- **Run:** any new request handler; any new dependency; any change to who-sees-what; any state change tied to user input; any new redirect or external request; any file-handling change.
-
-When skipped, record the skip rationale in the closeout report.
-
-1. **Dispatch Security subagent** (`agents/security.md`). Forward: full diff, ticket + AC, package manifests / lockfiles, repo `AGENTS.md`, Scoping + Reviewer reports (Reviewer's out-of-scope flags for Security feed in here), role prompt. Local threat modeling is useful preparation, but it does not satisfy this gate when Security is required.
-
-2. **If CHANGES REQUIRED**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **Reviewer + Security re-run on the full diff**.
-
-3. **When CLEAN (or skipped)**, run the self-improvement pass on Security findings (skip the pass if Security was skipped). Advance.
+3. **When CLEAN**, run the self-improvement extraction pass (per `self-improvement.md`). Advance to Verify.
 
 ## Verify
 
@@ -185,7 +167,6 @@ When skipped, record the skip rationale in the closeout report.
 
 0. **Ship preflight — mandatory before any Ship mutation.** Before opening a PR, marking a PR ready, moving a ticket to review, merging, closing, or otherwise signaling "ready," build a readiness ledger from the actual completed phase outputs:
    - Reviewer: CLEAN report present.
-   - Security: CLEAN report present, or skipped with a concrete "no plausible security surface" rationale.
    - QA: CLEAN report present.
    - UI/UX: CLEAN report and inventory validation present, or skipped with backend-only rationale.
    - Self-improvement: extraction pass completed for each auditor that ran; skipped only where the skill permits skipping.
@@ -203,7 +184,7 @@ When skipped, record the skip rationale in the closeout report.
 
 ## Bug-fix loop
 
-When any auditor (Reviewer / Security / QA / UI/UX) returns a non-clean verdict, route through `bug-fix-loop.md`. That file defines complexity tiers, per-agent re-review scope, the 3-iteration cap with intervention report, the always-on user-intervention principle, and sequencing rules.
+When any auditor (Reviewer / QA / UI/UX) returns a non-clean verdict, route through `bug-fix-loop.md`. That file defines complexity tiers, per-agent re-review scope, the 3-iteration cap with intervention report, the always-on user-intervention principle, and sequencing rules.
 
 ## Self-improvement loop
 
@@ -216,13 +197,13 @@ When the workflow dispatches a subagent and then asks the user for input, decisi
 | Trigger | Brief with |
 |---|---|
 | Scoping → user (Setup clarify, or Brainstorm opener) | Scoping's relevant findings (entry points, target module, prototype elements if any). For conflicts: quoted finding + `path:line` evidence. The question framed against that evidence. |
-| Auditor → fix decision (Reviewer / Security / QA / UI/UX) | Findings, one per line (severity, `path:line`, one-line description). Suggested fix. Complexity tier the bug-fix loop assigned. For architectural complexity: the tradeoff as options the user can weigh. |
+| Auditor → fix decision (Reviewer / QA / UI/UX) | Findings, one per line (severity, `path:line`, one-line description). Suggested fix. Complexity tier the bug-fix loop assigned. For architectural complexity: the tradeoff as options the user can weigh. |
 
 **Forbidden:** asking the user to pick an option they haven't seen, answer a clarifying question without its motivating context, or approve a fix without naming the finding.
 
 ## Implementation standards
 
-Smallest safe diff that satisfies the ticket. Preserve existing patterns; do not invent abstractions the ticket does not require. Consider security and performance during implementation, not only at the Security and QA gates — common attack vectors (injection, XSS, CSRF, SSRF, IDOR, path traversal, unsafe deserialization, secret leakage, insecure deps, unsafe client-side trust) apply per-change. Greenfield personal-project code with no inherited pattern: establish ownership boundaries and low coupling deliberately.
+Smallest safe diff that satisfies the ticket. Preserve existing patterns; do not invent abstractions the ticket does not require. Rely on the Superpowers implementation path for TDD, implementer self-review, spec-compliance review, code-quality review, and final review. If the ticket is explicitly security-intensive, pause and use a dedicated security workflow instead of expanding `ticket-start`. Greenfield personal-project code with no inherited pattern: establish ownership boundaries and low coupling deliberately.
 
 ## Library research
 
@@ -232,8 +213,7 @@ If the change touches a third-party library, identify the exact version from man
 
 When done, report:
 - What changed.
-- What was validated and how — name each form of evidence: tests run; Reviewer / Security / QA / UI/UX status; UI/UX mode and coverage (or skipped because backend-only). Omit only the ones that did not apply, and say so.
-- Security skip rationale, if skipped.
+- What was validated and how — name each form of evidence: tests run; Superpowers implementation/review status; Reviewer / QA / UI/UX status; UI/UX mode and coverage (or skipped because backend-only). Omit only the ones that did not apply, and say so.
 - Rules promoted in this session, by destination (per `self-improvement.md`).
 - Bug-fix iterations consumed (out of 3 cap).
 - Any remaining risk, assumption, or follow-up.
@@ -249,11 +229,10 @@ When done, report:
 - The brainstorm summary doesn't record at least one alternative considered (with dismissal rationale).
 - Skipping `superpowers:brainstorming`, `superpowers:writing-plans`, or `superpowers:subagent-driven-development` (or its `superpowers:executing-plans` fallback) because "the ticket is clear" or "the change is small."
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent gates. `ticket-start` invocation authorizes required dispatches.
-- Replacing Reviewer, Security, QA, or UI/UX with local review, test runs, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
+- Replacing Reviewer, QA, or UI/UX with local review, test runs, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
-- Skipping Security when the change has any plausible security surface (auth/session, user input, data exposure, persistence, redirects, file handling, external requests, privileged actions, deps, sensitive logging, who-sees-what).
 - Skipping the self-improvement extraction pass after an auditor report; auto-applying a rule without explicit user approval; editing `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md` without keeping them in sync.
 - Exceeding the 3-iteration bug-fix cap silently.
 - Continuing past a user-intervention condition without surfacing.
@@ -265,7 +244,7 @@ When done, report:
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review.
 - Letting `superpowers:finishing-a-development-branch` present its 4-option prompt instead of returning to Review.
 - Starting any Ship mutation without first completing the Ship preflight ledger from actual auditor/self-improvement outputs.
-- Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before Review, Security decision, QA, UI/UX if applicable, inventory validation, and self-improvement passes are complete.
+- Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before Review, QA, UI/UX if applicable, inventory validation, and self-improvement passes are complete.
 - Merging the PR before the user explicitly approves.
 
 If any of these is true: stop, name the violation, and recover before continuing.
