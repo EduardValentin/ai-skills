@@ -14,7 +14,15 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup → Solution Exploration", "personal-workflow.md"]
+skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "frontend-pr-test-acceptance"
+skill = "frontend-pr-test"
+prompt = "Test this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes."
+description_terms = ["frontend pull request", "acceptance criteria", "PR notes"]
+skill_terms = ["Browser acceptance capability", "Run focused tests near the changed code"]
 forbidden_terms = []
 
 [[scenario]]
@@ -23,6 +31,22 @@ skill = "design-studio"
 prompt = "Fix the mobile spacing bug in the React reference app dashboard and keep the prototype style intact."
 description_terms = ["UI/UX work", "React reference app", "visual bugs"]
 skill_terms = ["prepare-design-studio.sh", "references/browser-fallback.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-planner-prd-to-stories"
+skill = "ticket-planner"
+prompt = "Turn this PRD and prototype into implementation-ready epics, vertical-slice user stories, and acceptance criteria."
+description_terms = ["PRDs", "vertical-slice user stories", "acceptance criteria"]
+skill_terms = ["issue-tracker neutral", "references/requirements-interview.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "linear-issue-writing-approved-drafts"
+skill = "linear-issue-writing"
+prompt = "Publish these approved epic and user story drafts into Linear, with the right parent-child structure and duplicate checks."
+description_terms = ["publish approved epics", "user stories", "Linear issue structure"]
+skill_terms = ["Run duplicate detection", "parent/sub-issue structure"]
 forbidden_terms = []
 
 [[scenario]]

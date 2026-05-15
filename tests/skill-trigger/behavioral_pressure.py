@@ -72,7 +72,7 @@ def run_scenario(agent_command: str, index: str, scenario: dict[str, object]) ->
         print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
         raise ValueError(f"{scenario_id} did not select expected skill: {skill}")
 
-    for term in scenario["forbidden_terms"]:
+    for term in scenario["response_forbidden_terms"]:
         term_text = str(term)
         if term_text and term_text in response:
             print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)

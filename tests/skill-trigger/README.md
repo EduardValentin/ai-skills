@@ -30,8 +30,8 @@ SKILL_TRIGGER_AGENT_COMMAND='<agent command that reads stdin>' \
 
 The behavioral harness sends each scenario to an agent with the current skill
 index and asks it to return the skills it would load before acting. It fails if
-the expected skill is missing or if the response repeats a known bad
-rationalization.
+the expected skill is missing or if the response repeats a phrase listed in
+`response_forbidden_terms`.
 
 Run one scenario:
 
