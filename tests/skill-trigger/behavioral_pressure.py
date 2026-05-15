@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 
-from trigger_scenarios import load_scenarios
+from trigger_scenarios import discover_skill_files, load_scenarios, parse_frontmatter
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -120,24 +119,10 @@ Scenario id: {scenario["id"]}
 
 def skill_index() -> str:
     rows: list[str] = []
-    for skill_file in sorted((REPO_ROOT / "skills").glob("*/SKILL.md")):
+    for skill_name, skill_file in sorted(discover_skill_files(REPO_ROOT).items()):
         frontmatter = parse_frontmatter(skill_file.read_text(encoding="utf-8"))
-        rows.append(f"- {frontmatter.get('name', skill_file.parent.name)}: {frontmatter.get('description', '')}")
+        rows.append(f"- {frontmatter.get('name', skill_name)}: {frontmatter.get('description', '')}")
     return "\n".join(rows)
-
-
-def parse_frontmatter(skill_doc: str) -> dict[str, str]:
-    match = re.match(r"^---\n(?P<body>.*?)\n---\n", skill_doc, re.DOTALL)
-    if not match:
-        return {}
-
-    values: dict[str, str] = {}
-    for raw_line in match.group("body").splitlines():
-        if ":" not in raw_line:
-            continue
-        key, value = raw_line.split(":", 1)
-        values[key.strip()] = value.strip().strip('"')
-    return values
 
 
 if __name__ == "__main__":

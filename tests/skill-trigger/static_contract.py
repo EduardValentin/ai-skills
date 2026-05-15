@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from trigger_scenarios import load_scenarios
+from trigger_scenarios import discover_skill_files, load_scenarios
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,6 +33,7 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
 
     seen_ids: set[str] = set()
     covered_skills: set[str] = set()
+    skill_files = discover_skill_files(REPO_ROOT)
 
     for scenario in scenarios:
         scenario_id = str(scenario["id"])
@@ -43,9 +44,9 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
             raise ValueError(f"duplicate scenario id: {scenario_id}")
         seen_ids.add(scenario_id)
 
-        skill_file = REPO_ROOT / "skills" / skill / "SKILL.md"
-        if not skill_file.exists():
-            raise ValueError(f"{scenario_id} references missing canonical skill: {skill_file}")
+        skill_file = skill_files.get(skill)
+        if skill_file is None:
+            raise ValueError(f"{scenario_id} references missing skill: {skill}")
 
         skill_doc = skill_file.read_text(encoding="utf-8")
         frontmatter = parse_frontmatter(skill_file, skill_doc)
@@ -72,10 +73,11 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
 
         covered_skills.add(skill)
 
-    for skill_file in sorted((REPO_ROOT / "skills").glob("*/SKILL.md")):
-        skill = skill_file.parent.name
+    for skill, skill_file in sorted(skill_files.items()):
         if skill not in covered_skills:
-            raise ValueError(f"canonical skill missing trigger scenario: {skill}")
+            raise ValueError(
+                f"skill missing trigger scenario: {skill} ({skill_file.relative_to(REPO_ROOT)})"
+            )
 
 
 def parse_frontmatter(skill_file: Path, skill_doc: str) -> dict[str, str]:

@@ -83,3 +83,51 @@ prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report 
 description_terms = ["pull request IDs", "merge requests"]
 skill_terms = ["merge-status", "read-before-write"]
 forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "uiux-frontend-interface-design-accessible-page"
+skill = "frontend-interface-design"
+prompt = "Design a polished responsive settings page with semantic HTML, keyboard support, loading and error states, and subtle motion."
+description_terms = ["frontend pages", "semantic HTML", "accessibility", "responsive behavior", "production-grade UI/UX"]
+skill_terms = ["Design from structure outward", "ARIA only fills semantic gaps"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-semantic-design-tokens-raw-values"
+skill = "semantic-design-tokens"
+prompt = "Audit this component for raw hex colors, arbitrary Tailwind values, duplicated theme constants, and convert the styling to semantic design tokens."
+description_terms = ["semantic design tokens", "raw hex/rgb colors", "arbitrary utility classes", "duplicated theme constants"]
+skill_terms = ["Use tokens as the design-system contract", "scripts/audit_tokens.py"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-reusable-components-repeated-patterns"
+skill = "reusable-ui-components"
+prompt = "This dashboard repeats metric cards and filter panels across pages. Decide whether to reuse, extend variants, or extract a reusable component API."
+description_terms = ["UI patterns that repeat", "component APIs", "variants", "page-specific logic"]
+skill_terms = ["Prefer reusable components when they preserve meaning", "Name components after their role"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-visual-validation-breakpoints"
+skill = "visual-validation"
+prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking overflow, clipping, contrast, focus states, and parity with the reference app."
+description_terms = ["screenshots", "responsive layouts", "breakpoint behavior", "focus states", "visual parity"]
+skill_terms = ["Do not declare visual work complete from code inspection alone", "Viewport Matrix"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-design-direction-ambiguous-premium"
+skill = "design-direction-brainstorming"
+prompt = "Make the dashboard feel more premium and less cluttered; the target audience and emotional tone are not clear yet."
+description_terms = ["multiple plausible design directions", "unclear audience", "emotional tone", "make it better"]
+skill_terms = ["Align on the design's job before choosing pixels", "Chosen direction"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-web-copy-brand-voice-hero-cta"
+skill = "web-copy-from-brand-voice"
+prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so it fits our brand voice and conversion goal."
+description_terms = ["brand voice", "conversion goal", "microcopy"]
+skill_terms = ["Write copy from the brand's voice", "When SEO Matters"]
+forbidden_terms = []

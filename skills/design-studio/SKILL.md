@@ -1,6 +1,6 @@
 ---
 name: design-studio
-description: "Use when doing UI/UX work on a React reference app that mirrors a production codebase: building or auditing pages, components, sections, design-system tokens, reusable component patterns, visual validation, brand-aligned copy, or PRD/DESIGN.md sync."
+description: "Use when doing UI/UX work on a React reference app that mirrors a production codebase: building or auditing pages, components, sections, visual bugs, design-system tokens, reusable component patterns, visual validation, brand-aligned copy, or PRD/DESIGN.md sync."
 ---
 
 # Design Studio
@@ -50,7 +50,7 @@ Deadlines do not relax these priorities. If the requested timeline conflicts wit
    - `PRD.md` missing: offer to generate one using `references/prd-generation.md`.
    - Token docs and theme disagree: treat the implemented theme as the current source of truth, flag the mismatch, and offer to update `DESIGN.md`.
 
-4. **Capture visual context.** Start the app, inspect the target page and nearby pages, and write a 3-to-5 bullet aesthetic summary: color rhythm, spacing rhythm, type hierarchy, density, component shape, and motion. If the environment cannot capture screenshots, ask the user for them before changing visual design.
+4. **Capture visual context.** Start the app, inspect the target page and nearby pages, and write a 3-to-5 bullet aesthetic summary: color rhythm, spacing rhythm, type hierarchy, density, component shape, and motion. If the environment cannot capture screenshots, use the fallback ladder in `references/browser-fallback.md`.
 
 ## Choose The Flow
 
