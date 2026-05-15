@@ -8,8 +8,11 @@ Prompt: "Using the design-studio workflow, add a stats section to the React refe
 
 Expected behavior:
 - Inspects existing design tokens before styling.
-- Avoids raw hex/rgb values and arbitrary utility classes in product UI.
-- Proposes any missing token by semantic role before use.
+- Reuses existing semantic tokens when they express the role.
+- Avoids global one-off tokens for component-only values.
+- Keeps genuine one-off sizing local to the component.
+- Uses component-scoped color tokens only for genuine one-off component colors.
+- Proposes global tokens only for missing reusable semantic roles.
 - Updates design-system documentation if the token system changes.
 
 ## Evaluation 2: Reusable Components

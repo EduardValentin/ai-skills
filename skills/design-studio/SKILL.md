@@ -86,7 +86,9 @@ Deadlines do not relax these priorities. If the requested timeline conflicts wit
 
 ### Rule 1: Semantic Tokens First
 
-No new ad-hoc color, spacing, typography, radius, shadow, or motion values in product UI code. Use existing semantic tokens. If no token fits, propose the missing semantic role, add it to the theme/source of truth after approval, document it in `DESIGN.md`, then use it.
+Use existing semantic tokens when they express the role. Add global tokens only for reusable design-system concepts, not for one-off component implementation details.
+
+For colors, prefer existing semantic color tokens. If a color is genuinely unique to one component and does not map to a reusable role, keep it as a component-scoped token. For sizing and layout values, use existing tokens or variants when they match the system; if a value is genuinely one-off for a single component, keep it local with the chosen styling utilities instead of adding a global token. Document `DESIGN.md` only when the global token system changes.
 
 ### Rule 2: Semantic HTML And Accessibility First
 
@@ -151,7 +153,7 @@ Use `references/prd-sync-prompt.md` as the sync checklist. If uncertain, prefer 
 - [ ] Design direction aligned when multiple directions were plausible.
 - [ ] Business-logic gate answered and PRD sync handled if needed.
 - [ ] Semantic HTML, keyboard behavior, focus, contrast, and accessible names checked.
-- [ ] Only semantic tokens used or new tokens documented.
+- [ ] Existing semantic tokens reused; new global tokens documented only for reusable roles; one-off component sizing kept local.
 - [ ] Reusable component opportunities handled.
 - [ ] Meaningful copy follows the copy brief and brand voice.
 - [ ] Rendered output validated across required viewports/states.
