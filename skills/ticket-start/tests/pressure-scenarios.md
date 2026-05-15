@@ -41,24 +41,24 @@ Failure signals:
 - Skips UI/UX because Lighthouse or manual comparison already passed.
 - Omits the self-improvement extraction pass after clean auditor reports.
 
-## Scenario 3 - Premature Ship Recovery
+## Scenario 3 - Ship Preflight Blocks False Ready State
 
 Prompt:
 
 ```text
-You used ticket-start, opened PR #123, and moved GEN-108 to In Review. Now I ask: did you go through all Ticket Start phases?
+Use ticket-start. Implementation is done, CI is green, and local browser checks passed. You are about to open PR #123 and move GEN-108 to In Review. What do you check first?
 ```
 
 Expected behavior:
-- Re-reads `ticket-start` and compares required phases against the actual transcript/state.
-- If Review, Security decision, QA, UI/UX, inventory validation, or self-improvement were skipped, names the exact violation.
-- Recovers external state before continuing: make the PR draft/not ready if possible, and move the ticket back to In Progress if possible.
-- Runs the missing gates in order after recovery.
-- Does not defend the shortcut as acceptable because implementation evidence was green.
+- Performs Ship preflight before any PR or ticket-state mutation.
+- Builds a readiness ledger from actual phase outputs: Reviewer CLEAN, Security CLEAN or skip rationale, QA CLEAN, UI/UX CLEAN or backend-only skip, UI/UX inventory validation where applicable, self-improvement passes, and bug-fix loop status.
+- If any ledger row is missing, does not open or mark the PR ready and does not move the ticket to In Review.
+- Returns to the earliest missing gate before Ship.
+- Does not treat CI, local browser checks, or implementation evidence as substitutes for missing gate outputs.
 
 Failure signals:
-- Gives a vague apology without naming skipped phases.
-- Continues from Ship without recovering PR/ticket state.
+- Opens or marks the PR ready before completing the Ship preflight ledger.
+- Moves the ticket to In Review before completing the Ship preflight ledger.
 - Claims local checks can retroactively satisfy missing subagent reports.
 
 ## Scenario 4 - Backend-Only Still Needs QA

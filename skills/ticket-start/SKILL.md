@@ -183,24 +183,23 @@ When skipped, record the skip rationale in the closeout report.
 
 ## Ship
 
-1. **Personal workflow:** open the PR with `gh`, then move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
-2. **Job workflow:** follow the team's PR conventions from repository instructions.
+0. **Ship preflight — mandatory before any Ship mutation.** Before opening a PR, marking a PR ready, moving a ticket to review, merging, closing, or otherwise signaling "ready," build a readiness ledger from the actual completed phase outputs:
+   - Reviewer: CLEAN report present.
+   - Security: CLEAN report present, or skipped with a concrete "no plausible security surface" rationale.
+   - QA: CLEAN report present.
+   - UI/UX: CLEAN report and inventory validation present, or skipped with backend-only rationale.
+   - Self-improvement: extraction pass completed for each auditor that ran; skipped only where the skill permits skipping.
+   - Bug-fix loop: no active unresolved findings; iterations consumed recorded.
+
+   If any ledger row is missing, **do not perform any Ship action**. Return to the earliest missing gate and complete it first. Local verification, green CI, clean merge state, manual browser checks, or local review do not satisfy missing ledger rows.
+
+1. **Personal workflow:** after Ship preflight passes, open the PR with `gh`, then move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
+2. **Job workflow:** after Ship preflight passes, follow the team's PR conventions from repository instructions.
    - If the repository uses Bitbucket PRs and the work requires reading PR metadata, reading or posting comments, or merging via the REST API, treat that portion as Bitbucket PR REST work.
 3. Wait for the user's explicit approval before merging.
 4. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
 5. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
 6. If PR creation, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
-
-## Premature Ship recovery
-
-If any Ship action happened before Review, Security decision, QA, UI/UX if applicable, inventory validation, and self-improvement passes were complete, stop and recover external state before continuing:
-
-- Mark the PR back to draft / not-ready-for-review when the platform supports it.
-- Move the ticket back to the pre-review working state (`In Progress` for personal Linear workflow) when the workflow's state model supports it.
-- Report any recovery action that could not be performed and why.
-- Then run the missing gates in order from the earliest incomplete phase.
-
-Local verification, green CI, or a clean merge state does not retroactively satisfy missing gates.
 
 ## Bug-fix loop
 
@@ -265,6 +264,7 @@ When done, report:
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review.
 - Letting `superpowers:finishing-a-development-branch` present its 4-option prompt instead of returning to Review.
+- Starting any Ship mutation without first completing the Ship preflight ledger from actual auditor/self-improvement outputs.
 - Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before Review, Security decision, QA, UI/UX if applicable, inventory validation, and self-improvement passes are complete.
 - Merging the PR before the user explicitly approves.
 
