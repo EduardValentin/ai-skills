@@ -52,7 +52,7 @@ When the prototype and the design system disagree, the prototype wins. The desig
 
 This rule exists because of an observed failure mode where this exact substitution happened and the UI/UX agent accepted it as "design-system compliant."
 
-**Corollary:** prototype enumeration in Scoping is mandatory in parity mode. The parity-dominance rule depends on having an authoritative list of what to maintain parity with; Scoping's `## Prototype elements relevant to this feature` section is that list. An empty section is a Scoping failure, not a clean report — see `agents/scoping.md` → forbidden behaviors.
+**Corollary:** prototype enumeration in Scoping is mandatory in parity mode. The parity-dominance rule depends on having an authoritative list of what to maintain parity with; Scoping's `## Prototype or reference elements` section is that list. An empty section is a Scoping failure, not a clean report.
 
 ## Verification — Mode mapping for QA and UI/UX
 
@@ -68,7 +68,7 @@ Determined from the diff (main agent decides), same as the job workflow:
 
 ### UI/UX mode
 
-- **`parity`** — when `designs/` is a runnable React reference app. The UI/UX prompt asks the subagent to review the implemented frontend UI against the runnable prototype/reference app for visual parity using a matched-element inventory, DOM computed-style and bounding-rect extraction, per-state coverage at all relevant breakpoints, and accessibility checks. Reference app is the absolute source of truth. Main agent constructs the **expected matched-element inventory** at Verify dispatch (per `SKILL.md`'s Verify step 4a) from Scoping's prototype-element enumeration + the plan's `**Element mapping:**` blocks + the actual diff, and passes it as input.
+- **`parity`** — when `designs/` is a runnable React reference app. The UI/UX prompt asks the subagent to review the implemented frontend UI against the runnable prototype/reference app for visual parity using a matched-element inventory, DOM computed-style and bounding-rect extraction, per-state coverage at all relevant breakpoints, and accessibility checks. Reference app is the absolute source of truth. Main agent constructs the **expected matched-element inventory** at Verify dispatch (per `SKILL.md`'s Verify step 4a) from Scoping's prototype/reference element enumeration + the plan's `**Element mapping:**` blocks + the actual diff, and passes it as input.
 - **`consistency`** — fallback when `designs/` is missing or not runnable. The UI/UX prompt asks the subagent to review the implemented frontend UI against existing production sibling/analog elements for visual consistency, plus accessibility checks.
 
 UI/UX is **skipped** if main agent determines the change is backend-only.

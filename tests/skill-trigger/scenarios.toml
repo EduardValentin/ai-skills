@@ -14,7 +14,28 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md", "latest `origin/main`", "UI/UX trigger discipline"]
+skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md", "latest `origin/main`", "Scoping trigger discipline", "UI/UX trigger discipline"]
+forbidden_terms = []
+
+[[scenario]]
+id = "codebase-scope-map-implementation-handoff"
+skill = "codebase-scope-map"
+prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, tests, patterns, dependencies, conflicts, and keep it token-efficient."
+description_terms = ["implementation", "ticket", "relevant code mapped", "compact file-line locators"]
+skill_terms = ["Token Discipline", "Prototype / Reference App Rule", "Suggested downstream slices"]
+forbidden_terms = []
+
+[[scenario]]
+id = "codebase-scope-map-delegated-scoping"
+skill = "codebase-scope-map"
+prompt = """
+You are a Scoping subagent in a ticket workflow. Map the codebase for this
+implementation task as a token-efficient navigable scope map with file:line
+locators, tests, types/contracts, analogous implementations, dependencies,
+prototype/reference elements where relevant, conflict points, and downstream slices.
+"""
+description_terms = ["handoff task", "entry points", "prototype/reference elements"]
+skill_terms = ["Output Contract", "Potential conflict points", "Do not choose the implementation approach"]
 forbidden_terms = []
 
 [[scenario]]

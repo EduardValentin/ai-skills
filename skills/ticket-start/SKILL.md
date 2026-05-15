@@ -13,6 +13,8 @@ Implementation work driven by a ticket. The main agent owns user dialogue, plan-
 
 Brainstorm, Plan, and Implement use trigger-aligned Superpowers methodology: explore user intent, requirements, constraints, and design before implementation; write a distinct implementation plan; then execute the approved plan with subagent-driven development as the default path. Use the parallel-session execution path only when subagent-driven implementation is genuinely unavailable or unsuitable, and record the reason.
 
+**Scoping trigger discipline:** `ticket-start` dispatches the Scoping subagent and consumes its returned map, but does not name or inline a separate scoping skill. The Scoping prompt must describe the actual scoping work in trigger-matching language: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, conflict points, and suggested downstream slices.
+
 **UI/UX trigger discipline:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report, but does not name or inline a separate visual-review skill. The UI/UX subagent prompt must describe the actual review work in trigger-matching language: frontend UI, runnable prototype/reference app or production analogs, visual parity or consistency, matched-element inventory, DOM computed styles, bounding rects, and accessibility.
 
 **Context-economy contract:** every subagent's report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
@@ -50,7 +52,7 @@ If ambiguous, ask the user before loading anything else.
 
 4. **Workflow-specific reading.** Read the workflow file selected above and gather the facts it points at. Stop when the relevant facts are gathered.
 
-5. **Dispatch Scoping subagent** (`agents/scoping.md`). Forward: ticket title/description/AC, repo `AGENTS.md` / `CLAUDE.md`, and (personal workflow) the scoped slices of `PRD.md` / `designs/`. Subagent context does not inherit the main session's auto-loaded files — explicit forwarding is required. The returned report is the definitive map of the relevant code surface; do not re-read full files later when a Scoping locator points at the slice you need.
+5. **Dispatch Scoping subagent.** Phrase the prompt as a codebase scope-mapping task, not as an explicit skill invocation. Ask for a token-efficient navigable scope map for this implementation ticket with `path:line` / `path:start-end` locators, covering entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, conflict points, and suggested downstream slices. Forward: ticket title/description/AC, repo `AGENTS.md` / `CLAUDE.md`, and (personal workflow) the scoped slices of `PRD.md` / `designs/`. Subagent context does not inherit the main session's auto-loaded files — explicit forwarding is required. The returned map is the definitive map of the relevant code surface; do not re-read full files later when a Scoping locator points at the slice you need.
 
 6. **Clarify before brainstorming if needed.** If AC are missing/vague/not testable, or Scoping surfaces a conflict between the ticket and existing architecture, brief the user with the Scoping evidence (`path:line`) and ask before continuing. See `## Briefing rule`.
 
@@ -80,7 +82,7 @@ Explore user intent, requirements, constraints, and design before implementation
 
 1. Produce a written implementation plan from the brainstorm summary before touching code. The plan is a distinct artifact — not a verbal summary, not the brainstorm transcript, not a mental model.
 
-2. **Parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`) — each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype elements relevant to this feature` row from the Scoping report, and (b) the planned production `file:line` for the new/changed JSX declaration. Tasks that don't add/modify visible elements omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to build the expected matched-element inventory passed to the UI/UX subagent.
+2. **Parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`) — each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype or reference elements` row from the Scoping report, and (b) the planned production `file:line` for the new/changed JSX declaration. Tasks that don't add/modify visible elements omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to build the expected matched-element inventory passed to the UI/UX subagent.
 
    ```
    **Element mapping:**
@@ -127,7 +129,7 @@ Explore user intent, requirements, constraints, and design before implementation
 4a. **Parity mode only — construct the expected matched-element inventory before UI/UX dispatch.** (Skip in consistency mode; the UI/UX reviewer builds the analog inventory.) Parity mode = personal workflow with a runnable React reference app under `designs/`.
 
    Combine:
-   - Scoping's `## Prototype elements relevant to this feature` rows.
+   - Scoping's `## Prototype or reference elements` rows.
    - Each plan task's `**Element mapping:**` block.
    - Actual post-diff production `file:line`s, resolved by walking `git diff --name-only` for touched UI files and locating each plan-declared JSX declaration (e.g., `grep -n` on a stable selector like `class="..."` or `data-testid="..."` from the mapping).
 
@@ -237,7 +239,7 @@ When done, report:
 - Skipping the brainstorm, written-plan, or subagent-driven implementation workflows because "the ticket is clear" or "the change is small."
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent gates. `ticket-start` invocation authorizes required dispatches.
 - Replacing Reviewer, QA, or UI/UX with local review, test runs, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
-- Naming a visual-review skill explicitly in the UI/UX subagent prompt instead of using trigger-matching review wording.
+- Naming a scoping or visual-review skill explicitly in subagent prompts instead of using trigger-matching work descriptions.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
@@ -248,7 +250,7 @@ When done, report:
 - Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
 - Dispatching UI/UX in parity mode without the expected inventory constructed in step 4a.
 - Dispatching UI/UX without the trigger-matching terms that identify the task: frontend UI, prototype/reference parity or production analog consistency, matched-element inventory, DOM computed styles, bounding rects, and accessibility.
-- Scoping's `## Prototype elements relevant to this feature` empty or `_None._` for a parity-mode UI ticket.
+- Scoping's `## Prototype or reference elements` empty or `_None._` for a parity-mode UI ticket.
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
 - Using the parallel-session execution fallback path and skipping end-of-feature code review before advancing to Review.
 - Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Review.

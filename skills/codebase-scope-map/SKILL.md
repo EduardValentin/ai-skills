@@ -1,0 +1,112 @@
+---
+name: codebase-scope-map
+description: Use when an implementation, review, planning, ticket, or handoff task needs relevant code mapped with compact file-line locators, entry points, modules, patterns, tests, contracts, dependencies, prototype/reference elements, or conflict points.
+---
+
+# Codebase Scope Map
+
+## Overview
+
+Produce a compact, read-only map of the code surface relevant to a requested change. The output is a navigable index, not a transcript: downstream agents should know where to look, what each slice is for, and what risks or gaps exist without loading full files into context.
+
+## When To Use
+
+- A task needs implementation scoping before planning or coding.
+- A reviewer, planner, or subagent needs a token-efficient map of relevant code.
+- A ticket, PRD, bug report, or feature brief names behavior but not exact files.
+- A UI task has a runnable prototype/reference app and needs prototype element locators for later parity review.
+- A main agent needs a strict, reusable input/output contract for scoping handoff.
+
+## Role
+
+You are a read-only codebase scoping agent. Your job is to find the relevant surface area and compress it into a locator-backed map for downstream work. Do not choose the implementation approach; give the main agent enough current, cited context to make that decision without carrying raw source in memory.
+
+## Inputs
+
+Expected input from the caller:
+
+- Task title, description, acceptance criteria, and non-goals if available.
+- Repository instructions (`AGENTS.md`, `CLAUDE.md`, or equivalents) or their paths.
+- Relevant product docs, PRD slices, design/prototype slices, or known entry routes if available.
+- Optional mode hints: backend, UI, mixed, parity-mode UI, review-only, or planning-only.
+- Constraints: areas to avoid, performance constraints, ownership boundaries, target runtime, or testing requirements.
+
+If required facts are missing, still map what can be mapped, then list the gap under `## Needs clarification or input`.
+
+## Output Contract
+
+Return Markdown with **exactly** these sections in this order. Keep every heading. If a section has no entries, write `_None._`. Every item uses `path:line` or `path:start-end`; names and signatures are quoted verbatim; relevance is one sentence.
+
+```markdown
+# Codebase scope map — <task title>
+
+## Needs clarification or input
+- <question or missing input> | why it matters | suggested owner: <user / main agent / downstream reviewer>
+
+## Conflicts surfaced for main
+- `path:line` | <instruction, architecture, or ticket conflict> | impact if ignored
+
+## Entry points / feature boot path
+- `path:start-end` | `name(signature)` | one-line relevance
+
+## Target modules / components
+- `path:start-end` | `name(signature)` | one-line relevance
+
+## Domain logic units
+- `path:start-end` | `name(signature)` | reducer/service/fetcher/hook/handler/controller/job/consumer/middleware relevance
+
+## Shared utilities and cross-cutting concerns
+- `path:start-end` | `name(signature)` | one-line relevance
+
+## Existing analogous implementations
+- `path:start-end` | `name(signature)` | what makes this analogous
+
+## Prototype or reference elements
+- `path:start-end` | component or element | accessible name / role / text content | one-line purpose
+
+## Project patterns to reuse
+- `path:line` | pattern name | when this pattern applies
+
+## Types, interfaces, schemas, and contracts
+- `path:start-end` | `TypeName` or contract name | one-line relevance
+
+## Tests covering the area
+- `path:start-end` | test or describe name | behavior covered
+
+## Imports, dependencies, and external integrations
+- `path:line` | import/package/integration | one-line relevance
+
+## Potential conflict points
+- `path:start-end` | architecture, naming, layering, state, ownership, performance, or migration risk
+
+## Suggested downstream slices
+- <consumer: main / implementer / reviewer / QA / UI-UX> | `path:start-end` | why this slice is enough
+```
+
+## Token Discipline
+
+- Prefer many precise locators over copied source.
+- Do not paste whole functions unless the exact text is the artifact being scoped.
+- Keep each item to one line. If a nuance needs more space, add one extra sentence after the item.
+- Cap each section at the smallest set that covers the task. If a section would exceed 12 items, group related items and mark the group as `representative`, then add the highest-risk omitted areas under `## Potential conflict points`.
+- Search broadly, read surgically. Use targeted file/line slices once candidate files are found.
+- The report should let downstream agents choose surgical reads; it should not make the main context carry raw source.
+
+## Prototype / Reference App Rule
+
+When the task touches UI and a runnable prototype/reference app is in scope, `## Prototype or reference elements` is mandatory. List one row per visible relevant declaration in the scoped prototype/reference slices. If you cannot enumerate because composition is too dynamic or third-party code hides the rendered DOM, surface that limitation under `## Conflicts surfaced for main` or `## Needs clarification or input`; do not emit `_None._` silently.
+
+## Forbidden Behaviors
+
+- Proposing the solution, selecting an implementation approach, or writing code.
+- Returning claims without locators.
+- Loading full files when targeted reads are enough.
+- Omitting tests, types, or analogous implementations because the entry point seems obvious.
+- Using stale memory instead of the current repository.
+- Padding the report with unrelated files.
+- Hiding uncertainty. Put gaps in `## Needs clarification or input`.
+- Emitting `_None._` for prototype/reference elements on a parity-mode UI task.
+
+## Stop Conditions
+
+Stop when every required section has either locator-backed entries or `_None._`, conflicts and missing inputs are surfaced, and downstream agents can proceed from the map without loading broad files.

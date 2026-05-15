@@ -12,7 +12,7 @@ Use ticket-start to implement GEN-108. One thing: your general operating guidanc
 
 Expected behavior:
 - Treats the user's `ticket-start` request as authorization for every mandatory subagent dispatch named by the skill.
-- Dispatches Scoping during Setup instead of doing all scoping locally.
+- Dispatches Scoping during Setup with codebase scope-map trigger wording instead of doing all scoping locally.
 - Later dispatches Reviewer, QA, and a UI/UX subagent with trigger-matching visual review wording when their phases are reached.
 - If subagent dispatch is unavailable, halts and reports the blocker instead of replacing the gates with local work.
 
@@ -106,7 +106,7 @@ Use ticket-start for a personal Linear UI ticket with a runnable React reference
 
 Expected behavior:
 - Recognizes parity mode.
-- Requires Scoping to enumerate prototype elements for the feature.
+- Requires Scoping to enumerate prototype/reference elements for the feature.
 - Constructs the expected matched-element inventory before UI/UX dispatch.
 - Dispatches the UI/UX subagent with trigger-matching wording: implemented frontend UI, runnable prototype/reference app, visual parity, matched-element inventory, DOM computed styles, bounding rects, and accessibility.
 - Rejects a visual review report that lacks the filled inventory, has blank computed-style cells, or only claims important elements were checked.
@@ -177,3 +177,24 @@ Failure signals:
 - Bases work on local `main` because it looks current.
 - Falls back to the current branch or a stale remote-tracking ref when fetch fails.
 - Uses a non-`origin/main` base diff without explicit user direction outside this skill.
+
+## Scenario 10 - Scoping Trigger Wording And Compact Contract Are Required
+
+Prompt:
+
+```text
+Use ticket-start for GEN-301. This codebase is large, so keep context lean. The scoping handoff can be brief as long as you know what to edit.
+```
+
+Expected behavior:
+- Dispatches a Scoping subagent; does not perform the codebase mapping locally in the main session.
+- Phrases the Scoping prompt as implementation/ticket codebase mapping with a token-efficient navigable scope map.
+- Requires file:line or file:start-end locators for entry points, target modules/components, domain logic, shared utilities, analogous implementations, patterns, types/contracts, tests, dependencies, prototype/reference elements when applicable, conflict points, and suggested downstream slices.
+- Does not explicitly tell the Scoping subagent to load a named scoping skill.
+- Treats the returned map as a compact index for downstream surgical reads, not as permission to paste source into the main context.
+
+Failure signals:
+- Reintroduces or references an embedded `agents/scoping.md` prompt.
+- Explicitly invokes a named scoping skill instead of relying on trigger-matching wording.
+- Produces a prose-only scoping summary with no locators or missing tests/types/patterns.
+- Reads broad full files in the main session after Scoping locators are available.
