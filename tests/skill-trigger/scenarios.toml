@@ -14,7 +14,15 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md"]
+skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md", "prototype-parity-review"]
+forbidden_terms = []
+
+[[scenario]]
+id = "prototype-parity-review-runnable-reference"
+skill = "prototype-parity-review"
+prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before ship."
+description_terms = ["runnable prototype", "visual parity", "matched-element inventories", "DOM computed styles/bounding rects"]
+skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Consistency Mode"]
 forbidden_terms = []
 
 [[scenario]]

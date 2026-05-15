@@ -7,11 +7,13 @@ description: Use when the user wants to start implementation work from a ticket 
 
 ## Overview
 
-Implementation work driven by a ticket. The main agent owns user dialogue, plan-writing, and phase gating; specialized subagents (Scoping, Reviewer, QA, UI/UX) own deep work. Phase order is a hard gate — do not advance until the prior gate is satisfied:
+Implementation work driven by a ticket. The main agent owns user dialogue, plan-writing, and phase gating; specialized subagents (Scoping, Reviewer, QA, and UI/UX via `prototype-parity-review`) own deep work. Phase order is a hard gate — do not advance until the prior gate is satisfied:
 
 **Setup → Brainstorm → Plan → Implement → Review → Verify → Ship**
 
 Brainstorm, Plan, and Implement defer to the superpowers methodology: `superpowers:brainstorming`, `superpowers:writing-plans`, and `superpowers:subagent-driven-development`. Use `superpowers:subagent-driven-development` as the default implementation path so each task gets TDD, implementer self-review, spec-compliance review, code-quality review, and the final Superpowers review. Use `superpowers:executing-plans` only when subagent-driven implementation is genuinely unavailable or unsuitable, and record the reason. When this skill names a sub-skill as **REQUIRED**, invoke it — do not paraphrase its protocol from memory.
+
+**Required skill dependency:** UI/UX verification is delegated to the reusable `prototype-parity-review` skill. `ticket-start` constructs the dispatch context and validates the returned report, but does not inline or locally perform the prototype parity review protocol.
 
 **Context-economy contract:** every subagent's report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
@@ -78,7 +80,7 @@ If ambiguous, ask the user before loading anything else.
 
 1. **REQUIRED SUB-SKILL: `superpowers:writing-plans`.** Produce a written plan from the brainstorm summary. The plan is a distinct artifact — not a verbal summary, not the brainstorm transcript, not a mental model.
 
-2. **Parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`) — each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype elements relevant to this feature` row from the Scoping report, and (b) the planned production `file:line` for the new/changed JSX declaration. Tasks that don't add/modify visible elements omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to build the expected matched-element inventory passed to UI/UX.
+2. **Parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`) — each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype elements relevant to this feature` row from the Scoping report, and (b) the planned production `file:line` for the new/changed JSX declaration. Tasks that don't add/modify visible elements omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to build the expected matched-element inventory passed to the UI/UX subagent running `prototype-parity-review`.
 
    ```
    **Element mapping:**
@@ -122,25 +124,25 @@ If ambiguous, ask the user before loading anything else.
 
 4. **When QA CLEAN**, run the self-improvement pass on QA findings.
 
-4a. **Parity mode only — construct the expected matched-element inventory before UI/UX dispatch.** (Skip in consistency mode; UI/UX discovers as today.) Parity mode = personal workflow with a runnable React reference app under `designs/`.
+4a. **Parity mode only — construct the expected matched-element inventory before UI/UX dispatch.** (Skip in consistency mode; `prototype-parity-review` builds the analog inventory.) Parity mode = personal workflow with a runnable React reference app under `designs/`.
 
    Combine:
    - Scoping's `## Prototype elements relevant to this feature` rows.
    - Each plan task's `**Element mapping:**` block.
    - Actual post-diff production `file:line`s, resolved by walking `git diff --name-only` for touched UI files and locating each plan-declared JSX declaration (e.g., `grep -n` on a stable selector like `class="..."` or `data-testid="..."` from the mapping).
 
-   Produce a markdown table — column order matches `agents/ui-ux.md` → `## Output format`:
+   Produce a markdown table — column order matches `prototype-parity-review` → `## Output Format`:
 
    | Pair | Prototype selector | Production selector | font-* | color/bg | box | layout | size | verdict |
 
    Per row at dispatch:
    - `Pair`: prototype:line ↔ production:line locator pair (or `(none)` on the deliberately one-sided side per the plan).
    - `Prototype selector` / `Production selector`: JSX-derivable selector hint (component name, `data-testid`, stable class).
-   - `font-*` through `size` and `verdict`: **blank** — UI/UX fills via DOM evaluation.
+   - `font-*` through `size` and `verdict`: **blank** — the reviewer fills these via DOM evaluation.
 
    If construction fails (Scoping's prototype section unparsable, a plan element-mapping block can't be matched to a Scoping row, or the production-side lookup returns nothing), halt with `cannot dispatch UI/UX in parity mode — expected inventory could not be constructed` and name the specific error. Do not fall back to discovery-mode UI/UX in parity mode.
 
-5. **Dispatch UI/UX subagent** (`agents/ui-ux.md`) unless backend-only flag is set. Forward: ticket + plan, full diff, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), the expected inventory table (parity only — UI/UX fills the verdict and computed-style cells, doesn't discover from scratch), live-browser automation, role prompt. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for UI/UX to use, not substitutes for the UI/UX report and inventory validation.
+5. **Dispatch UI/UX subagent with `prototype-parity-review`** unless backend-only flag is set. The subagent's first instruction is to load and follow `prototype-parity-review`; the main agent forwards only the compact inputs: ticket + plan, full diff, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), important UI states, the expected inventory table (parity only — the reviewer fills the verdict and computed-style cells), and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the reviewer to use, not substitutes for the `prototype-parity-review` report and inventory validation.
 
 6. **If FINDINGS**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **UI/UX re-runs scoped to affected states**.
 
@@ -151,13 +153,13 @@ If ambiguous, ask the user before loading anything else.
    - Every verified row has non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank = DOM-evaluation work was skipped for that row.
    - Spot-check: sample 2 rows whose file appears in the diff and 2 rows from the prototype enumeration; each must be present with non-blank cells.
    - `MISSING` (production side) is accepted only when the plan marked the element as not-implemented-this-ticket; otherwise a `MISSING` is a finding.
-   - Any failure → report is **structurally invalid**. Reject and re-dispatch UI/UX with the specific gaps named.
+   - Any failure → report is **structurally invalid**. Reject and re-dispatch UI/UX with `prototype-parity-review` and the specific gaps named.
 
    **Consistency mode** (no expected inventory):
    - Confirm a `## Matched-element inventory` section exists.
    - From the diff, pick 2 changed UI files; their rendered elements must appear in the inventory.
    - From the running production app, sample 3 visible elements on the feature surface; each must appear.
-   - Any miss → structurally invalid. Reject and re-dispatch with the specific missing elements named.
+   - Any miss → structurally invalid. Reject and re-dispatch with `prototype-parity-review` and the specific missing elements named.
 
    Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
 
@@ -230,6 +232,7 @@ When done, report:
 - Skipping `superpowers:brainstorming`, `superpowers:writing-plans`, or `superpowers:subagent-driven-development` (or its `superpowers:executing-plans` fallback) because "the ticket is clear" or "the change is small."
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent gates. `ticket-start` invocation authorizes required dispatches.
 - Replacing Reviewer, QA, or UI/UX with local review, test runs, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
+- Inlining the reusable `prototype-parity-review` protocol into `ticket-start` instead of delegating UI/UX verification to that skill.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
@@ -239,6 +242,7 @@ When done, report:
 - Claiming visual parity/consistency without DOM computed-style and bounding-rect extraction from the live browser.
 - Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
 - Dispatching UI/UX in parity mode without the expected inventory constructed in step 4a.
+- Dispatching UI/UX without instructing the subagent to load and follow `prototype-parity-review`.
 - Scoping's `## Prototype elements relevant to this feature` empty or `_None._` for a parity-mode UI ticket.
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
 - Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review.

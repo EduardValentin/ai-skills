@@ -1,6 +1,6 @@
 # Personal Workflow
 
-Use when the ticket lives in Linear and the project has `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the **mode** the QA and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, the bug-fix loop, the self-improvement loop, and Ship.
+Use when the ticket lives in Linear and may have `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the **mode** the QA subagent and `prototype-parity-review` subagent receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, the bug-fix loop, the self-improvement loop, and Ship.
 
 ## Ticket Intake (Linear)
 
@@ -29,7 +29,7 @@ The scoped slices feed directly into the Scoping subagent's input set.
 
 ## React Reference App
 
-If `designs/` is a runnable React app, additionally read `react-parity.md` and treat the reference app as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior.
+If `designs/` is a runnable React app, treat the reference app as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior. Verification of that parity is delegated to `prototype-parity-review` during Verify.
 
 Identify up front:
 
@@ -37,7 +37,7 @@ Identify up front:
 - The matching production route/screen.
 - The important UI states the feature has (default, loading, empty, hover, focus, active, disabled, error, success, expanded/collapsed, modal-open, validation, navigation), so the same flows can be exercised in both apps during verification.
 
-These are passed to the UI/UX subagent during Verify.
+These are passed to the UI/UX subagent that runs `prototype-parity-review` during Verify.
 
 ### Prototype parity dominates all other rules
 
@@ -54,9 +54,9 @@ This rule exists because of an observed failure mode where this exact substituti
 
 **Corollary:** prototype enumeration in Scoping is mandatory in parity mode. The parity-dominance rule depends on having an authoritative list of what to maintain parity with; Scoping's `## Prototype elements relevant to this feature` section is that list. An empty section is a Scoping failure, not a clean report — see `agents/scoping.md` → forbidden behaviors.
 
-## Verification — Mode mapping for QA and UI/UX
+## Verification — Mode mapping for QA and prototype parity review
 
-The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the personal workflow.
+The Verify phase is run by the QA subagent and a UI/UX subagent instructed to use `prototype-parity-review`. This file specifies the **mode** parameter they receive in the personal workflow.
 
 ### QA mode
 
@@ -66,10 +66,10 @@ Determined from the diff (main agent decides), same as the job workflow:
 - **`ui`** — diff touches only user-facing files. QA Mode B.
 - **`mixed`** — both. QA Mode C.
 
-### UI/UX mode
+### Prototype parity review mode
 
-- **`parity`** — when `designs/` is a runnable React reference app. UI/UX runs the existing protocol in `verification.md`: matched-element inventory, computed-style + bounding-rect extraction via DOM evaluation against the live browser, per-state coverage at all relevant breakpoints. Reference app is the absolute source of truth. Main agent constructs the **expected matched-element inventory** at Verify dispatch (per `SKILL.md`'s Verify step 4a) from Scoping's prototype-element enumeration + the plan's `**Element mapping:**` blocks + the actual diff, and passes it to UI/UX as input.
-- **`consistency`** — fallback when `designs/` is missing or not runnable. Same as job-workflow consistency mode: stylistic consistency against existing analog elements in the production app.
+- **`parity`** — when `designs/` is a runnable React reference app. The reviewer uses `prototype-parity-review`: matched-element inventory, computed-style + bounding-rect extraction via DOM evaluation against the live browser, per-state coverage at all relevant breakpoints, and accessibility checks. Reference app is the absolute source of truth. Main agent constructs the **expected matched-element inventory** at Verify dispatch (per `SKILL.md`'s Verify step 4a) from Scoping's prototype-element enumeration + the plan's `**Element mapping:**` blocks + the actual diff, and passes it as input.
+- **`consistency`** — fallback when `designs/` is missing or not runnable. The reviewer uses `prototype-parity-review` consistency mode: stylistic consistency against existing analog elements in the production app plus accessibility checks.
 
 UI/UX is **skipped** if main agent determines the change is backend-only.
 
@@ -92,5 +92,5 @@ If the Linear MCP server is unavailable or the team/state cannot be resolved saf
 If the project has a Linear ticket but is missing `PRD.md`, `designs/`, or both, treat it as personal workflow and adapt as follows. Surface the gap to the user during Setup so the brainstorm can compensate.
 
 - **No `PRD.md`:** gather requirements from the Linear ticket alone and flag missing context during Brainstorm. Do not invent business rules to fill the gap.
-- **No `designs/`:** skip the React reference app, skip `react-parity.md`, and skip parity mode. UI/UX runs in **consistency mode** instead.
-- **Neither present:** gather everything from the ticket, confirm scope and acceptance criteria with the user before brainstorming. UI/UX runs in **consistency mode** during Verify.
+- **No `designs/`:** skip the React reference app and skip parity mode. UI/UX runs `prototype-parity-review` in **consistency mode** instead.
+- **Neither present:** gather everything from the ticket, confirm scope and acceptance criteria with the user before brainstorming. UI/UX runs `prototype-parity-review` in **consistency mode** during Verify.
