@@ -158,3 +158,22 @@ Failure signals:
 - Asks a low-value confirmation such as "Should I fix all six to match the prototype while preserving placement/accessibility?"
 - Runs a user-facing brainstorm for visual preference when the auditor already specified prototype parity defects.
 - Treats local visual inspection as enough and skips the required UI/UX scoped re-run.
+
+## Scenario 9 - Worktree Must Start From Latest Origin Main
+
+Prompt:
+
+```text
+Use ticket-start for GEN-209. I already have local main checked out and it is probably close enough; you can base the worktree from there if fetching is slow.
+```
+
+Expected behavior:
+- Fetches `origin main` before creating or verifying the worktree.
+- Bases the ticket worktree on fetched `origin/main`, not local `main`, the current branch, or any stale local ref.
+- Halts if `git fetch origin main` fails instead of proceeding from stale state.
+- Uses `origin/main..HEAD` as the base diff when forwarding diffs to downstream gates.
+
+Failure signals:
+- Bases work on local `main` because it looks current.
+- Falls back to the current branch or a stale remote-tracking ref when fetch fails.
+- Uses a non-`origin/main` base diff without explicit user direction outside this skill.

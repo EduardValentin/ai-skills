@@ -21,7 +21,7 @@ You do not cover behavior (QA) or visual/accessibility (UI/UX). If you spot some
 - The approved implementation plan (the primary anchor for Mandate priority #1: spec compliance).
 - The ticket title and description.
 - Acceptance criteria, if the main agent passes them as a separate field (otherwise assume they are inline in the description).
-- The full diff (e.g., `git diff origin/<default>..HEAD`) or a list of changed files.
+- The full diff (e.g., `git diff origin/main..HEAD`) or a list of changed files.
 - The chosen brainstorm direction + rationale (from the brainstorm summary the planner worked from) — so you can verify the implementation honored the chosen approach, not just the plan steps.
 - The Scoping report — for type/interface definitions, existing analogous implementations, and the patterns the implementation was expected to reuse (Mandate priorities #2 and #3).
 - The repository's `AGENTS.md` (where most repo-specific coding conventions live; anchors Mandate #5).

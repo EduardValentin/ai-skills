@@ -37,7 +37,7 @@ If ambiguous, ask the user before loading anything else.
 
 ## Setup
 
-1. **Worktree.** Start feature work in an isolated worktree. Base off `origin/<default>`, not local branch. Halt on `git fetch` failure — do not fall back to stale local state.
+1. **Worktree.** Start feature work in an isolated worktree based on the latest `origin/main`. Hard rule: fetch `origin main` first, then create or verify the worktree from fetched `origin/main`, never from local `main`, the current branch, or a stale remote-tracking ref. Halt on fetch failure — do not fall back to stale local state.
 
 2. **Bot identity (personal workflow only).** Run the two activation checks in `bot-identity.md` → `## Setup activation` — (a) mint a fresh GitHub installation token and verify it with a no-op API call, (b) apply the bot's git name/email as per-worktree git config. Halt on failure with a pointer at the runbook. Fail-closed — never fall back to personal GitHub credentials. Linear MCP stays under personal identity. Job workflow: skip this step.
 
@@ -104,7 +104,7 @@ Explore user intent, requirements, constraints, and design before implementation
 
 ## Review
 
-1. **Dispatch Reviewer subagent** (`agents/reviewer.md`). Forward: full diff (`git diff origin/<default>..HEAD`), ticket + AC + approved plan, chosen brainstorm direction + rationale from the brainstorm summary, repo `AGENTS.md`, Scoping report, role prompt. Local code inspection is useful preparation, but it does not satisfy this gate.
+1. **Dispatch Reviewer subagent** (`agents/reviewer.md`). Forward: full diff (`git diff origin/main..HEAD`), ticket + AC + approved plan, chosen brainstorm direction + rationale from the brainstorm summary, repo `AGENTS.md`, Scoping report, role prompt. Local code inspection is useful preparation, but it does not satisfy this gate.
 
 2. **If CHANGES REQUIRED**, brief the user (per `## Briefing rule`) and route through `bug-fix-loop.md`.
 
@@ -113,7 +113,7 @@ Explore user intent, requirements, constraints, and design before implementation
 ## Verify
 
 1. **Determine backend-only flag.** Walk the diff:
-   - `git diff --name-only origin/<default>..HEAD`.
+   - `git diff --name-only origin/main..HEAD`.
    - Match against UI extensions (`\.(tsx|jsx|vue|svelte|html|css|scss|sass|less|styl|ejs|pug|hbs|erb|twig|liquid|jinja|blade\.php)$`) and UI directories (`app/`, `components/`, `pages/`, `views/`, `templates/`, `client/`, `web/`, `frontend/`, `ui/`, plus repo-specific UI dirs identified by Scoping).
    - Any match → not backend-only.
    - Uncertain (config files affecting render, shared utilities used by both) → ask the user. Default on uncertainty: **do not skip** UI/UX (running it unnecessarily is cheap; skipping it incorrectly is expensive).
@@ -229,7 +229,7 @@ When done, report:
 ## Red flags — stop and recover
 
 - Working in the primary checkout instead of a fresh worktree.
-- Basing the worktree on a local branch instead of fetched `origin/<default>`.
+- Basing the worktree on anything other than freshly fetched `origin/main` (including local `main`, the current branch, or a stale remote-tracking ref).
 - Writing code before the plan is approved (including scaffolding or "sketching the structure").
 - Treating brainstorm convergence ("yes, do it" / "approved" / "go") as plan approval. They are separate artifacts.
 - Exiting the brainstorm on a single user answer, or treating an early implementation preference as the endpoint.
