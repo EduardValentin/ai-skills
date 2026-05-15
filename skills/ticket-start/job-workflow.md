@@ -70,4 +70,4 @@ UI/UX is **skipped** if main agent determines the change is backend-only (no UI 
 
 ## Hand-off to Brainstorm
 
-When ticket intake and the Scoping subagent's report are both complete, return to `SKILL.md` and proceed to the Brainstorm gate. Architect dispatch happens there; this file is no longer relevant until the Verify phase.
+When ticket intake and the Scoping subagent's report are both complete, return to `SKILL.md` and proceed to the Brainstorm gate. This file is no longer relevant until the Verify phase.
