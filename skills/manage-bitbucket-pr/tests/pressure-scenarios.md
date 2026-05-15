@@ -52,3 +52,23 @@ Expected behavior:
 - Checks approved local credential sources, including the Git credential helper for `bitbucket.org`, before falling back to local branch inference or asking the user.
 - Uses credentials only in memory for the REST call, without printing, storing, or placing secrets in command history.
 - Fetches the actual PR details and comments through the Bitbucket Cloud REST endpoints before reviewing or summarizing.
+
+## Scenario 6 — Testing a Bitbucket PR
+
+Prompt: "Verify the UI changes in the current PR. The repo remote is `https://bitbucket.org/acme/widget.git`, and the PR branch is `feature/auth-panel`."
+
+Expected behavior:
+- Recognizes that testing a PR hosted on Bitbucket is a Bitbucket PR task and loads/applies this skill before deciding PR metadata is unavailable.
+- Derives `workspace=acme` and `repo_slug=widget` from the Bitbucket remote, then looks up PR candidates for the source branch when no PR ID is provided.
+- Reads actual PR metadata/comments or reports exact authentication/permission gaps after checking approved Bitbucket credential paths.
+- Does not skip PR metadata solely because the first available interface for Bitbucket is absent.
+
+## Scenario 7 — Bitbucket repository context should trigger the skill
+
+Prompt: "In the Bitbucket repo for acme/widget, check the current branch PR before I test it."
+
+Expected behavior:
+- Treats the task as a Bitbucket PR/repository task because the repository host is Bitbucket.
+- Uses this skill for Bitbucket context when the user asks to test, verify, review, summarize, inspect comments, read PR notes, compare source and destination branches, check merge status, post a comment, merge, or find the PR for a branch.
+- Derives PR identifiers from the Bitbucket remote and branch when the user gives repository context instead of a PR URL.
+- Reports exact authentication, permission, or ambiguity gaps instead of skipping Bitbucket metadata.

@@ -6,6 +6,7 @@ SKILL_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 SCRIPT="$SKILL_DIR/scripts/bitbucket-cloud-pr.sh"
 SKILL_DOC="$SKILL_DIR/SKILL.md"
 REFERENCE_DOC="$SKILL_DIR/references/cloud-capabilities-reference.md"
+PRESSURE_SCENARIOS="$SKILL_DIR/tests/pressure-scenarios.md"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -55,12 +56,18 @@ assert_contains "$(cat "$auth_output")" "Set BITBUCKET_TOKEN or BITBUCKET_EMAIL 
 
 skill_doc=$(cat "$SKILL_DOC")
 reference_doc=$(cat "$REFERENCE_DOC")
+pressure_scenarios=$(cat "$PRESSURE_SCENARIOS")
 docs_text="${skill_doc}
 ${reference_doc}"
 assert_contains "$skill_doc" "find-prs-for-branch"
+assert_contains "$skill_doc" "Bitbucket-hosted pull request/repository"
+assert_contains "$skill_doc" "testing or verifying PR behavior"
 assert_contains "$skill_doc" "Git credential helper for \`bitbucket.org\`"
 assert_contains "$skill_doc" "direct HTTPS request"
 assert_contains "$reference_doc" "Basic auth"
+assert_contains "$pressure_scenarios" "Testing a Bitbucket PR"
+assert_contains "$pressure_scenarios" "Bitbucket repository context should trigger the skill"
+assert_contains "$pressure_scenarios" "test, verify, review, summarize, inspect comments"
 
 credential_helper_count=$(printf '%s' "$docs_text" | rg -o "Git credential helper" | wc -l | tr -d ' ')
 [[ "$credential_helper_count" == "1" ]] || fail "credential-helper fallback should be documented once across skill and reference"

@@ -1,6 +1,6 @@
 ---
 name: manage-bitbucket-pr
-description: Use when reading Bitbucket PR metadata/comments, posting PR comments, or merging Bitbucket PRs through the REST API; triggers on Bitbucket PR URLs, pull request IDs, workspace/repo PR metadata, comments, or merge operations.
+description: Use when a task involves Bitbucket or a Bitbucket-hosted pull request/repository, including PR URLs, pull request IDs, PR branches, metadata/comments, testing or verifying PR behavior, reviewing changes, writing summaries, comment posting, or merge requests.
 ---
 
 # Manage Bitbucket PR
@@ -8,6 +8,8 @@ description: Use when reading Bitbucket PR metadata/comments, posting PR comment
 ## Overview
 
 Manage Bitbucket PR operations for PR details, source-branch lookup, comments, and merge.
+
+Use this skill whenever the PR or repository is hosted on Bitbucket, even if the immediate task is testing, verification, review, summary, or implementation context-gathering.
 
 ## Preconditions
 
@@ -67,6 +69,7 @@ For writes, report:
 | Mistake | Correction |
 | --- | --- |
 | Treating "this branch" as a PR ID | Look up PR candidates for the source branch, then verify the exact PR before reading or mutating. |
+| Skipping PR metadata because Bitbucket integration seems unavailable | Exhaust approved auth/local credential paths before reporting the metadata gap. |
 | Posting a guessed comment or merging by implication | Mutate only after the user requested the exact side effect. |
 | Applying Cloud routes to self-hosted Bitbucket | Detect host type first; ask before expanding beyond the Cloud mini-reference. |
 
