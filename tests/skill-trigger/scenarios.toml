@@ -129,5 +129,5 @@ id = "uiux-web-copy-brand-voice-hero-cta"
 skill = "web-copy-from-brand-voice"
 prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so it fits our brand voice and conversion goal."
 description_terms = ["brand voice", "conversion goal", "microcopy"]
-skill_terms = ["Write copy from the brand's voice", "When SEO Matters"]
+skill_terms = ["Write copy from the brand's voice", "Copy Principles"]
 forbidden_terms = []

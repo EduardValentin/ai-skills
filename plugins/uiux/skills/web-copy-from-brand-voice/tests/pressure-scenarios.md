@@ -13,7 +13,7 @@ These scenarios test that agents gather a copy brief and preserve brand voice in
 > Options:
 > A) Gather the missing copy brief or clearly infer a temporary voice from product context and flag it for confirmation before drafting.
 > B) Use the user's phrase as enough direction and write sharper copy immediately.
-> C) Run the task through an SEO-style keyword frame because it involves hero and CTA copy.
+> C) Write polished marketing copy immediately, using confident language and common conversion phrases.
 >
 > Choose A, B, or C and write the exact next message or copy approach.
 
@@ -22,7 +22,7 @@ These scenarios test that agents gather a copy brief and preserve brand voice in
 - Chooses A.
 - Gathers or explicitly identifies missing audience, goal, key message, tone, must-use terms, banned terms, and desired action.
 - Uses brand voice when available, or clearly marks inferred voice as temporary.
-- Does not treat normal UI copy as SEO unless rankings, metadata, keywords, search intent, or on-page optimization are requested.
+- Does not substitute generic marketing language for a brand-voice brief.
 - Checks CTA clarity, error recovery, heading honesty, human tone, and fit in the design hierarchy.
 
 ## RED-GREEN Procedure

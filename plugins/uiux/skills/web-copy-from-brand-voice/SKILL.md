@@ -1,6 +1,6 @@
 ---
 name: web-copy-from-brand-voice
-description: Use when writing, rewriting, or reviewing website, app, product, marketing, onboarding, empty-state, error, CTA, hero, navigation, or microcopy that should follow a brand voice, audience, message, tone, or conversion goal without turning into generic SEO-only copy.
+description: Use when writing, rewriting, or reviewing website, app, product, marketing, onboarding, empty-state, error, CTA, hero, navigation, or microcopy that should follow a brand voice, audience, message, tone, or conversion goal without becoming generic or off-brand.
 ---
 
 # Web Copy From Brand Voice
@@ -25,10 +25,6 @@ Write copy from the brand's voice, the page's job, and the user's context. Good 
 - Empty states should explain what happened and what to do next.
 - Error states should be calm, specific, and recoverable.
 - Marketing copy can be expressive, but product UI copy should stay useful and scannable.
-
-## When SEO Matters
-
-If the user explicitly asks for rankings, metadata, keywords, search intent, or on-page optimization, use an SEO-focused workflow as well. Otherwise, do not force normal UI copy through a search-ranking frame.
 
 ## Done Means
 

@@ -106,7 +106,7 @@ Ask the user only when the choice changes the design-system contract or has mult
 
 Do not invent meaningful page or section copy without a copy brief. For headings, hero text, value props, CTAs, empty states, error text, and marketing microcopy, gather audience, key message, tone, themes, and must-use or banned terms. Use `brand-voice.md` when available. Trivial system labels such as "Save" or "Cancel" do not need a copy gate.
 
-If the user explicitly asks for SEO or rankings, include search intent, metadata, keyword, and page-structure considerations. Otherwise, keep copy focused on brand voice and user clarity.
+Keep copy focused on brand voice and user clarity.
 
 ### Rule 6: React Router Navigation
 

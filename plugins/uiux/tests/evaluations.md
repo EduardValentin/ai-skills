@@ -46,5 +46,5 @@ Prompt: "Rewrite this hero and CTA so it sounds more confident."
 
 Expected behavior:
 - Uses brand-voice guidance or asks for the missing copy brief.
-- Produces human, specific page copy without treating the task as SEO unless search ranking is requested.
+- Produces human, specific page copy without drifting into generic marketing language.
 - Verifies CTA clarity and fit in the UI.
