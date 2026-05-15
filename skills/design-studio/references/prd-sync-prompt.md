@@ -1,6 +1,6 @@
 # PRD Sync Prompt
 
-Use this template for PRD sync. Run it inline or delegate it when the current environment supports that. Replace the `[summary]` placeholder with a clear, business-level description of what changed (what the user can now DO, not how it looks).
+Use this template for PRD sync. Prefer delegating the PRD read/check to a context-isolated worker/subagent when the current environment supports that; run inline only when delegation is unavailable. Replace the `[summary]` placeholder with a clear, business-level description of what changed (what the user can now DO, not how it looks).
 
 ---
 

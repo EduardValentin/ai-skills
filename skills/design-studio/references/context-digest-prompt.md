@@ -1,6 +1,6 @@
 # Context Digest Prompt
 
-Use this template to gather project context at the start of a design-studio session. Run it inline, delegate it, or use any other context-saving mechanism the current environment supports. The output should be a single structured digest so the rest of the session can work from a compact project summary.
+Use this template to gather project context at the start of a design-studio session. Prefer running it through a context-isolated worker/subagent or another context-saving mechanism when the environment supports that. Fall back to inline execution only when delegation is unavailable. The output should be a single structured digest so the rest of the session can work from a compact project summary.
 
 **Inputs to fill in before running:**
 
@@ -131,5 +131,5 @@ After producing the digest:
    - `PRD.md` missing → see `prd-generation.md` and offer to generate one.
    - Tailwind theme missing or components directory missing → ask the user where they live, then re-run the digest.
 2. **Surface Mismatches.** Raise each one with the user and apply the conflict rule: the Tailwind theme is authoritative; offer to update DESIGN.md as part of the current task.
-3. **Use the digest as the working reference** for the rest of the session. Avoid repeated reads of the underlying files unless the source changed or a cited detail needs confirmation.
+3. **Use the digest as the working reference** for the rest of the session. Avoid repeated reads of the underlying files unless the source changed, implementation requires a targeted file read, or a cited detail needs confirmation.
 4. **Re-run the digest** when (a) any of the source artifacts has been edited since the last digest, or (b) the active task shifts enough that the PRD slice no longer covers it. Pass a refreshed `<task-summary>` in case (b).

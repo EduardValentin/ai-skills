@@ -6,7 +6,7 @@ If no `PRD.md` exists at the project root, offer to generate one:
 
 If the user **declines**, note that PRD sync will be skipped for the rest of the session, and proceed.
 
-If the user **accepts**, follow the steps below. Use delegation or another context-saving mechanism when available; otherwise run each prompt inline. The prompt bodies are identical either way.
+If the user **accepts**, follow the steps below. Prefer delegation to a context-isolated worker/subagent for the code-analysis pass when available; otherwise run the prompt inline. The prompt body is identical either way, but the main session should receive the structured analysis report rather than raw app files.
 
 ## Step 1 — Code-analysis pass
 

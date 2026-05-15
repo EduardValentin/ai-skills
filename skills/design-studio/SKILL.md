@@ -33,7 +33,7 @@ Deadlines do not relax these priorities. If the requested timeline conflicts wit
 
 1. **Prepare the reference app.** Run `<skill-dir>/scripts/prepare-design-studio.sh --project-root <abs-path>`. The script detects the app under `designs/`, installs dependencies only when needed, and prints the dev command. If detection fails, ask the user for the app path.
 
-2. **Create a project-context digest.** Before design work, summarize only the context needed for the task:
+2. **Create a project-context digest with context isolation.** Before design work, summarize only the context needed for the task:
    - semantic tokens from the theme and global CSS
    - reusable components and variants
    - relevant routes/pages
@@ -42,7 +42,7 @@ Deadlines do not relax these priorities. If the requested timeline conflicts wit
    - rendered aesthetic signals if screenshots already exist
    - mismatches and missing artifacts
 
-   Use delegation or another context-saving mechanism if the current environment offers one; otherwise produce the digest inline. `references/context-digest-prompt.md` contains a reusable prompt.
+   Prefer delegating this scan to a context-isolated worker/subagent when the environment supports it. The main session should receive only the compact digest, not raw docs, full component trees, or large source excerpts. If no delegation or context-saving mechanism exists, produce the digest inline and keep it compact. `references/context-digest-prompt.md` contains a reusable prompt.
 
 3. **Handle missing or conflicting sources.**
    - `DESIGN.md` missing: ask for design direction and create it before extending the system.
@@ -51,6 +51,20 @@ Deadlines do not relax these priorities. If the requested timeline conflicts wit
    - Token docs and theme disagree: treat the implemented theme as the current source of truth, flag the mismatch, and offer to update `DESIGN.md`.
 
 4. **Capture visual context.** Start the app, inspect the target page and nearby pages, and write a 3-to-5 bullet aesthetic summary: color rhythm, spacing rhythm, type hierarchy, density, component shape, and motion. If the environment cannot capture screenshots, use the fallback ladder in `references/browser-fallback.md`.
+
+## Context Discipline
+
+Design work often tempts agents to load everything: `DESIGN.md`, `brand-voice.md`, `PRD.md`, theme files, router files, component trees, screenshots, and page code. Do not pull all of that into the main working context when a compact digest or delegated scan can answer the task.
+
+Prefer context-isolated delegation for:
+
+- project-context digest creation
+- PRD generation app analysis
+- PRD sync checks
+- audits across 3 or more pages/components/routes
+- broad component inventory or token inventory
+
+The main session should work from structured summaries, screenshots, and targeted file reads. Read raw source in the main context only when implementing, verifying a cited detail, resolving a mismatch, or when delegation is unavailable.
 
 ## Choose The Flow
 
@@ -76,7 +90,7 @@ Deadlines do not relax these priorities. If the requested timeline conflicts wit
 1. Frame the audit with the user: audience, goal, target page/state, and what success looks like.
 2. Run the business-logic gate from Rule 8.
 3. Capture the current rendered state at relevant breakpoints and states.
-4. Critique information hierarchy, clutter, accessibility, responsive behavior, token use, component reuse, copy clarity, and visual fit.
+4. Critique information hierarchy, clutter, accessibility, responsive behavior, token use, component reuse, copy clarity, and visual fit. For audits spanning 3 or more pages/components/routes, prefer delegating the broad critique or inventory to a context-isolated worker/subagent, then rank fixes in the main session from the structured summary.
 5. Propose ranked fixes and get user approval on scope.
 6. Apply approved fixes.
 7. Re-validate the same viewports and states.
@@ -150,6 +164,7 @@ Use `references/prd-sync-prompt.md` as the sync checklist. If uncertain, prefer 
 ## Self-Check Before Done
 
 - [ ] Project-context digest created and missing/mismatched sources handled.
+- [ ] Context-isolated delegation used for large scans/digests when available; main context kept to compact summaries and targeted reads.
 - [ ] Design direction aligned when multiple directions were plausible.
 - [ ] Business-logic gate answered and PRD sync handled if needed.
 - [ ] Semantic HTML, keyboard behavior, focus, contrast, and accessible names checked.
