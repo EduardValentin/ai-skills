@@ -89,23 +89,24 @@ def run_scenario(agent_command: str, scenario: dict[str, object]) -> None:
     for term in string_list(scenario, "forbidden_response_terms"):
         assert_not_contains(response, term, f"{scenario_id} response")
 
-    scoping_index = first_index(response, "DISPATCH_SUBAGENT", "Scoping")
-    if scoping_index < 0:
+    anchor_terms = string_list(scenario, "anchor_terms") or ["DISPATCH_SUBAGENT", "Scoping"]
+    anchor_index = first_index(response, *anchor_terms)
+    if anchor_index < 0:
         print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
-        raise ValueError(f"{scenario_id} did not include a Scoping DISPATCH_SUBAGENT action")
+        raise ValueError(f"{scenario_id} did not include required anchor action: {', '.join(anchor_terms)}")
 
     for term in string_list(scenario, "must_precede_terms"):
         later_index = response.find(term)
-        if later_index >= 0 and later_index < scoping_index:
+        if later_index >= 0 and later_index < anchor_index:
             print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
-            raise ValueError(f"{scenario_id} mentioned {term!r} before Scoping dispatch")
+            raise ValueError(f"{scenario_id} mentioned {term!r} before required anchor action")
 
-    prefix = response[:scoping_index].lower()
-    if "local" in prefix and ("scope" in prefix or "map" in prefix):
+    prefix = response[:anchor_index].lower()
+    if "Scoping" in anchor_terms and "local" in prefix and ("scope" in prefix or "map" in prefix):
         print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
         raise ValueError(f"{scenario_id} performed local scoping before Scoping dispatch")
 
-    print(f"PASS: {scenario_id} dispatched Scoping before downstream phases", flush=True)
+    print(f"PASS: {scenario_id} satisfied workflow dispatch order", flush=True)
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
@@ -152,6 +153,8 @@ Use kind DISPATCH_SUBAGENT for any mandatory subagent dispatch. For subagent
 dispatch details, include the prompt intent and the compact inputs that must be
 forwarded. Include enough detail for a test to verify whether trigger-matching
 wording is present.
+
+Use kind READINESS_PREFLIGHT for any pre-review readiness preflight action.
 """
 
 

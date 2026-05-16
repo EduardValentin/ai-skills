@@ -12,6 +12,24 @@ only list the first workflow actions you would take from the loaded skill.
 """
 required_skill_terms = ["Scoping trigger discipline", "Dispatch Scoping subagent", "codebase scope-mapping task", "token-efficient navigable scope map", "suggested downstream slices"]
 forbidden_skill_terms = ["agents/scoping.md"]
-required_response_terms = ["DISPATCH_SUBAGENT", "Scoping", "codebase mapping", "token-efficient navigable scope map", "path:line", "entry points", "target modules", "types", "tests", "suggested downstream slices"]
+required_response_terms = ["DISPATCH_SUBAGENT", "Scoping", "mapping", "token-efficient navigable scope map", "path:line", "entry points", "target modules", "types", "tests", "suggested downstream slices"]
 forbidden_response_terms = ["agents/scoping.md", "codebase-scope-map", "$codebase-scope-map"]
+anchor_terms = ["DISPATCH_SUBAGENT", "Scoping"]
 must_precede_terms = ["BRAINSTORM", "PLAN", "IMPLEMENT"]
+
+[[scenario]]
+id = "ticket-start-runs-ui-readiness-preflight-before-review"
+skill = "ticket-start"
+prompt = """
+Use ticket-start for Linear issue APP-456. Assume the plan is approved,
+implementation has just completed, and the diff changes a waitlist form, CTA,
+sheet layout, semantic tokens, and motion in parity mode. Do not call external
+tools; only list the next workflow actions from the loaded skill before formal
+Review.
+"""
+required_skill_terms = ["Pre-review readiness preflight", "actual visible focus style", "Design-system collateral", "compact readiness ledger"]
+forbidden_skill_terms = []
+required_response_terms = ["READINESS_PREFLIGHT", "computed styles", "bounding boxes", "focus", "reduced-motion", "semantic tokens", "design", "readiness ledger", "Review"]
+forbidden_response_terms = ["skip Reviewer", "skip QA", "skip UI/UX", "preflight replaces"]
+anchor_terms = ["READINESS"]
+must_precede_terms = ["DISPATCH_SUBAGENT | Reviewer", "DISPATCH_SUBAGENT | QA", "DISPATCH_SUBAGENT | UI/UX"]

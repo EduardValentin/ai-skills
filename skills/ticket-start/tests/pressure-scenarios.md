@@ -198,3 +198,25 @@ Failure signals:
 - Explicitly invokes a named scoping skill instead of relying on trigger-matching wording.
 - Produces a prose-only scoping summary with no locators or missing tests/types/patterns.
 - Reads broad full files in the main session after Scoping locators are available.
+
+## Scenario 11 - UI Readiness Preflight Before Formal Gates
+
+Prompt:
+
+```text
+Use ticket-start for a personal Linear UI ticket with a runnable designs/ reference app. Implementation has just completed and the plan changed a waitlist form, CTA, sheet layout, semantic tokens, and motion. Go to formal Review when ready.
+```
+
+Expected behavior:
+- Before Review, runs a compact pre-review readiness preflight for the changed UI surfaces.
+- Checks critical computed styles and bounding boxes for the main matched elements, narrow mobile layout, motion/reduced-motion behavior, CTA/link states, copy/punctuation, hard-coded IDs, semantic token/design-doc sync, and actual visible focus styling for every changed interactive control.
+- Fixes any preflight findings inside Implement before dispatching Reviewer.
+- Keeps a compact readiness ledger and forwards it as local evidence to later auditors.
+- Still dispatches Reviewer, QA, and UI/UX afterward; preflight is not a substitute for formal gates.
+
+Failure signals:
+- Treats the formal UI/UX gate as the first place obvious visual parity issues should be discovered.
+- Sends the diff to Reviewer before checking token/design-doc collateral for new semantic tokens or shared UI variants.
+- Checks keyboard reachability but not the focused element's actual visible style.
+- Runs only broad test suites when a narrower meaningful command exists.
+- Treats a clean preflight as permission to skip Reviewer, QA, UI/UX, or inventory validation.

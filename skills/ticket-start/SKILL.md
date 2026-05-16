@@ -104,6 +104,13 @@ Explore user intent, requirements, constraints, and design before implementation
    - On the parallel-session execution fallback path, request an end-of-feature code review after the final task and before Review — that path has no other end-of-feature review.
    - When the implementation workflow reaches branch-finishing guidance, accept its test-pass check but do **not** present merge / PR / keep / discard options. Return to this skill's Review phase. Ship replaces those options.
 
+4. **Pre-review readiness preflight — UI/mixed diffs only.** Before entering Review, run a cheap local readiness pass for changed UI surfaces. This is not an auditor gate and never replaces Reviewer, QA, or UI/UX; it catches obvious issues before formal gates spend context.
+   - **Parity mode:** use Scoping prototype/reference rows, plan element mappings, and changed UI files to sample the main matched elements before formal UI/UX. Check critical computed styles and bounding boxes for typography, CTA/button shape, spacing, panel/card geometry, motion/transform offsets, and narrow mobile layout.
+   - **All UI modes:** keyboard through every changed interactive control and inspect the actual visible focus style on the focused element; check reduced-motion behavior where motion changed; verify CTA/link destinations and states; check copy/punctuation against the ticket/prototype; look for unnecessary hard-coded IDs.
+   - **Design-system collateral:** if the implementation adds or changes semantic tokens, shared classes, reusable primitives, or visible component variants, update the relevant design/token documentation in the same implementation pass.
+   - **Targeted verification:** run the narrowest meaningful tests or browser checks. If a command unexpectedly fans out to a broad suite, switch to a narrower valid command when available and record the reason.
+   - **Output:** keep a compact readiness ledger: one line per check with command/evidence pointer and PASS/FIXED/BLOCKED. If the preflight finds issues, fix them inside Implement before Review. Forward the ledger as local evidence to later auditors, but do not paste logs or screenshots unless an auditor needs a specific artifact.
+
 ## Review
 
 1. **Dispatch Reviewer subagent** (`agents/reviewer.md`). Forward: full diff (`git diff origin/main..HEAD`), ticket + AC + approved plan, chosen brainstorm direction + rationale from the brainstorm summary, repo `AGENTS.md`, Scoping report, role prompt. Local code inspection is useful preparation, but it does not satisfy this gate.
@@ -222,7 +229,7 @@ If the change touches a third-party library, identify the exact version from man
 
 When done, report:
 - What changed.
-- What was validated and how — name each form of evidence: tests run; Superpowers implementation/review status; Reviewer / QA / UI/UX status; UI/UX mode and coverage (or skipped because backend-only). Omit only the ones that did not apply, and say so.
+- What was validated and how — name each form of evidence: tests run; pre-review readiness preflight status for UI/mixed diffs; Superpowers implementation/review status; Reviewer / QA / UI/UX status; UI/UX mode and coverage (or skipped because backend-only). Omit only the ones that did not apply, and say so.
 - Rules promoted in this session, by destination (per `self-improvement.md`).
 - Bug-fix iterations consumed (out of 3 cap).
 - Any remaining risk, assumption, or follow-up.
@@ -254,6 +261,7 @@ When done, report:
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
 - Using the parallel-session execution fallback path and skipping end-of-feature code review before advancing to Review.
 - Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Review.
+- Entering Review on a UI/mixed diff without a compact pre-review readiness preflight, or treating that preflight as a substitute for Reviewer, QA, UI/UX, or inventory validation.
 - Starting any Ship mutation without first completing the Ship preflight ledger from actual auditor/self-improvement outputs.
 - Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before Review, QA, UI/UX if applicable, inventory validation, and self-improvement passes are complete.
 - Merging the PR before the user explicitly approves.
