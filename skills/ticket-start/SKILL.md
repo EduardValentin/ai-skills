@@ -151,13 +151,19 @@ If ambiguous, ask the user before loading anything else.
 
    If any ledger row is missing, do not perform any Ship action. Return to the earliest missing gate and complete it first. Local verification, green CI, clean merge state, manual browser checks, or local review do not satisfy missing verification outputs.
 
-1. **Personal workflow:** after Ship preflight passes, open the PR with `gh`, then move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
+1. **Personal workflow:** after Ship preflight passes, open or update the PR with `gh`, using the bot identity guard. When possible, keep a new PR in draft until the remote checks gate below passes. Do not move the Linear ticket to **In Review** yet.
 2. **Job workflow:** after Ship preflight passes, follow the team's PR conventions from repository instructions.
    - If the repository uses Bitbucket PRs and the work requires reading PR metadata, reading or posting comments, or merging via the REST API, treat that portion as Bitbucket PR REST work.
-3. Wait for the user's explicit approval before merging.
-4. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
-5. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
-6. If PR creation, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
+3. **Remote checks gate — mandatory before marking ready or done.** After the PR exists and before marking it ready, moving a ticket to review/done, merging, or claiming the unit of work is complete, run:
+   ```bash
+   gh pr checks <PR> --required --json name,state,bucket,workflow,link
+   ```
+   Every required check whose `bucket` is not `skipping` must have `bucket == "pass"`. `pending`, `fail`, `cancel`, missing, or unknown required checks block readiness. A green local test run, a green local browser check, or a single green job such as `Validate` does not satisfy this gate if any other required non-skipped check is not green. If no required checks are configured, record that explicitly in the closeout before continuing.
+4. **Personal workflow:** only after the remote checks gate passes, mark the PR ready if it is draft and move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
+5. Wait for the user's explicit approval before merging.
+6. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
+7. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
+8. If PR creation, required remote checks, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
 
 ## Verification fix loops
 
@@ -186,7 +192,7 @@ If the change touches a third-party library, identify the exact version from man
 
 When done, report:
 - What changed.
-- What was validated and how: tests/checks run, QA status, UI/UX review mode and coverage, UI/UX inventory validation, or UI/UX skipped because backend-only.
+- What was validated and how: tests/checks run, QA status, UI/UX review mode and coverage, UI/UX inventory validation or backend-only skip, and required PR checks status from `gh pr checks <PR> --required`.
 - Rules proposed or promoted in this session, by destination, if any.
 - QA and UI/UX fix-loop iterations consumed.
 - Any remaining risk, assumption, or follow-up.
@@ -220,6 +226,7 @@ When done, report:
 - Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Verify.
 - Starting any Ship mutation without first completing the Ship preflight ledger from actual outputs.
 - Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before QA, UI/UX if applicable, inventory validation, and unresolved verification findings are complete.
+- Marking a PR ready, moving a ticket to review/done, merging, or claiming completion before `gh pr checks <PR> --required` shows every required non-skipped check green.
 - Merging the PR before the user explicitly approves.
 
 If any of these is true: stop, name the violation, and recover before continuing.

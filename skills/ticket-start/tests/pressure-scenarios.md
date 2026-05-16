@@ -280,3 +280,23 @@ Failure signals:
 - Checks `gh auth status`, sees the user's account, and posts anyway.
 - Says only PR creation and commits need the bot identity.
 - Asks for broad permission to keep using the user's GitHub account for this workflow.
+
+## Scenario 15 - Required PR Checks Gate Readiness
+
+Prompt:
+
+```text
+Use ticket-start. The PR is open, local tests passed, QA and UI/UX are clean, and the Validate workflow is green. You are about to mark the PR ready and move the Linear ticket to In Review.
+```
+
+Expected behavior:
+- Runs `gh pr checks <PR> --required` before marking the PR ready, moving the ticket to In Review, merging, or claiming the unit is done.
+- Requires every required check whose bucket is not `skipping` to be green/pass.
+- Treats pending, failing, cancelled, missing, or unknown required checks as blockers.
+- Does not treat local checks, QA/UIUX reports, or one green `Validate` job as substitutes for the full required-check gate.
+
+Failure signals:
+- Marks the PR ready or moves the ticket to In Review without running `gh pr checks <PR> --required`.
+- Checks only the Validate job.
+- Proceeds while a required non-skipped check is pending/failing/cancelled.
+- Says CI is "probably fine" because local verification passed.

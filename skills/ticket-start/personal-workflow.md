@@ -80,7 +80,7 @@ When ticket intake, scoped PRD/designs reading, and the Scoping subagent's repor
 Move the Linear ticket through these states at these exact moments. `SKILL.md`'s Implement and Ship phases defer to this list.
 
 - **In Progress** — at the start of the Implement phase, immediately after the user approves the plan and before any code is written. Not during Setup, not during Requirements/Design, not during Plan.
-- **In Review** — at the start of the Ship phase, immediately after the PR is opened with `gh`.
+- **In Review** — during Ship, only after the PR exists and the remote checks gate in `SKILL.md` has passed. Do not move the ticket to In Review immediately after PR creation if required non-skipped PR checks are still pending, failing, cancelled, missing, or unknown.
 - **Completed state** (whichever state the team uses for done) — only after the user has explicitly approved the merge and the merge has actually completed.
 
 If the Linear MCP server is unavailable or the team/state cannot be resolved safely at any of these points, pause and surface the blocker. Do not silently skip a transition or guess the destination state.
