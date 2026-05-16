@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scan UI files for common ad-hoc styling values.
+"""Scan UI files for style values that may need token review.
 
 This is intentionally conservative: it reports suspicious raw values for a human
 to review instead of deciding whether a token definition is legitimate.
@@ -38,7 +38,7 @@ SKIP_DIRS = {
 PATTERNS = [
     ("hex-color", re.compile(r"(?<![\w-])#[0-9a-fA-F]{3,8}\b")),
     ("rgb-hsl-color", re.compile(r"\b(?:rgb|rgba|hsl|hsla)\s*\(", re.IGNORECASE)),
-    ("tailwind-arbitrary", re.compile(r"\b[a-zA-Z0-9:-]+-\[[^\]]+\]")),
+    ("bracket-literal-style", re.compile(r"\b[a-zA-Z0-9:-]+-\[[^\]]+\]")),
 ]
 
 
@@ -71,7 +71,7 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Audit UI files for ad-hoc style values.")
+    parser = argparse.ArgumentParser(description="Audit UI files for style values that may need token review.")
     parser.add_argument("paths", nargs="+", help="Files or directories to scan")
     parser.add_argument(
         "--extensions",
@@ -91,10 +91,13 @@ def main() -> int:
             print(f"{path}:{line_no}: {label}: {line}")
 
     if total:
-        print(f"\nFound {total} potential ad-hoc style value(s). Review and replace with semantic tokens where appropriate.")
+        print(
+            f"\nFound {total} style value(s) for token review. Replace with semantic tokens "
+            "only when they duplicate an existing role or should be reusable."
+        )
         return 1
 
-    print("No obvious ad-hoc style values found.")
+    print("No obvious style values need token review.")
     return 0
 
 

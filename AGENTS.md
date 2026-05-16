@@ -4,6 +4,10 @@ This repository is the tracked source for personal AI skills used across multipl
 
 ## Repository rules
 
+### Git baseline
+
+Before creating a branch or worktree from `main`, always fetch the remote first and base the new branch/worktree on the freshly fetched `origin/main`. Do not branch from a stale local `main` ref.
+
 ### 1. One canonical copy per skill
 
 Maintain a **single canonical version** of each skill in this repo. Do not fork a skill into per-agent folders (`claude/skills/foo/` *and* `codex/skills/foo/`). Forked copies drift, fixes don't propagate, and the same bug ends up debugged twice.
