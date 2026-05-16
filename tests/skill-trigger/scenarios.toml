@@ -14,7 +14,7 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "one-shot implementation subagent", "UI/UX dispatch wording"]
+skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "one-shot implementation subagent", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies"]
 forbidden_terms = []
 
 [[scenario]]

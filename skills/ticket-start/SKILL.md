@@ -23,6 +23,8 @@ Implementation is delegated, not done inline by the main session. Use fresh suba
 
 **Implementation dispatch wording:** after plan approval, `ticket-start` dispatches implementation to fresh implementer subagent(s). Prefer one implementer per independent task. If tasks share the same small write surface or cannot be safely parallelized, dispatch a single one-shot implementation subagent with the full approved plan. The main session coordinates, inspects returned summaries, and proceeds to Verify; it does not use tight coupling as a reason to implement inline.
 
+**GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes. If a bot token cannot be minted or the bot lacks permission, halt and draft the intended write in chat; do not post through the user's personal GitHub account.
+
 **Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
 **Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent dispatch named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required dispatches. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, implementation, QA, UI/UX, or focused verification-fix implementers with local-only substitutes.
@@ -201,6 +203,7 @@ When done, report:
 - Skipping requirements/design, written-plan, or delegated test-first implementation because "the ticket is clear" or "the change is small."
 - Implementing inline in the main session because tasks share a tight write surface, seem too small, or are awkward to split. Dispatch one one-shot implementation subagent instead.
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent dispatches.
+- Using ambient `gh` authentication for any personal-workflow GitHub write, including PR comments or review replies. Mint a fresh bot token and scope it to the write command; if that fails, halt.
 - Dispatching a separate ticket-start code-review subagent or adding a generic post-implementation code-review phase after Implement.
 - Replacing QA or UI/UX with local tests, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
 - Dispatching Scoping or UI/UX with vague prompts that omit the required work, evidence, and compact inputs.

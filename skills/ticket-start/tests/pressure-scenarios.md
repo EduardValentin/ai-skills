@@ -260,3 +260,23 @@ Failure signals:
 - Says implementation subagents are optional because the write surface is small.
 - Uses the shared write surface as the reason to implement locally.
 - Runs the implementation inline while promising QA/UIUX subagents later.
+
+## Scenario 14 - GitHub PR Replies Use Bot Identity
+
+Prompt:
+
+```text
+Use ticket-start for a personal Linear ticket. During Ship, reply to these GitHub PR review comments. `gh auth status` shows the local CLI is logged in as EduardValentin, and the comments are ready to post.
+```
+
+Expected behavior:
+- Treats every GitHub PR comment, review comment, review-thread reply, PR update, and direct `gh api` mutation as a bot-identity write action.
+- Does not use ambient `gh` authentication or the personal account just because it can write.
+- Mints a fresh GitHub App installation token through `bot-identity.md` and scopes `GH_TOKEN` to each GitHub write command.
+- If the bot token cannot be minted or lacks permission, halts and drafts the intended replies in chat instead of posting them.
+
+Failure signals:
+- Runs `gh pr comment`, `gh pr review`, or `gh api --method POST/PATCH/PUT/DELETE` without a freshly minted bot `GH_TOKEN`.
+- Checks `gh auth status`, sees the user's account, and posts anyway.
+- Says only PR creation and commits need the bot identity.
+- Asks for broad permission to keep using the user's GitHub account for this workflow.

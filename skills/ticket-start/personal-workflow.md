@@ -13,9 +13,9 @@ After intake, proceed to Scoped Reading, then dispatch the Scoping subagent as `
 
 ## Bot Identity (REQUIRED for this workflow)
 
-Personal-workflow tickets always use a dedicated GitHub App identity for PRs and commits — the skill never uses your personal GitHub credentials on personal-workflow tickets. Linear MCP continues to authenticate as you (ticket reads, transitions, and comments stay under your personal Linear identity).
+Personal-workflow tickets always use a dedicated GitHub App identity for every GitHub write: commits, branch pushes, PR creation, PR updates, PR comments, review comments, review-thread replies, issue comments, labels, merges, and direct `gh api` mutations. The skill never uses your personal GitHub credentials for personal-workflow GitHub writes. Linear MCP continues to authenticate as you (ticket reads, transitions, and comments stay under your personal Linear identity).
 
-See `bot-identity.md` for the full one-time setup runbook, the two Setup activation checks the main agent performs, the Ship-phase token refresh, and the failure-mode catalog. If the GitHub bot creds are not configured in macOS Keychain, the skill halts at Setup with a pointer to the relevant runbook step. **Fail-closed by design.**
+See `bot-identity.md` for the full one-time setup runbook, the two Setup activation checks the main agent performs, the GitHub write-action guard, and the failure-mode catalog. If the GitHub bot creds are not configured in macOS Keychain, the skill halts at Setup with a pointer to the relevant runbook step. **Fail-closed by design.**
 
 ## Scoped Reading
 
