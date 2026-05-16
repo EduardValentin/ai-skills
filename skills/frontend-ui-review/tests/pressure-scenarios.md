@@ -1,8 +1,8 @@
-# Prototype Parity Review Pressure Scenarios
+# Frontend UI Review Pressure Scenarios
 
-Run these with a fresh agent after changing `prototype-parity-review`. They target rationalizations that make visual review collapse into screenshots, summaries, or "close enough" design judgment. Do not leak the expected behavior into the test prompt.
+Run these with a fresh agent after changing `frontend-ui-review`. They target rationalizations that make visual review collapse into screenshots, summaries, or "close enough" design judgment. Do not leak the expected behavior into the test prompt.
 
-## Scenario 1 - Prototype Comparison Without Explicit Skill Name
+## Scenario 1 - Reference Comparison Without Explicit Skill Name
 
 Prompt:
 
@@ -11,7 +11,7 @@ Compare the implemented React dashboard against the runnable designs/ reference 
 ```
 
 Expected behavior:
-- Loads `prototype-parity-review` from the trigger wording even though the skill is not named.
+- Loads `frontend-ui-review` from the request wording even though the skill is not named.
 - Uses parity mode because a runnable reference app is present.
 - Builds or verifies a matched-element inventory and uses DOM computed-style plus bounding-rect evidence.
 - Treats screenshots as secondary evidence.
@@ -19,9 +19,9 @@ Expected behavior:
 Failure signals:
 - Performs only a visual screenshot comparison.
 - Reviews only "important" elements.
-- Claims the design system can override prototype details without an approved divergence.
+- Claims the design system can override reference details without an approved divergence.
 
-## Scenario 2 - Ticket-Start Delegated UI/UX Gate
+## Scenario 2 - Delegated UI/UX Gate
 
 Prompt:
 
@@ -30,18 +30,19 @@ Ticket-start delegated the UI/UX gate to you. You received production and protot
 ```
 
 Expected behavior:
-- Picks up the reusable visual review protocol automatically from the delegated UI/UX prompt wording.
+- Picks up the reusable frontend UI review protocol automatically from the delegated UI/UX prompt wording.
+- Uses parity mode because production and prototype URLs are present.
 - Builds the matched-element inventory from the affected surface map, approved artifacts, changed UI files, and live DOM inspection.
 - Fills `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells with DOM evidence for every in-scope row.
-- Adds observed production or prototype elements missing from the affected surface map or approved artifacts under `Inventory provenance gaps`.
+- Adds observed production or reference elements missing from the affected surface map or approved artifacts under `Inventory provenance gaps`.
 
 Failure signals:
-- Asks the main agent to construct the inventory.
+- Asks the caller to construct the inventory.
 - Requires the caller to name the skill explicitly before proceeding.
 - Returns CLEAN with blank computed-style cells.
 - Accepts "I checked the important elements" as a complete report.
 
-## Scenario 3 - No Reference Is Out Of Scope
+## Scenario 3 - No-Reference Consistency Review
 
 Prompt:
 
@@ -50,14 +51,15 @@ There is no prototype for this UI change. Review whether the new settings panel 
 ```
 
 Expected behavior:
-- Does not use `prototype-parity-review` as a no-reference consistency review.
-- Reports that a runnable prototype/reference is required for this skill.
-- Asks the caller to use a separate visual consistency or accessibility review workflow.
+- Loads `frontend-ui-review` from the no-reference visual consistency wording.
+- Uses consistency mode because no runnable reference is present.
+- Builds a matched-element inventory by pairing changed visible elements with credible production siblings or analogs.
+- Returns BLOCKED or degraded evidence for rows where no credible analog can be identified instead of inventing a basis.
 
 Failure signals:
-- Performs a sibling/analog consistency review under this skill.
-- Returns CLEAN without a runnable reference.
-- Invents a reference from production analogs.
+- Refuses the task because there is no runnable prototype.
+- Invents a prototype/reference from production analogs.
+- Returns CLEAN without DOM evidence for the implemented elements and their analogs.
 
 ## Scenario 4 - Browser Capability Degradation
 
@@ -86,7 +88,7 @@ The prior review found V1 major: graph card border and shadow differ from the pr
 ```
 
 Expected behavior:
-- Treats the findings as actionable prototype parity defects.
+- Treats the findings as actionable parity defects.
 - Does not ask whether to match the prototype while preserving approved placement/accessibility.
 - On rerun, scopes review to affected rows and states unless shared layout/global styles changed.
 

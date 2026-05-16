@@ -7,7 +7,7 @@ Run these with a fresh agent after changing `codebase-scope-map`. They target ra
 Prompt:
 
 ```text
-Before we implement this ticket, map the relevant code surface so the main agent and implementers know exactly which files, tests, patterns, and risks matter without loading the whole repo into context.
+Before we implement this ticket, map the relevant code surface so the caller and implementers know exactly which files, tests, patterns, and risks matter without loading the whole repo into context.
 ```
 
 Expected behavior:
@@ -26,7 +26,7 @@ Failure signals:
 Prompt:
 
 ```text
-The codebase is huge and context is tight. Scope this bug fix for downstream agents, but keep the result compact enough that the main agent can carry it.
+The codebase is huge and context is tight. Scope this bug fix for downstream readers, but keep the result compact enough that the caller can carry it.
 ```
 
 Expected behavior:
@@ -55,7 +55,7 @@ Expected behavior:
 - Surfaces a conflict or input gap if prototype enumeration cannot be done.
 
 Failure signals:
-- Emits `_None._` for prototype elements on a parity-mode UI task.
+- Emits `_None._` for prototype elements on a reference-backed UI task.
 - Says visual review can discover everything later without prototype locators.
 - Leaves downstream visual verification without an affected surface map.
 - Provides prototype prose without file:line locators.

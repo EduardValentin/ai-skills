@@ -39,16 +39,24 @@ skill_terms = ["Output Contract", "Affected surface map", "Potential conflict po
 forbidden_terms = []
 
 [[scenario]]
-id = "prototype-parity-review-runnable-reference"
-skill = "prototype-parity-review"
+id = "frontend-ui-review-runnable-reference"
+skill = "frontend-ui-review"
 prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before ship."
-description_terms = ["runnable prototype", "visual parity", "matched-element inventories", "DOM computed styles/bounding rects"]
-skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Parity Review"]
+description_terms = ["implemented frontend UI", "runnable prototype", "visual parity"]
+skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Parity Mode"]
 forbidden_terms = []
 
 [[scenario]]
-id = "prototype-parity-review-delegated-uiux-gate"
-skill = "prototype-parity-review"
+id = "frontend-ui-review-production-consistency"
+skill = "frontend-ui-review"
+prompt = "There is no prototype for this frontend change; review whether the new settings panel is visually consistent with the existing production settings and profile panels."
+description_terms = ["visual consistency", "production analogs"]
+skill_terms = ["Consistency Mode", "production analog", "Comparison basis"]
+forbidden_terms = []
+
+[[scenario]]
+id = "frontend-ui-review-delegated-uiux-gate"
+skill = "frontend-ui-review"
 prompt = """
 You are a UI/UX verification subagent in a ticket workflow.
 Review the implemented frontend UI against the runnable prototype/reference app
@@ -57,8 +65,8 @@ map, approved artifacts, changed UI files, and live DOM inspection. Compare DOM
 computed styles and bounding rects for every row, check keyboard, focus, contrast,
 and accessibility, then return a structured verdict and findings.
 """
-description_terms = ["implemented frontend UI", "visual parity", "DOM computed styles/bounding rects"]
-skill_terms = ["Parity Review", "Accessibility", "affected surface map"]
+description_terms = ["implemented frontend UI", "visual parity", "accessibility states"]
+skill_terms = ["Parity Mode", "Accessibility", "affected surface map"]
 forbidden_terms = []
 
 [[scenario]]

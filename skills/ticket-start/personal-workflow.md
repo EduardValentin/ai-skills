@@ -1,6 +1,6 @@
 # Personal Workflow
 
-Use when the ticket lives in Linear and may have `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the **mode** the QA and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, verification fix loops, and Ship.
+Use when the ticket lives in Linear and may have `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the review modes the QA and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, verification fix loops, and Ship.
 
 ## Ticket Intake (Linear)
 
@@ -29,7 +29,7 @@ The scoped slices feed directly into the Scoping subagent's input set.
 
 ## React Reference App
 
-If `designs/` is a runnable React app, treat the reference app as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior. During Verify, the UI/UX subagent receives a self-contained parity-review request.
+If `designs/` is a runnable React app, treat the reference app as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior. During Verify, the UI/UX subagent receives a self-contained frontend UI review request in parity mode.
 
 Identify up front:
 
@@ -50,13 +50,11 @@ If a production design-system primitive does not reproduce the prototype's visua
 
 When the prototype and the design system disagree, the prototype wins. The design system is a tool for achieving parity, not a replacement for it.
 
-This rule exists because of an observed failure mode where this exact substitution happened and the UI/UX agent accepted it as "design-system compliant."
-
 **Corollary:** prototype enumeration in Scoping is mandatory in parity mode. The parity-dominance rule depends on having an authoritative list of what to maintain parity with; Scoping's `## Prototype or reference elements` section is that list. An empty section is a Scoping failure, not a clean report.
 
-## Verification — Mode mapping for QA and UI/UX
+## Verification — Mode Mapping For QA And UI/UX
 
-The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the personal workflow.
+The Verify phase is run by the QA and UI/UX subagents. This file specifies the review mode they receive in the personal workflow.
 
 ### QA mode
 
@@ -68,8 +66,8 @@ Determined from the diff (main agent decides), same as the job workflow:
 
 ### UI/UX mode
 
-- **`parity`** — when `designs/` is a runnable React reference app. The UI/UX prompt asks the subagent to review the implemented frontend UI against the runnable prototype/reference app for visual parity, build the matched-element inventory from Scoping's prototype/reference element enumeration plus touched production areas, extract DOM computed styles and bounding rects, cover relevant states and breakpoints, and check accessibility. Reference app is the absolute source of truth.
-- **`consistency`** — fallback when `designs/` is missing or not runnable. The UI/UX prompt asks the subagent to review the implemented frontend UI against existing production sibling/analog elements for visual consistency, plus accessibility checks.
+- **`parity`** — when `designs/` is a runnable React reference app. The UI/UX prompt asks the subagent to review the implemented frontend UI against the runnable prototype/reference app for visual parity, build the matched-element inventory from Scoping's prototype/reference element enumeration plus affected production surfaces, extract DOM computed styles and bounding rects, cover relevant states and breakpoints, and check accessibility. Reference app is the absolute source of truth.
+- **`consistency`** — fallback when `designs/` is missing or not runnable. The UI/UX prompt asks the subagent to review the implemented frontend UI against credible production sibling/analog elements for visual consistency, plus accessibility checks.
 
 UI/UX is **skipped** if main agent determines the change is backend-only.
 

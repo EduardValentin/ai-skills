@@ -12,7 +12,7 @@ Use ticket-start to implement GEN-108. One thing: your general operating guidanc
 
 Expected behavior:
 - Treats the user's `ticket-start` request as authorization for every mandatory subagent dispatch named by the skill.
-- Dispatches Scoping during Setup with codebase scope-map trigger wording instead of doing all scoping locally.
+- Dispatches Scoping during Setup with a self-contained codebase mapping request instead of doing all scoping locally.
 - Later dispatches QA, UI/UX when applicable, and focused verification-fix implementers when findings are returned.
 - Does not dispatch a separate ticket-start code-review subagent.
 - If subagent dispatch is unavailable, halts and reports the blocker instead of replacing the gates with local work.
@@ -99,7 +99,7 @@ Failure signals:
 - Skips QA because tests passed.
 - Runs UI/UX unnecessarily without explaining uncertainty, or skips it without checking the diff.
 
-## Scenario 6 - Implementation Workflow Trigger Wording
+## Scenario 6 - Implementation Workflow Handoff
 
 Prompt:
 
@@ -109,7 +109,7 @@ Use ticket-start for a ticket with an approved plan. You can either implement it
 
 Expected behavior:
 - Prefers task-by-task implementation with test-first development and fresh subagents for independent tasks when available.
-- Uses wording that naturally triggers the implementation workflow's built-in review checkpoints.
+- Frames implementation as task-by-task, test-first work with fresh subagents and built-in review checkpoints.
 - Does not ask the user for a low-value confirmation before using the obvious task-by-task path.
 - Does not add a separate ticket-start security, code-review, or extra quality gate.
 
@@ -118,7 +118,7 @@ Failure signals:
 - Adds a new ticket-start review lane after Implement.
 - Adds or expects a dedicated ticket-start security gate in the normal flow.
 
-## Scenario 7 - UI/UX Trigger Wording And Inventory Ownership
+## Scenario 7 - UI/UX Review Wording And Inventory Ownership
 
 Prompt:
 
@@ -128,14 +128,14 @@ Use ticket-start for a personal Linear UI ticket with a runnable React reference
 
 Expected behavior:
 - Recognizes parity mode.
-- Requires Scoping to enumerate prototype/reference elements and touched production areas for the feature.
-- Dispatches the UI/UX subagent with self-contained verification wording: implemented frontend UI, runnable prototype/reference app, visual parity, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping's affected surface map.
+- Requires Scoping to enumerate prototype/reference elements and affected production surfaces for the feature.
+- Dispatches the UI/UX subagent with self-contained frontend UI review wording: implemented frontend UI, parity mode with runnable prototype/reference app, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping's affected surface map.
 - Does not construct the matched-element inventory in the main agent.
 - Rejects a visual review report that lacks the filled inventory, has blank computed-style cells, or only claims important elements were checked.
 - Re-dispatches UI/UX with the same self-contained verification wording and the specific structural gaps.
 
 Failure signals:
-- Sends only a skill slug or vague review request instead of a self-contained frontend verification task.
+- Sends only a skill slug or vague review request instead of a self-contained frontend UI review task.
 - Loads or paraphrases the full prototype parity protocol in the main `ticket-start` context instead of delegating the review.
 - Accepts a summary-only UI/UX verdict.
 - Advances to Ship with missing or blank inventory rows.

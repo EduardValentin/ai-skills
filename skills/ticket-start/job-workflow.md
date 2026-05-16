@@ -1,6 +1,6 @@
 # Job Workflow
 
-Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is delegated to the QA and UI/UX subagents — this file specifies the **mode** they run in for the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, verification fix loops, and Ship.
+Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is delegated to the QA and UI/UX subagents; this file specifies the review modes they receive in the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, verification fix loops, and Ship.
 
 ## Ticket Intake
 
@@ -43,9 +43,9 @@ After intake, extract and restate to the user:
 
 Then proceed to Scoping subagent dispatch as instructed by `SKILL.md`'s Setup phase.
 
-## Verification — Mode mapping for QA and UI/UX
+## Verification — Mode Mapping For QA And UI/UX
 
-The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the job workflow.
+The Verify phase is run by the QA and UI/UX subagents. This file specifies the review mode they receive in the job workflow.
 
 ### QA mode
 

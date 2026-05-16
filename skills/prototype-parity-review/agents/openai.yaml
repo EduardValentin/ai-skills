@@ -1,4 +1,0 @@
-interface:
-  display_name: "Prototype Parity Review"
-  short_description: "Verify UI parity against a runnable reference"
-  default_prompt: "Use $prototype-parity-review to verify this frontend change against the runnable prototype or reference app."

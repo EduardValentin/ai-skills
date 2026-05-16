@@ -19,7 +19,7 @@ Implementation proceeds task-by-task with test-first development, fresh subagent
 
 **Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
 
-**UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend verification request: frontend UI, runnable prototype/reference app or production analogs, visual parity or consistency, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
+**UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
 
 **Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
@@ -79,7 +79,7 @@ If ambiguous, ask the user before loading anything else.
 
 1. Produce a written implementation plan from the approved requirements/design artifact before touching code. The plan is a distinct artifact — not a verbal summary, not the requirements/design transcript, not a mental model.
 
-2. For parity-mode UI tickets, keep visible-surface tasks traceable to Scoping's prototype/reference rows and affected surface map. The main agent does not build the UI/UX matched-element inventory; the UI/UX subagent builds it during Verify from the affected surface map, the approved artifacts, and the diff.
+2. For UI tickets, keep visible-surface tasks traceable to Scoping's affected surface map. Reference-backed UI tasks should also remain traceable to Scoping's prototype/reference rows. The main agent does not build the UI/UX matched-element inventory; the UI/UX subagent builds it during Verify from the affected surface map, the approved artifacts, and the diff.
 
 3. Show the plan to the user for review. Wait for explicit user approval of the plan itself before any code.
 
@@ -109,26 +109,20 @@ If ambiguous, ask the user before loading anything else.
 
 4. **When QA is clean**, continue to UI/UX unless backend-only.
 
-5. **Dispatch UI/UX subagent** unless backend-only flag is set. Ask for frontend UI verification:
-   - "Review the implemented frontend UI against the runnable prototype/reference app for visual parity" in parity mode.
-   - "Review the implemented frontend UI against production sibling/analog elements for visual consistency" in consistency mode.
-   - Include: build a matched-element inventory from Scoping's affected surface map, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
+5. **Dispatch UI/UX subagent** unless backend-only flag is set. Ask for frontend UI review:
+   - Parity mode when a runnable prototype/reference app is available: review the implemented frontend UI against that reference as the visual source of truth.
+   - Consistency mode otherwise: review the implemented frontend UI against credible production sibling or analog elements.
+   - Include: build a matched-element inventory from Scoping's affected surface map, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, review mode, comparison basis, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
 
-   Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), important UI states, Scoping affected surfaces/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
+   Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, review mode, running URLs (production and reference when parity mode applies), important UI states, Scoping affected surfaces/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
 
 6. **Validate UI/UX's matched-element inventory before accepting any verdict.**
-
-   **Parity mode:**
    - A `## Matched-element inventory` section exists.
-   - Rows cover the relevant Scoping prototype/reference rows, affected production UI files, and visible changed elements on the feature surface.
+   - A `## Review mode` section exists and matches the workflow's expected mode.
+   - A `## Comparison basis` section exists. Parity mode names the runnable reference; consistency mode names credible production siblings or analogs.
+   - Rows cover the relevant Scoping affected surfaces, changed visible production UI files, and visible changed elements on the feature surface. Parity mode also covers the relevant Scoping prototype/reference rows.
    - Every verified row has non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank = DOM-evaluation work was skipped for that row.
    - Any missing expected coverage or blank cell -> report is structurally invalid. Reject and re-dispatch UI/UX with the same self-contained verification request and the specific gaps named.
-
-   **Consistency mode:**
-   - A `## Matched-element inventory` section exists.
-   - Changed visible elements are paired with production siblings/analogs.
-   - Every row has non-blank DOM evidence and a verdict.
-   - Any miss -> structurally invalid. Reject and re-dispatch UI/UX with the same self-contained verification request and the specific missing elements named.
 
    Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
 
@@ -183,7 +177,7 @@ If the change touches a third-party library, identify the exact version from man
 
 When done, report:
 - What changed.
-- What was validated and how: tests/checks run, QA status, UI/UX mode and coverage, UI/UX inventory validation, or UI/UX skipped because backend-only.
+- What was validated and how: tests/checks run, QA status, UI/UX review mode and coverage, UI/UX inventory validation, or UI/UX skipped because backend-only.
 - Rules proposed or promoted in this session, by destination, if any.
 - QA and UI/UX fix-loop iterations consumed.
 - Any remaining risk, assumption, or follow-up.
@@ -206,11 +200,11 @@ When done, report:
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
 - Continuing past a user-intervention condition without surfacing.
-- Claiming visual parity/consistency without DOM computed-style and bounding-rect extraction from the live browser.
+- Claiming frontend UI parity or consistency without DOM computed-style and bounding-rect extraction from the live browser.
 - Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
 - Building the UI/UX matched-element inventory in the main agent instead of delegating inventory construction to UI/UX from Scoping's affected surface map.
-- Dispatching UI/UX without the required verification terms: frontend UI, prototype/reference parity or production analog consistency, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
-- Scoping's `## Prototype or reference elements` empty or `_None._` for a parity-mode UI ticket.
+- Dispatching UI/UX without the required review terms: implemented frontend UI, parity mode with runnable reference or consistency mode with production analogs, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
+- Scoping's `## Prototype or reference elements` empty or `_None._` for a reference-backed UI ticket.
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
 - Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Verify.
 - Starting any Ship mutation without first completing the Ship preflight ledger from actual outputs.
