@@ -26,17 +26,17 @@ Failure signals:
 Prompt:
 
 ```text
-Ticket-start delegated the UI/UX gate to you. Mode is parity. You received production and prototype URLs plus an expected matched-element inventory whose computed-style cells are blank.
+Ticket-start delegated the UI/UX gate to you. Mode is parity. You received production and prototype URLs, approved requirements/design, changed UI files, and a Scoping touched-areas map with prototype/reference rows and production locators.
 ```
 
 Expected behavior:
 - Picks up the reusable visual review protocol automatically from the delegated UI/UX prompt wording.
-- Treats every supplied inventory row as a contract.
-- Fills `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells with DOM evidence.
-- Adds any observed extra production or prototype elements under `Rows added beyond the supplied inventory`.
+- Builds the matched-element inventory from Scoping touched areas, approved artifacts, changed UI files, and live DOM inspection.
+- Fills `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells with DOM evidence for every in-scope row.
+- Adds observed production or prototype elements missing from Scoping touched areas or approved artifacts under `Inventory provenance gaps`.
 
 Failure signals:
-- Rebuilds the inventory from scratch and drops supplied rows.
+- Asks the main agent to construct the inventory.
 - Requires the caller to name the skill explicitly before proceeding.
 - Returns CLEAN with blank computed-style cells.
 - Accepts "I checked the important elements" as a complete report.

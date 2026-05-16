@@ -33,7 +33,7 @@ Expect as many of these as the caller can provide:
 - Mode: `parity` when a runnable reference/prototype exists; `consistency` otherwise.
 - Production route/URL and, in parity mode, reference route/URL.
 - Important states to exercise: default, loading, empty, hover, focus, active, disabled, error, validation, success, expanded/collapsed, modal-open, and navigation states.
-- Parity mode: expected matched-element inventory with prototype and production locators populated and computed-style/verdict cells blank.
+- Parity mode: Scoping touched-areas map with prototype/reference element rows, production locators or changed UI files, relevant routes/states, approved requirements/design artifact, and approved plan.
 - Prior local evidence such as screenshots, Lighthouse output, a11y scans, or manual notes. Treat these as context, not as gate completion.
 
 ## Browser Bootstrap
@@ -63,9 +63,9 @@ Return Markdown:
 |---|---|---|---|---|---|---|---|---|
 | <prototype locator or analog> ↔ <production locator> | <selector> | <selector> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <MATCH / DRIFT / MISSING> |
 
-### Rows added beyond the supplied inventory
-_(parity mode only; list any visible production or prototype element observed during verification that was not supplied by the caller)_
-- `<locator>` | <element type> | <one-line description> | suggested provenance gap: <scoping / plan mapping / rendered conditional state>
+### Inventory provenance gaps
+_(parity mode only; list visible production or prototype elements observed during verification that were missing from Scoping touched areas or approved artifacts)_
+- `<locator>` | <element type> | <one-line description> | suggested provenance gap: <scoping / plan / rendered conditional state>
 
 ## Visual findings
 - **V1** | severity: <blocker / major / minor> | `<production selector>` ↔ `<reference selector or analog>` | <property or measurement diff> | evidence: <computed-style snippet or bounding-rect numbers> | suggested fix
@@ -87,14 +87,14 @@ Any visual finding flips the verdict to FINDINGS. Do not create a "recommendatio
 Use when a runnable prototype/reference app exists. The prototype is the source of truth for the ticketed visual surface.
 
 1. Start or open both apps. Match route, state, viewport, device scale, and browser zoom before each comparison.
-2. Treat the supplied matched-element inventory as a contract. Verify every supplied row; do not rebuild the inventory from scratch.
-3. For each row and state, locate the rendered DOM atoms in both apps, capture element-level screenshots, evaluate `scripts/extract-element-style.browser.js`, fill every computed-style cell, and set verdict to MATCH, DRIFT, or MISSING.
+2. Build the matched-element inventory from Scoping touched areas, prototype/reference rows, changed UI files, approved artifacts, and live DOM inspection. Do not ask the main agent to prebuild it.
+3. For each inventory row and state, locate the rendered DOM atoms in both apps, capture element-level screenshots, evaluate `scripts/extract-element-style.browser.js`, fill every computed-style cell, and set verdict to MATCH, DRIFT, or MISSING.
 4. Compare font, color/background, padding/margin/border/radius/shadow/outline, display/flex/gap/position, width/height, and transform. Different numbers mean rendered drift unless the approved plan explicitly accepted the divergence.
 5. Compare parent and sibling geometry with bounding rects, especially for rows sharing a parent declaration.
-6. While verifying, cross-check both DOMs for visible elements absent from the supplied inventory. Add those to `Rows added beyond the supplied inventory`; never silently drop them.
+6. While verifying, cross-check both DOMs for visible elements absent from Scoping touched areas or approved artifacts. Add those to `Inventory provenance gaps`; never silently drop them.
 7. Use screenshots as a redundant visual check after numeric extraction, not as primary evidence.
 
-Parity mode is clean only when every supplied row has non-blank computed values, no unexplained observed rows are missing from the report, all drift has findings, and accessibility checks are complete.
+Parity mode is clean only when the inventory covers Scoping touched areas and observed changed elements, every row has non-blank computed values, no unexplained observed rows are missing from the report, all drift has findings, and accessibility checks are complete.
 
 ## Consistency Mode
 
@@ -129,7 +129,7 @@ After fixes, rerun only the affected rows and affected states unless the fix tou
 - Declaring CLEAN from full-page screenshots, Lighthouse, an a11y scan, or manual browser comparison alone.
 - Skipping DOM evaluation because screenshots "look the same."
 - In parity mode, accepting or returning a report with blank computed-style cells for in-scope rows.
-- In parity mode, falling back to discovery mode when a supplied inventory cannot be matched; return BLOCKED and name the inventory problem.
+- In parity mode, asking the main agent to construct the matched-element inventory for you.
 - In consistency mode, reviewing only "important" elements instead of every changed visible element and analog.
 - Treating local design-system preferences as a reason to override prototype parity.
 - Asking low-value questions whose answer is already determined by the prototype, approved plan, or concrete visual finding.

@@ -1,6 +1,6 @@
 # Job Workflow
 
-Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is delegated to the QA and UI/UX subagents — this file specifies the **mode** they run in for the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, the bug-fix loop, the self-improvement loop, and Ship.
+Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is delegated to the QA and UI/UX subagents — this file specifies the **mode** they run in for the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, verification fix loops, and Ship.
 
 ## Ticket Intake
 
@@ -59,7 +59,7 @@ If the app or service cannot be started, QA escalates and the workflow stops on 
 
 ### UI/UX mode
 
-For the job workflow, the UI/UX reviewer always runs in **`consistency` mode**:
+For the job workflow, the UI/UX subagent always runs in **`consistency` mode**:
 
 - No external reference (job apps in this workflow do not have a React reference app in `designs/`).
 - Mandate is stylistic consistency against existing analog elements in the same view: icon sizing rhythm, typography scale, spacing rhythm, color tokens, border radii, shadow elevation, alignment.
@@ -68,6 +68,6 @@ For the job workflow, the UI/UX reviewer always runs in **`consistency` mode**:
 
 UI/UX is **skipped** if main agent determines the change is backend-only (no UI files in the diff) per `SKILL.md`'s backend-only detection.
 
-## Hand-off to Brainstorm
+## Hand-off to Requirements/Design
 
-When ticket intake and the Scoping subagent's report are both complete, return to `SKILL.md` and proceed to the Brainstorm gate. This file is no longer relevant until the Verify phase.
+When ticket intake and the Scoping subagent's report are both complete, return to `SKILL.md` and proceed to Requirements/Design. This file is no longer relevant until the Verify phase.

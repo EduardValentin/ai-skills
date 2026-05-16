@@ -1,6 +1,6 @@
 ---
 name: codebase-scope-map
-description: Use when an implementation, review, planning, ticket, or handoff task needs relevant code mapped with compact file-line locators, entry points, modules, patterns, tests, contracts, dependencies, prototype/reference elements, or conflict points.
+description: Use when an implementation, review, planning, ticket, or handoff task needs relevant code mapped with compact file-line locators, entry points, modules, patterns, tests, contracts, dependencies, prototype/reference elements, touched areas, or conflict points.
 ---
 
 # Codebase Scope Map
@@ -63,6 +63,9 @@ Return Markdown with **exactly** these sections in this order. Keep every headin
 
 ## Prototype or reference elements
 - `path:start-end` | component or element | accessible name / role / text content | one-line purpose
+
+## Touched areas map
+- <consumer: main / implementer / QA / UI-UX> | `path:start-end` | route/state/selector/prototype counterpart | why this area is touched
 
 ## Project patterns to reuse
 - `path:line` | pattern name | when this pattern applies

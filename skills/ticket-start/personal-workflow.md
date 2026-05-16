@@ -1,6 +1,6 @@
 # Personal Workflow
 
-Use when the ticket lives in Linear and may have `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the **mode** the QA and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, the bug-fix loop, the self-improvement loop, and Ship.
+Use when the ticket lives in Linear and may have `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the **mode** the QA and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, verification fix loops, and Ship.
 
 ## Ticket Intake (Linear)
 
@@ -68,20 +68,20 @@ Determined from the diff (main agent decides), same as the job workflow:
 
 ### UI/UX mode
 
-- **`parity`** — when `designs/` is a runnable React reference app. The UI/UX prompt asks the subagent to review the implemented frontend UI against the runnable prototype/reference app for visual parity using a matched-element inventory, DOM computed-style and bounding-rect extraction, per-state coverage at all relevant breakpoints, and accessibility checks. Reference app is the absolute source of truth. Main agent constructs the **expected matched-element inventory** at Verify dispatch (per `SKILL.md`'s Verify step 4a) from Scoping's prototype/reference element enumeration + the plan's `**Element mapping:**` blocks + the actual diff, and passes it as input.
+- **`parity`** — when `designs/` is a runnable React reference app. The UI/UX prompt asks the subagent to review the implemented frontend UI against the runnable prototype/reference app for visual parity, build the matched-element inventory from Scoping's prototype/reference element enumeration plus touched production areas, extract DOM computed styles and bounding rects, cover relevant states and breakpoints, and check accessibility. Reference app is the absolute source of truth.
 - **`consistency`** — fallback when `designs/` is missing or not runnable. The UI/UX prompt asks the subagent to review the implemented frontend UI against existing production sibling/analog elements for visual consistency, plus accessibility checks.
 
 UI/UX is **skipped** if main agent determines the change is backend-only.
 
-## Hand-off to Brainstorm
+## Hand-off to Requirements/Design
 
-When ticket intake, scoped PRD/designs reading, and the Scoping subagent's report are complete, return to `SKILL.md` and proceed to the Brainstorm gate. Use the brainstorm to map the prototype design into the production app — do not re-litigate copy, design, UI interactions, or animations already settled by the prototype unless the ticket or PRD conflicts with it.
+When ticket intake, scoped PRD/designs reading, and the Scoping subagent's report are complete, return to `SKILL.md` and proceed to Requirements/Design. Use that dialogue to map the prototype design into the production app — do not re-litigate copy, design, UI interactions, or animations already settled by the prototype unless the ticket or PRD conflicts with it.
 
 ## Linear State Transitions
 
 Move the Linear ticket through these states at these exact moments. `SKILL.md`'s Implement and Ship phases defer to this list.
 
-- **In Progress** — at the start of the Implement phase, immediately after the user approves the plan and before any code is written. Not during Setup, not during Brainstorm, not during Plan.
+- **In Progress** — at the start of the Implement phase, immediately after the user approves the plan and before any code is written. Not during Setup, not during Requirements/Design, not during Plan.
 - **In Review** — at the start of the Ship phase, immediately after the PR is opened with `gh`.
 - **Completed state** (whichever state the team uses for done) — only after the user has explicitly approved the merge and the merge has actually completed.
 
@@ -89,8 +89,8 @@ If the Linear MCP server is unavailable or the team/state cannot be resolved saf
 
 ## Partial Setups
 
-If the project has a Linear ticket but is missing `PRD.md`, `designs/`, or both, treat it as personal workflow and adapt as follows. Surface the gap to the user during Setup so the brainstorm can compensate.
+If the project has a Linear ticket but is missing `PRD.md`, `designs/`, or both, treat it as personal workflow and adapt as follows. Surface the gap to the user during Setup so the Requirements/Design dialogue can compensate.
 
-- **No `PRD.md`:** gather requirements from the Linear ticket alone and flag missing context during Brainstorm. Do not invent business rules to fill the gap.
+- **No `PRD.md`:** gather requirements from the Linear ticket alone and flag missing context during Requirements/Design. Do not invent business rules to fill the gap.
 - **No `designs/`:** skip the React reference app and skip parity mode. UI/UX runs in **consistency mode** instead.
-- **Neither present:** gather everything from the ticket, confirm scope and acceptance criteria with the user before brainstorming. UI/UX runs in **consistency mode** during Verify.
+- **Neither present:** gather everything from the ticket, confirm scope and acceptance criteria with the user before Requirements/Design. UI/UX runs in **consistency mode** during Verify.

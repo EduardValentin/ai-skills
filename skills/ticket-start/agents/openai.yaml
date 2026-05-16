@@ -1,4 +1,4 @@
 interface:
   display_name: "Ticket Start"
-  short_description: "Orchestrator skill that drives a ticket from intake through Ship via Superpowers implementation plus specialized Scoping, Reviewer, QA, and UI/UX gates. Supports Jira (acli + paste fallback) and Linear tickets."
-  default_prompt: "Use $ticket-start to begin implementation from this Jira or Linear ticket. The skill will drive the workflow through Setup, Brainstorm, Plan, Implement, Review, Verify, and Ship phases, preferring Superpowers subagent-driven development."
+  short_description: "Orchestrator skill that drives a ticket from intake through Ship via Scoping, requirements/design, planning, implementation, QA, and UI/UX verification. Supports Jira (acli + paste fallback) and Linear tickets."
+  default_prompt: "Use $ticket-start to begin implementation from this Jira or Linear ticket. The skill will drive Setup, Requirements/Design, Plan, Implement, Verify, and Ship."

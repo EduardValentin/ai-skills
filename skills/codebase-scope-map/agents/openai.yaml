@@ -1,4 +1,4 @@
 interface:
   display_name: "Codebase Scope Map"
-  short_description: "Map relevant code with compact file-line locators"
-  default_prompt: "Use $codebase-scope-map to map the relevant code surface for this implementation or review task."
+  short_description: "Map relevant code and touched areas with compact locators"
+  default_prompt: "Use $codebase-scope-map to map the relevant code surface and touched areas for this implementation or review task."
