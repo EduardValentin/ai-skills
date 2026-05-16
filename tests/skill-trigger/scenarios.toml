@@ -95,9 +95,9 @@ forbidden_terms = []
 [[scenario]]
 id = "uiux-semantic-design-tokens-raw-values"
 skill = "semantic-design-tokens"
-prompt = "Audit this component for raw hex colors, arbitrary Tailwind values, duplicated theme constants, and convert the styling to semantic design tokens."
-description_terms = ["semantic design tokens", "raw hex/rgb colors", "arbitrary utility classes", "duplicated theme constants"]
-skill_terms = ["Use tokens as the design-system contract", "scripts/audit_tokens.py"]
+prompt = "Audit this component for raw hex colors, duplicated theme constants, local values that bypass existing semantic roles, and styling that should be converted to semantic design tokens."
+description_terms = ["semantic design tokens", "component-local implementation values"]
+skill_terms = ["Use tokens as the design-system contract", "What Counts As One-Off", "scripts/audit_tokens.py"]
 forbidden_terms = []
 
 [[scenario]]
