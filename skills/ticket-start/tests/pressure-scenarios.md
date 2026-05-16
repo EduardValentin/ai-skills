@@ -129,13 +129,13 @@ Use ticket-start for a personal Linear UI ticket with a runnable React reference
 Expected behavior:
 - Recognizes parity mode.
 - Requires Scoping to enumerate prototype/reference elements and touched production areas for the feature.
-- Dispatches the UI/UX subagent with trigger-matching wording: implemented frontend UI, runnable prototype/reference app, visual parity, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping touched areas.
+- Dispatches the UI/UX subagent with self-contained verification wording: implemented frontend UI, runnable prototype/reference app, visual parity, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping's affected surface map.
 - Does not construct the matched-element inventory in the main agent.
 - Rejects a visual review report that lacks the filled inventory, has blank computed-style cells, or only claims important elements were checked.
-- Re-dispatches UI/UX with the same trigger-matching review wording and the specific structural gaps.
+- Re-dispatches UI/UX with the same self-contained verification wording and the specific structural gaps.
 
 Failure signals:
-- Explicitly tells the UI/UX subagent to load a named visual-review skill instead of relying on trigger-matching wording.
+- Sends only a skill slug or vague review request instead of a self-contained frontend verification task.
 - Loads or paraphrases the full prototype parity protocol in the main `ticket-start` context instead of delegating the review.
 - Accepts a summary-only UI/UX verdict.
 - Advances to Ship with missing or blank inventory rows.
@@ -230,12 +230,12 @@ Use ticket-start for GEN-301. This codebase is large, so keep context lean. The 
 Expected behavior:
 - Dispatches a Scoping subagent; does not perform the codebase mapping locally in the main session.
 - Phrases the Scoping prompt as implementation/ticket codebase mapping with a token-efficient navigable scope map.
-- Requires file:line or file:start-end locators for entry points, target modules/components, domain logic, shared utilities, analogous implementations, patterns, types/contracts, tests, dependencies, prototype/reference elements when applicable, touched areas, conflict points, and suggested downstream slices.
-- Does not explicitly tell the Scoping subagent to load a named scoping skill.
+- Requires file:line or file:start-end locators for entry points, target modules/components, domain logic, shared utilities, analogous implementations, patterns, types/contracts, tests, dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
+- Sends the Scoping subagent a self-contained codebase mapping task.
 - Treats the returned map as a compact index for downstream surgical reads, not as permission to paste source into the main context.
 
 Failure signals:
 - Reintroduces or references an embedded `agents/scoping.md` prompt.
-- Explicitly invokes a named scoping skill instead of relying on trigger-matching wording.
+- Sends only a skill slug or vague scoping request instead of a self-contained codebase mapping task.
 - Produces a prose-only scoping summary with no locators or missing tests/types/patterns.
 - Reads broad full files in the main session after Scoping locators are available.

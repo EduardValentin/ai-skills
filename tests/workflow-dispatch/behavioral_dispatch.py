@@ -150,8 +150,8 @@ ACTION: <number> | <kind> | <target> | <details>
 
 Use kind DISPATCH_SUBAGENT for any mandatory subagent dispatch. For subagent
 dispatch details, include the prompt intent and the compact inputs that must be
-forwarded. Include enough detail for a test to verify whether trigger-matching
-wording is present.
+forwarded. Include enough detail for a test to verify whether the prompt is a
+self-contained work request with the required evidence terms.
 """
 
 

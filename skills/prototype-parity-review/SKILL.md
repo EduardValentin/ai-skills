@@ -16,6 +16,12 @@ Visual review is evidence work, not taste work. Verify rendered UI by pairing vi
 - A visual review needs matched-element inventory coverage, computed style comparison, bounding-rect comparison, accessibility checks, or a scoped visual rerun after fixes.
 - No prototype exists, but new or changed UI must be checked for consistency against sibling or analog elements in the production app.
 
+## Modes
+
+- **Parity mode** — use when there is a runnable prototype, reference app, or design implementation that is the source of truth for the ticketed UI surface. The review compares production against that reference.
+- **Consistency mode** — use when there is no runnable reference. The review compares new or changed production UI against sibling or analog elements already in the product.
+- **Degraded mode** — use only when the normal browser/DOM evidence path is unavailable and the fallback chain below cannot produce full computed-style evidence.
+
 ## Required Capabilities
 
 - Ability to execute shell commands for app startup or browser automation fallback.
@@ -33,7 +39,7 @@ Expect as many of these as the caller can provide:
 - Mode: `parity` when a runnable reference/prototype exists; `consistency` otherwise.
 - Production route/URL and, in parity mode, reference route/URL.
 - Important states to exercise: default, loading, empty, hover, focus, active, disabled, error, validation, success, expanded/collapsed, modal-open, and navigation states.
-- Parity mode: Scoping touched-areas map with prototype/reference element rows, production locators or changed UI files, relevant routes/states, approved requirements/design artifact, and approved plan.
+- Parity mode: caller-supplied affected surface map if available, prototype/reference element rows, production locators or changed UI files, relevant routes/states, approved requirements/design artifact, and approved plan.
 - Prior local evidence such as screenshots, Lighthouse output, a11y scans, or manual notes. Treat these as context, not as gate completion.
 
 ## Browser Bootstrap
@@ -64,7 +70,7 @@ Return Markdown:
 | <prototype locator or analog> ↔ <production locator> | <selector> | <selector> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <MATCH / DRIFT / MISSING> |
 
 ### Inventory provenance gaps
-_(parity mode only; list visible production or prototype elements observed during verification that were missing from Scoping touched areas or approved artifacts)_
+_(parity mode only; list visible production or prototype elements observed during verification that were missing from the caller-supplied affected surface map or approved artifacts)_
 - `<locator>` | <element type> | <one-line description> | suggested provenance gap: <scoping / plan / rendered conditional state>
 
 ## Visual findings
@@ -87,14 +93,14 @@ Any visual finding flips the verdict to FINDINGS. Do not create a "recommendatio
 Use when a runnable prototype/reference app exists. The prototype is the source of truth for the ticketed visual surface.
 
 1. Start or open both apps. Match route, state, viewport, device scale, and browser zoom before each comparison.
-2. Build the matched-element inventory from Scoping touched areas, prototype/reference rows, changed UI files, approved artifacts, and live DOM inspection. Do not ask the main agent to prebuild it.
+2. Build the matched-element inventory from the caller-supplied affected surface map if available, prototype/reference rows, changed UI files, approved artifacts, and live DOM inspection. Do not ask the caller to prebuild it.
 3. For each inventory row and state, locate the rendered DOM atoms in both apps, capture element-level screenshots, evaluate `scripts/extract-element-style.browser.js`, fill every computed-style cell, and set verdict to MATCH, DRIFT, or MISSING.
 4. Compare font, color/background, padding/margin/border/radius/shadow/outline, display/flex/gap/position, width/height, and transform. Different numbers mean rendered drift unless the approved plan explicitly accepted the divergence.
 5. Compare parent and sibling geometry with bounding rects, especially for rows sharing a parent declaration.
-6. While verifying, cross-check both DOMs for visible elements absent from Scoping touched areas or approved artifacts. Add those to `Inventory provenance gaps`; never silently drop them.
+6. While verifying, cross-check both DOMs for visible elements absent from the caller-supplied affected surface map or approved artifacts. Add those to `Inventory provenance gaps`; never silently drop them.
 7. Use screenshots as a redundant visual check after numeric extraction, not as primary evidence.
 
-Parity mode is clean only when the inventory covers Scoping touched areas and observed changed elements, every row has non-blank computed values, no unexplained observed rows are missing from the report, all drift has findings, and accessibility checks are complete.
+Parity mode is clean only when the inventory covers caller-supplied affected surfaces if any and observed changed elements, every row has non-blank computed values, no unexplained observed rows are missing from the report, all drift has findings, and accessibility checks are complete.
 
 ## Consistency Mode
 
@@ -129,7 +135,7 @@ After fixes, rerun only the affected rows and affected states unless the fix tou
 - Declaring CLEAN from full-page screenshots, Lighthouse, an a11y scan, or manual browser comparison alone.
 - Skipping DOM evaluation because screenshots "look the same."
 - In parity mode, accepting or returning a report with blank computed-style cells for in-scope rows.
-- In parity mode, asking the main agent to construct the matched-element inventory for you.
+- In parity mode, asking the caller to construct the matched-element inventory for you.
 - In consistency mode, reviewing only "important" elements instead of every changed visible element and analog.
 - Treating local design-system preferences as a reason to override prototype parity.
 - Asking low-value questions whose answer is already determined by the prototype, approved plan, or concrete visual finding.

@@ -26,14 +26,14 @@ Failure signals:
 Prompt:
 
 ```text
-Ticket-start delegated the UI/UX gate to you. Mode is parity. You received production and prototype URLs, approved requirements/design, changed UI files, and a Scoping touched-areas map with prototype/reference rows and production locators.
+Ticket-start delegated the UI/UX gate to you. Mode is parity. You received production and prototype URLs, approved requirements/design, changed UI files, and an affected surface map with prototype/reference rows and production locators.
 ```
 
 Expected behavior:
 - Picks up the reusable visual review protocol automatically from the delegated UI/UX prompt wording.
-- Builds the matched-element inventory from Scoping touched areas, approved artifacts, changed UI files, and live DOM inspection.
+- Builds the matched-element inventory from the affected surface map, approved artifacts, changed UI files, and live DOM inspection.
 - Fills `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells with DOM evidence for every in-scope row.
-- Adds observed production or prototype elements missing from Scoping touched areas or approved artifacts under `Inventory provenance gaps`.
+- Adds observed production or prototype elements missing from the affected surface map or approved artifacts under `Inventory provenance gaps`.
 
 Failure signals:
 - Asks the main agent to construct the inventory.

@@ -13,7 +13,7 @@ Before we implement this ticket, map the relevant code surface so the main agent
 Expected behavior:
 - Picks up the reusable scope-map protocol from the wording.
 - Produces a structured scope map with file:line locators.
-- Includes entry points, target modules, analogous implementations, tests, types/contracts, dependencies, touched areas, conflict points, and downstream slices.
+- Includes entry points, target modules, analogous implementations, tests, types/contracts, dependencies, affected surfaces, conflict points, and downstream slices.
 - Does not propose a solution or write code.
 
 Failure signals:
@@ -51,13 +51,13 @@ Scope this UI ticket in a repo with a runnable designs/ React reference app. The
 Expected behavior:
 - Includes prototype/reference elements as a mandatory section.
 - Lists one row per visible relevant declaration in the scoped prototype slices.
-- Adds a touched-areas map that pairs downstream consumers with production locators, routes/states/selectors, and prototype counterparts where relevant.
+- Adds an affected surface map that pairs downstream uses with production locators, routes/states/selectors, and prototype counterparts where relevant.
 - Surfaces a conflict or input gap if prototype enumeration cannot be done.
 
 Failure signals:
 - Emits `_None._` for prototype elements on a parity-mode UI task.
 - Says visual review can discover everything later without prototype locators.
-- Leaves the UI/UX reviewer without a touched-areas map.
+- Leaves downstream visual verification without an affected surface map.
 - Provides prototype prose without file:line locators.
 
 ## Scenario 4 - Missing Context

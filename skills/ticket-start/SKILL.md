@@ -17,9 +17,9 @@ Before implementation, explore project context, user intent, requirements, const
 
 Implementation proceeds task-by-task with test-first development, fresh subagents for independent tasks when available, and review checkpoints built into the implementation workflow. `ticket-start` does not add a separate post-implementation code-review gate.
 
-**Scoping trigger discipline:** `ticket-start` dispatches the Scoping subagent and consumes its returned map, but does not name or inline a separate scoping skill. The Scoping prompt must describe the actual scoping work in trigger-matching language: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, touched areas, conflict points, and suggested downstream slices.
+**Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
 
-**UI/UX trigger discipline:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report, but does not name or inline a separate visual-review skill. The UI/UX subagent prompt must describe the actual review work in trigger-matching language: frontend UI, runnable prototype/reference app or production analogs, visual parity or consistency, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping touched areas.
+**UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend verification request: frontend UI, runnable prototype/reference app or production analogs, visual parity or consistency, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
 
 **Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
@@ -56,7 +56,7 @@ If ambiguous, ask the user before loading anything else.
 
 4. **Workflow-specific reading.** Read the workflow file selected above and gather the facts it points at. Stop when the relevant facts are gathered.
 
-5. **Dispatch Scoping subagent.** Phrase the prompt as a codebase scope-mapping task, not as an explicit skill invocation. Ask for a token-efficient navigable scope map for this implementation ticket with `path:line` / `path:start-end` locators, covering entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, touched areas, conflict points, and suggested downstream slices. Forward: ticket title/description/AC, repo `AGENTS.md` / `CLAUDE.md`, and (personal workflow) the scoped slices of `PRD.md` / `designs/`. Subagent context does not inherit the main session's auto-loaded files — explicit forwarding is required. The returned map is the definitive map of the relevant code surface; do not re-read full files later when a Scoping locator points at the slice you need.
+5. **Dispatch Scoping subagent.** Ask for a token-efficient navigable scope map for this implementation ticket with `path:line` / `path:start-end` locators, covering entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices. Forward: ticket title/description/AC, repo `AGENTS.md` / `CLAUDE.md`, and (personal workflow) the scoped slices of `PRD.md` / `designs/`. Subagent context does not inherit the main session's auto-loaded files — explicit forwarding is required. The returned map is the definitive map of the relevant code surface; do not re-read full files later when a Scoping locator points at the slice you need.
 
 6. **Clarify if needed.** If AC are missing/vague/not testable, or Scoping surfaces a conflict between the ticket and existing ownership, layering, or product constraints, brief the user with Scoping evidence (`path:line`) and ask before continuing. See `## Briefing rule`.
 
@@ -64,7 +64,7 @@ If ambiguous, ask the user before loading anything else.
 
 1. **Open with a Scoping-grounded briefing.** Per `## Briefing rule`, surface entry points, target module, prototype/reference elements if any, and conflicts Scoping flagged. The user must enter the dialogue with the same context Scoping built.
 
-2. **Explore before implementation.** Use trigger-matching language for requirements and design work: explore project context, user intent, requirements, constraints, design, alternatives, edge cases, failure modes, accessibility, and non-goals before implementation.
+2. **Explore before implementation.** Frame the work as requirements and design exploration: project context, user intent, requirements, constraints, design, alternatives, edge cases, failure modes, accessibility, and non-goals before implementation.
 
 3. **Surface alternatives.** Before treating any direction as converged, put at least one credible alternative on the table, even if only to dismiss it. The requirements/design artifact must record the chosen direction and any meaningful alternative dismissed with rationale.
 
@@ -79,7 +79,7 @@ If ambiguous, ask the user before loading anything else.
 
 1. Produce a written implementation plan from the approved requirements/design artifact before touching code. The plan is a distinct artifact — not a verbal summary, not the requirements/design transcript, not a mental model.
 
-2. For parity-mode UI tickets, keep visible-surface tasks traceable to Scoping's prototype/reference rows and touched areas. The main agent does not build the UI/UX matched-element inventory; the UI/UX subagent builds it during Verify from Scoping touched areas, the approved artifacts, and the diff.
+2. For parity-mode UI tickets, keep visible-surface tasks traceable to Scoping's prototype/reference rows and affected surface map. The main agent does not build the UI/UX matched-element inventory; the UI/UX subagent builds it during Verify from the affected surface map, the approved artifacts, and the diff.
 
 3. Show the plan to the user for review. Wait for explicit user approval of the plan itself before any code.
 
@@ -109,26 +109,26 @@ If ambiguous, ask the user before loading anything else.
 
 4. **When QA is clean**, continue to UI/UX unless backend-only.
 
-5. **Dispatch UI/UX subagent** unless backend-only flag is set. Phrase the subagent prompt as a frontend UI verification task, not as an explicit skill invocation:
+5. **Dispatch UI/UX subagent** unless backend-only flag is set. Ask for frontend UI verification:
    - "Review the implemented frontend UI against the runnable prototype/reference app for visual parity" in parity mode.
    - "Review the implemented frontend UI against production sibling/analog elements for visual consistency" in consistency mode.
-   - Include: build a matched-element inventory from Scoping touched areas, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
+   - Include: build a matched-element inventory from Scoping's affected surface map, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
 
-   Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), important UI states, Scoping touched areas/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
+   Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), important UI states, Scoping affected surfaces/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
 
 6. **Validate UI/UX's matched-element inventory before accepting any verdict.**
 
    **Parity mode:**
    - A `## Matched-element inventory` section exists.
-   - Rows cover the relevant Scoping prototype/reference rows, touched production UI files, and visible changed elements on the feature surface.
+   - Rows cover the relevant Scoping prototype/reference rows, affected production UI files, and visible changed elements on the feature surface.
    - Every verified row has non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank = DOM-evaluation work was skipped for that row.
-   - Any missing expected coverage or blank cell -> report is structurally invalid. Reject and re-dispatch UI/UX with the same trigger-aligned review wording and the specific gaps named.
+   - Any missing expected coverage or blank cell -> report is structurally invalid. Reject and re-dispatch UI/UX with the same self-contained verification request and the specific gaps named.
 
    **Consistency mode:**
    - A `## Matched-element inventory` section exists.
    - Changed visible elements are paired with production siblings/analogs.
    - Every row has non-blank DOM evidence and a verdict.
-   - Any miss -> structurally invalid. Reject and re-dispatch UI/UX with the same trigger-aligned review wording and the specific missing elements named.
+   - Any miss -> structurally invalid. Reject and re-dispatch UI/UX with the same self-contained verification request and the specific missing elements named.
 
    Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
 
@@ -166,7 +166,7 @@ When the workflow dispatches a subagent and then asks the user for input, decisi
 
 | Trigger | Brief with |
 |---|---|
-| Scoping -> user (Setup clarify, or Requirements/Design opener) | Scoping's relevant findings: entry points, target module, prototype/reference elements if any, touched areas, and conflicts. For conflicts: quoted finding + `path:line` evidence. The question framed against that evidence. |
+| Scoping -> user (Setup clarify, or Requirements/Design opener) | Scoping's relevant findings: entry points, target module, prototype/reference elements if any, affected surfaces, and conflicts. For conflicts: quoted finding + `path:line` evidence. The question framed against that evidence. |
 | QA/UIUX -> user intervention | Findings, one per line: severity, `path:line` or selector/state, one-line description. Suggested fix if available. The material decision or blocker that requires user input. |
 
 **Forbidden:** asking the user to pick an option they haven't seen, answer a clarifying question without its motivating context, or approve a fix without naming the finding.
@@ -201,15 +201,15 @@ When done, report:
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent dispatches.
 - Dispatching a separate ticket-start code-review subagent or adding a generic post-implementation code-review phase after Implement.
 - Replacing QA or UI/UX with local tests, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
-- Naming a scoping or visual-review skill explicitly in subagent prompts instead of using trigger-matching work descriptions.
+- Dispatching Scoping or UI/UX with vague prompts that omit the required work, evidence, and compact inputs.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
 - Continuing past a user-intervention condition without surfacing.
 - Claiming visual parity/consistency without DOM computed-style and bounding-rect extraction from the live browser.
 - Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
-- Building the UI/UX matched-element inventory in the main agent instead of delegating inventory construction to UI/UX from Scoping touched areas.
-- Dispatching UI/UX without trigger-matching terms: frontend UI, prototype/reference parity or production analog consistency, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping touched areas.
+- Building the UI/UX matched-element inventory in the main agent instead of delegating inventory construction to UI/UX from Scoping's affected surface map.
+- Dispatching UI/UX without the required verification terms: frontend UI, prototype/reference parity or production analog consistency, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
 - Scoping's `## Prototype or reference elements` empty or `_None._` for a parity-mode UI ticket.
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
 - Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Verify.

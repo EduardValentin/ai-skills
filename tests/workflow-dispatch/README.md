@@ -30,5 +30,5 @@ If `WORKFLOW_DISPATCH_AGENT_COMMAND` is unset, the harness falls back to
 
 The behavioral harness gives the agent the loaded skill body and asks for a
 workflow action ledger. It fails if the expected Scoping subagent dispatch is
-missing, appears after downstream phases, omits trigger-matching prompt terms,
-or explicitly invokes a named scoping skill instead of describing the work.
+missing, appears after downstream phases, or omits the required self-contained
+prompt terms that describe the work.
