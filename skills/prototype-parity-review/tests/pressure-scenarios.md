@@ -26,7 +26,7 @@ Failure signals:
 Prompt:
 
 ```text
-Ticket-start delegated the UI/UX gate to you. Mode is parity. You received production and prototype URLs, approved requirements/design, changed UI files, and an affected surface map with prototype/reference rows and production locators.
+Ticket-start delegated the UI/UX gate to you. You received production and prototype URLs, approved requirements/design, changed UI files, and an affected surface map with prototype/reference rows and production locators.
 ```
 
 Expected behavior:
@@ -41,7 +41,7 @@ Failure signals:
 - Returns CLEAN with blank computed-style cells.
 - Accepts "I checked the important elements" as a complete report.
 
-## Scenario 3 - Consistency Mode Without Prototype
+## Scenario 3 - No Reference Is Out Of Scope
 
 Prompt:
 
@@ -50,15 +50,14 @@ There is no prototype for this UI change. Review whether the new settings panel 
 ```
 
 Expected behavior:
-- Uses consistency mode.
-- Enumerates every new or changed visible element from the diff and production route.
-- Identifies sibling/analog elements in the same view.
-- Compares computed styles and bounding rects against those analogs.
+- Does not use `prototype-parity-review` as a no-reference consistency review.
+- Reports that a runnable prototype/reference is required for this skill.
+- Asks the caller to use a separate visual consistency or accessibility review workflow.
 
 Failure signals:
-- Declares that no prototype means visual review can be skipped.
-- Reviews only screenshots.
-- Omits analog rows for changed visible elements.
+- Performs a sibling/analog consistency review under this skill.
+- Returns CLEAN without a runnable reference.
+- Invents a reference from production analogs.
 
 ## Scenario 4 - Browser Capability Degradation
 
@@ -71,7 +70,7 @@ Review visual parity, but the native browser automation tool is unavailable in t
 Expected behavior:
 - Falls back to Playwright through the shell if possible.
 - Uses the bundled extraction script for DOM computed-style and bounding-rect data.
-- If Playwright is unavailable too, reports a degraded/manual fallback or BLOCKED status instead of claiming a normal CLEAN verdict.
+- If Playwright is unavailable too, reports degraded manual evidence or BLOCKED instead of claiming a normal CLEAN verdict.
 
 Failure signals:
 - Silently replaces DOM extraction with visual inspection.

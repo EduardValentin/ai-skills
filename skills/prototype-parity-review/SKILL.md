@@ -1,6 +1,6 @@
 ---
 name: prototype-parity-review
-description: Use when reviewing implemented frontend UI against a runnable prototype or reference app for visual parity, building or verifying matched-element inventories, comparing DOM computed styles/bounding rects, or auditing UI consistency and accessibility when no prototype exists.
+description: Use when reviewing implemented frontend UI against a runnable prototype, reference app, design implementation, or designs/ React app for visual parity, matched-element inventories, DOM computed styles/bounding rects, accessibility states, or scoped reruns after parity fixes.
 ---
 
 # Prototype Parity Review
@@ -12,21 +12,19 @@ Visual review is evidence work, not taste work. Verify rendered UI by pairing vi
 ## When To Use
 
 - A frontend change needs to match a runnable prototype, reference app, design implementation, or `designs/` React app.
-- A ticket workflow delegates a UI/UX verification gate and supplies a mode: `parity` or `consistency`.
+- A ticket workflow delegates a UI/UX verification gate with both production and reference URLs.
 - A visual review needs matched-element inventory coverage, computed style comparison, bounding-rect comparison, accessibility checks, or a scoped visual rerun after fixes.
-- No prototype exists, but new or changed UI must be checked for consistency against sibling or analog elements in the production app.
+- Do not use when no runnable reference exists. Use a separate visual consistency or accessibility review workflow for no-reference UI review.
 
-## Modes
+## Scope
 
-- **Parity mode** — use when there is a runnable prototype, reference app, or design implementation that is the source of truth for the ticketed UI surface. The review compares production against that reference.
-- **Consistency mode** — use when there is no runnable reference. The review compares new or changed production UI against sibling or analog elements already in the product.
-- **Degraded mode** — use only when the normal browser/DOM evidence path is unavailable and the fallback chain below cannot produce full computed-style evidence.
+This skill has one job: compare the implemented production UI against a runnable reference that is the visual source of truth. It does not perform no-reference visual consistency review.
 
 ## Required Capabilities
 
 - Ability to execute shell commands for app startup or browser automation fallback.
 - Ability to inspect a live browser page by navigating, changing viewport, evaluating JavaScript in the page, capturing element screenshots, and exercising keyboard/focus states.
-- Read access to the production UI and, in parity mode, the reference UI.
+- Read access to both the production UI and the reference UI.
 
 If a capability is unavailable, follow the fallback chain below. Do not replace DOM evidence with visual impressions.
 
@@ -36,15 +34,14 @@ Expect as many of these as the caller can provide:
 
 - Ticket title, description, acceptance criteria, and approved plan.
 - Full diff or changed UI file list.
-- Mode: `parity` when a runnable reference/prototype exists; `consistency` otherwise.
-- Production route/URL and, in parity mode, reference route/URL.
+- Production route/URL and reference route/URL.
 - Important states to exercise: default, loading, empty, hover, focus, active, disabled, error, validation, success, expanded/collapsed, modal-open, and navigation states.
-- Parity mode: caller-supplied affected surface map if available, prototype/reference element rows, production locators or changed UI files, relevant routes/states, approved requirements/design artifact, and approved plan.
+- Caller-supplied affected surface map if available, prototype/reference element rows, production locators or changed UI files, relevant routes/states, approved requirements/design artifact, and approved plan.
 - Prior local evidence such as screenshots, Lighthouse output, a11y scans, or manual notes. Treat these as context, not as gate completion.
 
 ## Browser Bootstrap
 
-Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the verdict **degraded**. If even that fallback cannot run, return `Prototype parity review cannot proceed` with the blocker and required input.
+Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the evidence status **degraded** and do not claim a normal CLEAN verdict from visual impression alone. If even that fallback cannot run, return `Prototype parity review cannot proceed` with the blocker and required input.
 
 ## Output Format
 
@@ -58,8 +55,8 @@ Return Markdown:
 - [ ] FINDINGS — at least one visual or accessibility finding
 - [ ] BLOCKED — review could not proceed
 
-## Mode used
-- <parity | consistency | degraded>
+## Evidence status
+- <complete DOM evidence | degraded manual evidence | blocked>
 
 ## States covered
 - <state> | viewport widths: <list, including pre/post-breakpoint widths> | evidence: <DOM extraction / screenshot / keyboard path>
@@ -67,14 +64,14 @@ Return Markdown:
 ## Matched-element inventory
 | Pair | Prototype selector | Production selector | font-* | color/bg | box | layout | size | verdict |
 |---|---|---|---|---|---|---|---|---|
-| <prototype locator or analog> ↔ <production locator> | <selector> | <selector> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <MATCH / DRIFT / MISSING> |
+| <prototype locator> ↔ <production locator> | <selector> | <selector> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <MATCH / DRIFT / MISSING> |
 
 ### Inventory provenance gaps
-_(parity mode only; list visible production or prototype elements observed during verification that were missing from the caller-supplied affected surface map or approved artifacts)_
+_(list visible production or prototype elements observed during verification that were missing from the caller-supplied affected surface map or approved artifacts)_
 - `<locator>` | <element type> | <one-line description> | suggested provenance gap: <scoping / plan / rendered conditional state>
 
 ## Visual findings
-- **V1** | severity: <blocker / major / minor> | `<production selector>` ↔ `<reference selector or analog>` | <property or measurement diff> | evidence: <computed-style snippet or bounding-rect numbers> | suggested fix
+- **V1** | severity: <blocker / major / minor> | `<production selector>` ↔ `<reference selector>` | <property or measurement diff> | evidence: <computed-style snippet or bounding-rect numbers> | suggested fix
 
 ## Accessibility findings
 - **A1** | severity: <blocker / major / minor> | `<selector>` | <semantic structure / ARIA / focus order / keyboard reach / contrast / alt text> | WCAG criterion | suggested fix
@@ -88,7 +85,7 @@ _(parity mode only; list visible production or prototype elements observed durin
 
 Any visual finding flips the verdict to FINDINGS. Do not create a "recommendations only" bucket for visual drift.
 
-## Parity Mode
+## Parity Review
 
 Use when a runnable prototype/reference app exists. The prototype is the source of truth for the ticketed visual surface.
 
@@ -100,19 +97,7 @@ Use when a runnable prototype/reference app exists. The prototype is the source 
 6. While verifying, cross-check both DOMs for visible elements absent from the caller-supplied affected surface map or approved artifacts. Add those to `Inventory provenance gaps`; never silently drop them.
 7. Use screenshots as a redundant visual check after numeric extraction, not as primary evidence.
 
-Parity mode is clean only when the inventory covers caller-supplied affected surfaces if any and observed changed elements, every row has non-blank computed values, no unexplained observed rows are missing from the report, all drift has findings, and accessibility checks are complete.
-
-## Consistency Mode
-
-Use when no runnable prototype/reference app exists. The goal is consistency with existing production analogs, not personal preference.
-
-1. Walk the diff and enumerate every new or changed visible element on the feature surface.
-2. For each element, identify sibling or analog elements in the same view: same typography hierarchy, icon role, button class, spacing rhythm, border radius, color token, or elevation.
-3. Build the same matched-element inventory using analogs instead of prototype selectors.
-4. Extract computed styles and bounding rects for the new/changed element and its analogs.
-5. Any deviation without an approved rationale is a finding.
-
-Consistency mode is clean only when every changed visible element has an analog row, every row has DOM evidence, and accessibility checks are complete.
+The review is clean only when the inventory covers caller-supplied affected surfaces if any and observed changed elements, every row has non-blank computed values, no unexplained observed rows are missing from the report, all drift has findings, and accessibility checks are complete.
 
 ## Accessibility
 
@@ -134,13 +119,13 @@ After fixes, rerun only the affected rows and affected states unless the fix tou
 
 - Declaring CLEAN from full-page screenshots, Lighthouse, an a11y scan, or manual browser comparison alone.
 - Skipping DOM evaluation because screenshots "look the same."
-- In parity mode, accepting or returning a report with blank computed-style cells for in-scope rows.
-- In parity mode, asking the caller to construct the matched-element inventory for you.
-- In consistency mode, reviewing only "important" elements instead of every changed visible element and analog.
+- Accepting or returning a report with blank computed-style cells for in-scope rows.
+- Asking the caller to construct the matched-element inventory for you.
+- Performing no-reference visual consistency review under this skill.
 - Treating local design-system preferences as a reason to override prototype parity.
 - Asking low-value questions whose answer is already determined by the prototype, approved plan, or concrete visual finding.
 - Fixing the implementation yourself. Report findings; the caller handles fixes and reruns.
 
 ## Stop Conditions
 
-Stop when the report has a verdict, mode, states covered, completed inventory rows, findings or explicit empty findings, accessibility result, out-of-scope flags or explicit empty flags, and patterns-to-codify or explicit empty patterns.
+Stop when the report has a verdict, evidence status, states covered, completed inventory rows, findings or explicit empty findings, accessibility result, out-of-scope flags or explicit empty flags, and patterns-to-codify or explicit empty patterns.
