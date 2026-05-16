@@ -15,15 +15,17 @@ Phase order is a hard gate:
 
 Before implementation, explore project context, user intent, requirements, constraints, design, alternatives, edge cases, and non-goals. Produce an approved requirements/design artifact before implementation planning. Then write a detailed implementation plan and wait for explicit plan approval before code.
 
-Implementation proceeds task-by-task with test-first development, fresh subagents for independent tasks when available, and review checkpoints built into the implementation workflow. `ticket-start` does not add a separate post-implementation code-review gate.
+Implementation is delegated, not done inline by the main session. Use fresh subagents for independent tasks when available; when the approved plan has one tight write surface or would cause subagent collisions, dispatch one fresh one-shot implementation subagent for the full approved plan. `ticket-start` does not add a separate post-implementation code-review gate.
 
 **Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
 
 **UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
 
+**Implementation dispatch wording:** after plan approval, `ticket-start` dispatches implementation to fresh implementer subagent(s). Prefer one implementer per independent task. If tasks share the same small write surface or cannot be safely parallelized, dispatch a single one-shot implementation subagent with the full approved plan. The main session coordinates, inspects returned summaries, and proceeds to Verify; it does not use tight coupling as a reason to implement inline.
+
 **Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
-**Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent dispatch named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required dispatches. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, QA, UI/UX, or focused verification-fix implementers with local-only substitutes.
+**Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent dispatch named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required dispatches. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, implementation, QA, UI/UX, or focused verification-fix implementers with local-only substitutes.
 
 ## When to use
 
@@ -89,9 +91,14 @@ If ambiguous, ask the user before loading anything else.
 
 1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
 
-2. Execute the approved plan task-by-task with test-first development. Prefer fresh subagents for independent implementation tasks when available. Keep task handoffs focused: the relevant plan task, required locators, expected tests, and constraints.
+2. **Dispatch implementation subagent(s).** Code-writing in `ticket-start` is delegated:
+   - Independent tasks: dispatch fresh implementer subagents per task when their write surfaces do not collide.
+   - Shared or tiny write surface: dispatch one fresh one-shot implementation subagent for the full approved plan.
+   - Each handoff includes: ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, expected tests/checks, repo instructions, constraints, and the current branch/worktree state.
+   - Each implementer executes test-first, edits only the scoped surface, and returns a compact summary of changes plus tests/checks run.
+   - The main session coordinates handoffs, inspects returned summaries/diffs, runs any necessary top-level verification commands, and then proceeds to Verify. Do not implement inline just because multiple implementers would collide.
 
-3. Let the implementation workflow's built-in review checkpoints handle implementation quality. `ticket-start` does not dispatch a separate code-review subagent and does not add another post-implementation code-review phase.
+3. Let the implementation workflow's built-in review checkpoints handle implementation quality inside the implementer flow. `ticket-start` does not dispatch a separate code-review subagent and does not add another post-implementation code-review phase.
 
 4. When implementation reaches branch-finishing guidance, accept any test-pass check but do not present merge / PR / keep / discard options. Return to this skill's Verify phase. Ship replaces those options.
 
@@ -135,7 +142,7 @@ If ambiguous, ask the user before loading anything else.
 0. **Ship preflight — mandatory before any Ship mutation.** Before opening a PR, marking a PR ready, moving a ticket to review, merging, closing, or otherwise signaling "ready," build a readiness ledger from actual completed outputs:
    - Approved requirements/design artifact.
    - Approved implementation plan.
-   - Implementation finished with required tests/checks for the plan.
+   - Implementation subagent(s) completed the approved plan with required tests/checks.
    - QA clean report present.
    - UI/UX clean report and inventory validation present, or skipped with backend-only rationale.
    - No unresolved QA or UI/UX findings.
@@ -191,7 +198,8 @@ When done, report:
 - Treating requirements/design approval ("yes, do it" / "approved" / "go") as implementation-plan approval. They are separate artifacts.
 - Exiting requirements/design on a single user answer, or treating an early implementation preference as the endpoint.
 - The requirements/design artifact does not record at least one alternative considered when a meaningful alternative exists.
-- Skipping requirements/design, written-plan, or task-by-task test-first implementation because "the ticket is clear" or "the change is small."
+- Skipping requirements/design, written-plan, or delegated test-first implementation because "the ticket is clear" or "the change is small."
+- Implementing inline in the main session because tasks share a tight write surface, seem too small, or are awkward to split. Dispatch one one-shot implementation subagent instead.
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent dispatches.
 - Dispatching a separate ticket-start code-review subagent or adding a generic post-implementation code-review phase after Implement.
 - Replacing QA or UI/UX with local tests, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.

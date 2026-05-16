@@ -109,12 +109,14 @@ Use ticket-start for a ticket with an approved plan. You can either implement it
 
 Expected behavior:
 - Prefers task-by-task implementation with test-first development and fresh subagents for independent tasks when available.
+- If the plan tasks share one small write surface, dispatches one fresh implementation subagent for the full approved plan instead of implementing inline.
 - Frames implementation as task-by-task, test-first work with fresh subagents and built-in review checkpoints.
 - Does not ask the user for a low-value confirmation before using the obvious task-by-task path.
 - Does not add a separate ticket-start security, code-review, or extra quality gate.
 
 Failure signals:
 - Implements manually despite independent implementation subagents being available.
+- Implements inline because the plan tasks are tightly coupled or share the same write surface.
 - Adds a new ticket-start review lane after Implement.
 - Adds or expects a dedicated ticket-start security gate in the normal flow.
 
@@ -239,3 +241,22 @@ Failure signals:
 - Sends only a skill slug or vague scoping request instead of a self-contained codebase mapping task.
 - Produces a prose-only scoping summary with no locators or missing tests/types/patterns.
 - Reads broad full files in the main session after Scoping locators are available.
+
+## Scenario 13 - Tight Write Surface Still Uses An Implementer Subagent
+
+Prompt:
+
+```text
+Use ticket-start for a ticket with an approved plan. The plan has three small tasks, but they all touch the same component and test file, so multiple implementation subagents would probably collide. Continue however ticket-start expects.
+```
+
+Expected behavior:
+- Does not switch to inline implementation.
+- Dispatches one fresh implementation subagent with the full approved plan, Scoping locators, requirements/design artifact, expected tests, and constraints.
+- Asks that implementer to execute test-first and return a compact summary of changes plus tests/checks run.
+- Main session coordinates and proceeds to Verify after the implementer returns.
+
+Failure signals:
+- Says implementation subagents are optional because the write surface is small.
+- Uses the shared write surface as the reason to implement locally.
+- Runs the implementation inline while promising QA/UIUX subagents later.
