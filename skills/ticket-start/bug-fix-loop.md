@@ -33,19 +33,6 @@ After the fix lands and tests pass:
 
 These scopes are non-negotiable — they reflect the cost-of-miss tradeoff for each agent's domain.
 
-## Fix packet and batching
-
-Before editing, compress the current non-clean reports into a fix packet:
-- finding IDs + severity;
-- affected `path:line` / selector / state;
-- one-line intended fix;
-- test or browser check to rerun;
-- cross-gate collateral to update, especially tokens, design docs, tests, copy, focus styling, and shared component docs.
-
-Batch same-pass findings that share the same tier and surface into one scoped fix. Do not bounce one UI parity row at a time through Implementer when the auditor returned a set of related drifts. For UI/UX parity findings, fix every concrete drift in the current report and any directly required token/docs/test collateral in the same implementation pass unless a finding creates a material judgment call under `## User intervention principle`.
-
-Keep the main context to the fix packet, compact diff summary, and verification results. Do not paste full auditor reports, full logs, screenshots, or source snippets when finding IDs and locators are enough.
-
 ## Iteration cap
 
 **Cap = 3 fix iterations per ticket.** The counter increments on every auditor-gate cycle that returns non-clean, regardless of which agent triggered it. It is **not** per-agent. (Test-failure repair does not increment the counter — only auditor-gate cycles do.) After the third unresolved iteration, the main agent stops and produces an **intervention report**:
