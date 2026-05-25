@@ -75,11 +75,18 @@ Read today's close from `<ticker_dir>/prices/prices.json` (latest bar; written b
 
 `compute_reverse_dcf.py` takes no ticker positional — only `--financials` (the JSON written by `compute_financials.py`), `--price`, the discount/terminal-growth rates, and `--out` (a JSON file path). Read the output JSON; capture the resulting implied growth rate (a percent) into the summary and into the refreshed `valuation.md` you write in Step 5.
 
-## Step 5: Compute deltas worth flagging
+## Step 5: Compute deltas and rewrite `valuation.md` + `market-expectations.md`
+
+First, compute the three deltas worth flagging:
 
 - **Buy-zone position:** today's close vs `saved_buy_zone_overall_low`–`saved_buy_zone_overall_high`. One of: `above-zone-high` / `inside-zone` / `below-zone-low`.
 - **Reverse-DCF drift:** `(new_implied_growth - saved_reverse_dcf_implied_growth) / saved_reverse_dcf_implied_growth * 100`. Flag if `|drift| > 50%`. If saved is `null`, mark `cannot-compute-drift`.
 - **Consensus drift:** compare new mean price target vs the one in the prior `market-expectations.json` (read from git's index for the file's previous version — `git show HEAD:...market-expectations.json`). Flag if `>15%` change.
+
+Then rewrite the two markdown companions:
+
+- **`<ticker_dir>/valuation.md`** — same shape as `stock-research` Phase 6 produced (frontmatter, current-multiples table, 5/10-year P/E band section, reverse-DCF section). Pull figures from the JSON outputs of `compute_pe_band.py` (Step 3) and `compute_reverse_dcf.py` (Step 4). Include the three deltas in a new section at the top: **"What changed since last touch"**.
+- **`<ticker_dir>/market-expectations.md`** — generated from the `market-expectations.json` written by `fetch_analyst_estimates.py` (Step 2). Same shape as `stock-research` Phase 7 produced (analyst coverage / consensus price targets / ratings / EPS estimates / EPS trend / recent rating changes). If consensus drift was flagged in Step 5, surface it at the top of this file too.
 
 ## Step 6: Return summary
 
