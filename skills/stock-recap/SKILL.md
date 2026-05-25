@@ -63,7 +63,7 @@ Every section the agent prints back to the user must be **pretty-printed Markdow
 
 ---
 
-## Mode router (Phase 1, step 4)
+## Mode router (Phase 1, Step 1.4)
 
 After Phase 1's preconditions and gap-detection complete, ask the user to pick the mode using the runtime's native interactive-input:
 
@@ -107,19 +107,25 @@ This phase runs in the main agent. No subagent dispatch.
    Run /stock-research <TICKER> first to produce the initial thesis.
    ```
 
-4. Load the saved verdict into memory so subsequent phases can reference:
+4. Load the saved thesis into memory. Note: the data lives in TWO files — `verdict.json` carries the canonical structured thesis, and `tickers.json[<TICKER>]` carries a flat mirror of selected fields for index display. Load:
+
+   **From `verdict.json` (canonical):**
    - `classification` (`BUY` / `WATCH` / `AVOID`)
    - `conviction` (`high` / `medium` / `low`)
-   - `gvd_bucket`
-   - `position_target_pct`
-   - `buy_zone` (low/high)
-   - `active_sell_triggers` (list of English strings)
-   - `watch_kpis` (list of KPI names)
-   - `thesis_version` (e.g., `v1`)
+   - `gvd_bucket` (one of `growth` / `quality-growth` / `value` / `dividend` / `speculative-growth`)
+   - `position_plan` (dict: `target_position_if_buy_zones_hit_pct`, `position_now_pct`, `rationale`)
+   - `buy_zones` (list of zone dicts, each with `name`, `price_range` like `"$80-$88"`, `action`)
+   - `sell_triggers` (dict with three keys: `materially_overvalued` (list of strings), `thesis_broken` (list of strings), `better_opportunity` (string or null))
+   - `watch_kpis` (dict with two keys: `generic` (list of strings), `story_custom` (list of strings))
+
+   **From `tickers.json[<TICKER>]` (flat mirror for at-a-glance use):**
+   - `thesis_version` (e.g., `"v1"`)
+   - `last_updated` (`YYYY-MM-DD`)
+   - `active_sell_triggers` (flat list — this is the user-facing summary; the canonical structured triggers live in `verdict.json.sell_triggers` above)
 
 ### Step 1.2 — Echo what's saved
 
-Render a compact Markdown summary (not in a code block):
+Render a compact Markdown summary directly to the user. The block below is the **content template** — render only its contents, NOT the surrounding fence:
 
 ```markdown
 ## Saved thesis for <TICKER>
@@ -128,17 +134,24 @@ Render a compact Markdown summary (not in a code block):
 |---|---|
 | Classification | <BUY / WATCH / AVOID> |
 | Conviction | <high / medium / low> |
-| GVD bucket | <growth / quality-growth / value / dividend / speculative-growth> |
-| Target position | <X>% |
-| Buy zone | $<low> – $<high> |
-| Last touched | <date from tickers.json `last_updated`> |
-| Thesis version | <vN> |
+| GVD bucket | <gvd_bucket value> |
+| Target position (if all buy zones hit) | <position_plan.target_position_if_buy_zones_hit_pct>% |
+| Current position | <position_plan.position_now_pct>% |
+| Buy zones | <comma-joined list of "<name> @ <price_range>" from buy_zones> |
+| Last touched | <tickers.json[<TICKER>].last_updated> |
+| Thesis version | <tickers.json[<TICKER>].thesis_version> |
 
-Active sell triggers:
+Active sell triggers (from `verdict.json.sell_triggers`):
 
-1. <trigger string 1>
-2. <trigger string 2>
-3. ...
+- **Materially overvalued:**
+  1. <materially_overvalued[0]>
+  2. <materially_overvalued[1]>
+  3. ...
+- **Thesis broken:**
+  1. <thesis_broken[0]>
+  2. <thesis_broken[1]>
+  3. ...
+- **Better opportunity:** <better_opportunity or "(no preset trigger)">
 ```
 
 ### Step 1.3 — Gap detection
