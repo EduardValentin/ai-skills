@@ -482,3 +482,96 @@ Format (rendered Markdown, NOT inside a code block):
 
 If the user picks "Continue without updating" — skip Phase 6 and jump to Phase 7 with no thesis changes.
 If the user picks "Enter Phase 6" or "Update anyway" — proceed to Phase 6.
+
+## Quarterly Phase 6: Update thesis (optional)
+
+This phase runs only if Checkpoint 2 routed here.
+
+**Read this reference before starting:**
+- `references/update-flow.md` — the three sub-modes (surgical / reclassification / pivot-to-restart) and their workflows.
+
+### Step 6.1 — Pick sub-mode
+
+Use native interactive-input — 3 options (per `update-flow.md`):
+1. **Surgical patch**
+2. **Reclassification**
+3. **Recommend full pivot to `stock-research`**
+
+If sub-mode 3 → render the recommendation, set a session variable `update_applied = "pivot-recommended"`, and jump directly to Phase 7. Skip Checkpoint 3.
+
+### Step 6.2 — Walk the sub-mode
+
+Follow the workflow in `update-flow.md` for the chosen sub-mode. Capture every change into staging variables; do NOT write to disk yet.
+
+For surgical: walk each section (sell triggers, buy zone, projection levers, watch KPIs, position size) with native interactive-input (**Edit this section** / **Leave unchanged**). On "Edit," engage free-form.
+
+For reclassification: re-walk classification, conviction, GVD bucket (if drifted), position sizing, buy zone, full sell-trigger list, full watch-KPI list. Free-form dialogue.
+
+### Step 6.3 — Render the diff
+
+Compose the diff-before-write block:
+
+```markdown
+## Checkpoint 3 — Diff before write
+
+The proposed update is:
+
+### `verdict.md` changes
+
+```diff
+- <old line>
++ <new line>
+```
+
+### `verdict.json` changes
+
+```diff
+  "sell_triggers": {
+    "materially_overvalued": [...],
+-   "thesis_broken": [
+-     "<old trigger 1>",
+-     "<old trigger 2>"
+-   ],
++   "thesis_broken": [
++     "<new trigger 1>",
++     "<new trigger 2>",
++     "<new trigger 3>"
++   ],
+    "better_opportunity": null
+  },
+```
+
+(Note: `thesis_version` lives in `tickers.json`, not `verdict.json`. If the version bumps on reclassification, surface the tickers.json change in a separate `### tickers.json changes` block — see Phase 7 step 7.2 for the `upsert_ticker.py` invocation.)
+
+### `projections.json` changes (if any)
+
+<Either a unified diff of the affected projection-year cells, or "No changes to projections.json this update.">
+
+### Summary
+
+- Classification: <unchanged | OLD → NEW>
+- Conviction: <unchanged | OLD → NEW>
+- GVD bucket: <unchanged | OLD → NEW>
+- Buy zone: <unchanged | $A-$B → $C-$D>
+- Sell triggers: <X retained, Y replaced, Z added, W dropped>
+- Watch KPIs: <unchanged | X swapped>
+- Position target %: <unchanged | OLD → NEW>
+- Tag bump: <yes (vN → vN+1) | no — surgical within same classification>
+```
+
+Use native interactive-input — 2 options:
+1. **Apply** — write to disk, proceed to Phase 7.
+2. **Revise further** — re-engage free-form dialogue on the disputed sections, then re-render Checkpoint 3.
+
+### Step 6.4 — On Apply: write to disk
+
+For **reclassification**:
+1. Snapshot prior files to `verdict-archive/verdict-v<N>.json` and `projections-archive/projections-v<N>.json` (per `update-flow.md`).
+2. Write new `verdict.{md,json}` and updated `projections.{md,json}`.
+3. Set session variable `update_applied = "reclassification"` and `thesis_version_after = "v<N+1>"`.
+
+For **surgical**:
+1. Write the surgical edits in place. No archive files (git history covers it).
+2. Set session variable `update_applied = "surgical"` and `thesis_version_after = "v<N>"` (unchanged).
+
+After Step 6.4 completes, proceed to Phase 7.
