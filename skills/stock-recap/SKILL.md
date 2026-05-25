@@ -276,3 +276,81 @@ Wait for both to return.
 | Either `BLOCKED` | Surface to the user via native interactive-input — 2 options: **Retry** / **Abort the recap**. Phase 5 cannot run without refreshed financials and a current price. |
 
 **Valuation-only recap branch:** if Phase 1 routed here directly (no new filings, user picked "Valuation-only recap"), only dispatch the valuation-refresh sub-agent. After it returns, skip Phase 4 and jump to Phase 5's sell-trigger evaluation; the trajectory-synthesis sub-section of Phase 5 becomes "No new filings to synthesize trajectory across — this is a price/consensus-only recap."
+
+## Quarterly Phase 4: Per-quarter analysis fan-out (parallel)
+
+For each quarter Phase 2 accepted (excluding any dropped via `NEEDS_CONTEXT_FILING` or `NEEDS_CONTEXT_TRANSCRIPT`), dispatch one sub-sub-agent in parallel using `phases/quarterly/04-quarter-analysis-sub.md`.
+
+Inject the standard context block plus:
+
+- `quarter_end_date`: from Phase 1's gap-detection list.
+- `filing_path`: from Phase 2's return for this quarter.
+- `transcript_path`: from Phase 2's return.
+- `projection_kpis`: list of KPI keys from `projections.json.scenarios.base.years[0]`, excluding `year` (e.g., `revenue`, `revenue_growth_pct`, `gross_margin_pct`, ..., `cumulative_dividends`).
+- `thesis_year_for_quarter`: 1-based integer. Compute `(quarter_end_date - thesis_creation_date) // 365 days + 1`, then clamp to `[1, len(projections.json.scenarios.base.years)]` (typically 5). Read `thesis_creation_date` from `verdict.json.date` (or, as a fallback, `tickers.json.tickers.<TICKER>.research_started`).
+
+Issue all dispatches using the runtime's native parallelism primitive (multiple Task tool calls in one message on Claude Code; parallel-task batch on Codex).
+
+Wait for all sub-sub-agents to return. Collect their `ACTUALS_VS_PROJECTIONS` blocks for use in Phase 5's diff table.
+
+**Failure handling:**
+
+| Returned status | Action |
+|---|---|
+| All `DONE` | Proceed to Checkpoint 1 |
+| Any `DONE_WITH_CONCERNS` | Proceed; surface the affected quarters' data-quality notes in Checkpoint 1 |
+| Any `NEEDS_CONTEXT` | Re-check Phase 2's outputs for that quarter (the filing or transcript path must be unreadable). If still failing, drop the quarter from the rest of the flow with a note to the user. |
+
+## Quarterly Checkpoint 1 — Per-quarter walkthrough
+
+This checkpoint walks the user through every newly-ingested quarter in chronological order before the orchestrator synthesizes the cross-quarter trajectory.
+
+**Before rendering: re-read each quarter's `earnings-calls/<quarter>-analysis.md` and pull the headline numbers + tone + guidance from each return summary. Also surface any `DATA_QUALITY_GAPS` from the Phase 3 financials-refresh return.**
+
+Format (rendered Markdown, NOT inside a code block — the fenced block below is the **content template**; render only its contents):
+
+```markdown
+## Checkpoint 1 — Quarterly walkthrough
+
+*Per-quarter analysis files written under `<ticker_dir>/earnings-calls/`. Refreshed `financials.{md,json}` and `valuation.md` are also on disk.*
+
+### Data quality
+
+<If Phase 3 reported gaps: surface them here first. Example:
+"⚠️ `roic_pct` is null for 2026-Q1 — the company didn't disclose it this quarter (they only report ROIC annually in the 10-K). The diff table will mark ROIC `cannot-evaluate` for this thesis-year." >
+
+<If no gaps: write "No data-quality gaps. All projection KPIs were resolvable from the new filings.">
+
+### Quarter-by-quarter
+
+For each quarter <YYYY-Qn> in chronological order:
+
+#### <YYYY-Qn> (thesis-year <N>)
+
+| Metric | Reported | TTM | YoY |
+|---|---|---|---|
+| Revenue | $X.XB | $Y.YB | +X.X% |
+| Operating income | ... | ... | ... |
+| Net income | ... | ... | ... |
+| Diluted EPS | $X.XX | $Y.YY | +X.X% |
+
+**Tone:** <one phrase + one sentence>. **Guidance:** <raised / maintained / lowered / no-guidance + one sentence>.
+
+**Lands closest to:** <bull / base / bear> case, because <one-sentence justification from the sub-agent's SCENARIO_LANDING>.
+
+<Pull two or three Q&A theme bullets from the analysis file.>
+
+<Repeat for each quarter.>
+
+### Worth discussing
+
+<3-5 bullets pulled across the new quarters — anything the user should weigh in on before we synthesize the trajectory. Examples:
+- "2026-Q1 lands base / 2026-Q2 lands bear — the operating margin compressed 220bps QoQ. Is this a one-off or the start of a trend?"
+- "Guidance was raised in Q1 and held in Q2 — management's confidence isn't slipping yet, but the actuals are."
+- "Capital allocation: $4B buyback in Q2 vs $1B in Q1 — material shift. Want to discuss the timing?" >
+```
+
+**Use the runtime's native interactive-input mechanism for the Continue / Push back & revise choice** at the end of Checkpoint 1.
+
+If the user picks "Continue" → proceed to Phase 5.
+If "Push back & revise" → free-form follow-up. Corrections that change the per-quarter analysis files get re-dispatched to the affected sub-sub-agent. Then return to Checkpoint 1.
