@@ -256,3 +256,23 @@ Issue all dispatches using the runtime's native parallelism primitive (in Claude
 | `NEEDS_CONTEXT_FILING` | Surface to the user via native interactive-input — 2 options: **Drop this quarter and continue** (Phase 5 marks it `data-unavailable`) / **Abort the recap** (something is wrong upstream — let the user re-check the gap-detection list before re-running). |
 
 Wait for any required user input and any re-dispatches to complete before moving to Phase 3.
+
+## Quarterly Phase 3: Refresh trailing financials + valuation (parallel batch)
+
+Dispatch TWO sub-agents in parallel — issue both dispatches in a single message:
+
+- `phases/quarterly/03-financials-refresh.md` with the standard context block + `new_quarters` (from Phase 2's accepted output) + `latest_period_before_recap` (read from the pre-recap `financials.json`).
+- `phases/quarterly/03-valuation-refresh.md` with the standard context block + `saved_buy_zone_overall_low`, `saved_buy_zone_overall_high` (computed by the orchestrator: parse the `price_range` string of each entry in `verdict.json.buy_zones`, take `min(low)` and `max(high)`), and `saved_reverse_dcf_implied_growth` (parsed from `valuation.md` if present, else `null`).
+
+Wait for both to return.
+
+**Failure handling:**
+
+| Returned status mix | Action |
+|---|---|
+| Both `DONE` | Proceed to Phase 4 |
+| financials = `DONE_WITH_CONCERNS` (data-quality gaps) | Proceed; surface the gap list in Checkpoint 1 |
+| valuation = `DONE_WITH_CONCERNS` (no analyst coverage) | Proceed; the reverse-DCF-drift auto-recommend rule is skipped in Phase 5 |
+| Either `BLOCKED` | Surface to the user via native interactive-input — 2 options: **Retry** / **Abort the recap**. Phase 5 cannot run without refreshed financials and a current price. |
+
+**Valuation-only recap branch:** if Phase 1 routed here directly (no new filings, user picked "Valuation-only recap"), only dispatch the valuation-refresh sub-agent. After it returns, skip Phase 4 and jump to Phase 5's sell-trigger evaluation; the trajectory-synthesis sub-section of Phase 5 becomes "No new filings to synthesize trajectory across — this is a price/consensus-only recap."
