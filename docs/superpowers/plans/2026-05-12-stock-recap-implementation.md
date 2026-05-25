@@ -503,10 +503,11 @@ mkdir -p <ticker_dir>/.raw/recap-<quarter>/
 ```bash
 <toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_sec.py <ticker> \
   --forms <form_type> \
-  --since <quarter-start-date> \
-  --until <quarter-end-date-plus-90-days> \
+  --since <quarter-end-date> \
   --out <ticker_dir>/.raw/recap-<quarter>/
 ```
+
+`fetch_sec.py` downloads every filing matching `<form_type>` with `filing_date >= --since`. Companies typically file 10-Qs within ~45 days of quarter-end and 10-Ks within ~75 days, so setting `--since` to the quarter-end date is enough to catch the right filing without pulling unrelated later filings. If multiple filings come back, identify the right one by matching its `period_of_report` (in the filing's metadata under `<ticker_dir>/.raw/recap-<quarter>/manifest.json` or similar) to the target `<quarter>`.
 
 If exit code 2 (no filing matched), return status `NEEDS_CONTEXT` with the message "No <form_type> filing found in SEC EDGAR for <ticker> in window <window>".
 
