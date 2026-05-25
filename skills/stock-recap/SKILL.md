@@ -218,3 +218,37 @@ Capture the answer verbatim into a session variable `session_context` (used late
 - **Quarterly catch-up** → proceed to Quarterly Phase 2.
 - **News mode** → proceed to News Phase 1.5 (event capture, since news mode skips per-quarter fetch).
 - **Valuation-only recap** → proceed to Quarterly Phase 3 (only the valuation-refresh sub-agent), skip Phases 2 and 4, then jump to Phase 5's sell-trigger evaluation (no trajectory synthesis since no new filings).
+
+---
+
+# Quarterly mode
+
+The following phases apply only when the user picked **Quarterly catch-up** at Phase 1's mode picker.
+
+## Quarterly Phase 2: Per-quarter fetch (parallel batch)
+
+For each filing detected in Phase 1's gap-detection list, dispatch one sub-agent in parallel using `phases/quarterly/02-fetch-sub.md` as the prompt.
+
+Inject the standard context block per sub-agent:
+
+```
+ticker: <TICKER>
+quarter: <YYYY-Qn>
+form_type: <10-Q | 10-K>
+ticker_dir: <absolute path>
+toolkit_dir: <absolute path to financial-toolkit install for this runtime>
+company_slug: <best-guess lowercase-hyphen company name>
+```
+
+Issue all dispatches in a single message so the host agent runs them concurrently.
+
+**Failure handling once all sub-agents return:**
+
+| Returned status mix | Action |
+|---|---|
+| All `DONE` | Proceed to Phase 3 |
+| 1 or more `DONE_WITH_CONCERNS` | Proceed; surface which quarters have missing sections in Checkpoint 1 |
+| Any `NEEDS_CONTEXT` (transcript) | Surface to the user via native interactive-input — 2 options per affected quarter: **Paste transcript inline** (capture next free-form message as stdin and re-dispatch only that sub-agent with `--manual`) / **Skip this quarter** (drop from the per-quarter analysis fan-out in Phase 4) |
+| Any `NEEDS_CONTEXT` (filing missing entirely) | Surface to the user via native interactive-input — 2 options: **Drop this quarter and continue** / **Abort the recap** |
+
+Wait for any required user input and any re-dispatches to complete before moving to Phase 3.
