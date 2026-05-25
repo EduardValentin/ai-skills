@@ -1955,11 +1955,10 @@ Dispatch the right toolkit script for `fetch_kind`, write the output to disk, re
 <toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_sec.py <ticker> \
   --forms 8-K \
   --since <extra_args.since-date> \
-  --until <extra_args.until-date | today> \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/
 ```
 
-Return the path to the downloaded 8-K HTML and a 2-3 sentence summary of what the 8-K discloses (read it).
+`fetch_sec.py` does not support `--until` — it fetches every 8-K with `filing_date >= --since`. Inspect the resulting `_filings_index.json` and find the entry whose `filing_date` is closest to (and within ±7 days of) `extra_args.event-date`. Return the path to that 8-K HTML and a 2-3 sentence summary of what it discloses (read it).
 
 ### `fetch_kind == "prices+consensus"`
 
@@ -1975,34 +1974,50 @@ Return the latest close, the day-over-event-day price reaction (if `extra_args.e
 
 If `extra_args.target_ticker` is US-listed:
 ```bash
+mkdir -p <ticker_dir>/.raw/news-<YYYY-MM-DD>/
 <toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_financials.py <extra_args.target_ticker> \
   --years 5 \
-  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/target-<extra_args.target_ticker>/
+  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/target-<extra_args.target_ticker>.json
 ```
 
-Return a 1-paragraph summary of the target's revenue scale, margins, growth, and how they compare to the parent.
+`compute_financials.py`'s `--out` is a FILE path (writes JSON to it). Return a 1-paragraph summary of the target's revenue scale, margins, growth, and how they compare to the parent.
 
 ### `fetch_kind == "risk-factors-diff"`
 
+`diff_risk_factors.py` takes the two 10-K filing files directly — it doesn't fetch them itself. So this is a two-step fetch:
+
 ```bash
-<toolkit_dir>/.venv/bin/python <toolkit_dir>/diff_risk_factors.py <ticker> \
-  --year-a <extra_args.prior-year> \
-  --year-b <extra_args.current-year>
+# Step 1: fetch both years' 10-Ks (if not already present in tickers/<ticker>/.raw/)
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_sec.py <ticker> \
+  --forms 10-K \
+  --since <extra_args.prior-year>-01-01 \
+  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/
+
+# Step 2: diff the two HTML files (the orchestrator passes their on-disk paths in extra_args)
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/diff_risk_factors.py \
+  --ticker <ticker> \
+  --file-a <extra_args.file-a-path> \
+  --file-b <extra_args.file-b-path> \
+  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors-diff.json \
+  --out-md <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors-diff.md
 ```
 
-Return the list of NEW risk factors added in `current-year` vs `prior-year`.
+After Step 1's fetch, inspect `_filings_index.json` to identify the prior-year and current-year 10-K HTML paths (matching by `report_date`'s year). Then run Step 2 with those paths.
+
+Return the list of NEW risk factors added in `current-year` vs `prior-year` (read from the JSON or MD output).
 
 ### `fetch_kind == "competitor-pull"`
 
 Re-use `stock-research`'s Phase 4 sub-sub-agent pattern: pull one competitor's financials. Args: `extra_args.competitor_ticker`.
 
 ```bash
+mkdir -p <ticker_dir>/.raw/news-<YYYY-MM-DD>/
 <toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_financials.py <extra_args.competitor_ticker> \
   --years 5 \
-  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/competitor-<extra_args.competitor_ticker>/
+  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/competitor-<extra_args.competitor_ticker>.json
 ```
 
-Return a 1-paragraph comparison.
+`compute_financials.py`'s `--out` is a FILE path. Return a 1-paragraph comparison.
 
 ## Step 2: Return structured summary
 
