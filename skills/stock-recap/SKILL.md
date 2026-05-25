@@ -354,3 +354,131 @@ For each quarter <YYYY-Qn> in chronological order:
 
 If the user picks "Continue" → proceed to Phase 5.
 If "Push back & revise" → free-form follow-up. Corrections that change the per-quarter analysis files get re-dispatched to the affected sub-sub-agent. Then return to Checkpoint 1.
+
+## Quarterly Phase 5: Trajectory synthesis + sell-trigger evaluation
+
+This phase runs in the main agent (you), not a sub-agent — it's interactive synthesis.
+
+**Read these references before starting:**
+- `references/sell-trigger-evaluation.md` — 4-state rubric for evaluating English triggers.
+- `references/diff-thresholds.md` — default tolerances + override-capture.
+- `references/auto-recommend-rules.md` — the 6 conditions that auto-recommend a thesis update.
+
+### Step 5.1 — Cross-quarter trajectory narrative
+
+Re-read all per-quarter analysis files (`earnings-calls/<quarter>-analysis.md`) and the refreshed `financials.md`. Write a cross-quarter narrative arc and append it to `earnings-calls/cross-call-themes.md` (do NOT overwrite — append a new section dated with today's session date so the prior `stock-research`-written themes remain).
+
+The narrative covers:
+- Where the trajectory inflected (revenue, margins, capital allocation, tone) and what drove it.
+- How management's narrative evolved across the window (themes dropped, themes added, guidance trajectory).
+- One-paragraph "current state" — where the company is now vs where the thesis expected it to be.
+
+### Step 5.2 — Render the actuals-vs-projection diff table
+
+Use the per-quarter `ACTUALS_VS_PROJECTIONS` blocks returned by Phase 4 plus the rules in `references/diff-thresholds.md`.
+
+Surface the defaults first, then use native interactive-input to let the user override (2 options: **Use defaults** / **Override one or more thresholds**). On override, capture into a session variable `diff_threshold_overrides` and re-tag any affected rows.
+
+Then render — one table per scenario, columns: thesis-year, KPI, projected, actual (TTM), tag, closest-scenario:
+
+```markdown
+### Actuals vs Bull case (probability <X>%)
+
+| Thesis-year | KPI | Projected | Actual (TTM at <latest-quarter>) | Tag | Closest |
+|---|---|---|---|---|---|
+| Y1 | Revenue | $X.XB | $Y.YB | on-track | base |
+| Y1 | Operating margin | 24.0% | 22.4% | behind | bear |
+| ... |
+
+### Actuals vs Base case (probability <X>%)
+
+...
+
+### Actuals vs Bear case (probability <X>%)
+
+...
+```
+
+### Step 5.3 — Cumulative deviation check
+
+Compute and surface (per `diff-thresholds.md`):
+
+```markdown
+### Cumulative deviation from base (across <N> quarters)
+
+| KPI | Σ(actual − base) | % of Σ(base) | Auto-recommend trigger fires? |
+|---|---|---|---|
+| Revenue | -$X.XB | -7.2% | No (within 25%) |
+| Diluted EPS | -$Y.YY | -28.4% | Yes (> 25%, two consecutive quarters) |
+| FCF margin | -120bps | -4.8% | No |
+```
+
+### Step 5.4 — Sell-trigger evaluation
+
+For each trigger across all three categories in `verdict.json.sell_triggers` (`materially_overvalued`, `thesis_broken`, `better_opportunity`), apply `references/sell-trigger-evaluation.md` and render (group by category):
+
+```markdown
+### Sell triggers — current state
+
+1. **🟢 / 🟡 / 🔴 / ⚪ <verbatim trigger string>.** <1-2 sentence justification with the specific data point and gap to threshold.>
+2. ...
+```
+
+### Step 5.5 — GVD bucket fit re-check
+
+Compare the refreshed financials against the 5 GVD bucket profiles (the same scorecard `stock-research` Phase 8 uses). Report the top 2 buckets by score:
+
+```markdown
+### GVD bucket fit
+
+- Saved: **<saved-bucket>**
+- Best fit now: **<best-bucket>** (score <X>) — <one-sentence why>
+- Runner-up: **<runner-up>** (score <Y>) — <one-sentence why>
+- <If best != saved>: **Drift detected** — this fires auto-recommend rule 4.
+```
+
+## Quarterly Checkpoint 2 — Trajectory & sell-trigger review
+
+**Before rendering: assemble the full Checkpoint 2 block from §5.1–§5.5, then evaluate the auto-recommend rules (see `references/auto-recommend-rules.md`) and append the recommendation block.**
+
+Format (rendered Markdown, NOT inside a code block):
+
+```markdown
+## Checkpoint 2 — Trajectory, diff, and triggers
+
+### Cross-quarter trajectory
+
+<Pull §5.1's narrative arc, 2-4 paragraphs. Use blockquotes for any verbatim management citation.>
+
+### Actuals vs projections
+
+<§5.2 — three diff tables (bull / base / bear).>
+
+### Cumulative deviation
+
+<§5.3 — the cumulative-deviation table.>
+
+### Sell triggers
+
+<§5.4 — one row per trigger with state + justification.>
+
+### GVD bucket fit
+
+<§5.5 — saved vs best-fit-now.>
+
+---
+
+### Auto-recommend evaluation
+
+<Pull the recommendation block from `auto-recommend-rules.md`. Either "Recommendation: enter Phase 6 to update the thesis" with the firing rules and evidence, OR "No automatic update recommended" with the rule-by-rule clearance summary.>
+```
+
+**Use the runtime's native interactive-input mechanism** for the user's response. Options depend on the recommendation:
+
+| Recommendation | Options |
+|---|---|
+| Update recommended | 1. **Enter Phase 6 to update** / 2. **Continue without updating** |
+| No update recommended | 1. **Continue without updating** / 2. **Update anyway** |
+
+If the user picks "Continue without updating" — skip Phase 6 and jump to Phase 7 with no thesis changes.
+If the user picks "Enter Phase 6" or "Update anyway" — proceed to Phase 6.
