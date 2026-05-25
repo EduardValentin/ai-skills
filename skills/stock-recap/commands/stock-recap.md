@@ -1,5 +1,5 @@
 ---
-description: Start a stock-recap session on a US-listed ticker. Usage: /stock-recap <TICKER>
+description: "Start a stock-recap session on a US-listed ticker. Usage: /stock-recap <TICKER>"
 argument-hint: <TICKER>
 ---
 
