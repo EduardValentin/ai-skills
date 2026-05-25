@@ -84,3 +84,124 @@ News mode      → Phase 2 (optional context fetch)
                 → Phase 4 (update, optional) → Checkpoint 2
                 → Phase 5 (commit + index)
 ```
+
+## Phase 1: Identify, preconditions, gap detection
+
+This phase runs in the main agent. No subagent dispatch.
+
+### Step 1.1 — Resolve ticker and load saved thesis
+
+1. The user has invoked the skill with a `<TICKER>` argument (via the slash command or by mention). Echo the ticker back in plain Markdown so any typo is caught immediately.
+2. Resolve `<ticker_dir>` = `/Users/trocaneduard/Documents/Personal/investing-research/tickers/<TICKER>/` (uppercase).
+3. **Hard preconditions** — abort immediately if any fail:
+   - `<ticker_dir>/verdict.json` exists.
+   - `<ticker_dir>/projections.json` exists.
+   - `<ticker_dir>/financials.json` exists.
+   - `<ticker_dir>/market-expectations.json` exists.
+   - Every file above has `schema_version: 1` at top-level (read the JSON and assert).
+
+   On any failure, abort with:
+
+   ```
+   stock-recap requires a prior stock-research session for <TICKER>. Missing: <list>.
+   Run /stock-research <TICKER> first to produce the initial thesis.
+   ```
+
+4. Load the saved verdict into memory so subsequent phases can reference:
+   - `classification` (`BUY` / `WATCH` / `AVOID`)
+   - `conviction` (`high` / `medium` / `low`)
+   - `gvd_bucket`
+   - `position_target_pct`
+   - `buy_zone` (low/high)
+   - `active_sell_triggers` (list of English strings)
+   - `watch_kpis` (list of KPI names)
+   - `thesis_version` (e.g., `v1`)
+
+### Step 1.2 — Echo what's saved
+
+Render a compact Markdown summary (not in a code block):
+
+```markdown
+## Saved thesis for <TICKER>
+
+| Field | Value |
+|---|---|
+| Classification | <BUY / WATCH / AVOID> |
+| Conviction | <high / medium / low> |
+| GVD bucket | <growth / quality-growth / value / dividend / speculative-growth> |
+| Target position | <X>% |
+| Buy zone | $<low> – $<high> |
+| Last touched | <date from tickers.json `last_updated`> |
+| Thesis version | <vN> |
+
+Active sell triggers:
+
+1. <trigger string 1>
+2. <trigger string 2>
+3. ...
+```
+
+### Step 1.3 — Gap detection
+
+Use the toolkit's SEC client to list 10-Q and 10-K filings with period-end after `financials.json`'s latest period:
+
+```bash
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_sec.py <TICKER> \
+  --forms 10-Q,10-K \
+  --since <latest-period-in-financials-json> \
+  --list-only \
+  --out <ticker_dir>/.raw/recap-gap-detection/
+```
+
+Where `<toolkit_dir>` is `~/.claude/toolkits/financial-toolkit/` on Claude Code or `~/.codex/toolkits/financial-toolkit/` on Codex (pick by which runtime is executing).
+
+The `--list-only` flag (already supported by `fetch_sec.py`) returns the matching filings as JSON to stdout without downloading the full filings. Parse the JSON, build a list `[("<YYYY-Qn>", "<filing-date>", "<form-type>"), ...]` sorted chronologically.
+
+### Step 1.4 — Mode picker
+
+Render the gap-detection result and ask the user to pick the mode via the runtime's native interactive-input.
+
+**If new filings were detected (1 or more):**
+
+```markdown
+### Filings detected since last touch (<date>)
+
+| Period | Filed | Form |
+|---|---|---|
+| 2026-Q1 | 2026-05-02 | 10-Q |
+| 2026-Q2 | 2026-08-01 | 10-Q |
+| ... | ... | ... |
+
+What kind of recap do you want?
+```
+
+Native interactive-input — 2 options:
+1. **Quarterly catch-up** — ingest all <N> filings above, build trajectory, evaluate all sell triggers.
+2. **News mode** — ignore filings for now, analyze a specific event instead.
+
+**If NO new filings were detected:**
+
+```markdown
+### No new 10-Q or 10-K since the last touch (<date>)
+
+The most recent filing in `financials.json` is <YYYY-Qn>, and SEC EDGAR has no newer 10-Q or 10-K for <TICKER>.
+```
+
+Native interactive-input — 3 options:
+1. **Switch to news mode** — analyze a specific event (M&A, CEO change, etc.).
+2. **Valuation-only recap** — re-pull today's price, analyst consensus, P/E band, and reverse-DCF; re-evaluate sell triggers against the refreshed valuation; do not touch financials.
+3. **Exit** — nothing to do right now.
+
+### Step 1.5 — Session-context capture (free-form)
+
+Once the mode is chosen (and is not Exit), ask the user as free-form text:
+
+> Anything you're already curious or worried about for this recap?
+
+Capture the answer verbatim into a session variable `session_context` (used later as the first section of the recap doc). Empty / "no" is acceptable; capture as empty string.
+
+### Step 1.6 — Branch to the chosen mode
+
+- **Quarterly catch-up** → proceed to Quarterly Phase 2.
+- **News mode** → proceed to News Phase 1.5 (event capture, since news mode skips per-quarter fetch).
+- **Valuation-only recap** → proceed to Quarterly Phase 3 (only the valuation-refresh sub-agent), skip Phases 2 and 4, then jump to Phase 5's sell-trigger evaluation (no trajectory synthesis since no new filings).
