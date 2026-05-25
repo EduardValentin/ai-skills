@@ -575,3 +575,193 @@ For **surgical**:
 2. Set session variable `update_applied = "surgical"` and `thesis_version_after = "v<N>"` (unchanged).
 
 After Step 6.4 completes, proceed to Phase 7.
+
+## Quarterly Phase 7: Commit & index
+
+This phase runs in the main agent, sync. It writes the recap doc, updates `tickers.json`, regenerates `INDEX.md`, commits, and optionally tags.
+
+### Step 7.1 — Compose the recap doc
+
+Write `<ticker_dir>/recaps/recap-<YYYY-MM-DD>-quarterly.md` (create the `recaps/` directory if it doesn't exist). Use the frontmatter + sections defined in spec §7.2:
+
+```yaml
+---
+ticker: <TICKER>
+artifact: recap
+mode: quarterly
+session: quarterly-recap
+session_date: <YYYY-MM-DD>
+window_start: <earliest-period-end-date-from-Phase2>
+window_end: <latest-period-end-date-from-Phase2>
+periods_processed: ["<YYYY-Qn>", ...]
+thesis_version_before: <vN>
+thesis_version_after: <vN | vN+1 if reclassification | vN if surgical>
+schema_version: 1
+diff_threshold_overrides: <from session if any, else omit>
+---
+
+# <TICKER> — Quarterly recap, <YYYY-MM-DD>
+
+## Session context
+
+<Phase 1's free-form session_context, or "(none)" if empty.>
+
+## Quarters ingested
+
+| Period | Filed | Form | Landed | Tone |
+|---|---|---|---|---|
+| <YYYY-Qn> | <filing-date> | 10-Q | base | confident |
+| ... |
+
+## Refreshed financials snapshot
+
+<Pull the §5.1 "current state" paragraph + a compact 1-table summary of TTM revenue / margins / FCF / share count / net debt at window_end vs at the prior-recap period.>
+
+## Trajectory synthesis
+
+<§5.1 cross-quarter narrative arc, 2-4 paragraphs.>
+
+## Actuals vs projections
+
+<§5.2 — three diff tables (bull / base / bear) condensed.>
+
+## Sell trigger evaluation
+
+<§5.4 — one row per trigger with state + justification.>
+
+## GVD bucket fit re-check
+
+<§5.5.>
+
+## Thesis update applied
+
+<One of:
+- "**None.** No thesis changes this session." (Checkpoint 2 → continue-without-updating)
+- "**Surgical patch.** <list of changed fields in 3-5 bullets>. Prior verdict at git ref `<prev-commit>`." (sub-mode 1)
+- "**Reclassification → <vN+1>.** <one paragraph why>. Prior thesis archived at `verdict-archive/verdict-v<N>.json` and `projections-archive/projections-v<N>.json`." (sub-mode 2)
+- "**Full pivot recommended.** Business has materially changed. Recommendation: run `/stock-research <TICKER>` with the archive-and-restart option. No thesis files were modified." (sub-mode 3)
+>
+
+## Next review trigger
+
+<today + 90 days, or earlier if the user specified during Phase 6, in the form "earnings:~<YYYY-MM-DD>" or "event:<description>">
+```
+
+### Step 7.2 — Update `tickers.json`
+
+Run from anywhere (the `--repo` flag points at the research repo root):
+
+```bash
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/upsert_ticker.py <TICKER> \
+  --repo /Users/trocaneduard/Documents/Personal/investing-research \
+  --field last_updated=<YYYY-MM-DD> \
+  --field status=<verdict.classification> \
+  --field classification=<verdict.classification> \
+  --field conviction=<verdict.conviction> \
+  --field thesis_version=<thesis_version_after> \
+  --field next_review_trigger=earnings:~<YYYY-MM-DD> \
+  --list-field active_sell_triggers="<flat trigger 1>" \
+  --list-field active_sell_triggers="<flat trigger 2>"
+  # (one --list-field per trigger; the script appends to the list,
+  #  but the script's CLI accepts only "key=value" — for replace
+  #  semantics, manually rewrite tickers.json[<TICKER>].active_sell_triggers
+  #  before calling upsert_ticker.py, OR use --list-field for adds only.)
+```
+
+`upsert_ticker.py` requires `--repo`. Scalar fields use `--field key=value`. List fields use `--list-field key=value` (one invocation per list element). The `active_sell_triggers` flat-list mirror in `tickers.json` is built from the canonical `verdict.json.sell_triggers` dict by concatenating the strings under `materially_overvalued`, `thesis_broken`, and (if non-null) `better_opportunity` — that's what the user sees in the INDEX.md dashboard.
+
+### Step 7.3 — Regenerate `INDEX.md`
+
+```bash
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/update_index.py \
+  --repo /Users/trocaneduard/Documents/Personal/investing-research
+```
+
+### Step 7.4 — Stage and commit
+
+In the research repo:
+
+```bash
+cd /Users/trocaneduard/Documents/Personal/investing-research
+git add tickers/<TICKER>/ tickers.json INDEX.md
+```
+
+Compose the commit message using the structured trailer format from `stock-research` Phase 10. The fields:
+
+- `type`:
+  - `recap` if `update_applied ∈ {"none", "surgical"}`.
+  - `pivot` if `update_applied == "reclassification"`.
+  - `update` if the only change was administrative (unlikely in this flow).
+- `session`: `quarterly-recap`.
+- `trigger`: `10-Q-<latest-period>` (or `10-K-<year>` if the window includes a 10-K).
+- `verdict`: the (possibly updated) classification, or `UNCHANGED` if unchanged.
+- `verdict-prior`: prior classification, included only if changed.
+- `conviction`: current.
+- `gvd`: current.
+- `price-target-low` / `-base` / `-high`: from the refreshed valuation.
+- `position-target-pct`: current.
+- `files-changed`: comma-list.
+
+Example commit:
+
+```bash
+git commit -m "$(cat <<'EOF'
+recap(NOW): 2026-Q1+Q2 catch-up; one trigger sharpened
+
+Two quarters since last touch. Revenue growth held above the trend
+gate (+15% TTM); operating margin compressed 120bps from the buyback-
+funded SBC offset narrative; one sell trigger sharpened from "Subs
+NRR < 100%" to "Customer cRPO growth < 18% YoY" given mgmt no longer
+discloses NRR. Verdict and classification unchanged.
+
+ticker: NOW
+session: quarterly-recap
+date: 2026-08-15
+trigger: 10-Q-2026-Q2
+verdict: BUY
+conviction: high
+gvd: quality-growth
+price-target-low: 850
+price-target-base: 920
+price-target-high: 1050
+position-target-pct: 7
+files-changed: tickers/NOW/financials.md, tickers/NOW/financials.json, tickers/NOW/valuation.md, tickers/NOW/market-expectations.md, tickers/NOW/market-expectations.json, tickers/NOW/earnings-calls/2026-Q1.md, tickers/NOW/earnings-calls/2026-Q1-analysis.md, tickers/NOW/earnings-calls/2026-Q2.md, tickers/NOW/earnings-calls/2026-Q2-analysis.md, tickers/NOW/earnings-calls/cross-call-themes.md, tickers/NOW/verdict.md, tickers/NOW/verdict.json, tickers/NOW/recaps/recap-2026-08-15-quarterly.md, tickers.json, INDEX.md
+EOF
+)"
+```
+
+### Step 7.5 — Tag on reclassification only
+
+If `update_applied == "reclassification"`:
+
+```bash
+git tag <TICKER>/v<N+1> -m "Reclassification: <one-line reason>"
+```
+
+Otherwise: no tag.
+
+### Step 7.6 — Push (optional)
+
+Use native interactive-input — 2 options:
+1. **Push now** (`git push --follow-tags`).
+2. **Skip** (user pushes later or doesn't push at all).
+
+### Step 7.7 — Final summary to the user
+
+Render a closing summary in the main agent's chat:
+
+```markdown
+## Recap committed
+
+**<TICKER> — <YYYY-MM-DD> quarterly recap**
+
+- <N> quarter(s) integrated: <YYYY-Qn>, ...
+- Verdict: <UNCHANGED at <classification> | <OLD> → <NEW>>
+- Thesis version: <vN | vN → vN+1>
+- Sell triggers: <X clear, Y flashing, Z fired, W cannot-evaluate>
+- Next review: <next_review_trigger>
+
+Recap doc: `tickers/<TICKER>/recaps/recap-<YYYY-MM-DD>-quarterly.md`
+Commit: `<short-sha>`
+Tag: <`<TICKER>/v<N+1>` | no tag this session>
+```
