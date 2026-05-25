@@ -703,15 +703,18 @@ You are a sub-agent dispatched by the Quarterly Phase 3 orchestrator. Your job i
 ```bash
 <toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_financials.py <ticker> \
   --years 10 \
-  --out <ticker_dir>/
+  --out <ticker_dir>/financials.json
 ```
 
-The script writes `financials.json` (overwriting the prior one) and `financials.md`. It includes:
+Note: `--out` is a FILE path (not a directory). The script writes the JSON document to that exact path, overwriting if it already exists.
+
+The output JSON includes:
 - annual series for the last 10 fiscal years
-- the most recent N quarters (where N covers `new_quarters` and at least 4 trailing for TTM)
 - `tag_resolution` — which us-gaap candidate resolved each metric
 - `missing_concepts` — metrics that no candidate in the script's list could find
 - `available_us_gaap_concepts` — only populated when something is missing, lists everything the company DOES report
+
+The script does NOT write `financials.md` — you generate that in Step 5 from the refreshed JSON.
 
 If exit code != 0, return status `BLOCKED` with the script's stderr.
 
@@ -810,32 +813,35 @@ If exit code 2 (yfinance empty — delisted / halted), return status `BLOCKED` w
   --out <ticker_dir>/
 ```
 
-This rewrites `market-expectations.{md,json}` directly (the script's existing behavior — same as `stock-research` Phase 7).
+`--out` is a directory; the script writes `<out>/market-expectations.json`. It does NOT write `market-expectations.md` — generate that in Step 5 from the JSON.
 
-If exit code != 0, return status `DONE_WITH_CONCERNS` with the message; the orchestrator will note "no analyst coverage available" in Checkpoint 1. Skip Step 3 of the auto-recommend rule based on consensus drift.
+If exit code != 0, return status `DONE_WITH_CONCERNS` with the message; the orchestrator will note "no analyst coverage available" in Checkpoint 1. Skip the auto-recommend rule based on consensus drift in that case.
 
 ## Step 3: P/E historical band
 
 ```bash
-<toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_pe_band.py <ticker> \
-  --out <ticker_dir>/
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_pe_band.py \
+  --prices <ticker_dir>/prices/prices.json \
+  --financials <ticker_dir>/financials.json \
+  --out <ticker_dir>/.raw/pe-band-<today-YYYY-MM-DD>.json
 ```
 
-This appends to / rewrites `valuation.md`'s P/E band section.
+`compute_pe_band.py` takes no ticker positional — only the two input JSON paths and an output JSON path. It writes a single JSON document at `--out`. Read that JSON and incorporate the 25th/50th/75th percentile P/E band figures into the refreshed `valuation.md` section you write in Step 5.
 
 ## Step 4: Reverse-DCF at today's price
 
-Read today's close from `prices/prices.json` (latest bar).
+Read today's close from `<ticker_dir>/prices/prices.json` (latest bar; written by Step 1).
 
 ```bash
-<toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_reverse_dcf.py <ticker> \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_reverse_dcf.py \
+  --financials <ticker_dir>/financials.json \
   --price <today-close> \
   --discount-rate 0.10 \
   --terminal-growth 0.025 \
-  --out <ticker_dir>/
+  --out <ticker_dir>/.raw/reverse-dcf-<today-YYYY-MM-DD>.json
 ```
 
-This updates `valuation.md`'s reverse-DCF section. Capture the resulting implied growth rate (a percent) into the summary.
+`compute_reverse_dcf.py` takes no ticker positional — only `--financials` (the JSON written by `compute_financials.py`), `--price`, the discount/terminal-growth rates, and `--out` (a JSON file path). Read the output JSON; capture the resulting implied growth rate (a percent) into the summary and into the refreshed `valuation.md` you write in Step 5.
 
 ## Step 5: Compute deltas worth flagging
 
