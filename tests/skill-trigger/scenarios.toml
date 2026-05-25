@@ -131,3 +131,19 @@ prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so
 description_terms = ["brand voice", "conversion goal", "microcopy"]
 skill_terms = ["Write copy from the brand's voice", "Copy Principles"]
 forbidden_terms = []
+
+[[scenario]]
+id = "stock-recap-quarterly-catch-up"
+skill = "stock-recap"
+prompt = "I last researched NOW back in February. Catch me up on the quarters that have been filed since then — I want to see whether the thesis still holds."
+description_terms = ["recapping an existing US-listed stock thesis", "catching up on every quarter", "Mechanically diffs actuals vs saved bull/base/bear projections", "LLM-evaluates the saved English sell triggers"]
+skill_terms = ["Quarterly catch-up", "phases/quarterly/02-fetch-sub.md", "auto-recommend", "Checkpoint 2 — Trajectory, diff, and triggers"]
+forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
+
+[[scenario]]
+id = "stock-recap-news-impact"
+skill = "stock-recap"
+prompt = "Microsoft just announced acquiring Activision for $69B. I have an existing thesis on MSFT — recap it through the lens of this acquisition."
+description_terms = ["impact of a material event", "M&A, CEO change, regulatory ruling", "how does this acquisition affect"]
+skill_terms = ["News mode", "phases/news/02-context-fetch-sub.md", "event_class", "Checkpoint 1 — News impact review"]
+forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]

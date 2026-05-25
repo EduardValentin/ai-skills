@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stock Recap"
+  short_description: "Quarterly catch-up or news-event recap of an existing stock thesis"
+  default_prompt: "Use $stock-recap to recap an existing thesis after new quarters or a material event."
