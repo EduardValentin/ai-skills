@@ -228,7 +228,7 @@ Every section the agent prints back to the user must be **pretty-printed Markdow
 
 ---
 
-## Mode router (Phase 1, step 4)
+## Mode router (Phase 1, Step 1.4)
 
 After Phase 1's preconditions and gap-detection complete, ask the user to pick the mode using the runtime's native interactive-input:
 
@@ -313,19 +313,25 @@ This phase runs in the main agent. No subagent dispatch.
    Run /stock-research <TICKER> first to produce the initial thesis.
    ```
 
-4. Load the saved verdict into memory so subsequent phases can reference:
+4. Load the saved thesis into memory. Note: the data lives in TWO files — `verdict.json` carries the canonical structured thesis, and `tickers.json[<TICKER>]` carries a flat mirror of selected fields for index display. Load:
+
+   **From `verdict.json` (canonical):**
    - `classification` (`BUY` / `WATCH` / `AVOID`)
    - `conviction` (`high` / `medium` / `low`)
-   - `gvd_bucket`
-   - `position_target_pct`
-   - `buy_zone` (low/high)
-   - `active_sell_triggers` (list of English strings)
-   - `watch_kpis` (list of KPI names)
-   - `thesis_version` (e.g., `v1`)
+   - `gvd_bucket` (one of `growth` / `quality-growth` / `value` / `dividend` / `speculative-growth`)
+   - `position_plan` (dict: `target_position_if_buy_zones_hit_pct`, `position_now_pct`, `rationale`)
+   - `buy_zones` (list of zone dicts, each with `name`, `price_range` like `"$80-$88"`, `action`)
+   - `sell_triggers` (dict with three keys: `materially_overvalued` (list of strings), `thesis_broken` (list of strings), `better_opportunity` (string or null))
+   - `watch_kpis` (dict with two keys: `generic` (list of strings), `story_custom` (list of strings))
+
+   **From `tickers.json[<TICKER>]` (flat mirror for at-a-glance use):**
+   - `thesis_version` (e.g., `"v1"`)
+   - `last_updated` (`YYYY-MM-DD`)
+   - `active_sell_triggers` (flat list — this is the user-facing summary; the canonical structured triggers live in `verdict.json.sell_triggers` above)
 
 ### Step 1.2 — Echo what's saved
 
-Render a compact Markdown summary (not in a code block):
+Render a compact Markdown summary directly to the user. The block below is the **content template** — render only its contents, NOT the surrounding fence:
 
 ```markdown
 ## Saved thesis for <TICKER>
@@ -334,17 +340,24 @@ Render a compact Markdown summary (not in a code block):
 |---|---|
 | Classification | <BUY / WATCH / AVOID> |
 | Conviction | <high / medium / low> |
-| GVD bucket | <growth / quality-growth / value / dividend / speculative-growth> |
-| Target position | <X>% |
-| Buy zone | $<low> – $<high> |
-| Last touched | <date from tickers.json `last_updated`> |
-| Thesis version | <vN> |
+| GVD bucket | <gvd_bucket value> |
+| Target position (if all buy zones hit) | <position_plan.target_position_if_buy_zones_hit_pct>% |
+| Current position | <position_plan.position_now_pct>% |
+| Buy zones | <comma-joined list of "<name> @ <price_range>" from buy_zones> |
+| Last touched | <tickers.json[<TICKER>].last_updated> |
+| Thesis version | <tickers.json[<TICKER>].thesis_version> |
 
-Active sell triggers:
+Active sell triggers (from `verdict.json.sell_triggers`):
 
-1. <trigger string 1>
-2. <trigger string 2>
-3. ...
+- **Materially overvalued:**
+  1. <materially_overvalued[0]>
+  2. <materially_overvalued[1]>
+  3. ...
+- **Thesis broken:**
+  1. <thesis_broken[0]>
+  2. <thesis_broken[1]>
+  3. ...
+- **Better opportunity:** <better_opportunity or "(no preset trigger)">
 ```
 
 ### Step 1.3 — Gap detection
@@ -419,7 +432,7 @@ Capture the answer verbatim into a session variable `session_context` (used late
 grep -c "^## " skills/stock-recap/SKILL.md
 ```
 
-Expected: at least 4 (`# Stock Recap`, `## When to use`, `## Prerequisites`, `## Asking the user for input`, `## Plain-English voice in every output`, `## Mode router (Phase 1, step 4)`, `## Phase 1: ...`).
+Expected: at least 4 (`# Stock Recap`, `## When to use`, `## Prerequisites`, `## Asking the user for input`, `## Plain-English voice in every output`, `## Mode router (Phase 1, Step 1.4)`, `## Phase 1: ...`).
 
 - [ ] **Step 3: Sync and commit**
 
@@ -732,7 +745,7 @@ Runs in parallel with the financials-refresh sub-agent.
 - `ticker`: ticker symbol.
 - `ticker_dir`: absolute path to `tickers/<TICKER>/`.
 - `toolkit_dir`: absolute path to the `financial-toolkit` install.
-- `saved_buy_zone_low` and `saved_buy_zone_high`: from `verdict.json`.
+- `saved_buy_zones`: the full `verdict.json.buy_zones` list (each entry has `name`, `price_range` like `"$80-$88"`, `action`). The orchestrator computes the overall low and high by parsing the `price_range` strings and taking `min(low)` / `max(high)` across all zones to pass to the sub-agent as `saved_buy_zone_overall_low` and `saved_buy_zone_overall_high` for the buy-zone-position check below.
 - `saved_reverse_dcf_implied_growth`: from the saved `valuation.md` (parse the line if present, else `null`).
 
 ## Your job
@@ -790,7 +803,7 @@ This updates `valuation.md`'s reverse-DCF section. Capture the resulting implied
 
 ## Step 5: Compute deltas worth flagging
 
-- **Buy-zone position:** today's close vs `saved_buy_zone_low`–`saved_buy_zone_high`. One of: `above-zone-high` / `inside-zone` / `below-zone-low`.
+- **Buy-zone position:** today's close vs `saved_buy_zone_overall_low`–`saved_buy_zone_overall_high`. One of: `above-zone-high` / `inside-zone` / `below-zone-low`.
 - **Reverse-DCF drift:** `(new_implied_growth - saved_reverse_dcf_implied_growth) / saved_reverse_dcf_implied_growth * 100`. Flag if `|drift| > 50%`. If saved is `null`, mark `cannot-compute-drift`.
 - **Consensus drift:** compare new mean price target vs the one in the prior `market-expectations.json` (read from git's index for the file's previous version — `git show HEAD:...market-expectations.json`). Flag if `>15%` change.
 
@@ -818,7 +831,7 @@ NOTES: <one sentence>
 Dispatch TWO sub-agents in parallel — issue both dispatches in a single message:
 
 - `phases/quarterly/03-financials-refresh.md` with the standard context block + `new_quarters` (from Phase 2's accepted output) + `latest_period_before_recap` (read from the pre-recap `financials.json`).
-- `phases/quarterly/03-valuation-refresh.md` with the standard context block + `saved_buy_zone_low`, `saved_buy_zone_high`, `saved_reverse_dcf_implied_growth` (all read from the loaded `verdict.json` / `valuation.md`).
+- `phases/quarterly/03-valuation-refresh.md` with the standard context block + `saved_buy_zone_overall_low`, `saved_buy_zone_overall_high` (computed by the orchestrator: parse the `price_range` string of each entry in `verdict.json.buy_zones`, take `min(low)` and `max(high)`), and `saved_reverse_dcf_implied_growth` (parsed from `valuation.md` if present, else `null`).
 
 Wait for both to return.
 
@@ -1084,7 +1097,7 @@ schema_version: 1
 
 # Sell-Trigger Evaluation Rubric
 
-This reference is loaded by Phase 5 (Quarterly mode) and Phase 3 (News mode) to evaluate every English sell trigger saved in `verdict.json.active_sell_triggers`. The agent reads each trigger string, the refreshed data, and assigns ONE of four states. The state plus a 1-2 sentence justification goes into the recap doc.
+This reference is loaded by Phase 5 (Quarterly mode) and Phase 3 (News mode) to evaluate every English sell trigger saved in `verdict.json.sell_triggers`. That field is a dict with three keys — `materially_overvalued` (list of strings), `thesis_broken` (list of strings), and `better_opportunity` (string or null). The agent flattens these into a single list of trigger strings (preserving category labels so the recap doc can group them), reads each trigger string, the refreshed data, and assigns ONE of four states per trigger. The state plus a 1-2 sentence justification goes into the recap doc.
 
 ## The four states
 
@@ -1339,7 +1352,7 @@ Compute and surface (per `diff-thresholds.md`):
 
 ### Step 5.4 — Sell-trigger evaluation
 
-For each trigger in `verdict.json.active_sell_triggers`, apply `references/sell-trigger-evaluation.md` and render:
+For each trigger across all three categories in `verdict.json.sell_triggers` (`materially_overvalued`, `thesis_broken`, `better_opportunity`), apply `references/sell-trigger-evaluation.md` and render (group by category):
 
 ```markdown
 ### Sell triggers — current state
@@ -1565,18 +1578,22 @@ The proposed update is:
 ### `verdict.json` changes
 
 ```diff
-- "active_sell_triggers": [
--   "<old trigger 1>",
--   "<old trigger 2>"
-- ],
-+ "active_sell_triggers": [
-+   "<new trigger 1>",
-+   "<new trigger 2>",
-+   "<new trigger 3>"
-+ ],
-- "thesis_version": "v1",
-+ "thesis_version": "v2",
+  "sell_triggers": {
+    "materially_overvalued": [...],
+-   "thesis_broken": [
+-     "<old trigger 1>",
+-     "<old trigger 2>"
+-   ],
++   "thesis_broken": [
++     "<new trigger 1>",
++     "<new trigger 2>",
++     "<new trigger 3>"
++   ],
+    "better_opportunity": null
+  },
 ```
+
+(Note: `thesis_version` lives in `tickers.json`, not `verdict.json`. If the version bumps on reclassification, surface the tickers.json change in a separate `### tickers.json changes` block — see Phase 7 step 7.2 for the `upsert_ticker.py` invocation.)
 
 ### `projections.json` changes (if any)
 
@@ -2038,7 +2055,7 @@ The user accepts / disputes / proposes alternates. Capture agreed shifts.
 
 ### Step 3.4 — Sell triggers — re-evaluate only the affected ones
 
-Identify the subset of `verdict.json.active_sell_triggers` that this event plausibly affects (the agent proposes; the user confirms with a quick "yes / I'd add this one too" exchange). Apply `references/sell-trigger-evaluation.md` to each of those. The unaffected triggers stay marked "not re-evaluated this session."
+Identify the subset of triggers across all three categories in `verdict.json.sell_triggers` (`materially_overvalued`, `thesis_broken`, `better_opportunity`) that this event plausibly affects (the agent proposes; the user confirms with a quick "yes / I'd add this one too" exchange). Apply `references/sell-trigger-evaluation.md` to each of those. The unaffected triggers stay marked "not re-evaluated this session."
 
 ## News mode Checkpoint 1 — Impact review
 
