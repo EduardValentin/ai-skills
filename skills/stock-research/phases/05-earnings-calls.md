@@ -11,7 +11,7 @@ You orchestrate Phase 5: fetch the last 3 quarterly earnings call transcripts, d
 
 ## Context (injected by orchestrator)
 
-Standard: `ticker`, `cik_padded`, `ticker_dir`, `scripts_dir`, `raw_dir`. Plus:
+Standard: `ticker`, `cik_padded`, `ticker_dir`, `toolkit_dir`, `raw_dir`. Plus:
 - `company_slug`: lowercase company name used for Motley Fool URLs (e.g., "apple", "microsoft"). The orchestrator passes its best guess; you can override via inspection of the IR page if the scraper fails.
 
 ## Your job
@@ -40,7 +40,7 @@ Convert to `YYYY-Qn` labels (e.g., a 10-Q with report_date `2024-06-29` for Appl
 
 For each of the 3 quarters, dispatch a sub-subagent using `phases/05-earnings-call-sub.md`. Inject:
 - `quarter_label`: `YYYY-Qn`
-- `ticker`, `company_slug`, `scripts_dir`
+- `ticker`, `company_slug`, `toolkit_dir`
 - `out_dir`: `<ticker_dir>/earnings-calls/`
 
 Wait for all 3 to complete. Each writes its own `<quarter_label>.md` (transcript) and `<quarter_label>-analysis.md`, and returns a summary covering: tone, prepared-remarks highlights, Q&A themes, guidance.

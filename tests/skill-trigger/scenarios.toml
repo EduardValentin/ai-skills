@@ -147,3 +147,11 @@ prompt = "Microsoft just announced acquiring Activision for $69B. I have an exis
 description_terms = ["impact of a material event", "M&A, CEO change, regulatory ruling", "how does this acquisition affect"]
 skill_terms = ["News mode", "phases/news/02-context-fetch-sub.md", "event_class", "Checkpoint 1 — News impact review"]
 forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
+
+[[scenario]]
+id = "stock-research-fundamentals-deep-dive"
+skill = "stock-research"
+prompt = "Research NVDA end-to-end — fundamentals deep dive and tell me if I should buy at the current price."
+description_terms = ["researching a US-listed company", "fundamentals deep dive", "investment thesis", "should I buy NVDA"]
+skill_terms = ["GVD lens", "phases/02-business-model.md"]
+forbidden_terms = ["CP1", "CP2", "CP3", "CP4", "ELI5"]
