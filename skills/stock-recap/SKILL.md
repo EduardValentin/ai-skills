@@ -234,21 +234,25 @@ Inject the standard context block per sub-agent:
 ```
 ticker: <TICKER>
 quarter: <YYYY-Qn>
+quarter_end_date: <YYYY-MM-DD>  # the period-end date for this quarter
 form_type: <10-Q | 10-K>
 ticker_dir: <absolute path>
 toolkit_dir: <absolute path to financial-toolkit install for this runtime>
 company_slug: <best-guess lowercase-hyphen company name>
+# manual_transcript_path: only set on the re-dispatch after a transcript paste — see below
 ```
 
-Issue all dispatches in a single message so the host agent runs them concurrently.
+`quarter_end_date` comes from Phase 1's gap-detection: each entry in the SEC manifest the orchestrator built includes the `report_date` field which is exactly this date.
+
+Issue all dispatches using the runtime's native parallelism primitive (in Claude Code: multiple Task tool calls in a single message; in Codex: a parallel-task batch). All sub-agents run concurrently.
 
 **Failure handling once all sub-agents return:**
 
-| Returned status mix | Action |
+| Returned status | Action |
 |---|---|
 | All `DONE` | Proceed to Phase 3 |
-| 1 or more `DONE_WITH_CONCERNS` | Proceed; surface which quarters have missing sections in Checkpoint 1 |
-| Any `NEEDS_CONTEXT` (transcript) | Surface to the user via native interactive-input — 2 options per affected quarter: **Paste transcript inline** (capture next free-form message as stdin and re-dispatch only that sub-agent with `--manual`) / **Skip this quarter** (drop from the per-quarter analysis fan-out in Phase 4) |
-| Any `NEEDS_CONTEXT` (filing missing entirely) | Surface to the user via native interactive-input — 2 options: **Drop this quarter and continue** / **Abort the recap** |
+| Any `DONE_WITH_CONCERNS` | Proceed; surface which quarters have missing sections in Checkpoint 1 |
+| `NEEDS_CONTEXT_TRANSCRIPT` | Surface to the user via native interactive-input — 2 options per affected quarter: **Paste transcript inline** / **Skip this quarter**. On **Paste**: capture the next free-form message, write it to a temp file (e.g., via `mktemp`), and re-dispatch only the affected sub-agent with `manual_transcript_path: <temp-file-path>` added to its context block (Step 4b in the sub-agent prompt handles this). On **Skip**: drop the quarter from Phase 4's analysis fan-out; Phase 5's trajectory synthesis will mark this quarter as `data-unavailable` rather than merging it into the trend. |
+| `NEEDS_CONTEXT_FILING` | Surface to the user via native interactive-input — 2 options: **Drop this quarter and continue** (Phase 5 marks it `data-unavailable`) / **Abort the recap** (something is wrong upstream — let the user re-check the gap-detection list before re-running). |
 
 Wait for any required user input and any re-dispatches to complete before moving to Phase 3.
