@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stock Research"
+  short_description: "End-to-end fundamentals deep dive on a US-listed company"
+  default_prompt: "Use $stock-research to begin a fundamentals research session on a ticker."

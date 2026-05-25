@@ -1,0 +1,114 @@
+{
+  "cik": 320193,
+  "entityName": "Apple Inc.",
+  "facts": {
+    "us-gaap": {
+      "Revenues": {
+        "label": "Revenues",
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 394328000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 383285000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 391035000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "NetIncomeLoss": {
+        "label": "Net Income (Loss)",
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 99803000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 96995000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 93736000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "GrossProfit": {
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 170782000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 169148000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 180683000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "OperatingIncomeLoss": {
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 119437000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 114301000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 123216000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "NetCashProvidedByUsedInOperatingActivities": {
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 122151000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 110543000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 118254000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "PaymentsToAcquirePropertyPlantAndEquipment": {
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 10708000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 10959000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 9447000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "CashAndCashEquivalentsAtCarryingValue": {
+        "units": {
+          "USD": [
+            {"end": "2024-09-28", "val": 29943000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "LongTermDebt": {
+        "units": {
+          "USD": [
+            {"end": "2024-09-28", "val": 85750000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "WeightedAverageNumberOfDilutedSharesOutstanding": {
+        "units": {
+          "shares": [
+            {"end": "2022-09-24", "val": 16215963000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 15812547000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 15408095000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "ShareBasedCompensation": {
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 9038000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 10833000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 11688000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "PaymentsForRepurchaseOfCommonStock": {
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 89402000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 77550000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 94949000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      },
+      "PaymentsOfDividends": {
+        "units": {
+          "USD": [
+            {"end": "2022-09-24", "val": 14841000000, "fy": 2022, "fp": "FY", "form": "10-K"},
+            {"end": "2023-09-30", "val": 15025000000, "fy": 2023, "fp": "FY", "form": "10-K"},
+            {"end": "2024-09-28", "val": 15234000000, "fy": 2024, "fp": "FY", "form": "10-K"}
+          ]
+        }
+      }
+    }
+  }
+}
