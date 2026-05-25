@@ -1,0 +1,9 @@
+{
+  "name": "uiux",
+  "version": "0.1.0",
+  "description": "UI/UX craft skills for accessible frontend design, semantic design tokens, reusable components, visual validation, design direction, and brand-voice web copy.",
+  "author": {
+    "name": "Eduard Trocan"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,149 @@
+# Global trigger coverage for canonical skills under skills/.
+# Each scenario asserts that a user prompt should make one skill get picked up.
+
+[[scenario]]
+id = "declaratia-d212-investments"
+skill = "declaratia-unica-romania"
+prompt = "Complete my Romanian D212 for dividends from Romania and capital gains from IBKR."
+description_terms = ["Declarația Unică", "D212", "dividende", "IBKR"]
+skill_terms = ["duf.anaf.ro", "workflow/citation-protocol.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-start-linear"
+skill = "ticket-start"
+prompt = "Start Linear issue APP-123 and implement it in the repo."
+description_terms = ["start implementation work from a ticket", "Linear issue ID"]
+skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "frontend-pr-test-acceptance"
+skill = "frontend-pr-test"
+prompt = "Test this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes."
+description_terms = ["frontend pull request", "acceptance criteria", "PR notes"]
+skill_terms = ["Browser acceptance capability", "Run focused tests near the changed code"]
+forbidden_terms = []
+
+[[scenario]]
+id = "design-studio-visual-bug"
+skill = "design-studio"
+prompt = "Fix the mobile spacing bug in the React reference app dashboard and keep the prototype style intact."
+description_terms = ["UI/UX work", "React reference app", "visual bugs"]
+skill_terms = ["prepare-design-studio.sh", "references/browser-fallback.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-planner-prd-to-stories"
+skill = "ticket-planner"
+prompt = "Turn this PRD and prototype into implementation-ready epics, vertical-slice user stories, and acceptance criteria."
+description_terms = ["PRDs", "vertical-slice user stories", "acceptance criteria"]
+skill_terms = ["issue-tracker neutral", "references/requirements-interview.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "linear-issue-writing-approved-drafts"
+skill = "linear-issue-writing"
+prompt = "Publish these approved epic and user story drafts into Linear, with the right parent-child structure and duplicate checks."
+description_terms = ["publish approved epics", "user stories", "Linear issue structure"]
+skill_terms = ["Run duplicate detection", "parent/sub-issue structure"]
+forbidden_terms = []
+
+[[scenario]]
+id = "bitbucket-pr-ui-test"
+skill = "manage-bitbucket-pr"
+prompt = """
+Verify the UI changes in the current PR. The repo remote is
+https://bitbucket.org/acme/widget.git and the PR branch is feature/auth-panel.
+"""
+description_terms = ["Bitbucket-hosted pull request/repository", "testing or verifying PR behavior"]
+skill_terms = ["find-prs-for-branch", "Git credential helper for `bitbucket.org`"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "bitbucket-current-branch"
+skill = "manage-bitbucket-pr"
+prompt = "In the Bitbucket repo for acme/widget, check the current branch PR before I test it."
+description_terms = ["Bitbucket-hosted pull request/repository", "PR branches"]
+skill_terms = ["find-prs-for-branch", "PR or repository is hosted on Bitbucket"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "bitbucket-review-summary"
+skill = "manage-bitbucket-pr"
+prompt = "Summarize the review discussion and PR notes for https://bitbucket.org/acme/widget/pull-requests/42."
+description_terms = ["PR URLs", "writing summaries"]
+skill_terms = ["pr-details", "read-comments"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "bitbucket-merge-status"
+skill = "manage-bitbucket-pr"
+prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report blockers."
+description_terms = ["pull request IDs", "merge requests"]
+skill_terms = ["merge-status", "read-before-write"]
+forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+
+[[scenario]]
+id = "uiux-frontend-interface-design-accessible-page"
+skill = "frontend-interface-design"
+prompt = "Design a polished responsive settings page with semantic HTML, keyboard support, loading and error states, and subtle motion."
+description_terms = ["frontend pages", "semantic HTML", "accessibility", "responsive behavior", "production-grade UI/UX"]
+skill_terms = ["Design from structure outward", "ARIA only fills semantic gaps"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-semantic-design-tokens-raw-values"
+skill = "semantic-design-tokens"
+prompt = "Audit this component for raw hex colors, duplicated theme constants, local values that bypass existing semantic roles, and styling that should be converted to semantic design tokens."
+description_terms = ["semantic design tokens", "component-local implementation values"]
+skill_terms = ["Use tokens as the design-system contract", "What Counts As One-Off", "scripts/audit_tokens.py"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-reusable-components-repeated-patterns"
+skill = "reusable-ui-components"
+prompt = "This dashboard repeats metric cards and filter panels across pages. Decide whether to reuse, extend variants, or extract a reusable component API."
+description_terms = ["UI patterns that repeat", "component APIs", "variants", "page-specific logic"]
+skill_terms = ["Prefer reusable components when they preserve meaning", "Name components after their role"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-visual-validation-breakpoints"
+skill = "visual-validation"
+prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking overflow, clipping, contrast, focus states, and parity with the reference app."
+description_terms = ["screenshots", "responsive layouts", "breakpoint behavior", "focus states", "visual parity"]
+skill_terms = ["Do not declare visual work complete from code inspection alone", "Viewport Matrix"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-design-direction-ambiguous-premium"
+skill = "design-direction-brainstorming"
+prompt = "I want to change the visual direction of this dashboard so it feels more premium and less cluttered; the target audience and emotional tone are not clear yet."
+description_terms = ["changes the visual direction", "multiple plausible design directions", "unclear audience", "emotional tone"]
+skill_terms = ["relentless collaborative interview", "Shared design direction"]
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-web-copy-brand-voice-hero-cta"
+skill = "web-copy-from-brand-voice"
+prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so it fits our brand voice and conversion goal."
+description_terms = ["brand voice", "conversion goal", "microcopy"]
+skill_terms = ["Write copy from the brand's voice", "Copy Principles"]
+forbidden_terms = []
+
+[[scenario]]
+id = "stock-recap-quarterly-catch-up"
+skill = "stock-recap"
+prompt = "I last researched NOW back in February. Catch me up on the quarters that have been filed since then — I want to see whether the thesis still holds."
+description_terms = ["recapping an existing US-listed stock thesis", "catching up on every quarter", "Mechanically diffs actuals vs saved bull/base/bear projections", "LLM-evaluates the saved English sell triggers"]
+skill_terms = ["Quarterly catch-up", "phases/quarterly/02-fetch-sub.md", "auto-recommend", "Checkpoint 2 — Trajectory, diff, and triggers"]
+forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
+
+[[scenario]]
+id = "stock-recap-news-impact"
+skill = "stock-recap"
+prompt = "Microsoft just announced acquiring Activision for $69B. I have an existing thesis on MSFT — recap it through the lens of this acquisition."
+description_terms = ["impact of a material event", "M&A, CEO change, regulatory ruling", "how does this acquisition affect"]
+skill_terms = ["News mode", "phases/news/02-context-fetch-sub.md", "event_class", "Checkpoint 1 — News impact review"]
+forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
