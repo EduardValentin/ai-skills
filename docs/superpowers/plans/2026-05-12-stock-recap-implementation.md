@@ -1775,17 +1775,26 @@ diff_threshold_overrides: <from session if any, else omit>
 
 ### Step 7.2 — Update `tickers.json`
 
-Run from the research repo root:
+Run from anywhere (the `--repo` flag points at the research repo root):
 
 ```bash
 <toolkit_dir>/.venv/bin/python <toolkit_dir>/upsert_ticker.py <TICKER> \
+  --repo /Users/trocaneduard/Documents/Personal/investing-research \
   --field last_updated=<YYYY-MM-DD> \
-  --field current_status=<verdict.classification> \
-  --field current_conviction=<verdict.conviction> \
+  --field status=<verdict.classification> \
+  --field classification=<verdict.classification> \
+  --field conviction=<verdict.conviction> \
   --field thesis_version=<thesis_version_after> \
-  --field active_sell_triggers='<JSON-encoded list from verdict.json>' \
-  --field next_review_trigger='earnings:~<YYYY-MM-DD>'
+  --field next_review_trigger=earnings:~<YYYY-MM-DD> \
+  --list-field active_sell_triggers="<flat trigger 1>" \
+  --list-field active_sell_triggers="<flat trigger 2>"
+  # (one --list-field per trigger; the script appends to the list,
+  #  but the script's CLI accepts only "key=value" — for replace
+  #  semantics, manually rewrite tickers.json[<TICKER>].active_sell_triggers
+  #  before calling upsert_ticker.py, OR use --list-field for adds only.)
 ```
+
+`upsert_ticker.py` requires `--repo`. Scalar fields use `--field key=value`. List fields use `--list-field key=value` (one invocation per list element). The `active_sell_triggers` flat-list mirror in `tickers.json` is built from the canonical `verdict.json.sell_triggers` dict by concatenating the strings under `materially_overvalued`, `thesis_broken`, and (if non-null) `better_opportunity` — that's what the user sees in the INDEX.md dashboard.
 
 ### Step 7.3 — Regenerate `INDEX.md`
 
