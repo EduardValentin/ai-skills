@@ -224,7 +224,7 @@ Apply this at every place in the workflow where the choice space is finite and e
 
 ## Plain-English voice in every output
 
-Every section the agent prints back to the user must be **pretty-printed Markdown** (headings, tables, fenced code where appropriate — no plaintext walls). The trajectory synthesis (Phase 5) and the sell-trigger justifications must read like a plain-English explanation to a future-self who hasn't touched the thesis in 6 months. No internal abbreviations: write **Checkpoint 1/2/3**, never `CP1`; write **plain-English explanation**, never `ELI5`; write **10-Q / 10-K**, never `Qs`; write **bull case / base case / bear case**, not BBB.
+Every section the agent prints back to the user must be **pretty-printed Markdown** (headings, tables, fenced code where appropriate — no plaintext walls). The trajectory synthesis (Phase 5) and the sell-trigger justifications must read like a plain-English explanation to a future-self who hasn't touched the thesis in 6 months. **Spell out every label in full** — write **Checkpoint 1**, **Checkpoint 2**, **Checkpoint 3** rather than any abbreviated form; write **plain-English explanation** rather than any acronym; write **10-Q / 10-K** rather than the short form; write **bull case / base case / bear case** rather than the three-letter shorthand. Any compressed label slips the user's mental model — full forms always.
 
 ---
 
