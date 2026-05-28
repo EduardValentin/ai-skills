@@ -1,19 +1,35 @@
 ---
 name: ticket-start
-description: Use when the user wants to start implementation work from a ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for follow-up status or progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for code review, planning-only, or debugging-only tasks.
+description: Use when the user wants to start implementation work from a ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for large multi-slice tickets that need orchestration, parallel or waved implementer subagents, direct browser verifier coordination, or follow-up status/progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for code review, planning-only, or debugging-only tasks.
 ---
 
 # Ticket Start
 
 ## Overview
 
-Implementation work driven by a ticket. The main agent owns user dialogue, plan-writing, and phase gating; specialized subagents (Scoping, Reviewer, Security, QA, UI/UX) own deep work. Phase order is a hard gate — do not advance until the prior gate is satisfied:
+Implementation work driven by a ticket. The main agent owns user dialogue, requirements/design approval, implementation-plan approval, verification gating, and Ship. Specialized subagents own compact codebase scoping, QA verification, UI/UX verification, and focused verification fixes.
 
-**Setup → Brainstorm → Plan → Implement → Review → Security? → Verify → Ship**
+Phase order is a hard gate:
 
-Brainstorm, Plan, and Implement defer to the superpowers methodology: `superpowers:brainstorming`, `superpowers:writing-plans`, and `superpowers:subagent-driven-development` (or `superpowers:executing-plans` fallback). When this skill names a sub-skill as **REQUIRED**, invoke it — do not paraphrase its protocol from memory.
+**Setup -> Requirements/Design -> Plan -> Implement -> Verify -> Ship**
 
-**Context-economy contract:** every subagent's report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
+Before implementation, explore project context, user intent, requirements, constraints, design, alternatives, edge cases, and non-goals. Produce an approved requirements/design artifact before implementation planning. Then write a detailed implementation plan and wait for explicit plan approval before code.
+
+Implementation is delegated, not done inline by the main session. Use fresh subagents for independent tasks when available; when the approved plan has one tight write surface or would cause subagent collisions, dispatch one fresh one-shot implementation subagent for the full approved plan. `ticket-start` does not add a separate post-implementation code-review gate.
+
+**Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
+
+**UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
+
+**Implementation dispatch wording:** after plan approval, `ticket-start` dispatches implementation to fresh implementer subagent(s). Prefer one implementer per independent task. If tasks share the same small write surface or cannot be safely parallelized, dispatch a single one-shot implementation subagent with the full approved plan. The main session coordinates, inspects returned summaries, and proceeds to Verify; it does not use tight coupling as a reason to implement inline.
+
+**Large feature orchestration wording:** large feature orchestration is an execution strategy inside `ticket-start`, not a separate workflow. The main session remains the root orchestrator and owns user dialogue, ticket/branch/PR state, planning approval, integration, verification gates, and Ship. Child implementers own bounded implementation slices. Grandchildren, when explicitly allowed, are narrow helper probes only. Browser verifiers are direct children of the root and are always leaf agents.
+
+**GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes. If a bot token cannot be minted or the bot lacks permission, halt and draft the intended write in chat; do not post through the user's personal GitHub account.
+
+**Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
+
+**Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent dispatch named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required dispatches. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, implementation, QA, UI/UX, or focused verification-fix implementers with local-only substitutes.
 
 ## When to use
 
@@ -24,18 +40,18 @@ Brainstorm, Plan, and Implement defer to the superpowers methodology: `superpowe
 
 **Do not use for:** code review, pure planning, debugging-only tasks, or refactors with no ticket.
 
-## Workflow selection (decide first)
+## Workflow selection
 
 - **Job workflow** — Jira ticket or pasted by the user. Load `job-workflow.md`.
-- **Personal workflow** — Linear ticket. Load `personal-workflow.md`. `PRD.md` and a `designs/` React reference app are **optional**; see that file's `## Partial Setups` for what changes when either is absent.
+- **Personal workflow** — Linear ticket. Load `personal-workflow.md`. `PRD.md` and a `designs/` React reference app are optional; see that file's `## Partial Setups` for what changes when either is absent.
 
 If ambiguous, ask the user before loading anything else.
 
 ## Setup
 
-1. **Worktree.** REQUIRED SUB-SKILL: `superpowers:using-git-worktrees`. Base off `origin/<default>`, not local branch. Halt on `git fetch` failure — do not fall back to stale local state.
+1. **Worktree.** Start feature work in an isolated worktree based on the latest `origin/main`. Hard rule: fetch `origin main` first, then create or verify the worktree from fetched `origin/main`, never from local `main`, the current branch, or a stale remote-tracking ref. Halt on fetch failure — do not fall back to stale local state.
 
-2. **Bot identity (personal workflow only).** Run the two activation checks in `bot-identity.md` → `## Setup activation` — (a) mint a fresh GitHub installation token and verify it with a no-op API call, (b) apply the bot's git name/email as per-worktree git config. Halt on failure with a pointer at the runbook. Fail-closed — never fall back to personal GitHub credentials. Linear MCP stays under personal identity. Job workflow: skip this step.
+2. **Bot identity (personal workflow only).** Run the two activation checks in `bot-identity.md` -> `## Setup activation` — mint a fresh GitHub installation token and verify it with a no-op API call, then apply the bot's git name/email as per-worktree git config. Halt on failure with a pointer at the runbook. Fail closed — never fall back to personal GitHub credentials. Linear MCP stays under personal identity. Job workflow: skip this step.
 
 3. **Freshness — memory is stale.** Memory, prior chat context, old plans, and earlier tool results are hints, not facts. Before any substantive answer about scope, status, blockers, related tickets, progress, or git state, fetch from the source of truth:
    - **Linear tickets:** Linear MCP. If related/blocking/duplicate/parent/child tickets matter, read each.
@@ -46,171 +62,211 @@ If ambiguous, ask the user before loading anything else.
 
 4. **Workflow-specific reading.** Read the workflow file selected above and gather the facts it points at. Stop when the relevant facts are gathered.
 
-5. **Dispatch Scoping subagent** (`agents/scoping.md`). Forward: ticket title/description/AC, repo `AGENTS.md` / `CLAUDE.md`, and (personal workflow) the scoped slices of `PRD.md` / `designs/`. Subagent context does not inherit the main session's auto-loaded files — explicit forwarding is required. The returned report is the definitive map of the relevant code surface; do not re-read full files later when a Scoping locator points at the slice you need.
+5. **Dispatch Scoping subagent.** Ask for a token-efficient navigable scope map for this implementation ticket with `path:line` / `path:start-end` locators, covering entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices. Forward: ticket title/description/AC, repo `AGENTS.md` / `CLAUDE.md`, and (personal workflow) the scoped slices of `PRD.md` / `designs/`. Subagent context does not inherit the main session's auto-loaded files — explicit forwarding is required. The returned map is the definitive map of the relevant code surface; do not re-read full files later when a Scoping locator points at the slice you need.
 
-6. **Clarify before brainstorming if needed.** If AC are missing/vague/not testable, or Scoping surfaces a conflict between the ticket and existing architecture, brief the user with the Scoping evidence (`path:line`) and ask before continuing. See `## Briefing rule`.
+6. **Clarify if needed.** If AC are missing/vague/not testable, or Scoping surfaces a conflict between the ticket and existing ownership, layering, or product constraints, brief the user with Scoping evidence (`path:line`) and ask before continuing. See `## Briefing rule`.
 
-## Brainstorm
+## Requirements/Design
 
-**REQUIRED SUB-SKILL: `superpowers:brainstorming`.** A single relentless interview between main agent and the user. Alternatives are surfaced inside this dialogue, not by a separate Architect role.
+1. **Open with a Scoping-grounded briefing.** Per `## Briefing rule`, surface entry points, target module, prototype/reference elements if any, and conflicts Scoping flagged. The user must enter the dialogue with the same context Scoping built.
 
-1. **Open with a Scoping-grounded briefing.** Per `## Briefing rule` (Scoping → user), surface entry points, target module, prototype elements (if any), and any conflicts Scoping flagged. The user must enter the dialogue with the same context Scoping built.
+2. **Explore before implementation.** Frame the work as requirements and design exploration: project context, user intent, requirements, constraints, design, alternatives, edge cases, failure modes, accessibility, and non-goals before implementation.
 
-2. **Run a relentless interview.** Cover every dimension the ticket and AC don't already settle:
-   - **Intent** — what does success look like for the user?
-   - **Constraints** — areas of code to avoid, performance bars, prior decisions to honor.
-   - **Design preferences** — UX, copy, animation, edge-state behavior, accessibility.
-   - **Edge cases and failure modes.**
-   - **Non-goals** — what is explicitly out of scope.
+3. **Surface alternatives.** Before treating any direction as converged, put at least one credible alternative on the table, even if only to dismiss it. The requirements/design artifact must record the chosen direction and any meaningful alternative dismissed with rationale.
 
-3. **Surface alternatives — mandatory.** Before treating any direction as converged, put at least one credible alternative on the table, even if only to dismiss it. The brainstorm summary must record `"considered X via approach B because [reason], but [reason it's worse]"`. If you cannot generate an alternative, dispatch a focused research subagent ad-hoc for that question — do not skip.
+4. **Anti-collapse rule.** A single user answer is not convergence. An early implementation preference is an input, not the endpoint. Before exiting:
+   - Restate the chosen direction across intent, mechanism, edge cases, non-goals, and alternatives considered.
+   - Ask the user to approve the requirements/design direction explicitly.
+   - "Yes, do it" / "approved" / "go ahead" / similar is approval of the requirements/design direction, not approval of the implementation plan.
 
-4. **Anti-collapse rule.** A single user answer is not convergence. An early user implementation preference is an **input** to the dialogue, not its endpoint. Before exiting:
-   - Restate the chosen direction across every dimension covered (intent, mechanism, edge cases, non-goals, alternatives considered).
-   - Ask the user to confirm each explicitly.
-   - "Yes, do it" / "approved" / "go ahead" / similar is approval of the **approach**, not approval of the plan. They are separate artifacts — the plan still has to be written and re-approved.
-
-5. **Output: brainstorm summary.** A written artifact passed to `superpowers:writing-plans`. Captures intent, mechanism, constraints, alternatives considered (with dismissal rationale), non-goals, and any open questions for the planner.
+5. **Output: approved requirements/design artifact.** Write the settled requirements/design artifact in the workflow's planning location. Keep agent-local planning artifacts out of product commits unless the repo explicitly asks to version them. Ask the user to review and approve the artifact before Plan.
 
 ## Plan
 
-1. **REQUIRED SUB-SKILL: `superpowers:writing-plans`.** Produce a written plan from the brainstorm summary. The plan is a distinct artifact — not a verbal summary, not the brainstorm transcript, not a mental model.
+1. Produce a written implementation plan from the approved requirements/design artifact before touching code. The plan is a distinct artifact — not a verbal summary, not the requirements/design transcript, not a mental model.
 
-2. **Parity-mode UI tickets** (personal workflow with a runnable React reference app under `designs/`) — each plan task that adds or modifies a visible element includes an `**Element mapping:**` block in its body declaring (a) the prototype counterpart via reference to a `## Prototype elements relevant to this feature` row from the Scoping report, and (b) the planned production `file:line` for the new/changed JSX declaration. Tasks that don't add/modify visible elements omit this block. Main agent uses these mappings at Verify dispatch (step 4a) to build the expected matched-element inventory passed to UI/UX.
+2. For UI tickets, keep visible-surface tasks traceable to Scoping's affected surface map. Reference-backed UI tasks should also remain traceable to Scoping's prototype/reference rows. The main agent does not build the UI/UX matched-element inventory; the UI/UX subagent builds it during Verify from the affected surface map, the approved artifacts, and the diff.
 
-   ```
-   **Element mapping:**
-   - Prototype: Scoping row `designs/components/Hero/Eyebrow.tsx:8` (`<span class="eyebrow">`)
-   - Planned production: `web/src/components/Hero/Eyebrow.tsx:12` (new `<span class="eyebrow">`)
-   ```
+3. Show the plan to the user for review. Wait for explicit user approval of the plan itself before any code.
 
-3. Show the plan as `superpowers:writing-plans` directs. Wait for **explicit user approval of the plan itself** before any code.
+4. **No code between requirements/design approval and plan approval.** Not exploratory edits, not scaffolding, not "drafting what the plan would say in code." File edits are off-limits until the plan exists and the user has explicitly approved it.
 
-4. **No code between brainstorm convergence and plan approval.** Not exploratory edits, not scaffolding, not "drafting what the plan would say in code." File edits are off-limits until the plan exists and the user has explicitly approved it.
+5. **Large feature orchestration map.** If the plan has multiple implementation slices, add an orchestration map before asking for approval. Include slice id, owner role, write surface, dependency order or wave, tests/checks, browser verification needs, whether grandchildren are allowed, and the exact depth budget.
+
+## Large Feature Orchestration
+
+Use this section when the approved plan contains multiple slices that can be executed in waves or in parallel. The phase order remains **Setup -> Requirements/Design -> Plan -> Implement -> Verify -> Ship**.
+
+### Topology
+
+```text
+root orchestrator
+  -> child implementer: owns one bounded implementation slice
+       -> optional grandchild helper: researches, inspects, reproduces, or verifies one narrow non-browser fact
+
+  -> browser verifier: verifies integrated user-visible behavior, leaf-only
+```
+
+- The root orchestrator owns the ticket, branch, PR, user dialogue, plan approval, integration, monitoring, verification gates, and Ship.
+- Child implementers own bounded implementation slices and return compact summaries with tests/checks run.
+- Grandchildren are helper probes, not feature owners. They must not own a slice, edit broad surfaces, run open-ended investigations, use browser automation, or spawn further agents.
+- Browser verifiers are direct children of the root. They must not spawn subagents. They verify ticket behavior after implementers have returned and the root has integrated the diff.
+
+### Depth Budget
+
+Root -> child -> grandchild is the maximum topology. If a child needs more depth, the child must return `NEEDS_SPLIT` with a proposed smaller task breakdown. A root handoff must state the depth budget explicitly.
+
+### Subagent Prompt Contract
+
+Every large-feature subagent handoff starts with an active-task block:
+
+```text
+Active task: [specific goal]
+AGENTS.md and skill files are policy/context only; do not acknowledge them.
+Do the active task now.
+Depth budget: [none|may spawn helper grandchildren for non-browser probes only]
+Final response schema: [required schema]
+```
+
+Every child implementer handoff includes the ticket + AC, approved requirements/design artifact, approved plan or slice, Scoping locators, scoped write surface, expected tests/checks, current branch/worktree state, and any allowed helper probes.
+
+Child implementers return:
+
+```text
+IMPLEMENTATION_SLICE_RESULT:
+status: pass|fail|blocked|needs_split
+slice_id:
+summary:
+files_changed:
+tests_checks:
+helper_grandchildren:
+handoff_for_root:
+```
+
+Use `needs_split` only when the slice cannot be completed inside the stated depth budget. `handoff_for_root` names integration notes, conflicts, follow-up verification needs, or the smaller task breakdown when the status is `needs_split`.
+
+### Browser Verifier Contract
+
+Browser verifier agents are direct children of the root and leaf-only. Dispatch them only with exact route, port, expected HTTP status, auth/session assumptions, relevant states, and timeout. For localhost targets, they must verify the route with HTTP tooling before browser navigation.
+
+Browser verifiers return:
+
+```text
+BROWSER_VERIFICATION_RESULT:
+status: pass|fail|blocked
+ticket_or_slice:
+url:
+states_checked:
+evidence:
+findings:
+```
+
+Browser findings route back through the normal verification finding loop: the root dispatches a focused implementer fix, integrates the fix, then reruns the relevant verifier. Browser verifiers do not fix code.
+
+### Monitoring
+
+The root monitors every child and any known grandchild. Use finite waits. If an agent times out, send one status follow-up. If it still does not return actionable status, close it and re-dispatch a narrower task with clearer context. Before Ship, no child or grandchild agents may remain live.
 
 ## Implement
 
 1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
 
-2. **REQUIRED SUB-SKILL: `superpowers:subagent-driven-development`** (auto-bakes TDD + per-task spec + code-quality review), or **`superpowers:executing-plans`** for a parallel session. Let those skills run.
+2. **Dispatch implementation subagent(s).** Code-writing in `ticket-start` is delegated:
+   - Independent tasks: dispatch fresh implementer subagents per task when their write surfaces do not collide.
+   - Shared or tiny write surface: dispatch one fresh one-shot implementation subagent for the full approved plan.
+   - Large feature orchestration: dispatch implementers by the approved orchestration map, in dependency order or parallel waves.
+   - Each handoff includes: ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, expected tests/checks, repo instructions, constraints, and the current branch/worktree state.
+   - Each implementer executes test-first, edits only the scoped surface, and returns a compact summary of changes plus tests/checks run.
+   - Implementers may spawn grandchildren only when the approved orchestration map explicitly allows narrow non-browser helper probes.
+   - Implementers must not dispatch browser automation subagents. Browser verification is rooted at the main session during Verify.
+   - The main session coordinates handoffs, inspects returned summaries/diffs, runs any necessary top-level verification commands, and then proceeds to Verify. Do not implement inline just because multiple implementers would collide.
 
-3. **Two overrides this skill adds:**
-   - On the `superpowers:executing-plans` fallback path, invoke `superpowers:requesting-code-review` after the final task and before Review — that path has no other end-of-feature review.
-   - When superpowers reaches `superpowers:finishing-a-development-branch`, accept its test-pass check but do **not** present its 4-option prompt (merge / PR / keep / discard). Return to this skill's Review phase. Ship replaces those options.
+3. Let the implementation workflow's built-in review checkpoints handle implementation quality inside the implementer flow. `ticket-start` does not dispatch a separate code-review subagent and does not add another post-implementation code-review phase.
 
-## Review
-
-1. **Dispatch Reviewer subagent** (`agents/reviewer.md`). Forward: full diff (`git diff origin/<default>..HEAD`), ticket + AC + approved plan, chosen brainstorm direction + rationale from the brainstorm summary, repo `AGENTS.md`, Scoping report, role prompt.
-
-2. **If CHANGES REQUIRED**, brief the user (per `## Briefing rule`) and route through `bug-fix-loop.md`.
-
-3. **When CLEAN**, run the self-improvement extraction pass (per `self-improvement.md`). Advance.
-
-## Security (judgment-triggered)
-
-**Run Security whenever the change has any plausible security surface.** The bar to skip is *"no plausible security surface,"* not *"looks safe."* When in doubt, run. Main agent decides — there is no allowlist.
-
-Plausible surfaces include — non-exhaustively — auth/session, user input handling, data exposure, persistence, redirects, file handling, external requests, privileged actions, third-party deps, sensitive logging, and any change to **what users can see or do that they otherwise couldn't**. Soft signals count: a feature that reveals whether an email is already registered on the site has a security surface (account enumeration) and qualifies.
-
-Calibration:
-- **Skip:** CSS-only spacing fix; prose copy change; internal helper rename with no surface change; asset swap with no new request.
-- **Run:** any new request handler; any new dependency; any change to who-sees-what; any state change tied to user input; any new redirect or external request; any file-handling change.
-
-When skipped, record the skip rationale in the closeout report.
-
-1. **Dispatch Security subagent** (`agents/security.md`). Forward: full diff, ticket + AC, package manifests / lockfiles, repo `AGENTS.md`, Scoping + Reviewer reports (Reviewer's out-of-scope flags for Security feed in here), role prompt.
-
-2. **If CHANGES REQUIRED**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **Reviewer + Security re-run on the full diff**.
-
-3. **When CLEAN (or skipped)**, run the self-improvement pass on Security findings (skip the pass if Security was skipped). Advance.
+4. When implementation reaches branch-finishing guidance, accept any test-pass check but do not present merge / PR / keep / discard options. Return to this skill's Verify phase. Ship replaces those options.
 
 ## Verify
 
 1. **Determine backend-only flag.** Walk the diff:
-   - `git diff --name-only origin/<default>..HEAD`.
+   - `git diff --name-only origin/main..HEAD`.
    - Match against UI extensions (`\.(tsx|jsx|vue|svelte|html|css|scss|sass|less|styl|ejs|pug|hbs|erb|twig|liquid|jinja|blade\.php)$`) and UI directories (`app/`, `components/`, `pages/`, `views/`, `templates/`, `client/`, `web/`, `frontend/`, `ui/`, plus repo-specific UI dirs identified by Scoping).
-   - Any match → not backend-only.
-   - Uncertain (config files affecting render, shared utilities used by both) → ask the user. Default on uncertainty: **do not skip** UI/UX (running it unnecessarily is cheap; skipping it incorrectly is expensive).
+   - Any match -> not backend-only.
+   - Uncertain (config files affecting render, shared utilities used by both) -> ask the user. Default on uncertainty: do not skip UI/UX.
 
-2. **Dispatch QA subagent** (`agents/qa.md`). Forward: ticket + AC + plan, full diff, QA mode (`backend` / `ui` / `mixed` from diff), path/URL of the running app, live-browser automation for UI mode (HTTP tooling for backend), role prompt.
+2. **Dispatch QA subagent** (`agents/qa.md`). Forward: ticket + AC, approved requirements/design artifact, approved plan, full diff, QA mode (`backend` / `ui` / `mixed` from diff), path/URL of the running app, live-browser automation for UI mode if available, HTTP tooling for backend, and role prompt. Local test runs, manual browser checks, and endpoint probes are evidence for QA to use, not substitutes for the QA report.
 
-3. **If BUGS FOUND**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **QA re-runs the full behavior pass**.
+3. **If QA returns findings**, route through `verification-fix-loops.md` -> `## QA finding loop`. QA findings dispatch a fresh lightweight implementer subagent with a compact finding packet, then QA reruns. Do not route QA findings through a generic review loop.
 
-4. **When QA CLEAN**, run the self-improvement pass on QA findings.
+4. **When QA is clean**, continue to UI/UX unless backend-only.
 
-4a. **Parity mode only — construct the expected matched-element inventory before UI/UX dispatch.** (Skip in consistency mode; UI/UX discovers as today.) Parity mode = personal workflow with a runnable React reference app under `designs/`.
+5. **Dispatch root-owned browser verifiers when the plan requires browser evidence.** Browser verifiers are direct children of the main session and leaf-only. They verify integrated ticket behavior and return `BROWSER_VERIFICATION_RESULT`. If they find issues, route the finding through the appropriate QA or UI/UX finding loop.
 
-   Combine:
-   - Scoping's `## Prototype elements relevant to this feature` rows.
-   - Each plan task's `**Element mapping:**` block.
-   - Actual post-diff production `file:line`s, resolved by walking `git diff --name-only` for touched UI files and locating each plan-declared JSX declaration (e.g., `grep -n` on a stable selector like `class="..."` or `data-testid="..."` from the mapping).
+6. **Dispatch UI/UX subagent** unless backend-only flag is set. Ask for frontend UI review:
+   - Parity mode when a runnable prototype/reference app is available: review the implemented frontend UI against that reference as the visual source of truth.
+   - Consistency mode otherwise: review the implemented frontend UI against credible production sibling or analog elements.
+   - Include: build a matched-element inventory from Scoping's affected surface map, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, review mode, comparison basis, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
 
-   Produce a markdown table — column order matches `agents/ui-ux.md` → `## Output format`:
+   Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, review mode, running URLs (production and reference when parity mode applies), important UI states, Scoping affected surfaces/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
 
-   | Pair | Prototype selector | Production selector | font-* | color/bg | box | layout | size | verdict |
-
-   Per row at dispatch:
-   - `Pair`: prototype:line ↔ production:line locator pair (or `(none)` on the deliberately one-sided side per the plan).
-   - `Prototype selector` / `Production selector`: JSX-derivable selector hint (component name, `data-testid`, stable class).
-   - `font-*` through `size` and `verdict`: **blank** — UI/UX fills via DOM evaluation.
-
-   If construction fails (Scoping's prototype section unparsable, a plan element-mapping block can't be matched to a Scoping row, or the production-side lookup returns nothing), halt with `cannot dispatch UI/UX in parity mode — expected inventory could not be constructed` and name the specific error. Do not fall back to discovery-mode UI/UX in parity mode.
-
-5. **Dispatch UI/UX subagent** (`agents/ui-ux.md`) unless backend-only flag is set. Forward: ticket + plan, full diff, mode (`parity` for personal workflow with React reference, `consistency` otherwise), running URLs (both production and reference in parity mode), the expected inventory table (parity only — UI/UX fills the verdict and computed-style cells, doesn't discover from scratch), live-browser automation, role prompt.
-
-6. **If FINDINGS**, brief the user and route through `bug-fix-loop.md`. Per the loop, after the fix lands, **UI/UX re-runs scoped to affected states**.
-
-6a. **Validate UI/UX's matched-element inventory before accepting any verdict.**
-
-   **Parity mode** (expected inventory was supplied at 4a):
-   - Every expected row appears in the verified inventory.
+7. **Validate UI/UX's matched-element inventory before accepting any verdict.**
+   - A `## Matched-element inventory` section exists.
+   - A `## Review mode` section exists and matches the workflow's expected mode.
+   - A `## Comparison basis` section exists. Parity mode names the runnable reference; consistency mode names credible production siblings or analogs.
+   - Rows cover the relevant Scoping affected surfaces, changed visible production UI files, and visible changed elements on the feature surface. Parity mode also covers the relevant Scoping prototype/reference rows.
    - Every verified row has non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank = DOM-evaluation work was skipped for that row.
-   - Spot-check: sample 2 rows whose file appears in the diff and 2 rows from the prototype enumeration; each must be present with non-blank cells.
-   - `MISSING` (production side) is accepted only when the plan marked the element as not-implemented-this-ticket; otherwise a `MISSING` is a finding.
-   - Any failure → report is **structurally invalid**. Reject and re-dispatch UI/UX with the specific gaps named.
-
-   **Consistency mode** (no expected inventory):
-   - Confirm a `## Matched-element inventory` section exists.
-   - From the diff, pick 2 changed UI files; their rendered elements must appear in the inventory.
-   - From the running production app, sample 3 visible elements on the feature surface; each must appear.
-   - Any miss → structurally invalid. Reject and re-dispatch with the specific missing elements named.
+   - Any missing expected coverage or blank cell -> report is structurally invalid. Reject and re-dispatch UI/UX with the same self-contained verification request and the specific gaps named.
 
    Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
 
-7. **When UI/UX CLEAN (or skipped) and inventory validation passes**, run the self-improvement pass on UI/UX findings (skip the pass if UI/UX was skipped). Advance to Ship.
+8. **If UI/UX returns findings**, route through `verification-fix-loops.md` -> `## UI/UX finding loop`. UI/UX findings dispatch a fresh lightweight implementer subagent with a compact visual/accessibility finding packet, then UI/UX reruns scoped to affected rows/states. Do not rerun QA or any code-review phase for visual-only UI/UX fixes.
+
+9. **When QA is clean, UI/UX is clean or skipped, and inventory validation passes if UI/UX ran**, advance to Ship.
 
 ## Ship
 
-1. **Personal workflow:** open the PR with `gh`, then move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
-2. **Job workflow:** follow the team's PR conventions from repository instructions.
+0. **Ship preflight — mandatory before any Ship mutation.** Before opening a PR, marking a PR ready, moving a ticket to review, merging, closing, or otherwise signaling "ready," build a readiness ledger from actual completed outputs:
+   - Approved requirements/design artifact.
+   - Approved implementation plan.
+   - Implementation subagent(s) completed the approved plan with required tests/checks.
+   - QA clean report present.
+   - UI/UX clean report and inventory validation present, or skipped with backend-only rationale.
+   - Large feature orchestration, if used, has no live child or grandchild agents and every slice is integrated or explicitly out of scope.
+   - No unresolved QA or UI/UX findings.
+
+   If any ledger row is missing, do not perform any Ship action. Return to the earliest missing gate and complete it first. Local verification, green CI, clean merge state, manual browser checks, or local review do not satisfy missing verification outputs.
+
+1. **Personal workflow:** after Ship preflight passes, open or update the PR with `gh`, using the bot identity guard. When possible, keep a new PR in draft until the remote checks gate below passes. Do not move the Linear ticket to **In Review** yet.
+2. **Job workflow:** after Ship preflight passes, follow the team's PR conventions from repository instructions.
    - If the repository uses Bitbucket PRs and the work requires reading PR metadata, reading or posting comments, or merging via the REST API, treat that portion as Bitbucket PR REST work.
-3. Wait for the user's explicit approval before merging.
-4. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
-5. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
-6. If PR creation, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
+3. **Remote checks gate — mandatory before marking ready or done.** After the PR exists and before marking it ready, moving a ticket to review/done, merging, or claiming the unit of work is complete, run:
+   ```bash
+   gh pr checks <PR> --required --json name,state,bucket,workflow,link
+   ```
+   Every required check whose `bucket` is not `skipping` must have `bucket == "pass"`. `pending`, `fail`, `cancel`, missing, or unknown required checks block readiness. A green local test run, a green local browser check, or a single green job such as `Validate` does not satisfy this gate if any other required non-skipped check is not green. If no required checks are configured, record that explicitly in the closeout before continuing.
+4. **Personal workflow:** only after the remote checks gate passes, mark the PR ready if it is draft and move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
+5. Wait for the user's explicit approval before merging.
+6. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
+7. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
+8. If PR creation, required remote checks, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
 
-## Bug-fix loop
+## Verification fix loops
 
-When any auditor (Reviewer / Security / QA / UI/UX) returns a non-clean verdict, route through `bug-fix-loop.md`. That file defines complexity tiers, per-agent re-review scope, the 3-iteration cap with intervention report, the always-on user-intervention principle, and sequencing rules.
-
-## Self-improvement loop
-
-After each auditor returns CLEAN (or becomes CLEAN through the bug-fix loop), run the rule-extraction pass per `self-improvement.md`. That file defines the promotion bar (pattern-based, high-cost, declarative, non-stylistic, non-duplicate), repo-vs-universal classification, destinations (repo `AGENTS.md` for repo-specific; both `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` for universal, kept in sync), and the mandatory user-approval gate per rule.
+When QA or UI/UX returns findings, use `verification-fix-loops.md`. That file defines the two local find -> fix -> verify loops, fresh lightweight implementer dispatch, compact finding packets, iteration caps, and user-intervention conditions.
 
 ## Briefing rule
 
-When the workflow dispatches a subagent and then asks the user for input, decision, or choice, **the user must enter the dialogue with the same context the subagent had.** Brief in a single message before the first question.
+When the workflow dispatches a subagent and then asks the user for input, decision, or choice, the user must enter the dialogue with the same context the subagent had. Brief in a single message before the first question.
 
 | Trigger | Brief with |
 |---|---|
-| Scoping → user (Setup clarify, or Brainstorm opener) | Scoping's relevant findings (entry points, target module, prototype elements if any). For conflicts: quoted finding + `path:line` evidence. The question framed against that evidence. |
-| Auditor → fix decision (Reviewer / Security / QA / UI/UX) | Findings, one per line (severity, `path:line`, one-line description). Suggested fix. Complexity tier the bug-fix loop assigned. For architectural complexity: the tradeoff as options the user can weigh. |
+| Scoping -> user (Setup clarify, or Requirements/Design opener) | Scoping's relevant findings: entry points, target module, prototype/reference elements if any, affected surfaces, and conflicts. For conflicts: quoted finding + `path:line` evidence. The question framed against that evidence. |
+| QA/UIUX -> user intervention | Findings, one per line: severity, `path:line` or selector/state, one-line description. Suggested fix if available. The material decision or blocker that requires user input. |
 
 **Forbidden:** asking the user to pick an option they haven't seen, answer a clarifying question without its motivating context, or approve a fix without naming the finding.
 
 ## Implementation standards
 
-Smallest safe diff that satisfies the ticket. Preserve existing patterns; do not invent abstractions the ticket does not require. Consider security and performance during implementation, not only at the Security and QA gates — common attack vectors (injection, XSS, CSRF, SSRF, IDOR, path traversal, unsafe deserialization, secret leakage, insecure deps, unsafe client-side trust) apply per-change. Greenfield personal-project code with no inherited pattern: establish ownership boundaries and low coupling deliberately.
+Smallest safe diff that satisfies the ticket. Preserve existing patterns; do not invent abstractions the ticket does not require. If the ticket is explicitly security-intensive, pause and use a dedicated security workflow instead of expanding `ticket-start`. Greenfield personal-project code with no inherited pattern: establish ownership boundaries and low coupling deliberately.
 
 ## Library research
 
@@ -220,36 +276,47 @@ If the change touches a third-party library, identify the exact version from man
 
 When done, report:
 - What changed.
-- What was validated and how — name each form of evidence: tests run; Reviewer / Security / QA / UI/UX status; UI/UX mode and coverage (or skipped because backend-only). Omit only the ones that did not apply, and say so.
-- Security skip rationale, if skipped.
-- Rules promoted in this session, by destination (per `self-improvement.md`).
-- Bug-fix iterations consumed (out of 3 cap).
+- What was validated and how: tests/checks run, QA status, UI/UX review mode and coverage, UI/UX inventory validation or backend-only skip, and required PR checks status from `gh pr checks <PR> --required`.
+- Rules proposed or promoted in this session, by destination, if any.
+- QA and UI/UX fix-loop iterations consumed.
 - Any remaining risk, assumption, or follow-up.
 - What is blocked or unverified, named explicitly.
 
 ## Red flags — stop and recover
 
 - Working in the primary checkout instead of a fresh worktree.
-- Basing the worktree on a local branch instead of fetched `origin/<default>`.
-- Writing code before the plan is approved (including scaffolding or "sketching the structure").
-- Treating brainstorm convergence ("yes, do it" / "approved" / "go") as plan approval. They are separate artifacts.
-- Exiting the brainstorm on a single user answer, or treating an early implementation preference as the endpoint.
-- The brainstorm summary doesn't record at least one alternative considered (with dismissal rationale).
-- Skipping `superpowers:brainstorming`, `superpowers:writing-plans`, or `superpowers:subagent-driven-development` (or its `superpowers:executing-plans` fallback) because "the ticket is clear" or "the change is small."
+- Basing the worktree on anything other than freshly fetched `origin/main` (including local `main`, the current branch, or a stale remote-tracking ref).
+- Writing code before the requirements/design artifact and implementation plan are both approved.
+- Treating requirements/design approval ("yes, do it" / "approved" / "go") as implementation-plan approval. They are separate artifacts.
+- Exiting requirements/design on a single user answer, or treating an early implementation preference as the endpoint.
+- The requirements/design artifact does not record at least one alternative considered when a meaningful alternative exists.
+- Skipping requirements/design, written-plan, or delegated test-first implementation because "the ticket is clear" or "the change is small."
+- Implementing inline in the main session because tasks share a tight write surface, seem too small, or are awkward to split. Dispatch one one-shot implementation subagent instead.
+- Using large feature orchestration without an approved orchestration map in the implementation plan.
+- Allowing any topology deeper than root -> child -> grandchild.
+- Letting a grandchild own an implementation slice, perform browser automation, or spawn another agent.
+- Dispatching browser automation from an implementer instead of as a direct root-owned verifier during Verify.
+- Accepting a browser verifier that spawns subagents or fixes code.
+- Letting a timed-out subagent remain live after one status follow-up without narrowing, closing, or re-dispatching.
+- Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent dispatches.
+- Using ambient `gh` authentication for any personal-workflow GitHub write, including PR comments or review replies. Mint a fresh bot token and scope it to the write command; if that fails, halt.
+- Dispatching a separate ticket-start code-review subagent or adding a generic post-implementation code-review phase after Implement.
+- Replacing QA or UI/UX with local tests, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
+- Dispatching Scoping or UI/UX with vague prompts that omit the required work, evidence, and compact inputs.
 - Trusting a stale ticket summary instead of re-reading from the source of truth.
 - Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
 - Reloading full files when a Scoping locator points at the surgical slice.
-- Skipping Security when the change has any plausible security surface (auth/session, user input, data exposure, persistence, redirects, file handling, external requests, privileged actions, deps, sensitive logging, who-sees-what).
-- Skipping the self-improvement extraction pass after an auditor report; auto-applying a rule without explicit user approval; editing `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md` without keeping them in sync.
-- Exceeding the 3-iteration bug-fix cap silently.
 - Continuing past a user-intervention condition without surfacing.
-- Claiming visual parity/consistency without DOM computed-style and bounding-rect extraction from the live browser.
+- Claiming frontend UI parity or consistency without DOM computed-style and bounding-rect extraction from the live browser.
 - Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
-- Dispatching UI/UX in parity mode without the expected inventory constructed in step 4a.
-- Scoping's `## Prototype elements relevant to this feature` empty or `_None._` for a parity-mode UI ticket.
+- Building the UI/UX matched-element inventory in the main agent instead of delegating inventory construction to UI/UX from Scoping's affected surface map.
+- Dispatching UI/UX without the required review terms: implemented frontend UI, parity mode with runnable reference or consistency mode with production analogs, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
+- Scoping's `## Prototype or reference elements` empty or `_None._` for a reference-backed UI ticket.
 - Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
-- Using the `superpowers:executing-plans` fallback path and skipping `superpowers:requesting-code-review` before advancing to Review.
-- Letting `superpowers:finishing-a-development-branch` present its 4-option prompt instead of returning to Review.
+- Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Verify.
+- Starting any Ship mutation without first completing the Ship preflight ledger from actual outputs.
+- Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before QA, UI/UX if applicable, inventory validation, and unresolved verification findings are complete.
+- Marking a PR ready, moving a ticket to review/done, merging, or claiming completion before `gh pr checks <PR> --required` shows every required non-skipped check green.
 - Merging the PR before the user explicitly approves.
 
 If any of these is true: stop, name the violation, and recover before continuing.

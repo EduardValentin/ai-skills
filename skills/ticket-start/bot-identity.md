@@ -4,13 +4,13 @@ Loaded by `personal-workflow.md` whenever the personal workflow is selected. Thi
 
 The bot identity applies **only** to the personal workflow. Job-workflow tickets continue to use the user's personal credentials.
 
-**Scope:** GitHub only. PRs and commits are attributed to the bot. Linear MCP continues to authenticate as you — Linear ticket reads, transitions, and comments stay under your personal Linear identity.
+**Scope:** GitHub only. Commits, branch pushes, PR creation, PR updates, PR comments, review comments, review-thread replies, issue comments, labels, merges, and direct `gh api` mutations are attributed to the bot. Linear MCP continues to authenticate as you — Linear ticket reads, transitions, and comments stay under your personal Linear identity.
 
 ## Overview
 
 When the agent works on a personal-workflow ticket:
 
-- **GitHub** — a GitHub App you installed on your personal repos. The bot opens PRs and authors commits. You do not appear in the commit history or PR metadata for the agent's work.
+- **GitHub** — a GitHub App you installed on your personal repos. The bot opens PRs, authors commits, and posts GitHub comments/review replies. You do not appear in the commit history, PR metadata, or PR comment threads for the agent's work.
 - **Linear** — your personal Linear identity (via the hosted Linear MCP). Ticket interactions are attributed to you.
 - **Credentials** — GitHub App credentials live in macOS Keychain. Keep an out-of-band copy (e.g., NordPass) for disaster recovery.
 
@@ -63,7 +63,7 @@ These don't require any setup; they're documented here for reference:
 
 - **Activation:** always-on for personal workflow.
 - **Helper-script stack:** bash + `openssl` + `python3` (no `jq`, no npm, no pip).
-- **Token mint:** every Setup phase and every Ship phase mints a fresh GitHub installation token. Auto-retry-once with a fresh token if `gh` returns 401 mid-session.
+- **Token mint:** every Setup phase and every GitHub write action mints a fresh GitHub installation token. Auto-retry-once with a fresh token if `gh` returns 401 mid-session.
 - **Per-worktree git config:** the activation step sets `user.name` and `user.email` per-worktree, so your global git config and other repos are unaffected.
 
 ## Setup activation (two checks, fail-closed)
@@ -128,9 +128,37 @@ git -C <worktree> log -1 --format='%an <%ae>'
 
 Expected: the bot's name and email.
 
-## Ship phase — token refresh
+## GitHub write actions — bot token required
 
-Before invoking `gh pr create`, refresh the GitHub installation token. Even if the session has been short, a fresh token guarantees we don't bump into the 1-hour ceiling mid-call. `<skill-root>` is the same value as in Check 1 (`~/.codex/skills/ticket-start` on Codex or `~/.claude/skills/ticket-start` on Claude Code):
+Before any GitHub write action, mint a fresh installation token and scope it to that one command. Do this for PR creation, PR body edits, PR comments, review comments, review-thread replies, issue comments, labels, merges, branch pushes performed through `gh`, and any `gh api` mutation.
+
+```bash
+GH_TOKEN=$(<skill-root>/scripts/get-bot-gh-token.sh) gh <write-subcommand> ...
+```
+
+For direct REST calls through `gh api`:
+
+```bash
+GH_TOKEN=$(<skill-root>/scripts/get-bot-gh-token.sh) gh api --method POST ...
+```
+
+For `git push`, do not rely on the local credential helper. Use a fresh installation token as the HTTPS credential for that push:
+
+```bash
+GH_TOKEN=$(<skill-root>/scripts/get-bot-gh-token.sh)
+BASIC_AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+git -c credential.helper= \
+  -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $BASIC_AUTH" \
+  push origin <branch>
+```
+
+Do not run `gh pr comment`, `gh pr review`, `gh api --method POST/PATCH/PUT/DELETE`, or any other GitHub write through ambient `gh` authentication. `gh auth status` showing a logged-in user is a hazard signal, not permission to write. If the bot token cannot be minted or the bot lacks permission for that operation, halt and draft the exact intended GitHub text in chat instead of posting it through the user's personal account.
+
+Read-only GitHub operations may use ambient credentials if needed. Writes may not.
+
+## Ship phase — PR creation
+
+Before invoking `gh pr create`, follow the GitHub write-action guard above. `<skill-root>` is the same value as in Check 1 (`~/.codex/skills/ticket-start` on Codex or `~/.claude/skills/ticket-start` on Claude Code):
 
 ```bash
 GH_TOKEN=$(<skill-root>/scripts/get-bot-gh-token.sh) gh pr create --title "..." --body "..."
@@ -147,6 +175,7 @@ The `GH_TOKEN` env var is scoped to the single `gh` invocation. It does not poll
 | GitHub token mint fails (4xx/5xx) | `get-bot-gh-token.sh` exits non-zero with the GitHub error body on stderr | Halt. Surface the error verbatim. Point at runbook Step A. Common causes: App revoked, key deleted, repo install removed. |
 | `gh pr create` returns 401 mid-session | `gh` exit code non-zero + stderr "401" | Auto-retry **once** with a freshly-minted token (call `get-bot-gh-token.sh` again, re-issue `gh pr create`). If still 401, halt and surface. |
 | Bot installed but no permission on this repo | `gh pr create` returns 403/404 | Halt. The App was not installed on this specific repo → runbook Step A.3, install it on the repo. |
+| Any GitHub write would use ambient personal `gh` auth | The planned command lacks `GH_TOKEN=$(<skill-root>/scripts/get-bot-gh-token.sh)` scoped to the command | Do not run it. Rebuild the command with a fresh bot token; if that cannot work, draft the intended write in chat and halt. |
 
 All failures are fail-closed: the skill never silently substitutes personal credentials.
 

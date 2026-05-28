@@ -14,7 +14,19 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup → Brainstorm → Plan", "personal-workflow.md"]
+skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-start-large-orchestration"
+skill = "ticket-start"
+prompt = """
+Start Linear issue APP-456. It is a large feature touching the billing API, onboarding UI,
+background jobs, and migrations, so split it into parallel or waved implementation slices
+and coordinate browser verification after integration.
+"""
+description_terms = ["large multi-slice tickets", "parallel or waved implementer subagents", "direct browser verifier coordination"]
+skill_terms = ["Large Feature Orchestration", "orchestration map", "Root -> child -> grandchild", "IMPLEMENTATION_SLICE_RESULT", "BROWSER_VERIFICATION_RESULT"]
 forbidden_terms = []
 
 [[scenario]]
@@ -139,6 +151,14 @@ prompt = "I last researched NOW back in February. Catch me up on the quarters th
 description_terms = ["recapping an existing US-listed stock thesis", "catching up on every quarter", "Mechanically diffs actuals vs saved bull/base/bear projections", "LLM-evaluates the saved English sell triggers"]
 skill_terms = ["Quarterly catch-up", "phases/quarterly/02-fetch-sub.md", "auto-recommend", "Checkpoint 2 — Trajectory, diff, and triggers"]
 forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
+
+[[scenario]]
+id = "stock-research-fundamentals-thesis"
+skill = "stock-research"
+prompt = "Research AAPL end-to-end and help me decide whether it belongs on my long-term buy/watch/avoid list."
+description_terms = ["researching a US-listed company end-to-end", "investment thesis", "buy/watch/avoid"]
+skill_terms = ["Phase 1: Setup & identity", "Phase 10: Commit & index", "Checkpoint 1"]
+forbidden_terms = []
 
 [[scenario]]
 id = "stock-recap-news-impact"
