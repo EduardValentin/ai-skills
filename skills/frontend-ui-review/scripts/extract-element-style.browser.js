@@ -1,18 +1,8 @@
-// Browser-context extraction snippet for the UI/UX matched-element inventory.
+// Browser-context extraction snippet for matched-element visual review.
 //
-// This is in-page JavaScript. Evaluate it against the live DOM through the
-// host agent's DOM-evaluation capability (a native browser-automation tool's
-// `evaluate()`-equivalent, or Playwright's `page.evaluate()` if running via
-// the shell fallback in `agents/ui-ux.md` → `## Browser bootstrap`).
-//
-// Input: a CSS selector for the element being inspected.
-// Output: a JSON-serialisable object with computed-style and bounding-rect
-// fields. Returns `{ missing: true, selector }` if the selector doesn't match.
-//
-// Property set is chosen so the matched-element inventory's `font-* | color/bg
-// | box | layout | size` columns can be filled directly from one call per
-// element. Keep this list aligned with the inventory header in
-// `agents/ui-ux.md` → `## Output format`.
+// Evaluate this in the page against a CSS selector for the element being
+// inspected. It returns the computed-style and bounding-rect fields needed to
+// fill the frontend-ui-review matched-element inventory.
 
 ((selector) => {
   const el = document.querySelector(selector);

@@ -1,6 +1,6 @@
 # Job Workflow
 
-Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is now delegated to the QA and UI/UX subagents — this file specifies the **mode** they run in for the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, the bug-fix loop, the self-improvement loop, and Ship.
+Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is delegated to the QA and UI/UX subagents; this file specifies the review modes they receive in the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, verification fix loops, and Ship.
 
 ## Ticket Intake
 
@@ -43,9 +43,9 @@ After intake, extract and restate to the user:
 
 Then proceed to Scoping subagent dispatch as instructed by `SKILL.md`'s Setup phase.
 
-## Verification — Mode mapping for QA and UI/UX
+## Verification — Mode Mapping For QA And UI/UX
 
-The Verify phase is run by the QA and UI/UX subagents. This file specifies the **mode** parameter they receive in the job workflow.
+The Verify phase is run by the QA and UI/UX subagents. This file specifies the review mode they receive in the job workflow.
 
 ### QA mode
 
@@ -59,15 +59,15 @@ If the app or service cannot be started, QA escalates and the workflow stops on 
 
 ### UI/UX mode
 
-For the job workflow, the UI/UX agent always runs in **`consistency` mode**:
+For the job workflow, the UI/UX subagent always runs in **`consistency` mode**:
 
 - No external reference (job apps in this workflow do not have a React reference app in `designs/`).
 - Mandate is stylistic consistency against existing analog elements in the same view: icon sizing rhythm, typography scale, spacing rhythm, color tokens, border radii, shadow elevation, alignment.
-- Programmatic-first: extract computed styles and bounding rects via DOM evaluation against the live browser (the snippet at `scripts/extract-element-style.browser.js` returns the inventory's column set). Screenshots only as supplementary context.
+- Programmatic-first: extract computed styles and bounding rects via DOM evaluation against the live browser. Screenshots are only supplementary context.
 - Accessibility checks always apply.
 
 UI/UX is **skipped** if main agent determines the change is backend-only (no UI files in the diff) per `SKILL.md`'s backend-only detection.
 
-## Hand-off to Brainstorm
+## Hand-off to Requirements/Design
 
-When ticket intake and the Scoping subagent's report are both complete, return to `SKILL.md` and proceed to the Brainstorm gate. This file is no longer relevant until the Verify phase.
+When ticket intake and the Scoping subagent's report are both complete, return to `SKILL.md` and proceed to Requirements/Design. This file is no longer relevant until the Verify phase.
