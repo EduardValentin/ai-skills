@@ -18,15 +18,16 @@ skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md"]
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-start-large-orchestration"
+id = "ticket-start-large-delegated-workflow"
 skill = "ticket-start"
 prompt = """
-Start Linear issue APP-456. It is a large feature touching the billing API, onboarding UI,
-background jobs, and migrations, so split it into parallel or waved implementation slices
-and coordinate browser verification after integration.
+Start the APP-456 workflow. It spans separate Linear tickets for the billing API,
+onboarding UI, background jobs, and migrations, so each ticket implementation should be
+delegated to a different agent where practical, while review, testing, and verification
+are still delegated too.
 """
-description_terms = ["large multi-slice tickets", "parallel or waved implementer subagents", "direct browser verifier coordination"]
-skill_terms = ["Large Feature Orchestration", "orchestration map", "Root -> child -> grandchild", "IMPLEMENTATION_SLICE_RESULT", "BROWSER_VERIFICATION_RESULT"]
+description_terms = ["large workflows spanning multiple tickets", "delegated orchestration"]
+skill_terms = ["Large Workflows", "The main agent is the orchestrator", "delegate each ticket implementation to a different implementation agent", "Review, testing, and verification remain delegated"]
 forbidden_terms = []
 
 [[scenario]]

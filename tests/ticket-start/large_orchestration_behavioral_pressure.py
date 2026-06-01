@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral pressure tests for ticket-start large orchestration.
+"""Behavioral pressure tests for ticket-start large delegated orchestration.
 
 Requires TICKET_START_BEHAVIOR_AGENT_COMMAND to name a command that reads a
 prompt from stdin and writes the agent response to stdout.
@@ -23,37 +23,58 @@ class Scenario:
     scenario_id: str
     user_request: str
     required_terms: tuple[str, ...]
+    required_any_groups: tuple[tuple[str, ...], ...]
     forbidden_terms: tuple[str, ...]
 
 
 SCENARIOS = (
     Scenario(
-        scenario_id="large-feature-dispatch-and-reporting",
+        scenario_id="large-workflow-delegated-ownership",
         user_request=(
-            "Use ticket-start for a large Linear epic with an approved plan. "
-            "The plan has four slices: database migration, backend API, onboarding UI, "
-            "and analytics events. The API and UI can run after the migration, analytics "
-            "can run in parallel with UI, and the UI needs browser verification after integration. "
-            "Describe the orchestration handoffs you would dispatch."
+            "Use ticket-start for a large workflow spanning four Linear tickets: database "
+            "migration, backend API, onboarding UI, and analytics events. Explain how the "
+            "main agent should coordinate implementation, review, testing, and verification."
         ),
         required_terms=(
-            "Active task:",
+            "delegated",
+            "review",
+            "verification",
+            "database",
+            "API",
+            "UI",
+            "analytics",
+        ),
+        required_any_groups=(
+            ("main agent is the orchestrator", "main agent stays the orchestrator", "main agent", "orchestrator"),
+            ("delegate each ticket implementation", "implementation ownership", "ticket agent"),
+            (
+                "different implementation agent",
+                "different agent",
+                "database ticket agent",
+                "API ticket agent",
+                "Agent 1",
+                "migration agent",
+                "API agent",
+            ),
+            ("testing", "QA"),
+            (
+                "delegation strategy",
+                "chosen strategy",
+                "different split",
+                "different strategy",
+                "different delegation shape",
+                "different delegation split",
+            ),
+        ),
+        forbidden_terms=(
             "Depth budget:",
             "IMPLEMENTATION_SLICE_RESULT",
             "BROWSER_VERIFICATION_RESULT",
-            "database migration",
-            "backend API",
-            "onboarding UI",
-            "analytics events",
-            "root",
-            "leaf",
-            "no child or grandchild agents may remain live",
-        ),
-        forbidden_terms=(
+            "Root -> child -> grandchild",
+            "orchestration map",
+            "leaf-only",
+            "grandchild",
             "I would implement inline",
-            "The implementer dispatches browser verifier",
-            "grandchild owns a feature slice",
-            "skip the orchestration map",
         ),
     ),
 )
@@ -82,7 +103,7 @@ def main() -> int:
         check_response(scenario, response)
         print(f"PASS: {scenario.scenario_id}")
 
-    print(f"PASS: {len(scenarios)} ticket-start large orchestration behavioral scenarios")
+    print(f"PASS: {len(scenarios)} ticket-start large delegated orchestration behavioral scenarios")
     return 0
 
 
@@ -107,14 +128,12 @@ Skill text:
 User request:
 {scenario.user_request}
 
-Do not execute the ticket. Return a concise dispatch plan only. It must name:
-- the orchestration map entries and their waves,
-- each child implementer handoff start block,
-- each child implementer final response schema,
-- browser verifier handoff and final response schema,
-- how the root monitors agents before Ship.
-
-Use exact field labels where the skill defines them.
+Do not execute the ticket. Return a concise delegation plan only. It must explain:
+- how the main agent stays the orchestrator,
+- which ticket implementation agents own which ticket,
+- how review, testing, and verification remain delegated,
+- when the orchestrator would choose a different delegation strategy,
+- how the delegated reports are used before Ship.
 """
 
 
@@ -137,12 +156,19 @@ def run_agent(agent_command: str, prompt: str) -> str:
 
 
 def check_response(scenario: Scenario, response: str) -> None:
-    missing = [term for term in scenario.required_terms if term not in response]
-    if missing:
+    normalized_response = response.lower()
+    missing = [term for term in scenario.required_terms if term.lower() not in normalized_response]
+    missing_groups = [
+        group for group in scenario.required_any_groups if not any(term.lower() in normalized_response for term in group)
+    ]
+    if missing or missing_groups:
         print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} missing required terms: {missing}")
+        raise AssertionError(
+            f"{scenario.scenario_id} missing required terms: {missing}; "
+            f"missing required term groups: {missing_groups}"
+        )
 
-    forbidden = [term for term in scenario.forbidden_terms if term in response]
+    forbidden = [term for term in scenario.forbidden_terms if term.lower() in normalized_response]
     if forbidden:
         print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
         raise AssertionError(f"{scenario.scenario_id} included forbidden terms: {forbidden}")

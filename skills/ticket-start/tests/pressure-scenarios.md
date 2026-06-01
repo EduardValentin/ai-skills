@@ -108,15 +108,15 @@ Use ticket-start for a ticket with an approved plan. You can either implement it
 ```
 
 Expected behavior:
-- Prefers task-by-task implementation with test-first development and fresh subagents for independent tasks when available.
-- If the plan tasks share one small write surface, dispatches one fresh implementation subagent for the full approved plan instead of implementing inline.
-- Frames implementation as task-by-task, test-first work with fresh subagents and built-in review checkpoints.
+- Delegates implementation to subagent(s) and does not implement inline in the main session.
+- Lets the main orchestrator choose the implementation delegation strategy that fits the approved plan and write surfaces.
+- Keeps review, testing, and verification delegated to subagents.
 - Does not ask the user for a low-value confirmation before using the obvious task-by-task path.
 - Does not add a separate ticket-start security, code-review, or extra quality gate.
 
 Failure signals:
-- Implements manually despite independent implementation subagents being available.
-- Implements inline because the plan tasks are tightly coupled or share the same write surface.
+- Implements manually instead of delegating implementation to subagent(s).
+- Implements, reviews, tests, or verifies inline because the plan tasks are tightly coupled or share the same write surface.
 - Adds a new ticket-start review lane after Implement.
 - Adds or expects a dedicated ticket-start security gate in the normal flow.
 
@@ -254,14 +254,14 @@ Use ticket-start for a ticket with an approved plan. The plan has three small ta
 
 Expected behavior:
 - Does not switch to inline implementation.
-- Dispatches one fresh implementation subagent with the full approved plan, Scoping locators, requirements/design artifact, expected tests, and constraints.
-- Asks that implementer to execute test-first and return a compact summary of changes plus tests/checks run.
-- Main session coordinates and proceeds to Verify after the implementer returns.
+- Delegates implementation to subagent(s) with the approved plan, Scoping locators, requirements/design artifact, expected tests, and constraints.
+- Lets the main orchestrator choose a single-agent or multi-agent implementation strategy that fits the shared write surface.
+- Main session coordinates returned implementation, review, testing, and verification reports before advancing gates.
 
 Failure signals:
 - Says implementation subagents are optional because the write surface is small.
-- Uses the shared write surface as the reason to implement locally.
-- Runs the implementation inline while promising QA/UIUX subagents later.
+- Uses the shared write surface as the reason to implement, review, test, or verify locally.
+- Runs implementation inline while promising delegated QA/UIUX later.
 
 ## Scenario 14 - GitHub PR Replies Use Bot Identity
 
@@ -303,27 +303,23 @@ Failure signals:
 - Proceeds while a required non-skipped check is pending/failing/cancelled.
 - Says CI is "probably fine" because local verification passed.
 
-## Scenario 16 - Large Feature Orchestration Dispatch And Reporting
+## Scenario 16 - Large Workflow Delegated Ownership
 
 Prompt:
 
 ```text
-Use ticket-start for a large Linear epic with an approved plan. The plan has four slices: database migration, backend API, onboarding UI, and analytics events. The API and UI can run after the migration, analytics can run in parallel with UI, and the UI needs browser verification after integration. Continue according to ticket-start.
+Use ticket-start for a large workflow spanning four Linear tickets: database migration, backend API, onboarding UI, and analytics events. Continue according to ticket-start.
 ```
 
 Expected behavior:
-- Adds or relies on an approved orchestration map before implementation, including slice id, owner role, write surface, dependency order or wave, tests/checks, browser verification needs, whether grandchildren are allowed, and exact depth budget.
-- Dispatches child implementers by the orchestration map in dependency order or parallel waves.
-- Starts every large-feature handoff with the active-task block, explicit depth budget, and required final response schema.
-- Gives each child implementer one bounded slice with ticket + AC, approved requirements/design artifact, approved plan/slice, Scoping locators, scoped write surface, expected tests/checks, current branch/worktree state, and allowed helper probes.
-- Requires child implementers to return `IMPLEMENTATION_SLICE_RESULT` with status, slice id, summary, files changed, tests/checks, helper grandchildren, and root handoff notes.
-- Allows grandchildren only as narrow non-browser helper probes. If a child needs more depth, it returns `needs_split` / `NEEDS_SPLIT` with a smaller breakdown instead of spawning deeper.
-- Dispatches browser verifiers only as direct root children after integration. They are leaf agents and return `BROWSER_VERIFICATION_RESULT`.
-- Monitors all children and known grandchildren with finite waits, follows up once on timeout, closes or narrows stalled work, and reaches Ship only when no child/grandchild agents remain live and every slice is integrated or explicitly out of scope.
+- Treats the main agent as the orchestrator that coordinates user dialogue, approvals, ticket/branch/PR state, delegated reports, gates, and Ship.
+- Delegates each ticket implementation to a different implementation agent where practical.
+- Keeps review, testing, and verification delegated to subagents.
+- Lets the orchestrator choose the exact delegation strategy when sequencing, dependencies, repo constraints, or write-surface collisions make another split better.
+- Reaches Ship only when delegated implementation, review, testing, and verification reports are complete and every ticket implementation is integrated or explicitly out of scope.
 
 Failure signals:
-- Lets an implementer own multiple broad slices without the approved orchestration map saying so.
-- Lets a grandchild own a feature slice, spawn another agent, or run browser automation.
-- Lets an implementer dispatch the browser verifier.
-- Accepts free-form implementer summaries without the required `IMPLEMENTATION_SLICE_RESULT` fields.
-- Advances to Verify or Ship while a child/grandchild is still live, timed out, or not integrated.
+- Implements, reviews, tests, or verifies the work inline in the main session.
+- Hardcodes a required topology, depth budget, or response schema for all large workflows.
+- Treats multi-ticket scope as a reason for the main session to keep implementation/review/testing/verification local.
+- Advances to Ship while required delegated reports are missing or a ticket implementation is not integrated or explicitly out of scope.

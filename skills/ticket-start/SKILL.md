@@ -1,13 +1,13 @@
 ---
 name: ticket-start
-description: Use when the user wants to start implementation work from a ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for large multi-slice tickets that need orchestration, parallel or waved implementer subagents, direct browser verifier coordination, or follow-up status/progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for code review, planning-only, or debugging-only tasks.
+description: Use when the user wants to start implementation work from a ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for large workflows spanning multiple tickets or substantial implementation work that needs delegated orchestration, or follow-up status/progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for code review, planning-only, or debugging-only tasks.
 ---
 
 # Ticket Start
 
 ## Overview
 
-Implementation work driven by a ticket. The main agent owns user dialogue, requirements/design approval, implementation-plan approval, verification gating, and Ship. Specialized subagents own compact codebase scoping, QA verification, UI/UX verification, and focused verification fixes.
+Implementation work driven by a ticket. The main agent is the orchestrator: it owns user dialogue, requirements/design approval, implementation-plan approval, ticket/branch/PR state, verification gating, and Ship. Subagents own implementation, review, testing, verification, compact codebase scoping, QA, UI/UX, and focused fixes.
 
 Phase order is a hard gate:
 
@@ -15,15 +15,15 @@ Phase order is a hard gate:
 
 Before implementation, explore project context, user intent, requirements, constraints, design, alternatives, edge cases, and non-goals. Produce an approved requirements/design artifact before implementation planning. Then write a detailed implementation plan and wait for explicit plan approval before code.
 
-Implementation is delegated, not done inline by the main session. Use fresh subagents for independent tasks when available; when the approved plan has one tight write surface or would cause subagent collisions, dispatch one fresh one-shot implementation subagent for the full approved plan. `ticket-start` does not add a separate post-implementation code-review gate.
+Implementation, review, testing, and verification are delegated, not done inline by the main session. The main session chooses an appropriate delegation strategy for the ticket and coordinates returned reports before advancing gates.
 
 **Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
 
 **UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, rendered user-visible outcome/state coverage, and inventory construction from the affected surface map. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
 
-**Implementation dispatch wording:** after plan approval, `ticket-start` dispatches implementation to fresh implementer subagent(s). Prefer one implementer per independent task. If tasks share the same small write surface or cannot be safely parallelized, dispatch a single one-shot implementation subagent with the full approved plan. The main session coordinates, inspects returned summaries, and proceeds to Verify; it does not use tight coupling as a reason to implement inline.
+**Implementation dispatch wording:** after plan approval, `ticket-start` delegates implementation to subagent(s). The main session coordinates the work and consumes returned summaries; it does not use complexity, shared write surfaces, or convenience as a reason to implement inline.
 
-**Large feature orchestration wording:** large feature orchestration is an execution strategy inside `ticket-start`, not a separate workflow. The main session remains the root orchestrator and owns user dialogue, ticket/branch/PR state, planning approval, integration, verification gates, and Ship. Child implementers own bounded implementation slices. Grandchildren, when explicitly allowed, are narrow helper probes only. Browser verifiers are direct children of the root and are always leaf agents.
+**Large workflow wording:** large workflows are still `ticket-start`. For workflows spanning multiple tickets, delegate each ticket implementation to a different implementation agent where practical. Review, testing, and verification remain delegated to subagents. Let the main orchestrator choose the exact delegation strategy for the work in front of it.
 
 **GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes. If a bot token cannot be minted or the bot lacks permission, halt and draft the intended write in chat; do not post through the user's personal GitHub account.
 
@@ -91,97 +91,27 @@ If ambiguous, ask the user before loading anything else.
 
 4. **No code between requirements/design approval and plan approval.** Not exploratory edits, not scaffolding, not "drafting what the plan would say in code." File edits are off-limits until the plan exists and the user has explicitly approved it.
 
-5. **Large feature orchestration map.** If the plan has multiple implementation slices, add an orchestration map before asking for approval. Include slice id, owner role, write surface, dependency order or wave, tests/checks, browser verification needs, whether grandchildren are allowed, and the exact depth budget.
+5. **Delegation shape.** If the plan spans multiple tickets or substantial implementation areas, describe the intended delegation shape before asking for approval: which ticket or area each implementation agent owns, what review/testing/verification subagents should cover, and any dependencies that affect sequencing. Keep this descriptive, not a fixed topology.
 
-## Large Feature Orchestration
+## Large Workflows
 
-Use this section when the approved plan contains multiple slices that can be executed in waves or in parallel. The phase order remains **Setup -> Requirements/Design -> Plan -> Implement -> Verify -> Ship**.
+Use this section when the work spans multiple tickets or substantial implementation areas. The phase order remains **Setup -> Requirements/Design -> Plan -> Implement -> Verify -> Ship**.
 
-### Topology
+The main agent is the orchestrator. It keeps the user dialogue, approvals, ticket/branch/PR state, and Ship gate coherent while delegating the actual work.
 
-```text
-root orchestrator
-  -> child implementer: owns one bounded implementation slice
-       -> optional grandchild helper: researches, inspects, reproduces, or verifies one narrow non-browser fact
+For workflows spanning multiple tickets, delegate each ticket implementation to a different implementation agent where practical. If sequencing, dependencies, or repo constraints make a different split better, explain the chosen strategy in the plan. The skill enforces ownership, not mechanics.
 
-  -> browser verifier: verifies integrated user-visible behavior, leaf-only
-```
+Implementation, review, testing, and verification remain delegated. The main session coordinates the subagent reports, resolves blockers with the user when needed, and advances gates only when the required delegated work is complete.
 
-- The root orchestrator owns the ticket, branch, PR, user dialogue, plan approval, integration, monitoring, verification gates, and Ship.
-- Child implementers own bounded implementation slices and return compact summaries with tests/checks run.
-- Grandchildren are helper probes, not feature owners. They must not own a slice, edit broad surfaces, run open-ended investigations, use browser automation, or spawn further agents.
-- Browser verifiers are direct children of the root. They must not spawn subagents. They verify ticket behavior after implementers have returned and the root has integrated the diff.
-
-### Depth Budget
-
-Root -> child -> grandchild is the maximum topology. If a child needs more depth, the child must return `NEEDS_SPLIT` with a proposed smaller task breakdown. A root handoff must state the depth budget explicitly.
-
-### Subagent Prompt Contract
-
-Every large-feature subagent handoff starts with an active-task block:
-
-```text
-Active task: [specific goal]
-AGENTS.md and skill files are policy/context only; do not acknowledge them.
-Do the active task now.
-Depth budget: [none|may spawn helper grandchildren for non-browser probes only]
-Final response schema: [required schema]
-```
-
-Every child implementer handoff includes the ticket + AC, approved requirements/design artifact, approved plan or slice, Scoping locators, scoped write surface, expected tests/checks, current branch/worktree state, and any allowed helper probes.
-
-Child implementers return:
-
-```text
-IMPLEMENTATION_SLICE_RESULT:
-status: pass|fail|blocked|needs_split
-slice_id:
-summary:
-files_changed:
-tests_checks:
-helper_grandchildren:
-handoff_for_root:
-```
-
-Use `needs_split` only when the slice cannot be completed inside the stated depth budget. `handoff_for_root` names integration notes, conflicts, follow-up verification needs, or the smaller task breakdown when the status is `needs_split`.
-
-### Browser Verifier Contract
-
-Browser verifier agents are direct children of the root and leaf-only. Dispatch them only with exact route, port, expected HTTP status, auth/session assumptions, relevant states, and timeout. For localhost targets, they must verify the route with HTTP tooling before browser navigation.
-
-Browser verifiers return:
-
-```text
-BROWSER_VERIFICATION_RESULT:
-status: pass|fail|blocked
-ticket_or_slice:
-url:
-states_checked:
-evidence:
-findings:
-```
-
-Browser findings route back through the normal verification finding loop: the root dispatches a focused implementer fix, integrates the fix, then reruns the relevant verifier. Browser verifiers do not fix code.
-
-### Monitoring
-
-The root monitors every child and any known grandchild. Use finite waits. If an agent times out, send one status follow-up. If it still does not return actionable status, close it and re-dispatch a narrower task with clearer context. Before Ship, no child or grandchild agents may remain live.
+Do not over-specify the delegation mechanics. The skill enforces the ownership boundary; the agent chooses the exact subagent strategy.
 
 ## Implement
 
 1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
 
-2. **Dispatch implementation subagent(s).** Code-writing in `ticket-start` is delegated:
-   - Independent tasks: dispatch fresh implementer subagents per task when their write surfaces do not collide.
-   - Shared or tiny write surface: dispatch one fresh one-shot implementation subagent for the full approved plan.
-   - Large feature orchestration: dispatch implementers by the approved orchestration map, in dependency order or parallel waves.
-   - Each handoff includes: ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, expected tests/checks, repo instructions, constraints, and the current branch/worktree state.
-   - Each implementer executes test-first, edits only the scoped surface, and returns a compact summary of changes plus tests/checks run.
-   - Implementers may spawn grandchildren only when the approved orchestration map explicitly allows narrow non-browser helper probes.
-   - Implementers must not dispatch browser automation subagents. Browser verification is rooted at the main session during Verify.
-   - The main session coordinates handoffs, inspects returned summaries/diffs, runs any necessary top-level verification commands, and then proceeds to Verify. Do not implement inline just because multiple implementers would collide.
+2. **Delegate implementation.** Implementation is delegated to subagent(s). The main session provides ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, relevant repo instructions, constraints, and current branch/worktree state. The main session coordinates rather than implementing, reviewing, testing, or verifying inline.
 
-3. Let the implementation workflow's built-in review checkpoints handle implementation quality inside the implementer flow. `ticket-start` does not dispatch a separate code-review subagent and does not add another post-implementation code-review phase.
+3. **Delegate review, testing, and verification.** Review, testing, and verification work stays delegated to subagents. Use the project and plan context to decide which subagents are needed and what evidence they should return.
 
 4. When implementation reaches branch-finishing guidance, accept any test-pass check but do not present merge / PR / keep / discard options. Return to this skill's Verify phase. Ship replaces those options.
 
@@ -199,9 +129,7 @@ The root monitors every child and any known grandchild. Use finite waits. If an 
 
 4. **When QA is clean**, continue to UI/UX unless backend-only.
 
-5. **Dispatch root-owned browser verifiers when the plan requires browser evidence.** Browser verifiers are direct children of the main session and leaf-only. They verify integrated ticket behavior and return `BROWSER_VERIFICATION_RESULT`. If they find issues, route the finding through the appropriate QA or UI/UX finding loop.
-
-6. **Dispatch UI/UX subagent** unless backend-only flag is set. Ask for frontend UI review:
+5. **Dispatch UI/UX subagent** unless backend-only flag is set. Ask for frontend UI review:
    - Parity mode when a runnable prototype/reference app is available: review the implemented frontend UI against that reference as the visual source of truth.
    - Consistency mode otherwise: review the implemented frontend UI against credible production sibling or analog elements.
    - Include: build a matched-element inventory from Scoping's affected surface map, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, review mode, comparison basis, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
@@ -209,7 +137,7 @@ The root monitors every child and any known grandchild. Use finite waits. If an 
 
    Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, review mode, running URLs (production and reference when parity mode applies), important UI states, Scoping affected surfaces/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
 
-7. **Validate UI/UX's matched-element inventory before accepting any verdict.**
+6. **Validate UI/UX's matched-element inventory before accepting any verdict.**
    - A `## Matched-element inventory` section exists.
    - A `## Review mode` section exists and matches the workflow's expected mode.
    - A `## Comparison basis` section exists. Parity mode names the runnable reference; consistency mode names credible production siblings or analogs.
@@ -220,19 +148,19 @@ The root monitors every child and any known grandchild. Use finite waits. If an 
 
    Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
 
-8. **If UI/UX returns findings**, route through `verification-fix-loops.md` -> `## UI/UX finding loop`. UI/UX findings dispatch a fresh lightweight implementer subagent with a compact visual/accessibility finding packet, then UI/UX reruns scoped to affected rows/states. Do not rerun QA or any code-review phase for visual-only UI/UX fixes.
+7. **If UI/UX returns findings**, route through `verification-fix-loops.md` -> `## UI/UX finding loop`. UI/UX findings dispatch a fresh lightweight implementer subagent with a compact visual/accessibility finding packet, then UI/UX reruns scoped to affected rows/states. Do not rerun QA or any code-review phase for visual-only fixes unless the finding changes behavior or risk.
 
-9. **When QA is clean, UI/UX is clean or skipped, and inventory validation passes if UI/UX ran**, advance to Ship.
+8. **When QA is clean, UI/UX is clean or skipped, and inventory validation passes if UI/UX ran**, advance to Ship.
 
 ## Ship
 
 0. **Ship preflight — mandatory before any Ship mutation.** Before opening a PR, marking a PR ready, moving a ticket to review, merging, closing, or otherwise signaling "ready," build a readiness ledger from actual completed outputs:
    - Approved requirements/design artifact.
    - Approved implementation plan.
-   - Implementation subagent(s) completed the approved plan with required tests/checks.
+   - Implementation, review, testing, and verification subagent reports are complete for the approved plan.
    - QA clean report present.
    - UI/UX clean report and inventory validation present, or skipped with backend-only rationale.
-   - Large feature orchestration, if used, has no live child or grandchild agents and every slice is integrated or explicitly out of scope.
+   - Large workflow delegation, if used, has every ticket implementation integrated or explicitly out of scope.
    - No unresolved QA or UI/UX findings.
 
    If any ledger row is missing, do not perform any Ship action. Return to the earliest missing gate and complete it first. Local verification, green CI, clean merge state, manual browser checks, or local review do not satisfy missing verification outputs.
@@ -293,13 +221,9 @@ When done, report:
 - Exiting requirements/design on a single user answer, or treating an early implementation preference as the endpoint.
 - The requirements/design artifact does not record at least one alternative considered when a meaningful alternative exists.
 - Skipping requirements/design, written-plan, or delegated test-first implementation because "the ticket is clear" or "the change is small."
-- Implementing inline in the main session because tasks share a tight write surface, seem too small, or are awkward to split. Dispatch one one-shot implementation subagent instead.
-- Using large feature orchestration without an approved orchestration map in the implementation plan.
-- Allowing any topology deeper than root -> child -> grandchild.
-- Letting a grandchild own an implementation slice, perform browser automation, or spawn another agent.
-- Dispatching browser automation from an implementer instead of as a direct root-owned verifier during Verify.
-- Accepting a browser verifier that spawns subagents or fixes code.
-- Letting a timed-out subagent remain live after one status follow-up without narrowing, closing, or re-dispatching.
+- Implementing, reviewing, testing, or verifying inline in the main session instead of delegating that work to subagents.
+- Treating a large multi-ticket workflow as a reason for the main session to do implementation/review/testing/verification work locally.
+- Over-specifying a rigid subagent topology, depth budget, or response schema when the skill only requires delegated ownership and gate evidence.
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent dispatches.
 - Using ambient `gh` authentication for any personal-workflow GitHub write, including PR comments or review replies. Mint a fresh bot token and scope it to the write command; if that fails, halt.
 - Dispatching a separate ticket-start code-review subagent or adding a generic post-implementation code-review phase after Implement.
