@@ -30,6 +30,18 @@ skill_terms = ["Large Feature Orchestration", "orchestration map", "Root -> chil
 forbidden_terms = []
 
 [[scenario]]
+id = "ticket-start-uiux-rendered-outcome"
+skill = "ticket-start"
+prompt = """
+Start Linear issue APP-789 for a parity-mode UI ticket. Make sure the UI/UX verification
+checks what the user actually sees in every meaningful state instead of hidden templates,
+storybook-only variants, or implementation proxy components.
+"""
+description_terms = ["start implementation work from a ticket", "Linear issue ID"]
+skill_terms = ["rendered user-visible outcome", "every visually meaningful state", "not hidden templates or implementation proxies"]
+forbidden_terms = []
+
+[[scenario]]
 id = "frontend-pr-test-acceptance"
 skill = "frontend-pr-test"
 prompt = "Test this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes."

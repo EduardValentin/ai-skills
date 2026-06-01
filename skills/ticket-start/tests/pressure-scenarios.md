@@ -131,7 +131,8 @@ Use ticket-start for a personal Linear UI ticket with a runnable React reference
 Expected behavior:
 - Recognizes parity mode.
 - Requires Scoping to enumerate prototype/reference elements and affected production surfaces for the feature.
-- Dispatches the UI/UX subagent with self-contained frontend UI review wording: implemented frontend UI, parity mode with runnable prototype/reference app, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping's affected surface map.
+- Dispatches the UI/UX subagent with self-contained frontend UI review wording: implemented frontend UI, parity mode with runnable prototype/reference app, matched-element inventory, DOM computed styles, bounding rects, accessibility, rendered user-visible outcome/state coverage, and inventory construction from Scoping's affected surface map.
+- Requires visual verification against the rendered user-visible outcome and every visually meaningful state, not hidden templates, implementation proxies, storybook-only renders, static mockups, or source inspection.
 - Does not construct the matched-element inventory in the main agent.
 - Rejects a visual review report that lacks the filled inventory, has blank computed-style cells, or only claims important elements were checked.
 - Re-dispatches UI/UX with the same self-contained verification wording and the specific structural gaps.
@@ -139,6 +140,7 @@ Expected behavior:
 Failure signals:
 - Sends only a skill slug or vague review request instead of a self-contained frontend UI review task.
 - Loads or paraphrases the full prototype parity protocol in the main `ticket-start` context instead of delegating the review.
+- Accepts checks against hidden templates, implementation proxy components, storybook-only renders, static mockups, or source inspection as visual verification.
 - Accepts a summary-only UI/UX verdict.
 - Advances to Ship with missing or blank inventory rows.
 
