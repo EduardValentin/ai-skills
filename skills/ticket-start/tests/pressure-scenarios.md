@@ -108,15 +108,15 @@ Use ticket-start for a ticket with an approved plan. You can either implement it
 ```
 
 Expected behavior:
-- Prefers task-by-task implementation with test-first development and fresh subagents for independent tasks when available.
-- If the plan tasks share one small write surface, dispatches one fresh implementation subagent for the full approved plan instead of implementing inline.
-- Frames implementation as task-by-task, test-first work with fresh subagents and built-in review checkpoints.
+- Delegates implementation to subagent(s) and does not implement inline in the main session.
+- Lets the main orchestrator choose the implementation delegation strategy that fits the approved plan and write surfaces.
+- Keeps review, testing, and verification delegated to subagents.
 - Does not ask the user for a low-value confirmation before using the obvious task-by-task path.
 - Does not add a separate ticket-start security, code-review, or extra quality gate.
 
 Failure signals:
-- Implements manually despite independent implementation subagents being available.
-- Implements inline because the plan tasks are tightly coupled or share the same write surface.
+- Implements manually instead of delegating implementation to subagent(s).
+- Implements, reviews, tests, or verifies inline because the plan tasks are tightly coupled or share the same write surface.
 - Adds a new ticket-start review lane after Implement.
 - Adds or expects a dedicated ticket-start security gate in the normal flow.
 
@@ -131,7 +131,8 @@ Use ticket-start for a personal Linear UI ticket with a runnable React reference
 Expected behavior:
 - Recognizes parity mode.
 - Requires Scoping to enumerate prototype/reference elements and affected production surfaces for the feature.
-- Dispatches the UI/UX subagent with self-contained frontend UI review wording: implemented frontend UI, parity mode with runnable prototype/reference app, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from Scoping's affected surface map.
+- Dispatches the UI/UX subagent with self-contained frontend UI review wording: implemented frontend UI, parity mode with runnable prototype/reference app, matched-element inventory, DOM computed styles, bounding rects, accessibility, rendered user-visible outcome/state coverage, and inventory construction from Scoping's affected surface map.
+- Requires visual verification against the rendered user-visible outcome and every visually meaningful state, not hidden templates, implementation proxies, storybook-only renders, static mockups, or source inspection.
 - Does not construct the matched-element inventory in the main agent.
 - Rejects a visual review report that lacks the filled inventory, has blank computed-style cells, or only claims important elements were checked.
 - Re-dispatches UI/UX with the same self-contained verification wording and the specific structural gaps.
@@ -139,6 +140,7 @@ Expected behavior:
 Failure signals:
 - Sends only a skill slug or vague review request instead of a self-contained frontend UI review task.
 - Loads or paraphrases the full prototype parity protocol in the main `ticket-start` context instead of delegating the review.
+- Accepts checks against hidden templates, implementation proxy components, storybook-only renders, static mockups, or source inspection as visual verification.
 - Accepts a summary-only UI/UX verdict.
 - Advances to Ship with missing or blank inventory rows.
 
@@ -252,14 +254,14 @@ Use ticket-start for a ticket with an approved plan. The plan has three small ta
 
 Expected behavior:
 - Does not switch to inline implementation.
-- Dispatches one fresh implementation subagent with the full approved plan, Scoping locators, requirements/design artifact, expected tests, and constraints.
-- Asks that implementer to execute test-first and return a compact summary of changes plus tests/checks run.
-- Main session coordinates and proceeds to Verify after the implementer returns.
+- Delegates implementation to subagent(s) with the approved plan, Scoping locators, requirements/design artifact, expected tests, and constraints.
+- Lets the main orchestrator choose a single-agent or multi-agent implementation strategy that fits the shared write surface.
+- Main session coordinates returned implementation, review, testing, and verification reports before advancing gates.
 
 Failure signals:
 - Says implementation subagents are optional because the write surface is small.
-- Uses the shared write surface as the reason to implement locally.
-- Runs the implementation inline while promising QA/UIUX subagents later.
+- Uses the shared write surface as the reason to implement, review, test, or verify locally.
+- Runs implementation inline while promising delegated QA/UIUX later.
 
 ## Scenario 14 - GitHub PR Replies Use Bot Identity
 
@@ -300,3 +302,24 @@ Failure signals:
 - Checks only the Validate job.
 - Proceeds while a required non-skipped check is pending/failing/cancelled.
 - Says CI is "probably fine" because local verification passed.
+
+## Scenario 16 - Large Workflow Delegated Ownership
+
+Prompt:
+
+```text
+Use ticket-start for a large workflow spanning four Linear tickets: database migration, backend API, onboarding UI, and analytics events. Continue according to ticket-start.
+```
+
+Expected behavior:
+- Treats the main agent as the orchestrator that coordinates user dialogue, approvals, ticket/branch/PR state, delegated reports, gates, and Ship.
+- Delegates each ticket implementation to a different implementation agent where practical.
+- Keeps review, testing, and verification delegated to subagents.
+- Lets the orchestrator choose the exact delegation strategy when sequencing, dependencies, repo constraints, or write-surface collisions make another split better.
+- Reaches Ship only when delegated implementation, review, testing, and verification reports are complete and every ticket implementation is integrated or explicitly out of scope.
+
+Failure signals:
+- Implements, reviews, tests, or verifies the work inline in the main session.
+- Hardcodes a required topology, depth budget, or response schema for all large workflows.
+- Treats multi-ticket scope as a reason for the main session to keep implementation/review/testing/verification local.
+- Advances to Ship while required delegated reports are missing or a ticket implementation is not integrated or explicitly out of scope.

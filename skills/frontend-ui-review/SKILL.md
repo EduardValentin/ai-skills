@@ -7,7 +7,7 @@ description: Use when reviewing implemented frontend UI for visual parity agains
 
 ## Overview
 
-Visual review is evidence work, not taste work. Verify rendered UI by pairing visible elements, extracting DOM computed styles and bounding boxes, checking screenshots only as secondary evidence, and reporting a compact inventory with findings.
+Visual review is evidence work, not taste work. Verify rendered UI by pairing visible elements, extracting DOM computed styles and bounding boxes, checking screenshots only as secondary evidence, and reporting a compact inventory with findings. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
 
 ## When To Use
 
@@ -36,6 +36,8 @@ Expect as many of these as the caller can provide:
 - Caller-supplied affected surface map if available, production locators or changed UI files, relevant routes/states, and prior local evidence such as screenshots, a11y scans, or manual notes.
 
 Treat prior evidence as context, not as gate completion.
+
+Important states means every visually meaningful user-visible state named by the task, approved artifacts, runnable reference, changed UI, or adjacent feature surface. Hidden templates, implementation-only component variants, and proxy render targets do not count as state coverage.
 
 ## Mode Selection
 
@@ -142,6 +144,7 @@ After fixes, rerun only the affected rows and affected states unless the fix tou
 ## Forbidden Behaviors
 
 - Declaring CLEAN from full-page screenshots, Lighthouse, an a11y scan, or manual browser comparison alone.
+- Accepting hidden templates, implementation proxies, storybook-only renders, static mockups, or source inspection as substitutes for the integrated rendered surface the user actually sees.
 - Skipping DOM evaluation because screenshots "look the same."
 - Accepting or returning a report with blank computed-style cells for in-scope rows.
 - Asking the caller to construct the matched-element inventory for you.

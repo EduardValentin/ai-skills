@@ -1,13 +1,13 @@
 ---
 name: ticket-start
-description: Use when the user wants to start implementation work from a ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for follow-up status or progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for code review, planning-only, or debugging-only tasks.
+description: Use when the user wants to start implementation work from a ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for large workflows spanning multiple tickets or substantial implementation work that needs delegated orchestration, or follow-up status/progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for code review, planning-only, or debugging-only tasks.
 ---
 
 # Ticket Start
 
 ## Overview
 
-Implementation work driven by a ticket. The main agent owns user dialogue, requirements/design approval, implementation-plan approval, verification gating, and Ship. Specialized subagents own compact codebase scoping, QA verification, UI/UX verification, and focused verification fixes.
+Implementation work driven by a ticket. The main agent is the orchestrator: it owns user dialogue, requirements/design approval, implementation-plan approval, ticket/branch/PR state, verification gating, and Ship. Subagents own implementation, review, testing, verification, compact codebase scoping, QA, UI/UX, and focused fixes.
 
 Phase order is a hard gate:
 
@@ -15,13 +15,15 @@ Phase order is a hard gate:
 
 Before implementation, explore project context, user intent, requirements, constraints, design, alternatives, edge cases, and non-goals. Produce an approved requirements/design artifact before implementation planning. Then write a detailed implementation plan and wait for explicit plan approval before code.
 
-Implementation is delegated, not done inline by the main session. Use fresh subagents for independent tasks when available; when the approved plan has one tight write surface or would cause subagent collisions, dispatch one fresh one-shot implementation subagent for the full approved plan. `ticket-start` does not add a separate post-implementation code-review gate.
+Implementation, review, testing, and verification are delegated, not done inline by the main session. The main session chooses an appropriate delegation strategy for the ticket and coordinates returned reports before advancing gates.
 
 **Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
 
-**UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
+**UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, rendered user-visible outcome/state coverage, and inventory construction from the affected surface map. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
 
-**Implementation dispatch wording:** after plan approval, `ticket-start` dispatches implementation to fresh implementer subagent(s). Prefer one implementer per independent task. If tasks share the same small write surface or cannot be safely parallelized, dispatch a single one-shot implementation subagent with the full approved plan. The main session coordinates, inspects returned summaries, and proceeds to Verify; it does not use tight coupling as a reason to implement inline.
+**Implementation dispatch wording:** after plan approval, `ticket-start` delegates implementation to subagent(s). The main session coordinates the work and consumes returned summaries; it does not use complexity, shared write surfaces, or convenience as a reason to implement inline.
+
+**Large workflow wording:** large workflows are still `ticket-start`. For workflows spanning multiple tickets, delegate each ticket implementation to a different implementation agent where practical. Review, testing, and verification remain delegated to subagents. Let the main orchestrator choose the exact delegation strategy for the work in front of it.
 
 **GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes. If a bot token cannot be minted or the bot lacks permission, halt and draft the intended write in chat; do not post through the user's personal GitHub account.
 
@@ -89,18 +91,27 @@ If ambiguous, ask the user before loading anything else.
 
 4. **No code between requirements/design approval and plan approval.** Not exploratory edits, not scaffolding, not "drafting what the plan would say in code." File edits are off-limits until the plan exists and the user has explicitly approved it.
 
+5. **Delegation shape.** If the plan spans multiple tickets or substantial implementation areas, describe the intended delegation shape before asking for approval: which ticket or area each implementation agent owns, what review/testing/verification subagents should cover, and any dependencies that affect sequencing. Keep this descriptive, not a fixed topology.
+
+## Large Workflows
+
+Use this section when the work spans multiple tickets or substantial implementation areas. The phase order remains **Setup -> Requirements/Design -> Plan -> Implement -> Verify -> Ship**.
+
+The main agent is the orchestrator. It keeps the user dialogue, approvals, ticket/branch/PR state, and Ship gate coherent while delegating the actual work.
+
+For workflows spanning multiple tickets, delegate each ticket implementation to a different implementation agent where practical. If sequencing, dependencies, or repo constraints make a different split better, explain the chosen strategy in the plan. The skill enforces ownership, not mechanics.
+
+Implementation, review, testing, and verification remain delegated. The main session coordinates the subagent reports, resolves blockers with the user when needed, and advances gates only when the required delegated work is complete.
+
+Do not over-specify the delegation mechanics. The skill enforces the ownership boundary; the agent chooses the exact subagent strategy.
+
 ## Implement
 
 1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
 
-2. **Dispatch implementation subagent(s).** Code-writing in `ticket-start` is delegated:
-   - Independent tasks: dispatch fresh implementer subagents per task when their write surfaces do not collide.
-   - Shared or tiny write surface: dispatch one fresh one-shot implementation subagent for the full approved plan.
-   - Each handoff includes: ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, expected tests/checks, repo instructions, constraints, and the current branch/worktree state.
-   - Each implementer executes test-first, edits only the scoped surface, and returns a compact summary of changes plus tests/checks run.
-   - The main session coordinates handoffs, inspects returned summaries/diffs, runs any necessary top-level verification commands, and then proceeds to Verify. Do not implement inline just because multiple implementers would collide.
+2. **Delegate implementation.** Implementation is delegated to subagent(s). The main session provides ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, relevant repo instructions, constraints, and current branch/worktree state. The main session coordinates rather than implementing, reviewing, testing, or verifying inline.
 
-3. Let the implementation workflow's built-in review checkpoints handle implementation quality inside the implementer flow. `ticket-start` does not dispatch a separate code-review subagent and does not add another post-implementation code-review phase.
+3. **Delegate review, testing, and verification.** Review, testing, and verification work stays delegated to subagents. Use the project and plan context to decide which subagents are needed and what evidence they should return.
 
 4. When implementation reaches branch-finishing guidance, accept any test-pass check but do not present merge / PR / keep / discard options. Return to this skill's Verify phase. Ship replaces those options.
 
@@ -122,6 +133,7 @@ If ambiguous, ask the user before loading anything else.
    - Parity mode when a runnable prototype/reference app is available: review the implemented frontend UI against that reference as the visual source of truth.
    - Consistency mode otherwise: review the implemented frontend UI against credible production sibling or analog elements.
    - Include: build a matched-element inventory from Scoping's affected surface map, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, review mode, comparison basis, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
+   - Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies. Do not accept template/source inspection, proxy-component screenshots, storybook-only renders, static mockups, or hidden component states as substitutes for the integrated rendered surface the user actually sees.
 
    Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, review mode, running URLs (production and reference when parity mode applies), important UI states, Scoping affected surfaces/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
 
@@ -130,12 +142,13 @@ If ambiguous, ask the user before loading anything else.
    - A `## Review mode` section exists and matches the workflow's expected mode.
    - A `## Comparison basis` section exists. Parity mode names the runnable reference; consistency mode names credible production siblings or analogs.
    - Rows cover the relevant Scoping affected surfaces, changed visible production UI files, and visible changed elements on the feature surface. Parity mode also covers the relevant Scoping prototype/reference rows.
+   - States covered include every visually meaningful user-visible state named by the ticket, approved artifacts, prototype/reference, changed UI, or adjacent feature surface. Hidden templates, implementation-only component variants, and proxy render targets do not count as state coverage.
    - Every verified row has non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank = DOM-evaluation work was skipped for that row.
    - Any missing expected coverage or blank cell -> report is structurally invalid. Reject and re-dispatch UI/UX with the same self-contained verification request and the specific gaps named.
 
    Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
 
-7. **If UI/UX returns findings**, route through `verification-fix-loops.md` -> `## UI/UX finding loop`. UI/UX findings dispatch a fresh lightweight implementer subagent with a compact visual/accessibility finding packet, then UI/UX reruns scoped to affected rows/states. Do not rerun QA or any code-review phase for visual-only UI/UX fixes.
+7. **If UI/UX returns findings**, route through `verification-fix-loops.md` -> `## UI/UX finding loop`. UI/UX findings dispatch a fresh lightweight implementer subagent with a compact visual/accessibility finding packet, then UI/UX reruns scoped to affected rows/states. Do not rerun QA or any code-review phase for visual-only fixes unless the finding changes behavior or risk.
 
 8. **When QA is clean, UI/UX is clean or skipped, and inventory validation passes if UI/UX ran**, advance to Ship.
 
@@ -144,9 +157,10 @@ If ambiguous, ask the user before loading anything else.
 0. **Ship preflight — mandatory before any Ship mutation.** Before opening a PR, marking a PR ready, moving a ticket to review, merging, closing, or otherwise signaling "ready," build a readiness ledger from actual completed outputs:
    - Approved requirements/design artifact.
    - Approved implementation plan.
-   - Implementation subagent(s) completed the approved plan with required tests/checks.
+   - Implementation, review, testing, and verification subagent reports are complete for the approved plan.
    - QA clean report present.
    - UI/UX clean report and inventory validation present, or skipped with backend-only rationale.
+   - Large workflow delegation, if used, has every ticket implementation integrated or explicitly out of scope.
    - No unresolved QA or UI/UX findings.
 
    If any ledger row is missing, do not perform any Ship action. Return to the earliest missing gate and complete it first. Local verification, green CI, clean merge state, manual browser checks, or local review do not satisfy missing verification outputs.
@@ -207,7 +221,9 @@ When done, report:
 - Exiting requirements/design on a single user answer, or treating an early implementation preference as the endpoint.
 - The requirements/design artifact does not record at least one alternative considered when a meaningful alternative exists.
 - Skipping requirements/design, written-plan, or delegated test-first implementation because "the ticket is clear" or "the change is small."
-- Implementing inline in the main session because tasks share a tight write surface, seem too small, or are awkward to split. Dispatch one one-shot implementation subagent instead.
+- Implementing, reviewing, testing, or verifying inline in the main session instead of delegating that work to subagents.
+- Treating a large multi-ticket workflow as a reason for the main session to do implementation/review/testing/verification work locally.
+- Over-specifying a rigid subagent topology, depth budget, or response schema when the skill only requires delegated ownership and gate evidence.
 - Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent dispatches.
 - Using ambient `gh` authentication for any personal-workflow GitHub write, including PR comments or review replies. Mint a fresh bot token and scope it to the write command; if that fails, halt.
 - Dispatching a separate ticket-start code-review subagent or adding a generic post-implementation code-review phase after Implement.
@@ -219,6 +235,7 @@ When done, report:
 - Continuing past a user-intervention condition without surfacing.
 - Claiming frontend UI parity or consistency without DOM computed-style and bounding-rect extraction from the live browser.
 - Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
+- Accepting visual verification based on hidden templates or implementation proxies, storybook-only renders, static mockups, or source inspection instead of the rendered user-visible outcome and every visually meaningful state.
 - Building the UI/UX matched-element inventory in the main agent instead of delegating inventory construction to UI/UX from Scoping's affected surface map.
 - Dispatching UI/UX without the required review terms: implemented frontend UI, parity mode with runnable reference or consistency mode with production analogs, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
 - Scoping's `## Prototype or reference elements` empty or `_None._` for a reference-backed UI ticket.

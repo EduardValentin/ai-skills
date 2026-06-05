@@ -1,5 +1,7 @@
 .DS_Store
 
+docs/superpowers/
+
 # Zip archives generated under any dist directory
 **/dist/*.zip
 **/dist/**/*.zip

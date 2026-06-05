@@ -35,7 +35,7 @@ Identify up front:
 
 - The reference route/screen for this feature.
 - The matching production route/screen.
-- The important UI states the feature has (default, loading, empty, hover, focus, active, disabled, error, success, expanded/collapsed, modal-open, validation, navigation), so the same flows can be exercised in both apps during verification.
+- The important UI states the feature has (default, loading, empty, hover, focus, active, disabled, error, success, expanded/collapsed, modal-open, validation, navigation), so the same rendered states can be exercised in both apps during verification.
 
 These are passed to the UI/UX subagent during Verify.
 
@@ -49,6 +49,8 @@ If a production design-system primitive does not reproduce the prototype's visua
 - **Wrong path:** silently substitute a "close-enough" production primitive (e.g., translating a prototype `<span>+✔` eyebrow into a production `Badge` component with pill background and shadow). That is parity drift dressed up as design-system discipline.
 
 When the prototype and the design system disagree, the prototype wins. The design system is a tool for achieving parity, not a replacement for it.
+
+Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
 
 **Corollary:** prototype enumeration in Scoping is mandatory in parity mode. The parity-dominance rule depends on having an authoritative list of what to maintain parity with; Scoping's `## Prototype or reference elements` section is that list. An empty section is a Scoping failure, not a clean report.
 

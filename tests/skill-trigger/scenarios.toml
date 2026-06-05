@@ -14,7 +14,32 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "one-shot implementation subagent", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "gh pr checks <PR> --required"]
+skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "gh pr checks <PR> --required"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-start-large-delegated-workflow"
+skill = "ticket-start"
+prompt = """
+Start the APP-456 workflow. It spans separate Linear tickets for the billing API,
+onboarding UI, background jobs, and migrations, so each ticket implementation should be
+delegated to a different agent where practical, while review, testing, and verification
+are still delegated too.
+"""
+description_terms = ["large workflows spanning multiple tickets", "delegated orchestration"]
+skill_terms = ["Large Workflows", "The main agent is the orchestrator", "delegate each ticket implementation to a different implementation agent", "Review, testing, and verification remain delegated"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-start-uiux-rendered-outcome"
+skill = "ticket-start"
+prompt = """
+Start Linear issue APP-789 for a parity-mode UI ticket. Make sure the UI/UX verification
+checks what the user actually sees in every meaningful state instead of hidden templates,
+storybook-only variants, or implementation proxy components.
+"""
+description_terms = ["start implementation work from a ticket", "Linear issue ID"]
+skill_terms = ["rendered user-visible outcome", "every visually meaningful state", "not hidden templates or implementation proxies"]
 forbidden_terms = []
 
 [[scenario]]
@@ -43,7 +68,7 @@ id = "frontend-ui-review-runnable-reference"
 skill = "frontend-ui-review"
 prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before ship."
 description_terms = ["implemented frontend UI", "runnable prototype", "visual parity"]
-skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Parity Mode"]
+skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Parity Mode", "rendered user-visible outcome", "every visually meaningful state"]
 forbidden_terms = []
 
 [[scenario]]
@@ -191,6 +216,14 @@ prompt = "I last researched NOW back in February. Catch me up on the quarters th
 description_terms = ["recapping an existing US-listed stock thesis", "catching up on every quarter", "Mechanically diffs actuals vs saved bull/base/bear projections", "LLM-evaluates the saved English sell triggers"]
 skill_terms = ["Quarterly catch-up", "phases/quarterly/02-fetch-sub.md", "auto-recommend", "Checkpoint 2 — Trajectory, diff, and triggers"]
 forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
+
+[[scenario]]
+id = "stock-research-fundamentals-thesis"
+skill = "stock-research"
+prompt = "Research AAPL end-to-end and help me decide whether it belongs on my long-term buy/watch/avoid list."
+description_terms = ["researching a US-listed company end-to-end", "investment thesis", "buy/watch/avoid"]
+skill_terms = ["Phase 1: Setup & identity", "Phase 10: Commit & index", "Checkpoint 1"]
+forbidden_terms = []
 
 [[scenario]]
 id = "stock-recap-news-impact"
