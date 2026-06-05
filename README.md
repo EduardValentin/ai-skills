@@ -17,11 +17,15 @@ Run deterministic skill-trigger contracts with:
 
 ```bash
 python3 tests/skill-trigger/static_contract.py
+python3 tests/workflow-dispatch/static_contract.py
 ```
 
-Behavioral trigger pressure tests are opt-in because they require an agent command:
+Behavioral/model-backed tests are opt-in because they require an agent command:
 
 ```bash
 SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
   python3 tests/skill-trigger/behavioral_pressure.py
+
+WORKFLOW_DISPATCH_AGENT_COMMAND='<command reading stdin>' \
+  python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```

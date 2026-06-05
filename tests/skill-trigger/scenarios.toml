@@ -14,7 +14,7 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md"]
+skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "gh pr checks <PR> --required"]
 forbidden_terms = []
 
 [[scenario]]
@@ -40,6 +40,58 @@ storybook-only variants, or implementation proxy components.
 """
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
 skill_terms = ["rendered user-visible outcome", "every visually meaningful state", "not hidden templates or implementation proxies"]
+forbidden_terms = []
+
+[[scenario]]
+id = "codebase-scope-map-implementation-handoff"
+skill = "codebase-scope-map"
+prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, affected surfaces, tests, patterns, dependencies, conflicts, and keep it token-efficient."
+description_terms = ["implementation", "ticket", "relevant code mapped", "compact file-line locators", "affected surfaces"]
+skill_terms = ["Token Discipline", "Prototype / Reference App Rule", "Affected surface map", "Suggested downstream slices"]
+forbidden_terms = []
+
+[[scenario]]
+id = "codebase-scope-map-delegated-scoping"
+skill = "codebase-scope-map"
+prompt = """
+You are a Scoping subagent in a ticket workflow. Map the codebase for this
+implementation task as a token-efficient navigable scope map with file:line
+locators, tests, types/contracts, analogous implementations, dependencies,
+prototype/reference elements where relevant, affected surfaces, conflict points, and downstream slices.
+"""
+description_terms = ["handoff task", "entry points", "prototype/reference elements", "affected surfaces"]
+skill_terms = ["Output Contract", "Affected surface map", "Potential conflict points", "Do not choose the implementation approach"]
+forbidden_terms = []
+
+[[scenario]]
+id = "frontend-ui-review-runnable-reference"
+skill = "frontend-ui-review"
+prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before ship."
+description_terms = ["implemented frontend UI", "runnable prototype", "visual parity"]
+skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Parity Mode", "rendered user-visible outcome", "every visually meaningful state"]
+forbidden_terms = []
+
+[[scenario]]
+id = "frontend-ui-review-production-consistency"
+skill = "frontend-ui-review"
+prompt = "There is no prototype for this frontend change; review whether the new settings panel is visually consistent with the existing production settings and profile panels."
+description_terms = ["visual consistency", "production analogs"]
+skill_terms = ["Consistency Mode", "production analog", "Comparison basis"]
+forbidden_terms = []
+
+[[scenario]]
+id = "frontend-ui-review-delegated-uiux-gate"
+skill = "frontend-ui-review"
+prompt = """
+You are a UI/UX verification subagent in a ticket workflow.
+Review the implemented frontend UI against the runnable prototype/reference app
+for visual parity. Build the matched-element inventory from the affected surface
+map, approved artifacts, changed UI files, and live DOM inspection. Compare DOM
+computed styles and bounding rects for every row, check keyboard, focus, contrast,
+and accessibility, then return a structured verdict and findings.
+"""
+description_terms = ["implemented frontend UI", "visual parity", "accessibility states"]
+skill_terms = ["Parity Mode", "Accessibility", "affected surface map"]
 forbidden_terms = []
 
 [[scenario]]
