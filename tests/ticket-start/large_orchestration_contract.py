@@ -52,7 +52,9 @@ def check_large_orchestration_contract(skill: str) -> None:
     assert_contains(implement, "The main session coordinates rather than implementing, reviewing, testing, or verifying inline")
 
     ship = section_between(skill, "## Ship", "## Verification fix loops")
-    assert_contains(ship, "Implementation, review, testing, and verification subagent reports are complete")
+    assert_contains(ship, "Use `ticket-ship-gate` for Ship")
+    assert_contains(ship, "per-work-unit readiness ledger")
+    assert_contains(ship, "Do not perform Ship mutations inline")
 
 
 def section_between(document: str, start_heading: str, end_heading: str) -> str:

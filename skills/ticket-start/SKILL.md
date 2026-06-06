@@ -150,34 +150,17 @@ Do not over-specify the delegation mechanics. The skill enforces the ownership b
 
 7. **If UI/UX returns findings**, route through `verification-fix-loops.md` -> `## UI/UX finding loop`. UI/UX findings dispatch a fresh lightweight implementer subagent with a compact visual/accessibility finding packet, then UI/UX reruns scoped to affected rows/states. Do not rerun QA or any code-review phase for visual-only fixes unless the finding changes behavior or risk.
 
-8. **When QA is clean, UI/UX is clean or skipped, and inventory validation passes if UI/UX ran**, advance to Ship.
+8. **When QA is clean, UI/UX is clean or skipped, and inventory validation passes if UI/UX ran**, advance to `ticket-ship-gate`. Forward the approved artifacts, implementation reports, implementer self-review reports, QA/UIUX verifier reports, backend-only skip rationales if any, unresolved-finding status, PR/ticket context, workflow type, bot identity guard context for personal workflow, required checks gate expectations, the per-work-unit readiness ledger, explicit user merge approval status, current PR draft/ready state, and intended Ship action.
 
 ## Ship
 
-0. **Ship preflight — mandatory before any Ship mutation.** Before opening a PR, marking a PR ready, moving a ticket to review, merging, closing, or otherwise signaling "ready," build a readiness ledger from actual completed outputs:
-   - Approved requirements/design artifact.
-   - Approved implementation plan.
-   - Implementation, review, testing, and verification subagent reports are complete for the approved plan.
-   - QA clean report present.
-   - UI/UX clean report and inventory validation present, or skipped with backend-only rationale.
-   - Large workflow delegation, if used, has every ticket implementation integrated or explicitly out of scope.
-   - No unresolved QA or UI/UX findings.
+Use `ticket-ship-gate` for Ship. Do not perform Ship mutations inline.
 
-   If any ledger row is missing, do not perform any Ship action. Return to the earliest missing gate and complete it first. Local verification, green CI, clean merge state, manual browser checks, or local review do not satisfy missing verification outputs.
+The Ship gate owns the mandatory preflight, PR creation/update, required remote checks, ticket transitions, merge approval, merge, and closeout mutation report. It must receive the per-work-unit readiness ledger and refuse Ship if implementation, implementer self-review, QA verification, UI/UX verification or explicit backend-only/non-UI skip rationale, integration status, or unresolved-finding status is missing.
 
-1. **Personal workflow:** after Ship preflight passes, open or update the PR with `gh`, using the bot identity guard. When possible, keep a new PR in draft until the remote checks gate below passes. Do not move the Linear ticket to **In Review** yet.
-2. **Job workflow:** after Ship preflight passes, follow the team's PR conventions from repository instructions.
-   - If the repository uses Bitbucket PRs and the work requires reading PR metadata, reading or posting comments, or merging via the REST API, treat that portion as Bitbucket PR REST work.
-3. **Remote checks gate — mandatory before marking ready or done.** After the PR exists and before marking it ready, moving a ticket to review/done, merging, or claiming the unit of work is complete, run:
-   ```bash
-   gh pr checks <PR> --required --json name,state,bucket,workflow,link
-   ```
-   Every required check whose `bucket` is not `skipping` must have `bucket == "pass"`. `pending`, `fail`, `cancel`, missing, or unknown required checks block readiness. A green local test run, a green local browser check, or a single green job such as `Validate` does not satisfy this gate if any other required non-skipped check is not green. If no required checks are configured, record that explicitly in the closeout before continuing.
-4. **Personal workflow:** only after the remote checks gate passes, mark the PR ready if it is draft and move the Linear ticket to **In Review** per `personal-workflow.md`. Do not merge or close.
-5. Wait for the user's explicit approval before merging.
-6. **Personal workflow:** after merge, move the Linear ticket to its completed state per `personal-workflow.md`.
-7. **Job workflow:** after merge, follow the team's post-merge convention if specified in repo instructions; otherwise stop and surface what remains manual.
-8. If PR creation, required remote checks, ticket transition, merge, or any Ship step cannot be completed, say exactly what failed and what remains manual.
+`ticket-start` still records the high-level invariant for continuity: the Remote checks gate is mandatory before marking ready or done, and the Ship gate must run `gh pr checks <PR> --required --json name,state,bucket,workflow,link`. If no required checks are configured, the Ship closeout records that explicitly.
+
+Personal workflow GitHub writes still use the bot identity guard in `bot-identity.md`; job workflow follows the team's PR convention. Merging still requires the user's explicit approval.
 
 ## Verification fix loops
 
