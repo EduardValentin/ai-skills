@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,11 +20,15 @@ def main() -> int:
     try:
         scenarios = load_scenarios()
         check_scenarios(scenarios)
+        nested_count = run_nested_contracts()
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print(f"PASS: {len(scenarios)} workflow-dispatch scenarios satisfy static contracts")
+    print(
+        f"PASS: {len(scenarios)} workflow-dispatch scenarios and "
+        f"{nested_count} grouped contracts satisfy static contracts"
+    )
     return 0
 
 
@@ -53,6 +58,27 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
             assert_contains(skill_doc, term, f"{scenario_id} skill document")
         for term in string_list(scenario, "forbidden_skill_terms"):
             assert_not_contains(skill_doc, term, f"{scenario_id} skill document")
+
+
+def run_nested_contracts() -> int:
+    scripts = sorted(SCRIPT_DIR.glob("*/*_contract.py"))
+    for script in scripts:
+        completed = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if completed.stdout:
+            print(completed.stdout, end="")
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"{script.relative_to(REPO_ROOT)} failed with exit code {completed.returncode}"
+            )
+    return len(scripts)
 
 
 def required_string(scenario: dict[str, object], key: str) -> str:
