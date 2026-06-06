@@ -34,7 +34,7 @@ SCENARIOS = (
         required_terms=(
             "backend",
             "service",
-            "unit test",
+            "unit",
             "request",
             "response",
             "persisted",

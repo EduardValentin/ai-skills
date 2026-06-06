@@ -12,6 +12,6 @@ only list the first workflow actions you would take from the loaded skill.
 """
 required_skill_terms = ["Scoping dispatch wording", "dispatches the Scoping subagent", "self-contained codebase mapping request", "token-efficient navigable scope map", "affected surfaces", "suggested downstream slices"]
 forbidden_skill_terms = ["agents/scoping.md"]
-required_response_terms = ["DISPATCH_SUBAGENT", "Scoping", "scope map", "token-efficient navigable", "locators", "entry points", "target modules", "types", "tests", "affected surfaces", "downstream"]
+required_response_terms = ["DISPATCH_SUBAGENT", "Scoping", "scope map", "token-efficient", "navigable", "locators", "entry points", "target modules", "types", "tests", "affected surfaces", "downstream"]
 forbidden_response_terms = ["agents/scoping.md", "codebase-scope-map", "$codebase-scope-map"]
 must_precede_terms = ["PLAN", "IMPLEMENT"]

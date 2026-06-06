@@ -75,8 +75,8 @@ SCENARIOS = (
         ),
         required_terms=(
             "no-checks-configured",
-            "mark",
-            "review",
+            "READY",
+            "Required checks result",
             "bot",
         ),
         forbidden_terms=(
