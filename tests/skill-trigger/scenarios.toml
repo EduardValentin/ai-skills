@@ -14,7 +14,7 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "gh pr checks <PR> --required"]
+skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "ticket-work-unit-orchestration", "ticket-ship-gate"]
 forbidden_terms = []
 
 [[scenario]]
@@ -27,7 +27,7 @@ delegated to a different agent where practical, while review, testing, and verif
 are still delegated too.
 """
 description_terms = ["large workflows spanning multiple tickets", "delegated orchestration"]
-skill_terms = ["Large Workflows", "The main agent is the orchestrator", "delegate each ticket implementation to a different implementation agent", "Review, testing, and verification remain delegated"]
+skill_terms = ["thin intake and routing orchestrator", "ticket-work-unit-orchestration", "each ticket implementation should be delegated to a different implementation agent", "review, testing, and verification remain delegated"]
 forbidden_terms = []
 
 [[scenario]]

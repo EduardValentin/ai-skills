@@ -19,7 +19,7 @@ def main() -> int:
         qa_skill = QA_SKILL.read_text(encoding="utf-8")
         check_qa_skill(qa_skill)
         check_legacy_pointer(LEGACY_QA_PROMPT.read_text(encoding="utf-8"))
-        check_orchestrator_references(TICKET_START.read_text(encoding="utf-8"))
+        check_ticket_start_routes(TICKET_START.read_text(encoding="utf-8"))
         check_orchestrator_references(WORK_UNIT.read_text(encoding="utf-8"))
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
@@ -65,6 +65,12 @@ def check_legacy_pointer(pointer: str) -> None:
 def check_orchestrator_references(skill: str) -> None:
     assert_contains(skill, "ticket-qa-verification", "orchestrator skill")
     assert_contains(skill, "QA verification report", "orchestrator skill")
+
+
+def check_ticket_start_routes(skill: str) -> None:
+    assert_contains(skill, "ticket-work-unit-orchestration", "ticket-start skill")
+    assert_contains(skill, "QA verification report", "ticket-start skill")
+    assert_not_contains(skill, "Dispatch `ticket-qa-verification`", "ticket-start skill")
 
 
 def assert_contains(haystack: str, needle: str, context: str) -> None:

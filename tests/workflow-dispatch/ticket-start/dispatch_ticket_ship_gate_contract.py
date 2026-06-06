@@ -25,16 +25,15 @@ def main() -> int:
 
 
 def check_contract(skill: str) -> None:
-    verify = section_between(skill, "## Verify", "## Ship")
-    ship = section_between(skill, "## Ship", "## Verification fix loops")
-    assert_contains(verify, "advance to `ticket-ship-gate`")
+    ship = section_between(skill, "## Ship routing", "## Briefing rule")
     assert_contains(ship, "Use `ticket-ship-gate`")
+    assert_contains(ship, "required checks gate expectations")
     assert_contains(ship, "per-work-unit readiness ledger")
     assert_contains(ship, "Do not perform Ship mutations inline")
-    assert_contains(verify, "explicit user merge approval status")
-    assert_contains(verify, "current PR draft/ready state")
-    assert_contains(verify, "intended Ship action")
-    assert_before(verify, "QA is clean", "advance to `ticket-ship-gate`")
+    assert_contains(ship, "explicit user merge approval status")
+    assert_contains(ship, "current PR draft/ready state")
+    assert_contains(ship, "intended Ship action")
+    assert_not_contains(ship, "gh pr checks <PR> --required --json name,state,bucket,workflow,link")
 
 
 def section_between(document: str, start_heading: str, end_heading: str) -> str:
@@ -53,11 +52,9 @@ def assert_contains(haystack: str, needle: str) -> None:
         raise AssertionError(f"expected to find {needle!r}")
 
 
-def assert_before(haystack: str, first: str, second: str) -> None:
-    first_index = haystack.find(first)
-    second_index = haystack.find(second)
-    if first_index < 0 or second_index < 0 or first_index >= second_index:
-        raise AssertionError(f"expected {first!r} to appear before {second!r}")
+def assert_not_contains(haystack: str, needle: str) -> None:
+    if needle in haystack:
+        raise AssertionError(f"expected not to find {needle!r}")
 
 
 if __name__ == "__main__":

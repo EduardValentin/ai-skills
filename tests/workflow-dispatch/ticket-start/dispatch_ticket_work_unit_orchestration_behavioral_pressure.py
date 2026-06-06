@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral pressure test for ticket-start dispatching ticket-qa-verification."""
+"""Behavioral pressure test for ticket-start dispatching ticket-work-unit-orchestration."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def main() -> int:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches ticket-qa-verification before UI/UX")
+    print("PASS: ticket-start dispatches ticket-work-unit-orchestration")
     return 0
 
 
@@ -40,7 +40,7 @@ def print_usage() -> None:
     print(
         """Usage:
   WORKFLOW_DISPATCH_AGENT_COMMAND='<command reading stdin>' \\
-    python3 tests/workflow-dispatch/ticket-start/dispatch_ticket_qa_verification_behavioral_pressure.py
+    python3 tests/workflow-dispatch/ticket-start/dispatch_ticket_work_unit_orchestration_behavioral_pressure.py
 """
     )
 
@@ -56,16 +56,16 @@ Loaded skill: ticket-start
 </skill>
 
 User request:
-The implementation plan is approved and the branch has a mixed backend and UI diff.
-The app URL is http://localhost:3000 and local tests passed. Return only the
-Verify-phase workflow actions the main agent must take before Ship.
+The requirements/design artifact and implementation plan are approved for a mixed
+backend and UI ticket. Return only the execution-routing workflow actions the
+main agent must take before Ship.
 
 Do not execute the ticket. Do not call tools.
 
 Return only action lines in this exact shape:
 ACTION: <number> | <kind> | <target> | <details>
 
-Use kind DISPATCH_SUBAGENT for mandatory verification skill dispatches.
+Use kind DISPATCH_SUBAGENT for mandatory workflow dispatches.
 """
 
 
@@ -90,24 +90,30 @@ def check_response(response: str) -> None:
     normalized = response.lower()
     required_terms = (
         "dispatch_subagent",
-        "ticket-qa-verification",
-        "mixed",
-        "full diff",
-        "local test",
+        "ticket-work-unit-orchestration",
+        "approved requirements",
+        "approved implementation plan",
+        "scope",
+        "readiness ledger",
         "qa",
-        "findings",
         "ui/ux",
+        "ship",
     )
     missing = [term for term in required_terms if term not in normalized]
     if missing:
         print(f"Response:\n{response}", file=sys.stderr)
         raise AssertionError(f"missing required dispatch terms: {missing}")
 
-    qa_index = dispatch_index(response, "ticket-qa-verification")
-    uiux_index = dispatch_index(response, "UI/UX")
-    if qa_index < 0 or uiux_index < 0 or uiux_index < qa_index:
+    orchestration_index = dispatch_index(response, "ticket-work-unit-orchestration")
+    if orchestration_index < 0:
         print(f"Response:\n{response}", file=sys.stderr)
-        raise AssertionError("ticket-qa-verification must appear before UI/UX")
+        raise AssertionError("ticket-work-unit-orchestration dispatch is required")
+
+    forbidden = ("ticket-qa-verification", "frontend-ui-review", "ticket-implementation-unit")
+    present = [term for term in forbidden if term in normalized]
+    if present:
+        print(f"Response:\n{response}", file=sys.stderr)
+        raise AssertionError(f"ticket-start should not dispatch downstream execution skills directly: {present}")
 
 
 def dispatch_index(response: str, target: str) -> int:

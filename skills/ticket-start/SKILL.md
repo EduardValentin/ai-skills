@@ -7,38 +7,35 @@ description: Use when the user wants to start implementation work from a ticket 
 
 ## Overview
 
-Implementation work driven by a ticket. The main agent is the orchestrator: it owns user dialogue, requirements/design approval, implementation-plan approval, ticket/branch/PR state, verification gating, and Ship. Subagents own implementation, review, testing, verification, compact codebase scoping, QA, UI/UX, and focused fixes.
+`ticket-start` is the thin intake and routing orchestrator for implementation work driven by a ticket. It owns user dialogue, source-of-truth freshness, requirements/design approval, implementation-plan approval, routing to execution orchestration, and routing to Ship.
 
 Phase order is a hard gate:
 
-**Setup -> Requirements/Design -> Plan -> Implement -> Verify -> Ship**
+**Setup -> Requirements/Design -> Plan -> Execute -> Ship**
 
-Before implementation, explore project context, user intent, requirements, constraints, design, alternatives, edge cases, and non-goals. Produce an approved requirements/design artifact before implementation planning. Then write a detailed implementation plan and wait for explicit plan approval before code.
-
-Implementation, review, testing, and verification are delegated, not done inline by the main session. The main session chooses an appropriate delegation strategy for the ticket and coordinates returned reports before advancing gates.
+Implementation, review, testing, QA, UI/UX verification, focused fixes, readiness ledger tracking, and Ship mutations are delegated to dedicated skills. The main session coordinates returned reports and user decisions; it does not implement, review, test, verify, or mutate release state inline.
 
 **Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
 
-**UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, rendered user-visible outcome/state coverage, and inventory construction from the affected surface map. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
+**Implementation dispatch wording:** `ticket-start` invokes `ticket-work-unit-orchestration` after plan approval. That skill chooses the implementation delegation strategy and may use `ticket-implementation-unit`.
 
-**Implementation dispatch wording:** after plan approval, `ticket-start` delegates implementation through `ticket-implementation-unit` subagent(s). The main session coordinates the work and consumes returned implementation reports with implementer self-review; it does not use complexity, shared write surfaces, or convenience as a reason to implement inline.
+**UI/UX dispatch wording:** UI/UX verification remains delegated through execution orchestration, preferably to `frontend-ui-review` for UI-facing or mixed work. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
 
-**Large workflow wording:** large workflows are still `ticket-start`. For workflows spanning multiple tickets, delegate each ticket implementation to a different implementation agent where practical. Review, testing, and verification remain delegated to subagents. Let the main orchestrator choose the exact delegation strategy for the work in front of it.
-
-**GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes. If a bot token cannot be minted or the bot lacks permission, halt and draft the intended write in chat; do not post through the user's personal GitHub account.
+**GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes.
 
 **Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
-**Subagent authorization contract:** a user who invokes `ticket-start` has authorized every mandatory subagent dispatch named by this skill. General host guidance that discourages casual subagent spawning does not override `ticket-start`'s required dispatches. If the host cannot dispatch subagents, halt and surface that blocker; never replace Scoping, implementation, QA, UI/UX, or focused verification-fix implementers with local-only substitutes.
+**Subagent authorization contract:** a user who invokes `ticket-start` has authorized the mandatory dispatches still owned here: Scoping, `ticket-work-unit-orchestration`, and `ticket-ship-gate`. If the host cannot dispatch required subagents or skills, halt and surface that blocker.
 
 ## When to use
 
 - The user asks to start, work on, build, or implement a ticket.
 - The user pastes a Jira/job ticket and asks for implementation.
 - The user gives a Linear ticket identifier in a personal project.
-- Follow-up status/progress questions about a ticket already in this workflow.
+- The user asks about a ticket already in this workflow.
+- The work is a large workflow spanning multiple tickets or substantial implementation areas that needs delegated orchestration.
 
-**Do not use for:** code review, pure planning, debugging-only tasks, or refactors with no ticket.
+Do not use for code review, pure planning, debugging-only tasks, or refactors with no ticket.
 
 ## Workflow selection
 
@@ -49,184 +46,101 @@ If ambiguous, ask the user before loading anything else.
 
 ## Setup
 
-1. **Worktree.** Start feature work in an isolated worktree based on the latest `origin/main`. Hard rule: fetch `origin main` first, then create or verify the worktree from fetched `origin/main`, never from local `main`, the current branch, or a stale remote-tracking ref. Halt on fetch failure — do not fall back to stale local state.
+1. **Worktree.** Start feature work in an isolated worktree based on the latest `origin/main`. Hard rule: fetch `origin main` first, then create or verify the worktree from fetched `origin/main`, never from local `main`, the current branch, or a stale remote-tracking ref. Halt on fetch failure.
 
-2. **Bot identity (personal workflow only).** Run the two activation checks in `bot-identity.md` -> `## Setup activation` — mint a fresh GitHub installation token and verify it with a no-op API call, then apply the bot's git name/email as per-worktree git config. Halt on failure with a pointer at the runbook. Fail closed — never fall back to personal GitHub credentials. Linear MCP stays under personal identity. Job workflow: skip this step.
+2. **Bot identity (personal workflow only).** Run the two activation checks in `bot-identity.md` -> `## Setup activation`: mint and verify a fresh GitHub installation token, then apply the bot's git name/email as per-worktree git config. Fail closed; never fall back to personal GitHub credentials. Job workflow skips this step.
 
-3. **Freshness — memory is stale.** Memory, prior chat context, old plans, and earlier tool results are hints, not facts. Before any substantive answer about scope, status, blockers, related tickets, progress, or git state, fetch from the source of truth:
-   - **Linear tickets:** Linear MCP. If related/blocking/duplicate/parent/child tickets matter, read each.
-   - **Job/Jira tickets:** prefer `acli jira workitem view <KEY> --json` (see `job-workflow.md`); fall back to user paste only on `acli` failure.
-   - **Repo state:** inspect branch, working tree, diffs, recent commits, PR metadata.
-   - **Repo docs/code:** re-read from disk before citing or depending.
-   - If a source is unavailable, say what could not be verified. Do not fill from memory.
+3. **Freshness.** Memory and prior chat are hints, not facts. Before substantive answers about scope, status, blockers, related tickets, progress, or git state, re-read the source of truth:
+   - Linear tickets through Linear MCP, including related tickets when relevant.
+   - Job/Jira tickets through `acli jira workitem view <KEY> --json` when available, otherwise the user paste.
+   - Repo branch, working tree, diffs, recent commits, PR metadata, docs, and code from disk.
+   - If a source is unavailable, say what could not be verified.
 
-4. **Workflow-specific reading.** Read the workflow file selected above and gather the facts it points at. Stop when the relevant facts are gathered.
+4. **Workflow-specific reading.** Read the selected workflow file and gather only the relevant facts it points at.
 
-5. **Dispatch Scoping subagent.** Ask for a token-efficient navigable scope map for this implementation ticket with `path:line` / `path:start-end` locators, covering entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices. Forward: ticket title/description/AC, repo `AGENTS.md` / `CLAUDE.md`, and (personal workflow) the scoped slices of `PRD.md` / `designs/`. Subagent context does not inherit the main session's auto-loaded files — explicit forwarding is required. The returned map is the definitive map of the relevant code surface; do not re-read full files later when a Scoping locator points at the slice you need.
+5. **Dispatch Scoping subagent.** Forward ticket title/description/AC, relevant repo instructions, workflow facts, and scoped PRD/design slices when applicable. The returned scope map is the definitive relevant code surface for downstream routing.
 
-6. **Clarify if needed.** If AC are missing/vague/not testable, or Scoping surfaces a conflict between the ticket and existing ownership, layering, or product constraints, brief the user with Scoping evidence (`path:line`) and ask before continuing. See `## Briefing rule`.
+6. **Clarify if needed.** If acceptance criteria are missing/vague/not testable, or Scoping surfaces a conflict, brief the user with Scoping evidence and ask before continuing.
 
 ## Requirements/Design
 
-1. **Open with a Scoping-grounded briefing.** Per `## Briefing rule`, surface entry points, target module, prototype/reference elements if any, and conflicts Scoping flagged. The user must enter the dialogue with the same context Scoping built.
+1. Open with a Scoping-grounded briefing: entry points, target modules, prototype/reference elements if any, affected surfaces, and conflicts.
 
-2. **Explore before implementation.** Frame the work as requirements and design exploration: project context, user intent, requirements, constraints, design, alternatives, edge cases, failure modes, accessibility, and non-goals before implementation.
+2. Explore project context, user intent, requirements, constraints, design, alternatives, edge cases, failure modes, accessibility, and non-goals before implementation.
 
-3. **Surface alternatives.** Before treating any direction as converged, put at least one credible alternative on the table, even if only to dismiss it. The requirements/design artifact must record the chosen direction and any meaningful alternative dismissed with rationale.
+3. Surface at least one credible alternative when meaningful, and record the chosen direction plus dismissed alternatives in the requirements/design artifact.
 
-4. **Anti-collapse rule.** A single user answer is not convergence. An early implementation preference is an input, not the endpoint. Before exiting:
-   - Restate the chosen direction across intent, mechanism, edge cases, non-goals, and alternatives considered.
-   - Ask the user to approve the requirements/design direction explicitly.
-   - "Yes, do it" / "approved" / "go ahead" / similar is approval of the requirements/design direction, not approval of the implementation plan.
+4. Ask the user to approve the requirements/design direction explicitly. Approval here is not implementation-plan approval.
 
-5. **Output: approved requirements/design artifact.** Write the settled requirements/design artifact in the workflow's planning location. Keep agent-local planning artifacts out of product commits unless the repo explicitly asks to version them. Ask the user to review and approve the artifact before Plan.
+5. Write the approved requirements/design artifact in the workflow's planning location. Keep agent-local planning artifacts out of product commits unless the repo explicitly asks to version them.
 
 ## Plan
 
-1. Produce a written implementation plan from the approved requirements/design artifact before touching code. The plan is a distinct artifact — not a verbal summary, not the requirements/design transcript, not a mental model.
+1. Produce a written implementation plan from the approved requirements/design artifact before touching code.
 
-2. For UI tickets, keep visible-surface tasks traceable to Scoping's affected surface map. Reference-backed UI tasks should also remain traceable to Scoping's prototype/reference rows. The main agent does not build the UI/UX matched-element inventory; the UI/UX subagent builds it during Verify from the affected surface map, the approved artifacts, and the diff.
+2. Keep UI-visible tasks traceable to Scoping's affected surface map and reference/prototype rows when present.
 
-3. Show the plan to the user for review. Wait for explicit user approval of the plan itself before any code.
+3. If the plan spans multiple tickets or substantial implementation areas, describe the intended delegation shape at a high level. For workflows spanning multiple tickets, each ticket implementation should be delegated to a different implementation agent where practical, while review, testing, and verification remain delegated to subagents. The exact strategy belongs to `ticket-work-unit-orchestration`.
 
-4. **No code between requirements/design approval and plan approval.** Not exploratory edits, not scaffolding, not "drafting what the plan would say in code." File edits are off-limits until the plan exists and the user has explicitly approved it.
+4. Wait for explicit user approval of the implementation plan before execution. No code or scaffolding happens between requirements/design approval and plan approval.
 
-5. **Delegation shape.** If the plan spans multiple tickets or substantial implementation areas, describe the intended delegation shape before asking for approval: which ticket or area each implementation agent owns, what review/testing/verification subagents should cover, and any dependencies that affect sequencing. Keep this descriptive, not a fixed topology.
+## Execution routing
 
-## Large Workflows
+Invoke `ticket-work-unit-orchestration` after the implementation plan is approved.
 
-Use this section when the work spans multiple tickets or substantial implementation areas. The phase order remains **Setup -> Requirements/Design -> Plan -> Implement -> Verify -> Ship**.
+Forward a compact execution packet:
 
-The main agent is the orchestrator. It keeps the user dialogue, approvals, ticket/branch/PR state, and Ship gate coherent while delegating the actual work.
+- ticket source, ticket IDs, and acceptance criteria
+- approved requirements/design artifact
+- approved implementation plan
+- Scoping map with affected surfaces, entry points, tests, and constraints
+- workflow type and branch/worktree state
+- relevant repo instructions and non-goals
+- UI/prototype/reference context when applicable
+- expected handoff shape: per-work-unit readiness ledger for implementation report, implementer self-review report, QA verification report, UI/UX verification report or explicit backend-only/non-UI skip rationale, unresolved findings status, and integration/out-of-scope status
 
-For workflows spanning multiple tickets, delegate each ticket implementation to a different implementation agent where practical. If sequencing, dependencies, or repo constraints make a different split better, explain the chosen strategy in the plan. The skill enforces ownership, not mechanics.
+Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`. `ticket-work-unit-orchestration` owns those details and returns the per-work-unit readiness ledger before Ship.
 
-Implementation, review, testing, and verification remain delegated. The main session coordinates the subagent reports, resolves blockers with the user when needed, and advances gates only when the required delegated work is complete.
-
-Do not over-specify the delegation mechanics. The skill enforces the ownership boundary; the agent chooses the exact subagent strategy.
-
-## Implement
-
-1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
-
-2. **Delegate implementation.** Implementation is delegated through `ticket-implementation-unit` subagent(s). The main session provides ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, relevant repo instructions, constraints, expected local checks, current branch/worktree state, and non-goals. The main session coordinates rather than implementing, reviewing, testing, or verifying inline.
-
-3. **Delegate review, testing, and verification.** Review, testing, and verification work stays delegated to subagents. Use the project and plan context to decide which subagents are needed and what evidence they should return.
-
-4. When implementation reaches branch-finishing guidance, accept any test-pass check but do not present merge / PR / keep / discard options. Return to this skill's Verify phase. Ship replaces those options.
-
-## Verify
-
-1. **Determine backend-only flag.** Walk the diff:
-   - `git diff --name-only origin/main..HEAD`.
-   - Match against UI extensions (`\.(tsx|jsx|vue|svelte|html|css|scss|sass|less|styl|ejs|pug|hbs|erb|twig|liquid|jinja|blade\.php)$`) and UI directories (`app/`, `components/`, `pages/`, `views/`, `templates/`, `client/`, `web/`, `frontend/`, `ui/`, plus repo-specific UI dirs identified by Scoping).
-   - Any match -> not backend-only.
-   - Uncertain (config files affecting render, shared utilities used by both) -> ask the user. Default on uncertainty: do not skip UI/UX.
-
-2. **Dispatch `ticket-qa-verification`.** Forward: ticket + AC, approved requirements/design artifact, approved plan, full diff, QA mode (`backend` / `ui` / `mixed` from diff), path/URL of the running app, relevant credentials or seed data, live-browser automation for UI mode if available, and HTTP tooling for backend. Local test runs, manual browser checks, and endpoint probes are evidence for QA to use, not substitutes for the QA verification report.
-
-3. **If QA returns findings**, route through `verification-fix-loops.md` -> `## QA finding loop`. QA findings dispatch a fresh lightweight implementer subagent with a compact finding packet, then QA reruns. Do not route QA findings through a generic review loop.
-
-4. **When QA is clean**, continue to UI/UX unless backend-only.
-
-5. **Dispatch UI/UX subagent** unless backend-only flag is set. Ask for frontend UI review:
-   - Parity mode when a runnable prototype/reference app is available: review the implemented frontend UI against that reference as the visual source of truth.
-   - Consistency mode otherwise: review the implemented frontend UI against credible production sibling or analog elements.
-   - Include: build a matched-element inventory from Scoping's affected surface map, approved artifacts, changed UI files, and live DOM inspection; fill DOM computed styles; compare bounding rects; check keyboard/focus/contrast accessibility; return a Markdown report with verdict, review mode, comparison basis, states covered, completed inventory rows, findings, out-of-scope flags, and patterns.
-   - Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies. Do not accept template/source inspection, proxy-component screenshots, storybook-only renders, static mockups, or hidden component states as substitutes for the integrated rendered surface the user actually sees.
-
-   Forward only compact inputs: ticket + approved requirements/design artifact + plan, full diff or changed UI files, review mode, running URLs (production and reference when parity mode applies), important UI states, Scoping affected surfaces/prototype-reference rows/production locators, and any local evidence. Local accessibility scans, screenshots, Lighthouse, or visual comparison notes are evidence for the UI/UX subagent to use, not substitutes for the UI/UX report and inventory validation.
-
-6. **Validate UI/UX's matched-element inventory before accepting any verdict.**
-   - A `## Matched-element inventory` section exists.
-   - A `## Review mode` section exists and matches the workflow's expected mode.
-   - A `## Comparison basis` section exists. Parity mode names the runnable reference; consistency mode names credible production siblings or analogs.
-   - Rows cover the relevant Scoping affected surfaces, changed visible production UI files, and visible changed elements on the feature surface. Parity mode also covers the relevant Scoping prototype/reference rows.
-   - States covered include every visually meaningful user-visible state named by the ticket, approved artifacts, prototype/reference, changed UI, or adjacent feature surface. Hidden templates, implementation-only component variants, and proxy render targets do not count as state coverage.
-   - Every verified row has non-blank `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells. Blank = DOM-evaluation work was skipped for that row.
-   - Any missing expected coverage or blank cell -> report is structurally invalid. Reject and re-dispatch UI/UX with the same self-contained verification request and the specific gaps named.
-
-   Do not accept "I checked the major elements" or "the rest match by inspection" as substitutes for filled rows.
-
-7. **If UI/UX returns findings**, route through `verification-fix-loops.md` -> `## UI/UX finding loop`. UI/UX findings dispatch a fresh lightweight implementer subagent with a compact visual/accessibility finding packet, then UI/UX reruns scoped to affected rows/states. Do not rerun QA or any code-review phase for visual-only fixes unless the finding changes behavior or risk.
-
-8. **When QA is clean, UI/UX is clean or skipped, and inventory validation passes if UI/UX ran**, advance to `ticket-ship-gate`. Forward the approved artifacts, implementation reports, implementer self-review reports, QA/UIUX verifier reports, backend-only skip rationales if any, unresolved-finding status, PR/ticket context, workflow type, bot identity guard context for personal workflow, required checks gate expectations, the per-work-unit readiness ledger, explicit user merge approval status, current PR draft/ready state, and intended Ship action.
-
-## Ship
+## Ship routing
 
 Use `ticket-ship-gate` for Ship. Do not perform Ship mutations inline.
 
-The Ship gate owns the mandatory preflight, PR creation/update, required remote checks, ticket transitions, merge approval, merge, and closeout mutation report. It must receive the per-work-unit readiness ledger and refuse Ship if implementation, implementer self-review, QA verification, UI/UX verification or explicit backend-only/non-UI skip rationale, integration status, or unresolved-finding status is missing.
+Forward a compact Ship packet:
 
-`ticket-start` still records the high-level invariant for continuity: the Remote checks gate is mandatory before marking ready or done, and the Ship gate must run `gh pr checks <PR> --required --json name,state,bucket,workflow,link`. If no required checks are configured, the Ship closeout records that explicitly.
+- approved requirements/design artifact and approved implementation plan
+- per-work-unit readiness ledger from `ticket-work-unit-orchestration`
+- PR/ticket context, workflow type, branch, and repository
+- bot identity guard context for personal workflow
+- required checks gate expectations
+- explicit user merge approval status
+- current PR draft/ready state
+- intended Ship action
 
-Personal workflow GitHub writes still use the bot identity guard in `bot-identity.md`; job workflow follows the team's PR convention. Merging still requires the user's explicit approval.
-
-## Verification fix loops
-
-When QA or UI/UX returns findings, use `verification-fix-loops.md`. That file defines the two local find -> fix -> verify loops, fresh lightweight implementer dispatch, compact finding packets, iteration caps, and user-intervention conditions.
+`ticket-ship-gate` owns readiness preflight, PR creation/update, Remote checks gate, ticket transitions, merge approval, merge, and closeout mutation report.
 
 ## Briefing rule
 
-When the workflow dispatches a subagent and then asks the user for input, decision, or choice, the user must enter the dialogue with the same context the subagent had. Brief in a single message before the first question.
-
-| Trigger | Brief with |
-|---|---|
-| Scoping -> user (Setup clarify, or Requirements/Design opener) | Scoping's relevant findings: entry points, target module, prototype/reference elements if any, affected surfaces, and conflicts. For conflicts: quoted finding + `path:line` evidence. The question framed against that evidence. |
-| QA/UIUX -> user intervention | Findings, one per line: severity, `path:line` or selector/state, one-line description. Suggested fix if available. The material decision or blocker that requires user input. |
-
-**Forbidden:** asking the user to pick an option they haven't seen, answer a clarifying question without its motivating context, or approve a fix without naming the finding.
-
-## Implementation standards
-
-Smallest safe diff that satisfies the ticket. Preserve existing patterns; do not invent abstractions the ticket does not require. If the ticket is explicitly security-intensive, pause and use a dedicated security workflow instead of expanding `ticket-start`. Greenfield personal-project code with no inherited pattern: establish ownership boundaries and low coupling deliberately.
-
-## Library research
-
-If the change touches a third-party library, identify the exact version from manifests/lockfiles and read the official docs for that version before editing dependent code. Targeted searches only — do not load the whole library reference.
+When a routed skill or subagent returns a finding, blocker, or decision point that needs user input, brief the user with the same relevant context before asking. Include severity, locator or ticket reference, one-line description, and the material choice or blocker.
 
 ## Closeout report
 
 When done, report:
-- What changed.
-- What was validated and how: tests/checks run, QA status, UI/UX review mode and coverage, UI/UX inventory validation or backend-only skip, and required PR checks status from `gh pr checks <PR> --required`.
-- Rules proposed or promoted in this session, by destination, if any.
-- QA and UI/UX fix-loop iterations consumed.
-- Any remaining risk, assumption, or follow-up.
-- What is blocked or unverified, named explicitly.
 
-## Red flags — stop and recover
+- what changed
+- what was validated and how, including delegated QA/UIUX status or backend-only skip
+- readiness ledger status from `ticket-work-unit-orchestration`
+- Ship gate status from `ticket-ship-gate`
+- rules proposed or promoted in this session, if any
+- remaining risks, assumptions, blockers, or manual follow-up
 
-- Working in the primary checkout instead of a fresh worktree.
-- Basing the worktree on anything other than freshly fetched `origin/main` (including local `main`, the current branch, or a stale remote-tracking ref).
-- Writing code before the requirements/design artifact and implementation plan are both approved.
-- Treating requirements/design approval ("yes, do it" / "approved" / "go") as implementation-plan approval. They are separate artifacts.
-- Exiting requirements/design on a single user answer, or treating an early implementation preference as the endpoint.
-- The requirements/design artifact does not record at least one alternative considered when a meaningful alternative exists.
-- Skipping requirements/design, written-plan, or delegated test-first implementation because "the ticket is clear" or "the change is small."
-- Implementing, reviewing, testing, or verifying inline in the main session instead of delegating that work to subagents.
-- Treating a large multi-ticket workflow as a reason for the main session to do implementation/review/testing/verification work locally.
-- Over-specifying a rigid subagent topology, depth budget, or response schema when the skill only requires delegated ownership and gate evidence.
-- Treating general host guidance against casual subagent spawning as a reason to skip this skill's mandatory subagent dispatches.
-- Using ambient `gh` authentication for any personal-workflow GitHub write, including PR comments or review replies. Mint a fresh bot token and scope it to the write command; if that fails, halt.
-- Dispatching a separate ticket-start code-review subagent or adding a generic post-implementation code-review phase after Implement.
-- Replacing QA or UI/UX with local tests, browser checks, Lighthouse, or prototype comparison. Local checks are evidence, not gate completion.
-- Dispatching Scoping or UI/UX with vague prompts that omit the required work, evidence, and compact inputs.
-- Trusting a stale ticket summary instead of re-reading from the source of truth.
-- Loading `PRD.md` or `designs/` in full instead of scoped to the feature.
-- Reloading full files when a Scoping locator points at the surgical slice.
-- Continuing past a user-intervention condition without surfacing.
-- Claiming frontend UI parity or consistency without DOM computed-style and bounding-rect extraction from the live browser.
-- Accepting a UI/UX verdict whose matched-element inventory is missing, empty, has blank cells for in-scope rows, or restricts itself to "important" elements.
-- Accepting visual verification based on hidden templates or implementation proxies, storybook-only renders, static mockups, or source inspection instead of the rendered user-visible outcome and every visually meaningful state.
-- Building the UI/UX matched-element inventory in the main agent instead of delegating inventory construction to UI/UX from Scoping's affected surface map.
-- Dispatching UI/UX without the required review terms: implemented frontend UI, parity mode with runnable reference or consistency mode with production analogs, matched-element inventory, DOM computed styles, bounding rects, accessibility, and inventory construction from the affected surface map.
-- Scoping's `## Prototype or reference elements` empty or `_None._` for a reference-backed UI ticket.
-- Briefing the user with anything less than the subagent's synthesis before a dialogue, clarification, or fix-decision.
-- Letting branch-finishing guidance present merge / PR / keep / discard options instead of returning to Verify.
-- Starting any Ship mutation without first completing the Ship preflight ledger from actual outputs.
-- Opening or marking a PR ready, moving the ticket to In Review, or otherwise entering Ship before QA, UI/UX if applicable, inventory validation, and unresolved verification findings are complete.
-- Marking a PR ready, moving a ticket to review/done, merging, or claiming completion before `gh pr checks <PR> --required` shows every required non-skipped check green.
-- Merging the PR before the user explicitly approves.
+## Red flags
 
-If any of these is true: stop, name the violation, and recover before continuing.
+Stop and recover if any of these happen:
+
+- worktree was not based on freshly fetched `origin/main`
+- source-of-truth ticket, repo, or PR state is stale or unavailable but treated as fact
+- requirements/design or implementation-plan approval is skipped or collapsed
+- implementation, review, testing, QA, UI/UX, fixes, or Ship mutations are done inline by `ticket-start`
+- visual verification is accepted without the rendered user-visible outcome and every visually meaningful state
+- personal-workflow GitHub writes would use ambient credentials
+- Ship starts without a complete per-work-unit readiness ledger
