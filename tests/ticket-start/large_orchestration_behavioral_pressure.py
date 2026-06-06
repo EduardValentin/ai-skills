@@ -8,6 +8,7 @@ prompt from stdin and writes the agent response to stdout.
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -33,38 +34,19 @@ SCENARIOS = (
         user_request=(
             "Use ticket-start for a large workflow spanning four Linear tickets: database "
             "migration, backend API, onboarding UI, and analytics events. Explain how the "
-            "main agent should coordinate implementation, review, testing, and verification."
+            "main agent should route execution after requirements/design and plan approval."
         ),
         required_terms=(
-            "delegated",
-            "review",
-            "verification",
-            "database",
-            "API",
-            "UI",
-            "analytics",
+            "ticket-work-unit-orchestration",
+            "approved requirements",
+            "approved implementation plan",
+            "scoping",
+            "readiness ledger",
         ),
         required_any_groups=(
-            ("main agent is the orchestrator", "main agent stays the orchestrator", "main agent", "orchestrator"),
-            ("delegate each ticket implementation", "implementation ownership", "ticket agent"),
-            (
-                "different implementation agent",
-                "different agent",
-                "database ticket agent",
-                "API ticket agent",
-                "Agent 1",
-                "migration agent",
-                "API agent",
-            ),
-            ("testing", "QA"),
-            (
-                "delegation strategy",
-                "chosen strategy",
-                "different split",
-                "different strategy",
-                "different delegation shape",
-                "different delegation split",
-            ),
+            ("main agent is the orchestrator", "main agent stays the orchestrator", "orchestrator"),
+            ("large workflow", "multiple tickets", "four linear tickets"),
+            ("implementation", "QA", "UI/UX", "verification"),
         ),
         forbidden_terms=(
             "Depth budget:",
@@ -75,6 +57,8 @@ SCENARIOS = (
             "leaf-only",
             "grandchild",
             "I would implement inline",
+            "ticket-qa-verification",
+            "ticket-implementation-unit",
         ),
     ),
 )
@@ -128,21 +112,19 @@ Skill text:
 User request:
 {scenario.user_request}
 
-Do not execute the ticket. Return a concise delegation plan only. It must explain:
-- how the main agent stays the orchestrator,
-- which ticket implementation agents own which ticket,
-- how review, testing, and verification remain delegated,
-- when the orchestrator would choose a different delegation strategy,
-- how the delegated reports are used before Ship.
+Do not execute the ticket. Return a concise routing plan only. It must explain:
+- how ticket-start stays the intake and routing orchestrator,
+- which dedicated skill owns execution orchestration,
+- which compact context ticket-start forwards,
+- how the readiness ledger is used before Ship.
 """
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
     completed = subprocess.run(
-        agent_command,
+        shlex.split(agent_command),
         input=prompt,
         text=True,
-        shell=True,
         cwd=REPO_ROOT,
         capture_output=True,
         check=False,

@@ -26,15 +26,17 @@ def main() -> int:
 
 
 def check_large_orchestration_contract(skill: str) -> None:
-    section = section_between(skill, "## Large Workflows", "## Implement")
-
-    assert_contains(section, "The main agent is the orchestrator")
-    assert_contains(section, "For workflows spanning multiple tickets")
-    assert_contains(section, "delegate each ticket implementation to a different implementation agent")
-    assert_contains(section, "review, testing, and verification remain delegated")
-    assert_contains(section, "The skill enforces ownership, not mechanics")
+    assert_line_count_at_most(skill, 175)
+    assert_contains(skill, "thin intake and routing orchestrator")
+    assert_contains(skill, "Invoke `ticket-work-unit-orchestration`")
+    assert_contains(skill, "large workflows spanning multiple tickets")
+    assert_contains(skill, "per-work-unit readiness ledger")
+    assert_contains(skill, "Use `ticket-ship-gate` for Ship")
 
     forbidden_terms = (
+        "## Large Workflows",
+        "## Implement",
+        "## Verify",
         "Root -> child -> grandchild",
         "Depth budget",
         "IMPLEMENTATION_SLICE_RESULT",
@@ -42,19 +44,24 @@ def check_large_orchestration_contract(skill: str) -> None:
         "leaf-only",
         "Grandchildren are helper probes",
         "exact depth budget",
+        "Implementation is delegated through `ticket-implementation-unit` subagent(s)",
+        "Dispatch `ticket-qa-verification`",
+        "Dispatch UI/UX subagent",
+        "Every verified row has non-blank",
+        "gh pr checks <PR> --required --json name,state,bucket,workflow,link",
     )
     for forbidden in forbidden_terms:
         assert_not_contains(skill, forbidden)
 
-    implement = section_between(skill, "## Implement", "## Verify")
-    assert_contains(implement, "Implementation is delegated through `ticket-implementation-unit` subagent(s)")
-    assert_contains(implement, "Review, testing, and verification work stays delegated")
-    assert_contains(implement, "The main session coordinates rather than implementing, reviewing, testing, or verifying inline")
+    execution = section_between(skill, "## Execution routing", "## Ship routing")
+    assert_contains(execution, "approved requirements/design artifact")
+    assert_contains(execution, "approved implementation plan")
+    assert_contains(execution, "Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`")
 
-    ship = section_between(skill, "## Ship", "## Verification fix loops")
+    ship = section_between(skill, "## Ship routing", "## Briefing rule")
     assert_contains(ship, "Use `ticket-ship-gate` for Ship")
-    assert_contains(ship, "per-work-unit readiness ledger")
-    assert_contains(ship, "Do not perform Ship mutations inline")
+    assert_contains(ship, "explicit user merge approval status")
+    assert_contains(ship, "intended Ship action")
 
 
 def section_between(document: str, start_heading: str, end_heading: str) -> str:
@@ -76,6 +83,12 @@ def assert_contains(haystack: str, needle: str) -> None:
 def assert_not_contains(haystack: str, needle: str) -> None:
     if needle in haystack:
         raise AssertionError(f"expected not to find {needle!r}")
+
+
+def assert_line_count_at_most(text: str, limit: int) -> None:
+    line_count = len(text.splitlines())
+    if line_count > limit:
+        raise AssertionError(f"expected ticket-start to be at most {limit} lines, found {line_count}")
 
 
 if __name__ == "__main__":

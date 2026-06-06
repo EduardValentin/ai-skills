@@ -11,14 +11,16 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 PERSONAL_WORKFLOW_PATH = REPO_ROOT / "skills" / "ticket-start" / "personal-workflow.md"
+FRONTEND_UI_REVIEW_PATH = REPO_ROOT / "skills" / "frontend-ui-review" / "SKILL.md"
 
 
 def main() -> int:
     skill = SKILL_PATH.read_text(encoding="utf-8")
     personal_workflow = PERSONAL_WORKFLOW_PATH.read_text(encoding="utf-8")
+    frontend_ui_review = FRONTEND_UI_REVIEW_PATH.read_text(encoding="utf-8")
 
     try:
-        check_uiux_contract(skill, personal_workflow)
+        check_uiux_contract(skill, personal_workflow, frontend_ui_review)
     except AssertionError as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -27,32 +29,27 @@ def main() -> int:
     return 0
 
 
-def check_uiux_contract(skill: str, personal_workflow: str) -> None:
-    verify = section_between(skill, "## Verify", "## Ship")
-
+def check_uiux_contract(skill: str, personal_workflow: str, frontend_ui_review: str) -> None:
     required_rule = (
         "Visual verification checks the rendered user-visible outcome and every visually "
         "meaningful state, not hidden templates or implementation proxies."
     )
 
     assert_contains(skill, required_rule)
-    assert_contains(verify, required_rule)
-    assert_contains(verify, "rendered user-visible outcome")
-    assert_contains(verify, "every visually meaningful state")
-    assert_contains(verify, "not hidden templates or implementation proxies")
-    assert_contains(verify, "Do not accept template/source inspection")
-    assert_contains(verify, "proxy-component screenshots")
-    assert_contains(verify, "storybook-only renders")
+    assert_contains(skill, "frontend-ui-review")
+    assert_contains(skill, "UI/UX verification remains delegated")
+    assert_contains(frontend_ui_review, required_rule)
+    assert_contains(frontend_ui_review, "DOM computed styles")
+    assert_contains(frontend_ui_review, "bounding rects")
+    assert_contains(frontend_ui_review, "Matched-element inventory")
+
+    assert_not_contains(skill, "Do not accept template/source inspection")
+    assert_not_contains(skill, "proxy-component screenshots")
+    assert_not_contains(skill, "storybook-only renders")
+    assert_not_contains(skill, "Every verified row has non-blank")
 
     assert_contains(personal_workflow, required_rule)
     assert_contains(personal_workflow, "same rendered states can be exercised in both apps")
-
-    red_flags = section_between(
-        skill,
-        "## Red flags — stop and recover",
-        "If any of these is true: stop, name the violation, and recover before continuing.",
-    )
-    assert_contains(red_flags, "hidden templates or implementation proxies")
 
 
 def section_between(document: str, start_heading: str, end_heading: str) -> str:
@@ -69,6 +66,11 @@ def section_between(document: str, start_heading: str, end_heading: str) -> str:
 def assert_contains(haystack: str, needle: str) -> None:
     if needle not in haystack:
         raise AssertionError(f"expected to find {needle!r}")
+
+
+def assert_not_contains(haystack: str, needle: str) -> None:
+    if needle in haystack:
+        raise AssertionError(f"expected not to find {needle!r}")
 
 
 if __name__ == "__main__":

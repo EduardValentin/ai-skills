@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for ticket-start dispatching ticket-qa-verification."""
+"""Contract checks for ticket-start dispatching ticket-work-unit-orchestration."""
 
 from __future__ import annotations
 
@@ -20,17 +20,20 @@ def main() -> int:
         print(f"FAIL: {SKILL_PATH.relative_to(REPO_ROOT)}: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches ticket-qa-verification")
+    print("PASS: ticket-start dispatches ticket-work-unit-orchestration")
     return 0
 
 
 def check_contract(skill: str) -> None:
-    verify = section_between(skill, "## Verify", "## Ship")
-    assert_contains(verify, "Dispatch `ticket-qa-verification`")
-    assert_contains(verify, "QA mode (`backend` / `ui` / `mixed` from diff)")
-    assert_contains(verify, "Local test runs, manual browser checks, and endpoint probes are evidence")
-    assert_contains(verify, "not substitutes for the QA verification report")
-    assert_before(verify, "Dispatch `ticket-qa-verification`", "continue to UI/UX")
+    execution = section_between(skill, "## Execution routing", "## Ship routing")
+    assert_contains(execution, "Invoke `ticket-work-unit-orchestration`")
+    assert_contains(execution, "approved requirements/design artifact")
+    assert_contains(execution, "approved implementation plan")
+    assert_contains(execution, "Scoping map")
+    assert_contains(execution, "per-work-unit readiness ledger")
+    assert_contains(execution, "Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`")
+    assert_not_contains(execution, "Dispatch `ticket-qa-verification`")
+    assert_not_contains(execution, "QA mode (`backend` / `ui` / `mixed` from diff)")
 
 
 def section_between(document: str, start_heading: str, end_heading: str) -> str:
@@ -49,11 +52,9 @@ def assert_contains(haystack: str, needle: str) -> None:
         raise AssertionError(f"expected to find {needle!r}")
 
 
-def assert_before(haystack: str, first: str, second: str) -> None:
-    first_index = haystack.find(first)
-    second_index = haystack.find(second)
-    if first_index < 0 or second_index < 0 or first_index > second_index:
-        raise AssertionError(f"expected {first!r} to appear before {second!r}")
+def assert_not_contains(haystack: str, needle: str) -> None:
+    if needle in haystack:
+        raise AssertionError(f"expected not to find {needle!r}")
 
 
 if __name__ == "__main__":
