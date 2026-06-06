@@ -77,6 +77,7 @@ against the running service before Ship.
 description_terms = ["verifying ticket acceptance criteria", "backend/API/service behavior", "running app or service"]
 skill_terms = ["Backend/API/Service Mode", "QA reports require live behavior evidence", "Inspect more than status codes", "QA findings are reported, not fixed"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "ticket-qa-verification-ui-behavior"
@@ -89,6 +90,7 @@ visual parity to the UI/UX verifier.
 description_terms = ["user-facing UI behavior", "QA reports", "running app or service"]
 skill_terms = ["UI Mode", "loading, empty, success, error, and validation states", "QA is about functionality and user-observable states, not visual parity"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "ticket-qa-verification-mixed-flow"
@@ -100,6 +102,7 @@ Verify both the API behavior and the browser-visible user flow before Ship.
 description_terms = ["mixed API-and-UI behavior", "verifying ticket acceptance criteria", "before Ship"]
 skill_terms = ["Mixed Mode", "Run backend/API/service mode and UI mode", "The work is not QA clean until both are clean"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "ticket-ship-gate-complete-ledgers"
@@ -112,6 +115,7 @@ before the PR or ticket is marked ready.
 description_terms = ["Ship mutations", "per-work-unit readiness ledgers", "required GitHub checks"]
 skill_terms = ["Ship gate owns readiness and release mutations", "per-work-unit readiness ledger", "gh pr checks <PR> --required --json name,state,bucket,workflow,link", "no-checks-configured"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "ticket-ship-gate-merge-approval"
@@ -124,6 +128,7 @@ any GitHub write.
 description_terms = ["merging ticket pull requests", "explicit user merge approval", "bot identity"]
 skill_terms = ["User approval is required before merge", "ambient personal GitHub credentials", "ticket-start/bot-identity.md"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "codebase-scope-map-implementation-handoff"
@@ -153,6 +158,7 @@ prompt = "Compare the implemented React dashboard against the runnable designs/ 
 description_terms = ["implemented frontend UI", "runnable prototype", "visual parity"]
 skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Parity Mode", "rendered user-visible outcome", "every visually meaningful state"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "frontend-ui-review-production-consistency"
@@ -161,6 +167,7 @@ prompt = "There is no prototype for this frontend change; review whether the new
 description_terms = ["visual consistency", "production analogs"]
 skill_terms = ["Consistency Mode", "production analog", "Comparison basis"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "frontend-ui-review-delegated-uiux-gate"
@@ -176,6 +183,7 @@ and accessibility, then return a structured verdict and findings.
 description_terms = ["implemented frontend UI", "visual parity", "accessibility states"]
 skill_terms = ["Parity Mode", "Accessibility", "affected surface map"]
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "frontend-pr-test-acceptance"
