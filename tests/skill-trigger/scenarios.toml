@@ -51,7 +51,19 @@ Invite Flow. Keep a per-unit readiness ledger while delegating implementation,
 self-review, QA, and UI/UX verification before Ship.
 """
 description_terms = ["coordinating approved ticket implementation", "multi-ticket delivery", "per-unit readiness ledger", "delegated implementation"]
-skill_terms = ["per-work-unit readiness ledger", "A work unit is not complete until", "Self-review is distinct from QA verification and UI/UX verification", "explicit backend-only/non-UI skip rationale", "Do not prescribe a rigid topology"]
+skill_terms = ["per-work-unit readiness ledger", "ticket-implementation-unit", "A work unit is not complete until", "Self-review is distinct from QA verification and UI/UX verification", "explicit backend-only/non-UI skip rationale", "Do not prescribe a rigid topology"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-implementation-unit-approved-slice"
+skill = "ticket-implementation-unit"
+prompt = """
+Implement this approved work-unit plan slice for the Invite Flow. Use the provided
+Scoping locators and constraints, run relevant local checks, perform implementer
+self-review, and return a compact implementation report for the orchestrator.
+"""
+description_terms = ["implementing an approved ticket work unit", "implementation report", "concrete implementer self-review"]
+skill_terms = ["Required Inputs", "Implementer Self-Review", "Files changed", "Local tests/checks run", "READY FOR VERIFICATION", "Claiming QA/UIUX passed without separate verifier reports"]
 forbidden_terms = []
 
 [[scenario]]

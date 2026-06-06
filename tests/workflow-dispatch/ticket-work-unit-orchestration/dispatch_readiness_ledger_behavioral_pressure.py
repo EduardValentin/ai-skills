@@ -67,8 +67,8 @@ Return only action lines in this exact shape:
 ACTION: <number> | <kind> | <target> | <details>
 
 Use kind SET_UP_LEDGER for the per-work-unit readiness ledger and kind
-DISPATCH_SUBAGENT for delegated implementation, self-review, `ticket-qa-verification`,
-or UI/UX work.
+DISPATCH_SUBAGENT for `ticket-implementation-unit`, self-review,
+`ticket-qa-verification`, or UI/UX work.
 """
 
 
@@ -107,6 +107,7 @@ def check_response(response: str) -> None:
         "onboarding ui",
         "invite flow",
         "implementation",
+        "ticket-implementation-unit",
         "self-review",
         "qa",
         "ticket-qa-verification",
