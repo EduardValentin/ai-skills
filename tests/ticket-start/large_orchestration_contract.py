@@ -47,7 +47,7 @@ def check_large_orchestration_contract(skill: str) -> None:
         assert_not_contains(skill, forbidden)
 
     implement = section_between(skill, "## Implement", "## Verify")
-    assert_contains(implement, "Implementation is delegated to subagent(s)")
+    assert_contains(implement, "Implementation is delegated through `ticket-implementation-unit` subagent(s)")
     assert_contains(implement, "Review, testing, and verification work stays delegated")
     assert_contains(implement, "The main session coordinates rather than implementing, reviewing, testing, or verifying inline")
 

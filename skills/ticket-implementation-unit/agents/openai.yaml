@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ticket Implementation Unit"
+  short_description: "Implement a scoped work unit with self-review"
+  default_prompt: "Use $ticket-implementation-unit to implement this approved work-unit plan slice and return a self-reviewed implementation report."

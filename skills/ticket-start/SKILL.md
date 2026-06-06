@@ -21,7 +21,7 @@ Implementation, review, testing, and verification are delegated, not done inline
 
 **UI/UX dispatch wording:** `ticket-start` constructs the UI/UX dispatch context and validates the returned report. The UI/UX subagent prompt must be a self-contained frontend UI review request: implemented frontend UI, review mode (`parity` with a runnable prototype/reference, `consistency` with production analogs), matched-element inventory, DOM computed styles, bounding rects, accessibility, rendered user-visible outcome/state coverage, and inventory construction from the affected surface map. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
 
-**Implementation dispatch wording:** after plan approval, `ticket-start` delegates implementation to subagent(s). The main session coordinates the work and consumes returned summaries; it does not use complexity, shared write surfaces, or convenience as a reason to implement inline.
+**Implementation dispatch wording:** after plan approval, `ticket-start` delegates implementation through `ticket-implementation-unit` subagent(s). The main session coordinates the work and consumes returned implementation reports with implementer self-review; it does not use complexity, shared write surfaces, or convenience as a reason to implement inline.
 
 **Large workflow wording:** large workflows are still `ticket-start`. For workflows spanning multiple tickets, delegate each ticket implementation to a different implementation agent where practical. Review, testing, and verification remain delegated to subagents. Let the main orchestrator choose the exact delegation strategy for the work in front of it.
 
@@ -109,7 +109,7 @@ Do not over-specify the delegation mechanics. The skill enforces the ownership b
 
 1. **Personal workflow:** move the Linear ticket to **In Progress** immediately after plan approval, before any code (per `personal-workflow.md`).
 
-2. **Delegate implementation.** Implementation is delegated to subagent(s). The main session provides ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, relevant repo instructions, constraints, and current branch/worktree state. The main session coordinates rather than implementing, reviewing, testing, or verifying inline.
+2. **Delegate implementation.** Implementation is delegated through `ticket-implementation-unit` subagent(s). The main session provides ticket + AC, approved requirements/design artifact, approved plan or task, Scoping locators, relevant repo instructions, constraints, expected local checks, current branch/worktree state, and non-goals. The main session coordinates rather than implementing, reviewing, testing, or verifying inline.
 
 3. **Delegate review, testing, and verification.** Review, testing, and verification work stays delegated to subagents. Use the project and plan context to decide which subagents are needed and what evidence they should return.
 

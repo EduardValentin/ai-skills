@@ -27,6 +27,7 @@ def check_dispatch_contract(skill: str) -> None:
     required_terms = (
         "Build the ledger before delegating implementation",
         "Delegate implementation",
+        "ticket-implementation-unit",
         "Require returned reports to update the ledger",
         "implementation report",
         "implementer self-review report",

@@ -7,7 +7,7 @@ description: Use when coordinating approved ticket implementation, multi-ticket 
 
 ## Overview
 
-Coordinate approved implementation work after intake, requirements/design, and implementation-plan approval are complete. The main agent is the orchestrator: it keeps the user dialogue, branch or ticket state, integration status, and Ship gate coherent while delegating implementation, implementer self-review, QA verification, UI/UX verification, review, testing, and focused fixes.
+Coordinate approved implementation work after intake, requirements/design, and implementation-plan approval are complete. The main agent is the orchestrator: it keeps the user dialogue, branch or ticket state, integration status, and Ship gate coherent while delegating implementation through `ticket-implementation-unit`, implementer self-review, QA verification, UI/UX verification, review, testing, and focused fixes.
 
 The hard contract is the **per-work-unit readiness ledger**. The skill enforces independent completion evidence for each work unit, not a rigid root/child/grandchild topology. Do not prescribe a rigid topology. Let the orchestrator choose the delegation strategy that fits the ticket, repository, sequencing, and shared write surfaces.
 
@@ -26,7 +26,7 @@ If these preconditions are not met, return to the intake/planning workflow inste
 1. Identify each work unit from the approved plan. A work unit may be a ticket, feature slice, backend surface, UI surface, migration, background job, or integration slice.
 2. Classify each work unit as backend-only/non-UI, UI-facing, or mixed. If uncertain, do not assume backend-only.
 3. Build the ledger before delegating implementation. Each work unit starts with empty rows for implementation, implementer self-review, QA, UI/UX or skip rationale, unresolved findings, and integration/out-of-scope status.
-4. Delegate implementation using the smallest sensible unit boundaries. Multiple work units may use multiple implementers where practical, but sequencing, shared ownership, and repository constraints may justify another strategy.
+4. Delegate implementation through `ticket-implementation-unit` using the smallest sensible unit boundaries. Multiple work units may use multiple implementers where practical, but sequencing, shared ownership, and repository constraints may justify another strategy.
 5. Require returned reports to update the ledger. Local checks, green tests, screenshots, or manual notes can be evidence inside a report; they do not replace missing report rows.
 
 ## Per-Work-Unit Readiness Ledger
@@ -36,8 +36,8 @@ Track every work unit independently with these rows:
 | Row | Required evidence |
 |---|---|
 | Work unit | Name, scope, related ticket if any, and backend-only/UI-facing/mixed classification. |
-| Implementation | Completed implementation report with changed surfaces, decisions, and any follow-up risk. |
-| Self-review | Completed implementer self-review report covering local diff review, edge cases, and obvious regressions. |
+| Implementation | Completed implementation report, preferably through `ticket-implementation-unit`, with changed surfaces, decisions, and any follow-up risk. |
+| Self-review | Completed implementer self-review report from `ticket-implementation-unit` covering local diff review, edge cases, and obvious regressions. |
 | QA | Completed QA verification report, preferably through `ticket-qa-verification`, with the scenario, checks performed, result, and findings status. |
 | UI/UX | Completed UI/UX verification report for UI-facing or mixed units, preferably through `frontend-ui-review`; otherwise an explicit backend-only/non-UI skip rationale. |
 | Findings | Unresolved findings status, fix-loop status, and owner if not clean. |
