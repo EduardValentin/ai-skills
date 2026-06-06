@@ -102,6 +102,30 @@ skill_terms = ["Mixed Mode", "Run backend/API/service mode and UI mode", "The wo
 forbidden_terms = []
 
 [[scenario]]
+id = "ticket-ship-gate-complete-ledgers"
+skill = "ticket-ship-gate"
+prompt = """
+Run the Ship gate for this PR. The per-work-unit readiness ledgers are complete,
+QA and UI/UX verification are clean, and I need required GitHub checks evaluated
+before the PR or ticket is marked ready.
+"""
+description_terms = ["Ship mutations", "per-work-unit readiness ledgers", "required GitHub checks"]
+skill_terms = ["Ship gate owns readiness and release mutations", "per-work-unit readiness ledger", "gh pr checks <PR> --required --json name,state,bucket,workflow,link", "no-checks-configured"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-ship-gate-merge-approval"
+skill = "ticket-ship-gate"
+prompt = """
+Merge this ticket PR after checking that all required checks passed and that the
+user explicitly approved the merge. Use the personal workflow bot identity for
+any GitHub write.
+"""
+description_terms = ["merging ticket pull requests", "explicit user merge approval", "bot identity"]
+skill_terms = ["User approval is required before merge", "ambient personal GitHub credentials", "ticket-start/bot-identity.md"]
+forbidden_terms = []
+
+[[scenario]]
 id = "codebase-scope-map-implementation-handoff"
 skill = "codebase-scope-map"
 prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, affected surfaces, tests, patterns, dependencies, conflicts, and keep it token-efficient."
