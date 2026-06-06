@@ -123,7 +123,7 @@ Do not over-specify the delegation mechanics. The skill enforces the ownership b
    - Any match -> not backend-only.
    - Uncertain (config files affecting render, shared utilities used by both) -> ask the user. Default on uncertainty: do not skip UI/UX.
 
-2. **Dispatch QA subagent** (`agents/qa.md`). Forward: ticket + AC, approved requirements/design artifact, approved plan, full diff, QA mode (`backend` / `ui` / `mixed` from diff), path/URL of the running app, live-browser automation for UI mode if available, HTTP tooling for backend, and role prompt. Local test runs, manual browser checks, and endpoint probes are evidence for QA to use, not substitutes for the QA report.
+2. **Dispatch `ticket-qa-verification`.** Forward: ticket + AC, approved requirements/design artifact, approved plan, full diff, QA mode (`backend` / `ui` / `mixed` from diff), path/URL of the running app, relevant credentials or seed data, live-browser automation for UI mode if available, and HTTP tooling for backend. Local test runs, manual browser checks, and endpoint probes are evidence for QA to use, not substitutes for the QA verification report.
 
 3. **If QA returns findings**, route through `verification-fix-loops.md` -> `## QA finding loop`. QA findings dispatch a fresh lightweight implementer subagent with a compact finding packet, then QA reruns. Do not route QA findings through a generic review loop.
 

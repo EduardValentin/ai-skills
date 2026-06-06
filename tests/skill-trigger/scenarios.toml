@@ -55,6 +55,41 @@ skill_terms = ["per-work-unit readiness ledger", "A work unit is not complete un
 forbidden_terms = []
 
 [[scenario]]
+id = "ticket-qa-verification-backend-api"
+skill = "ticket-qa-verification"
+prompt = """
+QA this backend API ticket against the acceptance criteria. Unit tests passed,
+but I need endpoint behavior, persistence, auth, and error responses verified
+against the running service before Ship.
+"""
+description_terms = ["verifying ticket acceptance criteria", "backend/API/service behavior", "running app or service"]
+skill_terms = ["Backend/API/Service Mode", "QA reports require live behavior evidence", "Inspect more than status codes", "QA findings are reported, not fixed"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-qa-verification-ui-behavior"
+skill = "ticket-qa-verification"
+prompt = """
+QA this user-facing UI change. Exercise loading, empty, success, error,
+validation, disabled, and rapid-click behavior in the running app, but leave
+visual parity to the UI/UX verifier.
+"""
+description_terms = ["user-facing UI behavior", "QA reports", "running app or service"]
+skill_terms = ["UI Mode", "loading, empty, success, error, and validation states", "QA is about functionality and user-observable states, not visual parity"]
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-qa-verification-mixed-flow"
+skill = "ticket-qa-verification"
+prompt = """
+QA this mixed ticket where the invite API and invite form changed together.
+Verify both the API behavior and the browser-visible user flow before Ship.
+"""
+description_terms = ["mixed API-and-UI behavior", "verifying ticket acceptance criteria", "before Ship"]
+skill_terms = ["Mixed Mode", "Run backend/API/service mode and UI mode", "The work is not QA clean until both are clean"]
+forbidden_terms = []
+
+[[scenario]]
 id = "codebase-scope-map-implementation-handoff"
 skill = "codebase-scope-map"
 prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, affected surfaces, tests, patterns, dependencies, conflicts, and keep it token-efficient."

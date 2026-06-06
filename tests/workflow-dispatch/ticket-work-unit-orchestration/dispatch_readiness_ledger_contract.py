@@ -31,6 +31,7 @@ def check_dispatch_contract(skill: str) -> None:
         "implementation report",
         "implementer self-review report",
         "QA verification report",
+        "ticket-qa-verification",
         "UI/UX verification report",
         "explicit backend-only/non-UI skip rationale",
         "unresolved findings status",
