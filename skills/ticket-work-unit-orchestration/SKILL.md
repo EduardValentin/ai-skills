@@ -38,7 +38,7 @@ Track every work unit independently with these rows:
 | Work unit | Name, scope, related ticket if any, and backend-only/UI-facing/mixed classification. |
 | Implementation | Completed implementation report with changed surfaces, decisions, and any follow-up risk. |
 | Self-review | Completed implementer self-review report covering local diff review, edge cases, and obvious regressions. |
-| QA | Completed QA verification report with the scenario, checks performed, result, and findings status. |
+| QA | Completed QA verification report, preferably through `ticket-qa-verification`, with the scenario, checks performed, result, and findings status. |
 | UI/UX | Completed UI/UX verification report for UI-facing or mixed units, preferably through `frontend-ui-review`; otherwise an explicit backend-only/non-UI skip rationale. |
 | Findings | Unresolved findings status, fix-loop status, and owner if not clean. |
 | Integration | Integrated, blocked, or explicitly out-of-scope status. |
@@ -67,7 +67,7 @@ Choose the delegation strategy that fits the work:
 - For independent tickets or slices, delegate each work unit separately where practical.
 - For tightly coupled slices, delegate implementation in the sequence that reduces conflicts, then still require per-unit ledger rows.
 - For UI-facing or mixed work, include affected surfaces, important states, running URLs when available, and any reference/prototype context in the UI/UX verification request.
-- For backend-only work, include APIs, jobs, migrations, persistence behavior, and relevant test/probe expectations in QA.
+- For backend-only work, include APIs, jobs, migrations, persistence behavior, and relevant test/probe expectations in the `ticket-qa-verification` request.
 - For findings, delegate focused fixes with the finding packet and rerun only the affected verification rows unless the fix changes broader behavior.
 
 The orchestrator may combine reports when the same agent legitimately owns multiple units, but the ledger must still show every work unit separately.

@@ -1,6 +1,6 @@
 # Personal Workflow
 
-Use when the ticket lives in Linear and may have `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the review modes the QA and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, verification fix loops, and Ship.
+Use when the ticket lives in Linear and may have `PRD.md` plus a `designs/` reference app. Loaded by `SKILL.md` once when the personal workflow is selected. The Ticket Intake, Scoped Reading, and React Reference App sections apply during Setup. The Verification mode-mapping section specifies the review modes `ticket-qa-verification` and UI/UX subagents receive. The Linear State Transitions section applies during Implement and Ship. Return to `SKILL.md` for phase ordering, dispatch points, verification fix loops, and Ship.
 
 ## Ticket Intake (Linear)
 
@@ -62,9 +62,9 @@ The Verify phase is run by the QA and UI/UX subagents. This file specifies the r
 
 Determined from the diff (main agent decides), same as the job workflow:
 
-- **`backend`** — diff touches only backend / service files. QA Mode A.
-- **`ui`** — diff touches only user-facing files. QA Mode B.
-- **`mixed`** — both. QA Mode C.
+- **`backend`** — diff touches only backend / service files. QA uses `ticket-qa-verification` backend mode.
+- **`ui`** — diff touches only user-facing files. QA uses `ticket-qa-verification` UI mode.
+- **`mixed`** — both. QA uses `ticket-qa-verification` mixed mode.
 
 ### UI/UX mode
 
