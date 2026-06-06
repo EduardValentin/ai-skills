@@ -47,11 +47,18 @@ def main() -> int:
 
         for scenario in scenarios:
             run_scenario(agent_command, scenario)
+        nested_count = 0
+        if not scenario_filter:
+            nested_count = run_nested_behavioral_pressure(agent_command)
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print(f"PASS: {len(scenarios)} behavioral workflow-dispatch scenarios", flush=True)
+    print(
+        f"PASS: {len(scenarios)} behavioral workflow-dispatch scenarios and "
+        f"{nested_count} grouped behavioral tests",
+        flush=True,
+    )
     return 0
 
 
@@ -101,11 +108,45 @@ def run_scenario(agent_command: str, scenario: dict[str, object]) -> None:
             raise ValueError(f"{scenario_id} mentioned {term!r} before Scoping dispatch")
 
     prefix = response[:scoping_index].lower()
-    if "local" in prefix and ("scope" in prefix or "map" in prefix):
+    local_scoping_markers = (
+        "local scope map",
+        "local scoping",
+        "map the code",
+        "map code",
+        "codebase map",
+        "scope map",
+        "affected surfaces",
+    )
+    if any(marker in prefix for marker in local_scoping_markers):
         print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
         raise ValueError(f"{scenario_id} performed local scoping before Scoping dispatch")
 
     print(f"PASS: {scenario_id} dispatched Scoping before downstream phases", flush=True)
+
+
+def run_nested_behavioral_pressure(agent_command: str) -> int:
+    scripts = sorted(SCRIPT_DIR.glob("*/*_behavioral_pressure.py"))
+    env = os.environ.copy()
+    env["WORKFLOW_DISPATCH_AGENT_COMMAND"] = agent_command
+
+    for script in scripts:
+        completed = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if completed.stdout:
+            print(completed.stdout, end="")
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"{script.relative_to(REPO_ROOT)} failed with exit code {completed.returncode}"
+            )
+    return len(scripts)
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
