@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Behavioral dispatch tests for ticket-start -> ticket-ship-gate."""
+"""Behavioral dispatch tests for ticket-start -> Ship gate capability."""
 
 from __future__ import annotations
 
 import os
-import shlex
-import subprocess
 import sys
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from auto_discovery import assert_auto_discovers, assert_concept_groups, assert_forbidden_terms, run_agent  # noqa: E402
 
 
 def main() -> int:
@@ -26,13 +27,13 @@ def main() -> int:
     skill = SKILL_PATH.read_text(encoding="utf-8")
     response = run_agent(agent_command, make_prompt(skill))
     try:
-        check_response(response)
+        check_response(response, agent_command)
     except Exception as error:
         print(f"Response:\n{response}", file=sys.stderr)
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches ticket-ship-gate behaviorally")
+    print("PASS: ticket-start dispatches Ship gate capability behaviorally")
     return 0
 
 
@@ -52,44 +53,28 @@ Ship. The user also wants to understand the required checks, bot identity, and
 merge approval gates before any Ship mutation. What should the main agent do next?
 
 Do not perform the task. Do not call tools. Return only action lines in this shape:
-ACTION: <number> | <kind> | <target> | <details>
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Do not
+name downstream skill identifiers; describe the capability and self-contained
+request so auto-discovery can select the right skill.
 """
 
 
-def run_agent(agent_command: str, prompt: str) -> str:
-    completed = subprocess.run(
-        shlex.split(agent_command),
-        input=prompt,
-        text=True,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
+def check_response(response: str, agent_command: str) -> None:
+    required_groups = (
+        ("dispatch_request", "dispatch request", "delegated request"),
+        ("ship gate", "ship readiness", "ship mutation"),
+        ("readiness ledger", "readiness packet", "per-work-unit ledger", "per-unit readiness"),
+        ("required checks", "remote checks", "pr checks"),
+        ("bot", "github app", "write identity"),
+        ("approval", "merge approval", "user approved merge"),
     )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            "agent command failed with exit code "
-            f"{completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
-        )
-    return completed.stdout
+    assert_concept_groups(response, required_groups, "Ship gate dispatch")
 
-
-def check_response(response: str) -> None:
-    normalized = response.lower()
-    required = (
-        "ticket-ship-gate",
-        "readiness ledger",
-        "required checks",
-        "bot",
-        "approval",
-    )
-    missing = [term for term in required if term not in normalized]
-    if missing:
-        raise AssertionError(f"missing required terms: {missing}")
-
-    forbidden = ("implement inline", "perform ship inline", "merge now")
-    present = [term for term in forbidden if term in normalized]
-    if present:
-        raise AssertionError(f"included forbidden terms: {present}")
+    forbidden = ("ticket-ship-gate", "ticket-work-unit-orchestration", "implement inline", "perform ship inline", "merge now")
+    assert_forbidden_terms(response, forbidden, "Ship gate dispatch")
+    assert_auto_discovers(agent_command, response, "ticket-ship-gate")
 
 
 if __name__ == "__main__":

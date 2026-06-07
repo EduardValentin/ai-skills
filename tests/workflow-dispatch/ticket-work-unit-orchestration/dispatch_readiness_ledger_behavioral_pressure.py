@@ -4,13 +4,21 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-work-unit-orchestration" / "SKILL.md"
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from auto_discovery import (  # noqa: E402
+    action_lines,
+    assert_auto_discovers,
+    assert_concept_groups,
+    assert_forbidden_terms,
+    run_agent,
+)
 
 
 def main() -> int:
@@ -26,7 +34,7 @@ def main() -> int:
 
     try:
         response = run_agent(agent_command, make_prompt())
-        check_response(response)
+        check_response(response, agent_command)
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -67,62 +75,54 @@ Return only action lines in this exact shape:
 ACTION: <number> | <kind> | <target> | <details>
 
 Use kind SET_UP_LEDGER for the per-work-unit readiness ledger and kind
-DISPATCH_SUBAGENT for `ticket-implementation-unit`, self-review,
-`ticket-qa-verification`, or UI/UX work.
+DISPATCH_REQUEST for delegated capability requests. Do not name downstream skill
+identifiers; describe each capability and self-contained request so
+auto-discovery can select the right skill.
 """
 
 
-def run_agent(agent_command: str, prompt: str) -> str:
-    completed = subprocess.run(
-        agent_command,
-        input=prompt,
-        text=True,
-        shell=True,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            "agent command failed with exit code "
-            f"{completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
-        )
-    return completed.stdout
-
-
-def check_response(response: str) -> None:
-    normalized = response.lower()
-    action_lines = [line for line in response.splitlines() if line.startswith("ACTION:")]
-    if not action_lines:
+def check_response(response: str, agent_command: str) -> None:
+    lines = action_lines(response)
+    if not lines:
         print(f"Response:\n{response}", file=sys.stderr)
         raise AssertionError("missing ACTION lines")
 
-    first_action = action_lines[0].lower()
+    first_action = lines[0].casefold()
     if "set_up_ledger" not in first_action or "ledger" not in first_action:
         print(f"Response:\n{response}", file=sys.stderr)
         raise AssertionError("first action must set up the readiness ledger")
 
-    required_terms = (
-        "billing api",
-        "onboarding ui",
-        "invite flow",
-        "implementation",
-        "ticket-implementation-unit",
-        "self-review",
-        "qa",
-        "ticket-qa-verification",
-        "ui/ux",
-        "backend-only",
-        "skip rationale",
+    required_groups = (
+        ("billing api",),
+        ("onboarding ui",),
+        ("invite flow",),
+        ("implementation", "implementer"),
+        ("self-review", "self review"),
+        ("qa", "acceptance-criteria verification", "behavior verification"),
+        ("ui/ux", "visual verification", "frontend review"),
+        ("backend-only", "backend only", "non-ui"),
+        ("skip rationale", "non-ui rationale", "backend-only rationale"),
     )
-    missing = [term for term in required_terms if term not in normalized]
-    if missing:
-        print(f"Response:\n{response}", file=sys.stderr)
-        raise AssertionError(f"missing required workflow terms: {missing}")
+    assert_concept_groups(response, required_groups, "readiness ledger workflow")
 
-    if "dispatch_subagent" not in normalized:
-        print(f"Response:\n{response}", file=sys.stderr)
-        raise AssertionError("missing delegated subagent dispatch")
+    forbidden = ("ticket-implementation-unit", "ticket-qa-verification", "frontend-ui-review", "codebase-scope-map")
+    assert_forbidden_terms(response, forbidden, "readiness ledger workflow")
+
+    dispatch_text = "\n".join(lines)
+    assert_concept_groups(
+        dispatch_text,
+        (
+            ("dispatch_request", "dispatch request", "delegated request"),
+            ("implementation work-unit", "implementation unit", "implementer"),
+            ("qa", "acceptance-criteria verification", "behavior verification"),
+            ("ui/ux", "visual verification", "frontend review"),
+        ),
+        "readiness ledger dispatch actions",
+    )
+
+    assert_auto_discovers(agent_command, dispatch_text, "ticket-implementation-unit")
+    assert_auto_discovers(agent_command, dispatch_text, "ticket-qa-verification")
+    assert_auto_discovers(agent_command, dispatch_text, "frontend-ui-review")
 
 
 if __name__ == "__main__":

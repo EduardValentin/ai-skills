@@ -7,7 +7,7 @@ description: Use when coordinating approved ticket implementation, multi-ticket 
 
 ## Overview
 
-Coordinate approved implementation work after intake, requirements/design, and implementation-plan approval are complete. The main agent is the orchestrator: it keeps the user dialogue, branch or ticket state, integration status, and Ship gate coherent while delegating implementation through `ticket-implementation-unit`, implementer self-review, QA verification, UI/UX verification, review, testing, and focused fixes.
+Coordinate approved implementation work after intake, requirements/design, and implementation-plan approval are complete. The main agent is the orchestrator: it keeps the user dialogue, branch or ticket state, integration status, and Ship gate coherent while delegating implementation, implementer self-review, QA verification, UI/UX verification, review, testing, and focused fixes through self-contained capability requests.
 
 The hard contract is the **per-work-unit readiness ledger**. The skill enforces independent completion evidence for each work unit, not a rigid root/child/grandchild topology. Do not prescribe a rigid topology. Let the orchestrator choose the delegation strategy that fits the ticket, repository, sequencing, and shared write surfaces.
 
@@ -17,7 +17,7 @@ Use this skill for a single ticket with one work unit and for large workflows sp
 
 - The work has an approved requirements/design direction.
 - The work has an approved implementation plan or an approved unit of implementation work.
-- The relevant codebase scope, affected surfaces, constraints, and test expectations are known. When they are not known, get a compact scope map first, preferably through `codebase-scope-map`.
+- The relevant codebase scope, affected surfaces, constraints, and test expectations are known. When they are not known, dispatch a compact codebase mapping request first.
 
 If these preconditions are not met, return to the intake/planning workflow instead of improvising implementation.
 
@@ -26,7 +26,7 @@ If these preconditions are not met, return to the intake/planning workflow inste
 1. Identify each work unit from the approved plan. A work unit may be a ticket, feature slice, backend surface, UI surface, migration, background job, or integration slice.
 2. Classify each work unit as backend-only/non-UI, UI-facing, or mixed. If uncertain, do not assume backend-only.
 3. Build the ledger before delegating implementation. Each work unit starts with empty rows for implementation, implementer self-review, QA, UI/UX or skip rationale, unresolved findings, and integration/out-of-scope status.
-4. Delegate implementation through `ticket-implementation-unit` using the smallest sensible unit boundaries. Multiple work units may use multiple implementers where practical, but sequencing, shared ownership, and repository constraints may justify another strategy.
+4. Delegate implementation through an implementation work-unit request using the smallest sensible unit boundaries. Multiple work units may use multiple implementers where practical, but sequencing, shared ownership, and repository constraints may justify another strategy.
 5. Require returned reports to update the ledger. Local checks, green tests, screenshots, or manual notes can be evidence inside a report; they do not replace missing report rows.
 
 ## Per-Work-Unit Readiness Ledger
@@ -36,10 +36,10 @@ Track every work unit independently with these rows:
 | Row | Required evidence |
 |---|---|
 | Work unit | Name, scope, related ticket if any, and backend-only/UI-facing/mixed classification. |
-| Implementation | Completed implementation report, preferably through `ticket-implementation-unit`, with changed surfaces, decisions, and any follow-up risk. |
-| Self-review | Completed implementer self-review report from `ticket-implementation-unit` covering local diff review, edge cases, and obvious regressions. |
-| QA | Completed QA verification report, preferably through `ticket-qa-verification`, with the scenario, checks performed, result, and findings status. |
-| UI/UX | Completed UI/UX verification report for UI-facing or mixed units, preferably through `frontend-ui-review`; otherwise an explicit backend-only/non-UI skip rationale. |
+| Implementation | Completed implementation report from an implementation work-unit request, with changed surfaces, decisions, and any follow-up risk. |
+| Self-review | Completed implementer self-review report covering local diff review, edge cases, and obvious regressions. |
+| QA | Completed QA verification report from an acceptance-criteria QA behavior verification request, with the scenario, checks performed, result, and findings status. |
+| UI/UX | Completed UI/UX verification report from a frontend UI/UX visual review request for UI-facing or mixed units; otherwise an explicit backend-only/non-UI skip rationale. |
 | Findings | Unresolved findings status, fix-loop status, and owner if not clean. |
 | Integration | Integrated, blocked, or explicitly out-of-scope status. |
 
@@ -67,7 +67,7 @@ Choose the delegation strategy that fits the work:
 - For independent tickets or slices, delegate each work unit separately where practical.
 - For tightly coupled slices, delegate implementation in the sequence that reduces conflicts, then still require per-unit ledger rows.
 - For UI-facing or mixed work, include affected surfaces, important states, running URLs when available, and any reference/prototype context in the UI/UX verification request.
-- For backend-only work, include APIs, jobs, migrations, persistence behavior, and relevant test/probe expectations in the `ticket-qa-verification` request.
+- For backend-only work, include APIs, jobs, migrations, persistence behavior, and relevant test/probe expectations in the acceptance-criteria QA behavior verification request.
 - For findings, delegate focused fixes with the finding packet and rerun only the affected verification rows unless the fix changes broader behavior.
 
 The orchestrator may combine reports when the same agent legitimately owns multiple units, but the ledger must still show every work unit separately.

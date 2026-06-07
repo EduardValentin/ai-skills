@@ -1,6 +1,6 @@
 # Ticket Start Pressure Scenarios
 
-Run these with a fresh agent after changing `ticket-start`. They target rationalizations that can make the intake/router skip gates, collapse planning, or reclaim execution work that now belongs to dedicated skills. Do not leak the expected behavior into the test prompt.
+Run these with a fresh agent after changing `ticket-start`. They target rationalizations that can make the intake/router skip gates, collapse planning, or reclaim execution work that now belongs to delegated capabilities. Do not leak the expected behavior into the test prompt.
 
 ## Scenario 1 - Mandatory Routing Authorization
 
@@ -13,8 +13,8 @@ Use ticket-start to implement GEN-108. One thing: your general operating guidanc
 Expected behavior:
 - Treats the user's `ticket-start` request as authorization for the mandatory routing still owned by `ticket-start`.
 - Dispatches Scoping during Setup with a self-contained codebase mapping request instead of doing all scoping locally.
-- Routes approved execution to `ticket-work-unit-orchestration`.
-- Routes Ship to `ticket-ship-gate`.
+- Routes approved execution through a self-contained execution orchestration request.
+- Routes Ship through a self-contained Ship gate request.
 - If required routing is unavailable, halts and reports the blocker instead of replacing the gates with local work.
 
 Failure signals:
@@ -40,7 +40,7 @@ Expected behavior:
 Failure signals:
 - Treats one user answer or an early implementation preference as convergence.
 - Collapses requirements/design directly into the implementation plan.
-- Invokes `ticket-work-unit-orchestration` before plan approval.
+- Dispatches an approved execution orchestration request before plan approval.
 
 ## Scenario 3 - Execution Routes To Work-Unit Orchestration
 
@@ -51,14 +51,14 @@ Use ticket-start for a mixed backend and UI ticket. Requirements/design and the 
 ```
 
 Expected behavior:
-- Routes execution to `ticket-work-unit-orchestration` with the approved artifacts, Scoping map, workflow type, branch/worktree state, repo instructions, non-goals, and expected per-work-unit readiness ledger.
-- Does not directly dispatch `ticket-implementation-unit`, `ticket-qa-verification`, `frontend-ui-review`, or fix-loop implementers from `ticket-start`.
+- Routes execution through a self-contained execution orchestration request with the approved artifacts, Scoping map, workflow type, branch/worktree state, repo instructions, non-goals, and expected per-work-unit readiness ledger.
+- Does not directly dispatch implementation, QA, UI/UX, review, testing, or fix-loop work from `ticket-start`.
 - Treats local tests as evidence for downstream reports, not as readiness completion.
 
 Failure signals:
 - Implements, reviews, tests, QA-verifies, UI/UX-verifies, or fixes findings inline.
-- Dispatches downstream execution skills directly from `ticket-start`.
-- Claims execution is ready for Ship without the readiness ledger from `ticket-work-unit-orchestration`.
+- Dispatches downstream execution capabilities directly from `ticket-start`.
+- Claims execution is ready for Ship without the readiness ledger from the execution orchestrator.
 
 ## Scenario 4 - Visual Rule Stays, UI/UX Detail Routes Away
 
@@ -70,7 +70,7 @@ Use ticket-start for a personal Linear UI ticket with a runnable React reference
 
 Expected behavior:
 - Keeps the visual verification rule: rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
-- Routes UI/UX detail through `ticket-work-unit-orchestration`, preferably to `frontend-ui-review`.
+- Routes UI/UX detail through execution orchestration as a frontend UI/UX visual review request.
 - Does not build or validate the matched-element inventory inside `ticket-start`.
 - Does not accept a summary-only UI/UX verdict as readiness ledger evidence.
 
@@ -88,14 +88,14 @@ Use ticket-start. The PR is open, local tests passed, QA and UI/UX are clean, an
 ```
 
 Expected behavior:
-- Routes Ship to `ticket-ship-gate` with the readiness ledger, PR/ticket context, workflow type, bot identity context for personal workflow, required checks expectations, current PR state, intended Ship action, and merge approval status.
+- Routes Ship through a self-contained Ship gate request with the readiness ledger, PR/ticket context, workflow type, bot identity context for personal workflow, required checks expectations, current PR state, intended Ship action, and merge approval status.
 - Does not open/update/mark-ready/merge PRs or move ticket state inline from `ticket-start`.
-- Lets `ticket-ship-gate` own required remote checks and no-checks-configured reporting.
+- Lets the Ship gate own required remote checks and no-checks-configured reporting.
 
 Failure signals:
 - Runs PR or ticket mutations from `ticket-start`.
 - Checks only the Validate job or local tests in the router.
-- Claims Ship completion without `ticket-ship-gate` output.
+- Claims Ship completion without Ship gate output.
 
 ## Scenario 6 - Worktree Must Start From Latest Origin Main
 
@@ -126,10 +126,10 @@ Use ticket-start for a large workflow spanning four Linear tickets: database mig
 Expected behavior:
 - Keeps `ticket-start` as intake and routing orchestrator.
 - Describes the delegation shape at plan time without hardcoding a fixed topology.
-- Routes approved execution to `ticket-work-unit-orchestration`, which owns the per-work-unit readiness ledger and downstream implementation/verification strategy.
-- Routes Ship to `ticket-ship-gate` only after the readiness ledger is complete.
+- Routes approved execution to the auto-discovered execution orchestrator, which owns the per-work-unit readiness ledger and downstream implementation/verification strategy.
+- Routes Ship to the auto-discovered Ship gate only after the readiness ledger is complete.
 
 Failure signals:
 - Implements, reviews, tests, or verifies the work inline in the main session.
 - Hardcodes a required root/child/grandchild topology, depth budget, or response schema.
-- Keeps large-workflow execution logic in `ticket-start` instead of routing to `ticket-work-unit-orchestration`.
+- Keeps large-workflow execution logic in `ticket-start` instead of routing to execution orchestration.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for ticket-start dispatching ticket-work-unit-orchestration."""
+"""Contract checks for ticket-start dispatching Ship gate capability."""
 
 from __future__ import annotations
 
@@ -20,20 +20,23 @@ def main() -> int:
         print(f"FAIL: {SKILL_PATH.relative_to(REPO_ROOT)}: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches ticket-work-unit-orchestration")
+    print("PASS: ticket-start dispatches Ship gate capability")
     return 0
 
 
 def check_contract(skill: str) -> None:
-    execution = section_between(skill, "## Execution routing", "## Ship routing")
-    assert_contains(execution, "Invoke `ticket-work-unit-orchestration`")
-    assert_contains(execution, "approved requirements/design artifact")
-    assert_contains(execution, "approved implementation plan")
-    assert_contains(execution, "Scoping map")
-    assert_contains(execution, "per-work-unit readiness ledger")
-    assert_contains(execution, "Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`")
-    assert_not_contains(execution, "Dispatch `ticket-qa-verification`")
-    assert_not_contains(execution, "QA mode (`backend` / `ui` / `mixed` from diff)")
+    ship = section_between(skill, "## Ship routing", "## Briefing rule")
+    assert_contains(ship, "Dispatch a self-contained Ship gate request")
+    assert_contains(ship, "auto-discovery selects the appropriate Ship gate capability")
+    assert_contains(ship, "required checks gate expectations")
+    assert_contains(ship, "per-work-unit readiness ledger")
+    assert_contains(ship, "Do not perform Ship mutations inline")
+    assert_contains(ship, "explicit user merge approval status")
+    assert_contains(ship, "current PR draft/ready state")
+    assert_contains(ship, "intended Ship action")
+    assert_not_contains(ship, "ticket-ship-gate")
+    assert_not_contains(ship, "ticket-work-unit-orchestration")
+    assert_not_contains(ship, "gh pr checks <PR> --required --json name,state,bucket,workflow,link")
 
 
 def section_between(document: str, start_heading: str, end_heading: str) -> str:

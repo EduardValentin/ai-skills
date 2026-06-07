@@ -13,19 +13,19 @@ Phase order is a hard gate:
 
 **Setup -> Requirements/Design -> Plan -> Execute -> Ship**
 
-Implementation, review, testing, QA, UI/UX verification, focused fixes, readiness ledger tracking, and Ship mutations are delegated to dedicated skills. The main session coordinates returned reports and user decisions; it does not implement, review, test, verify, or mutate release state inline.
+Implementation, review, testing, QA, UI/UX verification, focused fixes, readiness ledger tracking, and Ship mutations are delegated through capability requests. The main session coordinates returned reports and user decisions; it does not implement, review, test, verify, or mutate release state inline.
 
 **Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
 
-**Implementation dispatch wording:** `ticket-start` invokes `ticket-work-unit-orchestration` after plan approval. That skill chooses the implementation delegation strategy and may use `ticket-implementation-unit`.
+**Implementation dispatch wording:** after plan approval, `ticket-start` dispatches a self-contained approved execution orchestration request and lets auto-discovery select the appropriate execution orchestration capability. The receiving capability chooses the implementation delegation strategy.
 
-**UI/UX dispatch wording:** UI/UX verification remains delegated through execution orchestration, preferably to `frontend-ui-review` for UI-facing or mixed work. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
+**UI/UX dispatch wording:** UI/UX verification remains delegated through execution orchestration for UI-facing or mixed work. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
 
 **GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes.
 
 **Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
 
-**Subagent authorization contract:** a user who invokes `ticket-start` has authorized the mandatory dispatches still owned here: Scoping, `ticket-work-unit-orchestration`, and `ticket-ship-gate`. If the host cannot dispatch required subagents or skills, halt and surface that blocker.
+**Subagent authorization contract:** a user who invokes `ticket-start` has authorized the mandatory dispatches still owned here: Scoping, approved execution orchestration, and Ship gate. If the host cannot dispatch required subagents or auto-discover capabilities from self-contained requests, halt and surface that blocker.
 
 ## When to use
 
@@ -80,13 +80,13 @@ If ambiguous, ask the user before loading anything else.
 
 2. Keep UI-visible tasks traceable to Scoping's affected surface map and reference/prototype rows when present.
 
-3. If the plan spans multiple tickets or substantial implementation areas, describe the intended delegation shape at a high level. For workflows spanning multiple tickets, each ticket implementation should be delegated to a different implementation agent where practical, while review, testing, and verification remain delegated to subagents. The exact strategy belongs to `ticket-work-unit-orchestration`.
+3. If the plan spans multiple tickets or substantial implementation areas, describe the intended delegation shape at a high level. For workflows spanning multiple tickets, each ticket implementation should be delegated to a different implementation agent where practical, while review, testing, and verification remain delegated to subagents. The exact strategy belongs to the auto-discovered execution orchestration capability.
 
 4. Wait for explicit user approval of the implementation plan before execution. No code or scaffolding happens between requirements/design approval and plan approval.
 
 ## Execution routing
 
-Invoke `ticket-work-unit-orchestration` after the implementation plan is approved.
+Dispatch a self-contained approved execution orchestration request after the implementation plan is approved. Do not name a downstream skill identifier; write the request so auto-discovery selects the appropriate execution orchestration capability.
 
 Forward a compact execution packet:
 
@@ -99,16 +99,16 @@ Forward a compact execution packet:
 - UI/prototype/reference context when applicable
 - expected handoff shape: per-work-unit readiness ledger for implementation report, implementer self-review report, QA verification report, UI/UX verification report or explicit backend-only/non-UI skip rationale, unresolved findings status, and integration/out-of-scope status
 
-Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`. `ticket-work-unit-orchestration` owns those details and returns the per-work-unit readiness ledger before Ship.
+Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`. The auto-discovered execution orchestrator owns those details and returns the per-work-unit readiness ledger before Ship.
 
 ## Ship routing
 
-Use `ticket-ship-gate` for Ship. Do not perform Ship mutations inline.
+Dispatch a self-contained Ship gate request for Ship. Do not name a downstream skill identifier; write the request so auto-discovery selects the appropriate Ship gate capability. Do not perform Ship mutations inline.
 
 Forward a compact Ship packet:
 
 - approved requirements/design artifact and approved implementation plan
-- per-work-unit readiness ledger from `ticket-work-unit-orchestration`
+- per-work-unit readiness ledger from the execution orchestrator
 - PR/ticket context, workflow type, branch, and repository
 - bot identity guard context for personal workflow
 - required checks gate expectations
@@ -116,7 +116,7 @@ Forward a compact Ship packet:
 - current PR draft/ready state
 - intended Ship action
 
-`ticket-ship-gate` owns readiness preflight, PR creation/update, Remote checks gate, ticket transitions, merge approval, merge, and closeout mutation report.
+The auto-discovered Ship gate capability owns readiness preflight, PR creation/update, Remote checks gate, ticket transitions, merge approval, merge, and closeout mutation report.
 
 ## Briefing rule
 
@@ -128,8 +128,8 @@ When done, report:
 
 - what changed
 - what was validated and how, including delegated QA/UIUX status or backend-only skip
-- readiness ledger status from `ticket-work-unit-orchestration`
-- Ship gate status from `ticket-ship-gate`
+- readiness ledger status from the execution orchestrator
+- Ship gate status
 - rules proposed or promoted in this session, if any
 - remaining risks, assumptions, blockers, or manual follow-up
 

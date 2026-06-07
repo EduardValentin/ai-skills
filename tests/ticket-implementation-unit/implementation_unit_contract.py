@@ -45,14 +45,19 @@ def check_skill(skill: str) -> None:
 
 
 def check_orchestrator(skill: str) -> None:
-    assert_contains(skill, "ticket-implementation-unit", "orchestrator skill")
     assert_contains(skill, "implementation report", "orchestrator skill")
     assert_contains(skill, "implementer self-review", "orchestrator skill")
+    assert_not_contains(skill, "ticket-implementation-unit", "orchestrator skill")
 
 
 def assert_contains(haystack: str, needle: str, context: str) -> None:
     if needle not in haystack:
         raise AssertionError(f"{context} must contain {needle!r}")
+
+
+def assert_not_contains(haystack: str, needle: str, context: str) -> None:
+    if needle in haystack:
+        raise AssertionError(f"{context} must not contain {needle!r}")
 
 
 if __name__ == "__main__":

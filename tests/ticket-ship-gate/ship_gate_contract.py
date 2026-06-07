@@ -57,14 +57,19 @@ def check_bot_identity_reference(skill: str, bot_identity: str) -> None:
 
 
 def check_ticket_start_dispatch(skill: str) -> None:
-    assert_contains(skill, "ticket-ship-gate", "ticket-start skill")
     assert_contains(skill, "Ship gate", "ticket-start skill")
     assert_contains(skill, "per-work-unit readiness ledger", "ticket-start skill")
+    assert_not_contains(skill, "ticket-ship-gate", "ticket-start skill")
 
 
 def assert_contains(haystack: str, needle: str, context: str) -> None:
     if needle not in haystack:
         raise AssertionError(f"{context} must contain {needle!r}")
+
+
+def assert_not_contains(haystack: str, needle: str, context: str) -> None:
+    if needle in haystack:
+        raise AssertionError(f"{context} must not contain {needle!r}")
 
 
 if __name__ == "__main__":

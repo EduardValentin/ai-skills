@@ -14,7 +14,7 @@ id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "ticket-work-unit-orchestration", "ticket-ship-gate"]
+skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "auto-discovery selects the appropriate execution orchestration capability", "auto-discovery selects the appropriate Ship gate capability"]
 forbidden_terms = []
 
 [[scenario]]
@@ -27,7 +27,7 @@ delegated to a different agent where practical, while review, testing, and verif
 are still delegated too.
 """
 description_terms = ["large workflows spanning multiple tickets", "delegated orchestration"]
-skill_terms = ["thin intake and routing orchestrator", "ticket-work-unit-orchestration", "each ticket implementation should be delegated to a different implementation agent", "review, testing, and verification remain delegated"]
+skill_terms = ["thin intake and routing orchestrator", "approved execution orchestration request", "each ticket implementation should be delegated to a different implementation agent", "review, testing, and verification remain delegated"]
 forbidden_terms = []
 
 [[scenario]]
@@ -51,7 +51,7 @@ Invite Flow. Keep a per-unit readiness ledger while delegating implementation,
 self-review, QA, and UI/UX verification before Ship.
 """
 description_terms = ["coordinating approved ticket implementation", "multi-ticket delivery", "per-unit readiness ledger", "delegated implementation"]
-skill_terms = ["per-work-unit readiness ledger", "ticket-implementation-unit", "A work unit is not complete until", "Self-review is distinct from QA verification and UI/UX verification", "explicit backend-only/non-UI skip rationale", "Do not prescribe a rigid topology"]
+skill_terms = ["per-work-unit readiness ledger", "implementation work-unit request", "A work unit is not complete until", "Self-review is distinct from QA verification and UI/UX verification", "explicit backend-only/non-UI skip rationale", "Do not prescribe a rigid topology"]
 forbidden_terms = []
 
 [[scenario]]
