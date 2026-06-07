@@ -9,7 +9,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 QA_SKILL = REPO_ROOT / "skills" / "ticket-qa-verification" / "SKILL.md"
-LEGACY_QA_PROMPT = REPO_ROOT / "skills" / "ticket-start" / "agents" / "qa.md"
+TICKET_START_QA_POINTER = REPO_ROOT / "skills" / "ticket-start" / "agents" / "qa.md"
 TICKET_START = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 WORK_UNIT = REPO_ROOT / "skills" / "ticket-work-unit-orchestration" / "SKILL.md"
 
@@ -18,7 +18,7 @@ def main() -> int:
     try:
         qa_skill = QA_SKILL.read_text(encoding="utf-8")
         check_qa_skill(qa_skill)
-        check_legacy_pointer(LEGACY_QA_PROMPT.read_text(encoding="utf-8"))
+        check_ticket_start_has_no_qa_pointer()
         check_ticket_start_routes(TICKET_START.read_text(encoding="utf-8"))
         check_orchestrator_references(WORK_UNIT.read_text(encoding="utf-8"))
     except Exception as error:
@@ -48,18 +48,9 @@ def check_qa_skill(skill: str) -> None:
         assert_contains(skill, term, "ticket-qa-verification skill")
 
 
-def check_legacy_pointer(pointer: str) -> None:
-    assert_contains(pointer, "ticket-qa-verification", "legacy QA pointer")
-    assert_contains(pointer, "intentionally thin", "legacy QA pointer")
-    forbidden_duplicate_terms = (
-        "Mode A",
-        "Mode B",
-        "Mode C",
-        "Cross-feature regression check",
-        "After any fix, the full pass re-runs from scratch",
-    )
-    for term in forbidden_duplicate_terms:
-        assert_not_contains(pointer, term, "legacy QA pointer")
+def check_ticket_start_has_no_qa_pointer() -> None:
+    if TICKET_START_QA_POINTER.exists():
+        raise AssertionError(f"ticket-start should not keep QA pointer file: {TICKET_START_QA_POINTER}")
 
 
 def check_orchestrator_references(skill: str) -> None:
