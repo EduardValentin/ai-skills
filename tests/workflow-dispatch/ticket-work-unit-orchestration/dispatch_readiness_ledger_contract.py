@@ -26,22 +26,30 @@ def main() -> int:
 def check_dispatch_contract(skill: str) -> None:
     required_terms = (
         "Build the ledger before delegating implementation",
-        "Delegate implementation",
-        "ticket-implementation-unit",
+        "Delegate implementation through an implementation work-unit request",
         "Require returned reports to update the ledger",
         "implementation report",
         "implementer self-review report",
         "QA verification report",
-        "ticket-qa-verification",
+        "acceptance-criteria QA behavior verification request",
         "UI/UX verification report",
+        "frontend UI/UX visual review request",
         "explicit backend-only/non-UI skip rationale",
         "unresolved findings status",
         "integration/out-of-scope status",
-        "frontend-ui-review",
         "Do not prescribe a rigid topology",
     )
     for term in required_terms:
         assert_contains(skill, term)
+
+    forbidden_terms = (
+        "ticket-implementation-unit",
+        "ticket-qa-verification",
+        "frontend-ui-review",
+        "codebase-scope-map",
+    )
+    for term in forbidden_terms:
+        assert_not_contains(skill, term)
 
     assert_before(skill, "Build the ledger before delegating implementation", "Delegate implementation")
 
@@ -49,6 +57,11 @@ def check_dispatch_contract(skill: str) -> None:
 def assert_contains(haystack: str, needle: str) -> None:
     if needle not in haystack:
         raise AssertionError(f"expected to find {needle!r}")
+
+
+def assert_not_contains(haystack: str, needle: str) -> None:
+    if needle in haystack:
+        raise AssertionError(f"expected not to find {needle!r}")
 
 
 def assert_before(haystack: str, first: str, second: str) -> None:

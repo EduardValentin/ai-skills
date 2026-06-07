@@ -37,7 +37,6 @@ SCENARIOS = (
             "main agent should route execution after requirements/design and plan approval."
         ),
         required_terms=(
-            "ticket-work-unit-orchestration",
             "approved requirements",
             "approved implementation plan",
             "scoping",
@@ -45,7 +44,7 @@ SCENARIOS = (
         ),
         required_any_groups=(
             ("main agent is the orchestrator", "main agent stays the orchestrator", "orchestrator"),
-            ("large workflow", "multiple tickets", "four linear tickets"),
+            ("large workflow", "multiple tickets", "four linear tickets", "four tickets", "all four ticket"),
             ("implementation", "QA", "UI/UX", "verification"),
         ),
         forbidden_terms=(
@@ -59,6 +58,9 @@ SCENARIOS = (
             "I would implement inline",
             "ticket-qa-verification",
             "ticket-implementation-unit",
+            "ticket-work-unit-orchestration",
+            "ticket-ship-gate",
+            "frontend-ui-review",
         ),
     ),
 )
@@ -114,9 +116,10 @@ User request:
 
 Do not execute the ticket. Return a concise routing plan only. It must explain:
 - how ticket-start stays the intake and routing orchestrator,
-- which dedicated skill owns execution orchestration,
+- which delegated capability owns execution orchestration,
 - which compact context ticket-start forwards,
 - how the readiness ledger is used before Ship.
+Do not name downstream skill identifiers.
 """
 
 

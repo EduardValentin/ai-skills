@@ -36,8 +36,8 @@ def check_uiux_contract(skill: str, personal_workflow: str, frontend_ui_review: 
     )
 
     assert_contains(skill, required_rule)
-    assert_contains(skill, "frontend-ui-review")
     assert_contains(skill, "UI/UX verification remains delegated")
+    assert_not_contains(skill, "frontend-ui-review")
     assert_contains(frontend_ui_review, required_rule)
     assert_contains(frontend_ui_review, "DOM computed styles")
     assert_contains(frontend_ui_review, "bounding rects")

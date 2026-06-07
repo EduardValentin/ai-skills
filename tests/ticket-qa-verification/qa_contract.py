@@ -54,14 +54,15 @@ def check_ticket_start_has_no_qa_pointer() -> None:
 
 
 def check_orchestrator_references(skill: str) -> None:
-    assert_contains(skill, "ticket-qa-verification", "orchestrator skill")
     assert_contains(skill, "QA verification report", "orchestrator skill")
+    assert_not_contains(skill, "ticket-qa-verification", "orchestrator skill")
 
 
 def check_ticket_start_routes(skill: str) -> None:
-    assert_contains(skill, "ticket-work-unit-orchestration", "ticket-start skill")
     assert_contains(skill, "QA verification report", "ticket-start skill")
     assert_not_contains(skill, "Dispatch `ticket-qa-verification`", "ticket-start skill")
+    assert_not_contains(skill, "ticket-work-unit-orchestration", "ticket-start skill")
+    assert_not_contains(skill, "ticket-qa-verification", "ticket-start skill")
 
 
 def assert_contains(haystack: str, needle: str, context: str) -> None:

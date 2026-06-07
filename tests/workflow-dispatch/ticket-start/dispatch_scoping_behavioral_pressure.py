@@ -4,14 +4,15 @@
 from __future__ import annotations
 
 import os
-import shlex
-import subprocess
 import sys
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from auto_discovery import assert_auto_discovers, assert_concept_groups, assert_forbidden_terms, run_agent  # noqa: E402
 
 
 def main() -> int:
@@ -25,7 +26,7 @@ def main() -> int:
 
     response = run_agent(agent_command, make_prompt())
     try:
-        check_response(response)
+        check_response(response, agent_command)
     except Exception as error:
         print(f"Response:\n{response}", file=sys.stderr)
         print(f"FAIL: {error}", file=sys.stderr)
@@ -52,66 +53,39 @@ be read successfully and has acceptance criteria.
 Do not perform the task. Do not call tools. Return only the first workflow
 actions the main agent must take.
 
-Return only action lines in this exact shape:
-ACTION: <number> | <kind> | <target> | <details>
+Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
 
-Use kind DISPATCH_SUBAGENT for any mandatory subagent dispatch. For subagent
+Use kind DISPATCH_REQUEST for any mandatory delegated capability request. For
 dispatch details, include the prompt intent and compact inputs that must be
-forwarded. Include enough detail for a test to verify whether the prompt is a
-self-contained work request with the required evidence terms.
+forwarded. Do not name downstream skill identifiers.
 """
 
 
-def run_agent(agent_command: str, prompt: str) -> str:
-    completed = subprocess.run(
-        shlex.split(agent_command),
-        input=prompt,
-        text=True,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            "agent command failed with exit code "
-            f"{completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
-        )
-    return completed.stdout
-
-
-def check_response(response: str) -> None:
+def check_response(response: str, agent_command: str) -> None:
     normalized = response.lower()
-    required_terms = (
-        "dispatch_subagent",
-        "scoping",
-        "scope map",
-        "token-efficient",
-        "navigable",
-        "locators",
-        "entry points",
-        "target modules",
-        "types",
-        "tests",
-        "affected surfaces",
-        "downstream",
+    required_groups = (
+        ("dispatch_request", "dispatch request", "delegated request"),
+        ("scoping", "scope map", "codebase mapping"),
+        ("token-efficient", "compact", "surgical"),
+        ("navigable", "file:line", "locators"),
+        ("entry points", "target modules", "target components"),
+        ("types", "contracts", "interfaces"),
+        ("tests", "test surfaces", "verification surfaces"),
+        ("affected surfaces", "affected ui/prototype surfaces", "affected ui surfaces", "impacted surfaces"),
+        ("downstream", "implementation slices", "delegation slices"),
     )
-    missing = [term for term in required_terms if term not in normalized]
-    if missing:
-        raise AssertionError(f"missing required dispatch terms: {missing}")
+    assert_concept_groups(response, required_groups, "Scoping dispatch")
 
-    forbidden_terms = ("agents/scoping.md", "codebase-scope-map", "$codebase-scope-map")
-    present = [term for term in forbidden_terms if term in normalized]
-    if present:
-        raise AssertionError(f"included forbidden terms: {present}")
+    forbidden_terms = ("agents/scoping.md", "`codebase-scope-map`", "$codebase-scope-map")
+    assert_forbidden_terms(response, forbidden_terms, "Scoping dispatch")
+    assert_auto_discovers(agent_command, response, "codebase-scope-map")
 
-    scoping_index = first_index(response, "DISPATCH_SUBAGENT", "Scoping")
+    scoping_index = first_index(response, "dispatch_request", "scoping")
     if scoping_index < 0:
-        raise AssertionError("Scoping DISPATCH_SUBAGENT action is required")
-
-    for term in ("plan", "implement"):
-        later_index = normalized.find(term)
-        if 0 <= later_index < scoping_index:
-            raise AssertionError(f"mentioned {term!r} before Scoping dispatch")
+        scoping_index = first_index(response, "dispatch_request", "scope")
+    if scoping_index < 0:
+        raise AssertionError("Scoping dispatch request action is required")
 
     prefix = response[:scoping_index].lower()
     local_scoping_markers = (

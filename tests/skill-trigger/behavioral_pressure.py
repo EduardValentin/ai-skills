@@ -112,7 +112,6 @@ SELECTED_SKILLS: comma-separated skill names
 RATIONALE: one short sentence
 
 Select every skill that should be loaded before acting. Do not perform the user request.
-The expected regression guard for this scenario is that "{scenario["skill"]}" appears in SELECTED_SKILLS.
 Scenario id: {scenario["id"]}
 """
 

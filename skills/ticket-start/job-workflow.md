@@ -1,6 +1,6 @@
 # Job Workflow
 
-Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is delegated to `ticket-qa-verification` and UI/UX subagents; this file specifies the review modes they receive in the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, verification fix loops, and Ship.
+Use when the ticket comes from Jira or is pasted by the user. Loaded by `SKILL.md` once when the job workflow is selected. The Ticket Intake section applies during Setup. The Verification section is delegated to QA and UI/UX subagents; this file specifies the review modes they receive in the job workflow. Return to `SKILL.md` for phase ordering, dispatch points, standards, verification fix loops, and Ship.
 
 ## Ticket Intake
 
@@ -51,9 +51,9 @@ The Verify phase is run by the QA and UI/UX subagents. This file specifies the r
 
 Determined from the diff (main agent decides):
 
-- **`backend`** — diff touches only backend / API / service files. QA uses `ticket-qa-verification` backend mode.
-- **`ui`** — diff touches only user-facing app files. QA uses `ticket-qa-verification` UI mode.
-- **`mixed`** — diff touches both. QA uses `ticket-qa-verification` mixed mode; backend and UI behavior must both be clean.
+- **`backend`** — diff touches only backend / API / service files. QA uses backend/API/service behavior mode.
+- **`ui`** — diff touches only user-facing app files. QA uses user-facing UI behavior mode.
+- **`mixed`** — diff touches both. QA uses mixed backend-and-UI behavior mode; backend and UI behavior must both be clean.
 
 If the app or service cannot be started, QA escalates and the workflow stops on the user-intervention principle. Do not declare verified.
 

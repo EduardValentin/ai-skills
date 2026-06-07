@@ -10,6 +10,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
+SKILL_DIR = SKILL_PATH.parent
+DOWNSTREAM_SKILL_IDS = (
+    "ticket-work-unit-orchestration",
+    "ticket-implementation-unit",
+    "ticket-qa-verification",
+    "ticket-ship-gate",
+    "frontend-ui-review",
+    "codebase-scope-map",
+)
 
 
 def main() -> int:
@@ -28,10 +37,10 @@ def main() -> int:
 def check_large_orchestration_contract(skill: str) -> None:
     assert_line_count_at_most(skill, 175)
     assert_contains(skill, "thin intake and routing orchestrator")
-    assert_contains(skill, "Invoke `ticket-work-unit-orchestration`")
+    assert_contains(skill, "Dispatch a self-contained approved execution orchestration request")
     assert_contains(skill, "large workflows spanning multiple tickets")
     assert_contains(skill, "per-work-unit readiness ledger")
-    assert_contains(skill, "Use `ticket-ship-gate` for Ship")
+    assert_contains(skill, "Dispatch a self-contained Ship gate request")
 
     forbidden_terms = (
         "## Large Workflows",
@@ -49,9 +58,15 @@ def check_large_orchestration_contract(skill: str) -> None:
         "Dispatch UI/UX subagent",
         "Every verified row has non-blank",
         "gh pr checks <PR> --required --json name,state,bucket,workflow,link",
+        *DOWNSTREAM_SKILL_IDS,
     )
     for forbidden in forbidden_terms:
         assert_not_contains(skill, forbidden)
+
+    for markdown_file in sorted(SKILL_DIR.rglob("*.md")):
+        text = markdown_file.read_text(encoding="utf-8")
+        for forbidden in DOWNSTREAM_SKILL_IDS:
+            assert_not_contains(text, forbidden)
 
     execution = section_between(skill, "## Execution routing", "## Ship routing")
     assert_contains(execution, "approved requirements/design artifact")
@@ -59,7 +74,7 @@ def check_large_orchestration_contract(skill: str) -> None:
     assert_contains(execution, "Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`")
 
     ship = section_between(skill, "## Ship routing", "## Briefing rule")
-    assert_contains(ship, "Use `ticket-ship-gate` for Ship")
+    assert_contains(ship, "Ship gate request")
     assert_contains(ship, "explicit user merge approval status")
     assert_contains(ship, "intended Ship action")
 
