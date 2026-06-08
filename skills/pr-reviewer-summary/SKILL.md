@@ -7,6 +7,17 @@ description: Use when asked for a PR description, summary of changes, testing in
 
 Generate a full PR body in Markdown that helps a reviewer understand what changed, why it matters, and how to verify it quickly. Build the draft from the current branch diff, changed files, recent commits, and the surrounding user conversation or ticket context. Describe the final shipped state only, not the sequence of iterations, discarded approaches, or intermediate fixes that happened during development.
 
+## Preconditions
+
+Requires repo read access and enough review context to inspect the branch diff, changed files, recent commits, and available ticket or conversation context.
+
+Fallbacks:
+
+- If the branch diff is unavailable, ask for the PR diff, changed-file summary, or PR URL before drafting.
+- If commit history is unavailable, rely on the current diff and state that commit-level context was not inspected.
+- If ticket or conversation context is unavailable, draft from the observable diff and call out assumptions that could affect reviewer validation.
+- If no reliable change context is available, stop and ask for the missing context instead of inventing a PR body.
+
 ## Workflow
 
 1. Gather the review context.
