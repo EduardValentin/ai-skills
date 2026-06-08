@@ -17,7 +17,6 @@ The static contract is deterministic. It verifies:
 - every scenario references an existing skill;
 - the declared skill name matches its folder;
 - descriptions start with `Use when`;
-- scenario-specific trigger terms appear in the description or skill body;
 - forbidden stale wording is absent.
 
 ## Installed-Harness Behavioral Trigger

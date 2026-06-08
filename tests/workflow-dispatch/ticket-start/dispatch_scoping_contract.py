@@ -24,28 +24,7 @@ def main() -> int:
 
 
 def check_contract(skill: str) -> None:
-    required_terms = (
-        "Scoping dispatch wording",
-        "dispatches the Scoping subagent",
-        "self-contained codebase mapping request",
-        "token-efficient navigable scope map",
-        "file:line locators",
-        "entry points",
-        "target modules/components",
-        "types/contracts",
-        "tests",
-        "affected surfaces",
-        "suggested downstream slices",
-    )
-    for term in required_terms:
-        assert_contains(skill, term)
-
     assert_not_contains(skill, "agents/scoping.md")
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

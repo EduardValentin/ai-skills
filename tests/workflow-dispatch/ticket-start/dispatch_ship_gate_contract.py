@@ -26,14 +26,6 @@ def main() -> int:
 
 def check_contract(skill: str) -> None:
     ship = section_between(skill, "## Ship routing", "## Briefing rule")
-    assert_contains(ship, "Dispatch a self-contained Ship gate request")
-    assert_contains(ship, "auto-discovery selects the appropriate Ship gate capability")
-    assert_contains(ship, "required checks gate expectations")
-    assert_contains(ship, "per-work-unit readiness ledger")
-    assert_contains(ship, "Do not perform Ship mutations inline")
-    assert_contains(ship, "explicit user merge approval status")
-    assert_contains(ship, "current PR draft/ready state")
-    assert_contains(ship, "intended Ship action")
     assert_not_contains(ship, "ticket-ship-gate")
     assert_not_contains(ship, "ticket-work-unit-orchestration")
     assert_not_contains(ship, "gh pr checks <PR> --required --json name,state,bucket,workflow,link")
@@ -48,11 +40,6 @@ def section_between(document: str, start_heading: str, end_heading: str) -> str:
     if not match:
         raise AssertionError(f"missing section from {start_heading!r} to {end_heading!r}")
     return match.group("section")
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

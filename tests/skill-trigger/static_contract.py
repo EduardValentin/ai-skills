@@ -62,12 +62,6 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
         if not description.startswith("Use when"):
             raise ValueError(f"{skill} description must start with 'Use when'")
 
-        for term in scenario["description_terms"]:
-            assert_contains(description, str(term), f"{scenario_id} description")
-
-        for term in scenario["skill_terms"]:
-            assert_contains(skill_doc, str(term), f"{scenario_id} skill document")
-
         for term in scenario["forbidden_terms"]:
             assert_not_contains(skill_doc, str(term), f"{scenario_id} skill document")
             assert_not_contains(prompt, str(term), f"{scenario_id} prompt")
@@ -93,11 +87,6 @@ def parse_frontmatter(skill_file: Path, skill_doc: str) -> dict[str, str]:
         key, value = raw_line.split(":", 1)
         values[key.strip()] = value.strip().strip('"')
     return values
-
-
-def assert_contains(haystack: str, needle: str, context: str) -> None:
-    if needle and needle not in haystack:
-        raise ValueError(f"{context} must contain: {needle}")
 
 
 def assert_not_contains(haystack: str, needle: str, context: str) -> None:

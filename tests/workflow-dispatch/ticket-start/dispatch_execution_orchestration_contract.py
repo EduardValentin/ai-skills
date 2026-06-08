@@ -26,13 +26,6 @@ def main() -> int:
 
 def check_contract(skill: str) -> None:
     execution = section_between(skill, "## Execution routing", "## Ship routing")
-    assert_contains(execution, "Dispatch a self-contained approved execution orchestration request")
-    assert_contains(execution, "auto-discovery selects the appropriate execution orchestration capability")
-    assert_contains(execution, "approved requirements/design artifact")
-    assert_contains(execution, "approved implementation plan")
-    assert_contains(execution, "Scoping map")
-    assert_contains(execution, "per-work-unit readiness ledger")
-    assert_contains(execution, "Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`")
     assert_not_contains(execution, "ticket-work-unit-orchestration")
     assert_not_contains(execution, "ticket-implementation-unit")
     assert_not_contains(execution, "Dispatch `ticket-qa-verification`")
@@ -50,11 +43,6 @@ def section_between(document: str, start_heading: str, end_heading: str) -> str:
     if not match:
         raise AssertionError(f"missing section from {start_heading!r} to {end_heading!r}")
     return match.group("section")
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

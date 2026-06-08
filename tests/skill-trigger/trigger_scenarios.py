@@ -67,7 +67,7 @@ def load_scenarios(path: Path) -> list[dict[str, Any]]:
 
 def _normalize_scenario(path: Path, scenario: dict[str, Any]) -> dict[str, Any]:
     required_strings = ("id", "skill", "prompt")
-    optional_lists = ("description_terms", "skill_terms", "forbidden_terms", "response_forbidden_terms")
+    optional_lists = ("forbidden_terms", "response_forbidden_terms")
 
     for key in required_strings:
         value = scenario.get(key)

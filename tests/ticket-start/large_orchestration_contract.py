@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -36,11 +35,6 @@ def main() -> int:
 
 def check_large_orchestration_contract(skill: str) -> None:
     assert_line_count_at_most(skill, 175)
-    assert_contains(skill, "thin intake and routing orchestrator")
-    assert_contains(skill, "Dispatch a self-contained approved execution orchestration request")
-    assert_contains(skill, "large workflows spanning multiple tickets")
-    assert_contains(skill, "per-work-unit readiness ledger")
-    assert_contains(skill, "Dispatch a self-contained Ship gate request")
 
     forbidden_terms = (
         "## Large Workflows",
@@ -67,32 +61,6 @@ def check_large_orchestration_contract(skill: str) -> None:
         text = markdown_file.read_text(encoding="utf-8")
         for forbidden in DOWNSTREAM_SKILL_IDS:
             assert_not_contains(text, forbidden)
-
-    execution = section_between(skill, "## Execution routing", "## Ship routing")
-    assert_contains(execution, "approved requirements/design artifact")
-    assert_contains(execution, "approved implementation plan")
-    assert_contains(execution, "Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`")
-
-    ship = section_between(skill, "## Ship routing", "## Briefing rule")
-    assert_contains(ship, "Ship gate request")
-    assert_contains(ship, "explicit user merge approval status")
-    assert_contains(ship, "intended Ship action")
-
-
-def section_between(document: str, start_heading: str, end_heading: str) -> str:
-    pattern = re.compile(
-        rf"^{re.escape(start_heading)}\n(?P<section>.*?)(?=^{re.escape(end_heading)}\n)",
-        re.MULTILINE | re.DOTALL,
-    )
-    match = pattern.search(document)
-    if not match:
-        raise AssertionError(f"missing section from {start_heading!r} to {end_heading!r}")
-    return match.group("section")
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

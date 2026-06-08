@@ -1,14 +1,6 @@
 # Ticket Work Unit Orchestration Tests
 
-These focused tests cover the per-ticket / per-work-unit readiness ledger expected from the future `ticket-work-unit-orchestration` skill.
-
-They are intentionally RED until that dedicated skill exists and defines the explicit ledger contract.
-
-## Deterministic Contract
-
-```bash
-python3 tests/ticket-work-unit-orchestration/readiness_ledger_contract.py
-```
+These focused tests cover the per-ticket / per-work-unit readiness ledger expected from `ticket-work-unit-orchestration`.
 
 ## Behavioral Pressure
 

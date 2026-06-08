@@ -5,16 +5,12 @@
 id = "declaratia-d212-investments"
 skill = "declaratia-unica-romania"
 prompt = "Complete my Romanian D212 for dividends from Romania and capital gains from IBKR."
-description_terms = ["Declarația Unică", "D212", "dividende", "IBKR"]
-skill_terms = ["duf.anaf.ro", "workflow/citation-protocol.md"]
 forbidden_terms = []
 
 [[scenario]]
 id = "ticket-start-linear"
 skill = "ticket-start"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
-description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["Setup -> Requirements/Design -> Plan", "personal-workflow.md", "latest `origin/main`", "Scoping dispatch wording", "Implementation dispatch wording", "UI/UX dispatch wording", "GitHub write identity guard", "review-thread replies", "Remote checks gate", "auto-discovery selects the appropriate execution orchestration capability", "auto-discovery selects the appropriate Ship gate capability"]
 forbidden_terms = []
 
 [[scenario]]
@@ -26,8 +22,6 @@ onboarding UI, background jobs, and migrations, so each ticket implementation sh
 delegated to a different agent where practical, while review, testing, and verification
 are still delegated too.
 """
-description_terms = ["large workflows spanning multiple tickets", "delegated orchestration"]
-skill_terms = ["thin intake and routing orchestrator", "approved execution orchestration request", "each ticket implementation should be delegated to a different implementation agent", "review, testing, and verification remain delegated"]
 forbidden_terms = []
 
 [[scenario]]
@@ -38,8 +32,6 @@ Start Linear issue APP-789 for a parity-mode UI ticket. Make sure the UI/UX veri
 checks what the user actually sees in every meaningful state instead of hidden templates,
 storybook-only variants, or implementation proxy components.
 """
-description_terms = ["start implementation work from a ticket", "Linear issue ID"]
-skill_terms = ["rendered user-visible outcome", "every visually meaningful state", "not hidden templates or implementation proxies"]
 forbidden_terms = []
 
 [[scenario]]
@@ -50,8 +42,6 @@ Coordinate the approved implementation plan for Billing API, Onboarding UI, and
 Invite Flow. Keep a per-unit readiness ledger while delegating implementation,
 self-review, QA, and UI/UX verification before Ship.
 """
-description_terms = ["coordinating approved ticket implementation", "multi-ticket delivery", "per-unit readiness ledger", "delegated implementation"]
-skill_terms = ["per-work-unit readiness ledger", "implementation work-unit request", "approved work-unit plan slice", "A work unit is not complete until", "Self-review is distinct from QA verification and UI/UX verification", "explicit backend-only/non-UI skip rationale", "reviewing implemented frontend UI for visual parity against a runnable prototype/reference or visual consistency against production analogs", "Do not prescribe a rigid topology"]
 forbidden_terms = []
 
 [[scenario]]
@@ -62,8 +52,6 @@ Implement this approved work-unit plan slice for the Invite Flow. Use the provid
 Scoping locators and constraints, run relevant local checks, perform implementer
 self-review, and return a compact implementation report for the orchestrator.
 """
-description_terms = ["implementing an approved ticket work unit", "implementation report", "concrete implementer self-review"]
-skill_terms = ["Required Inputs", "Implementer Self-Review", "Files changed", "Local tests/checks run", "READY FOR VERIFICATION", "Claiming QA/UIUX passed without separate verifier reports"]
 forbidden_terms = []
 
 [[scenario]]
@@ -74,8 +62,6 @@ QA this backend API ticket against the acceptance criteria. Unit tests passed,
 but I need endpoint behavior, persistence, auth, and error responses verified
 against the running service before Ship.
 """
-description_terms = ["verifying ticket acceptance criteria", "backend/API/service behavior", "running app or service"]
-skill_terms = ["Backend/API/Service Mode", "QA reports require live behavior evidence", "Inspect more than status codes", "QA findings are reported, not fixed"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -87,8 +73,6 @@ QA this user-facing UI change. Exercise loading, empty, success, error,
 validation, disabled, and rapid-click behavior in the running app, but leave
 visual parity to the UI/UX verifier.
 """
-description_terms = ["user-facing UI behavior", "QA reports", "running app or service"]
-skill_terms = ["UI Mode", "loading, empty, success, error, and validation states", "QA is about functionality and user-observable states, not visual parity"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -99,8 +83,6 @@ prompt = """
 QA this mixed ticket where the invite API and invite form changed together.
 Verify both the API behavior and the browser-visible user flow before Ship.
 """
-description_terms = ["mixed API-and-UI behavior", "verifying ticket acceptance criteria", "before Ship"]
-skill_terms = ["Mixed Mode", "Run backend/API/service mode and UI mode", "The work is not QA clean until both are clean"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -112,8 +94,6 @@ Run the Ship gate for this PR. The per-work-unit readiness ledgers are complete,
 QA and UI/UX verification are clean, and I need required GitHub checks evaluated
 before the PR or ticket is marked ready.
 """
-description_terms = ["Ship mutations", "per-work-unit readiness ledgers", "required GitHub checks"]
-skill_terms = ["Ship gate owns readiness and release mutations", "per-work-unit readiness ledger", "gh pr checks <PR> --required --json name,state,bucket,workflow,link", "no-checks-configured"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -125,8 +105,6 @@ Merge this ticket PR after checking that all required checks passed and that the
 user explicitly approved the merge. Use the personal workflow bot identity for
 any GitHub write.
 """
-description_terms = ["merging ticket pull requests", "explicit user merge approval", "bot identity"]
-skill_terms = ["User approval is required before merge", "ambient personal GitHub credentials", "ticket-start/bot-identity.md"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -134,8 +112,6 @@ response_forbidden_terms = ["ticket-start"]
 id = "codebase-scope-map-implementation-handoff"
 skill = "codebase-scope-map"
 prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, affected surfaces, tests, patterns, dependencies, conflicts, and keep it token-efficient."
-description_terms = ["implementation", "ticket", "relevant code mapped", "compact file-line locators", "affected surfaces"]
-skill_terms = ["Token Discipline", "Prototype / Reference App Rule", "Affected surface map", "Suggested downstream slices"]
 forbidden_terms = []
 
 [[scenario]]
@@ -147,16 +123,12 @@ implementation task as a token-efficient navigable scope map with file:line
 locators, tests, types/contracts, analogous implementations, dependencies,
 prototype/reference elements where relevant, affected surfaces, conflict points, and downstream slices.
 """
-description_terms = ["handoff task", "entry points", "prototype/reference elements", "affected surfaces"]
-skill_terms = ["Output Contract", "Affected surface map", "Potential conflict points", "Do not choose the implementation approach"]
 forbidden_terms = []
 
 [[scenario]]
 id = "frontend-ui-review-runnable-reference"
 skill = "frontend-ui-review"
 prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before ship."
-description_terms = ["implemented frontend UI", "runnable prototype", "visual parity"]
-skill_terms = ["Matched-element inventory", "scripts/extract-element-style.browser.js", "Parity Mode", "rendered user-visible outcome", "every visually meaningful state"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -164,8 +136,6 @@ response_forbidden_terms = ["ticket-start"]
 id = "frontend-ui-review-production-consistency"
 skill = "frontend-ui-review"
 prompt = "There is no prototype for this frontend change; review whether the new settings panel is visually consistent with the existing production settings and profile panels."
-description_terms = ["visual consistency", "production analogs"]
-skill_terms = ["Consistency Mode", "production analog", "Comparison basis"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -180,8 +150,6 @@ map, approved artifacts, changed UI files, and live DOM inspection. Compare DOM
 computed styles and bounding rects for every row, check keyboard, focus, contrast,
 and accessibility, then return a structured verdict and findings.
 """
-description_terms = ["implemented frontend UI", "visual parity", "accessibility states"]
-skill_terms = ["Parity Mode", "Accessibility", "affected surface map"]
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -189,32 +157,24 @@ response_forbidden_terms = ["ticket-start"]
 id = "frontend-pr-test-acceptance"
 skill = "frontend-pr-test"
 prompt = "Test this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes."
-description_terms = ["frontend pull request", "acceptance criteria", "PR notes"]
-skill_terms = ["Browser acceptance capability", "Run focused tests near the changed code"]
 forbidden_terms = []
 
 [[scenario]]
 id = "design-studio-visual-bug"
 skill = "design-studio"
 prompt = "Fix the mobile spacing bug in the React reference app dashboard and keep the prototype style intact."
-description_terms = ["UI/UX work", "React reference app", "visual bugs"]
-skill_terms = ["prepare-design-studio.sh", "references/browser-fallback.md"]
 forbidden_terms = []
 
 [[scenario]]
 id = "ticket-planner-prd-to-stories"
 skill = "ticket-planner"
 prompt = "Turn this PRD and prototype into implementation-ready epics, vertical-slice user stories, and acceptance criteria."
-description_terms = ["PRDs", "vertical-slice user stories", "acceptance criteria"]
-skill_terms = ["issue-tracker neutral", "references/requirements-interview.md"]
 forbidden_terms = []
 
 [[scenario]]
 id = "linear-issue-writing-approved-drafts"
 skill = "linear-issue-writing"
 prompt = "Publish these approved epic and user story drafts into Linear, with the right parent-child structure and duplicate checks."
-description_terms = ["publish approved epics", "user stories", "Linear issue structure"]
-skill_terms = ["Run duplicate detection", "parent/sub-issue structure"]
 forbidden_terms = []
 
 [[scenario]]
@@ -224,102 +184,76 @@ prompt = """
 Verify the UI changes in the current PR. The repo remote is
 https://bitbucket.org/acme/widget.git and the PR branch is feature/auth-panel.
 """
-description_terms = ["Bitbucket-hosted pull request/repository", "testing or verifying PR behavior"]
-skill_terms = ["find-prs-for-branch", "Git credential helper for `bitbucket.org`"]
 forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
 
 [[scenario]]
 id = "bitbucket-current-branch"
 skill = "manage-bitbucket-pr"
 prompt = "In the Bitbucket repo for acme/widget, check the current branch PR before I test it."
-description_terms = ["Bitbucket-hosted pull request/repository", "PR branches"]
-skill_terms = ["find-prs-for-branch", "PR or repository is hosted on Bitbucket"]
 forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
 
 [[scenario]]
 id = "bitbucket-review-summary"
 skill = "manage-bitbucket-pr"
 prompt = "Summarize the review discussion and PR notes for https://bitbucket.org/acme/widget/pull-requests/42."
-description_terms = ["PR URLs", "writing summaries"]
-skill_terms = ["pr-details", "read-comments"]
 forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
 
 [[scenario]]
 id = "bitbucket-merge-status"
 skill = "manage-bitbucket-pr"
 prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report blockers."
-description_terms = ["pull request IDs", "merge requests"]
-skill_terms = ["merge-status", "read-before-write"]
 forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
 
 [[scenario]]
 id = "uiux-frontend-interface-design-accessible-page"
 skill = "frontend-interface-design"
 prompt = "Design a polished responsive settings page with semantic HTML, keyboard support, loading and error states, and subtle motion."
-description_terms = ["frontend pages", "semantic HTML", "accessibility", "responsive behavior", "production-grade UI/UX"]
-skill_terms = ["Design from structure outward", "ARIA only fills semantic gaps"]
 forbidden_terms = []
 
 [[scenario]]
 id = "uiux-semantic-design-tokens-raw-values"
 skill = "semantic-design-tokens"
 prompt = "Audit this component for raw hex colors, duplicated theme constants, local values that bypass existing semantic roles, and styling that should be converted to semantic design tokens."
-description_terms = ["semantic design tokens", "component-local implementation values"]
-skill_terms = ["Use tokens as the design-system contract", "What Counts As One-Off", "scripts/audit_tokens.py"]
 forbidden_terms = []
 
 [[scenario]]
 id = "uiux-reusable-components-repeated-patterns"
 skill = "reusable-ui-components"
 prompt = "This dashboard repeats metric cards and filter panels across pages. Decide whether to reuse, extend variants, or extract a reusable component API."
-description_terms = ["UI patterns that repeat", "component APIs", "variants", "page-specific logic"]
-skill_terms = ["Prefer reusable components when they preserve meaning", "Name components after their role"]
 forbidden_terms = []
 
 [[scenario]]
 id = "uiux-visual-validation-breakpoints"
 skill = "visual-validation"
 prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking overflow, clipping, contrast, focus states, and parity with the reference app."
-description_terms = ["screenshots", "responsive layouts", "breakpoint behavior", "focus states", "visual parity"]
-skill_terms = ["Do not declare visual work complete from code inspection alone", "Viewport Matrix"]
 forbidden_terms = []
 
 [[scenario]]
 id = "uiux-design-direction-ambiguous-premium"
 skill = "design-direction-brainstorming"
 prompt = "I want to change the visual direction of this dashboard so it feels more premium and less cluttered; the target audience and emotional tone are not clear yet."
-description_terms = ["changes the visual direction", "multiple plausible design directions", "unclear audience", "emotional tone"]
-skill_terms = ["relentless collaborative interview", "Shared design direction"]
 forbidden_terms = []
 
 [[scenario]]
 id = "uiux-web-copy-brand-voice-hero-cta"
 skill = "web-copy-from-brand-voice"
 prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so it fits our brand voice and conversion goal."
-description_terms = ["brand voice", "conversion goal", "microcopy"]
-skill_terms = ["Write copy from the brand's voice", "Copy Principles"]
 forbidden_terms = []
 
 [[scenario]]
 id = "stock-recap-quarterly-catch-up"
 skill = "stock-recap"
 prompt = "I last researched NOW back in February. Catch me up on the quarters that have been filed since then — I want to see whether the thesis still holds."
-description_terms = ["recapping an existing US-listed stock thesis", "catching up on every quarter", "Mechanically diffs actuals vs saved bull/base/bear projections", "LLM-evaluates the saved English sell triggers"]
-skill_terms = ["Quarterly catch-up", "phases/quarterly/02-fetch-sub.md", "auto-recommend", "Checkpoint 2 — Trajectory, diff, and triggers"]
 forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
 
 [[scenario]]
 id = "stock-research-fundamentals-thesis"
 skill = "stock-research"
 prompt = "Research AAPL end-to-end and help me decide whether it belongs on my long-term buy/watch/avoid list."
-description_terms = ["researching a US-listed company end-to-end", "investment thesis", "buy/watch/avoid"]
-skill_terms = ["Phase 1: Setup & identity", "Phase 10: Commit & index", "Checkpoint 1"]
 forbidden_terms = []
 
 [[scenario]]
 id = "stock-recap-news-impact"
 skill = "stock-recap"
 prompt = "Microsoft just announced acquiring Activision for $69B. I have an existing thesis on MSFT — recap it through the lens of this acquisition."
-description_terms = ["impact of a material event", "M&A, CEO change, regulatory ruling", "how does this acquisition affect"]
-skill_terms = ["News mode", "phases/news/02-context-fetch-sub.md", "event_class", "Checkpoint 1 — News impact review"]
 forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]

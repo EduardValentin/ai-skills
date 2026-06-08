@@ -23,10 +23,9 @@ python3 tests/workflow-dispatch/static_contract.py
 ```
 
 The static contract runs grouped `*_contract.py` tests under skill folders. Each
-test verifies that the loaded skill body still contains required dispatch wording,
-does not reintroduce stale embedded-prompt references, and does not hardcode
-downstream skill identifiers in parent/orchestrator skill prose. It also guards
-the downstream discovery helper so it cannot rebuild or inject a skill index.
+test guards against stale embedded-prompt references and hardcoded downstream
+skill identifiers in parent/orchestrator skill prose. It also guards the
+downstream discovery helper so it cannot rebuild or inject a skill index.
 
 ## Behavioral Dispatch
 
