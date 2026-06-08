@@ -32,7 +32,8 @@ downstream discovery helper so it cannot rebuild or inject a skill index.
 Run manually, nightly, or in a model-enabled CI job:
 
 ```bash
-WORKFLOW_DISPATCH_AGENT_COMMAND='<agent command that reads stdin>' \
+WORKFLOW_DISPATCH_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
+SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
   python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```
 
@@ -51,7 +52,19 @@ downstream skill is selected. The downstream check does not provide a skill body
 an `Available skills` list, or any repo-built skill index. If the harness cannot
 discover the downstream skill from the delegated request, the test fails.
 
-Behavioral checks should tolerate non-deterministic model wording. Prefer
-case-insensitive concept groups and forbidden anti-patterns over exact full-line
-or full-response matches. Exact tokens are appropriate only when the prompt
-explicitly requires a machine-readable token such as `DISPATCH_REQUEST`.
+Behavioral checks use a hybrid model:
+
+- deterministic hard gates for `ACTION:` shape, required machine tokens,
+  forbidden downstream skill IDs, ordering invariants, and black-box downstream
+  discovery;
+- semantic judge rubrics for workflow quality, such as whether the parent stayed
+  an orchestrator and whether delegated requests are self-contained.
+
+Set `SEMANTIC_JUDGE_AGENT_COMMAND` to use a separate judge command. If unset,
+the workflow agent command is reused as the judge.
+
+Use the repo's `tests/codex_agent_command.py` shim for Codex-backed runs. It
+defaults both actor and judge invocations to `gpt-5.4-mini` with `low` reasoning,
+while still allowing `CODEX_ACTOR_MODEL`, `CODEX_JUDGE_MODEL`,
+`CODEX_ACTOR_REASONING_EFFORT`, and `CODEX_JUDGE_REASONING_EFFORT` overrides for
+the rare scenario that needs more depth.

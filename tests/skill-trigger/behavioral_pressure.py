@@ -15,6 +15,14 @@ from trigger_scenarios import load_scenarios
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SCENARIOS_PATH = SCRIPT_DIR / "scenarios.toml"
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 def main() -> int:
@@ -38,8 +46,9 @@ def main() -> int:
         if not scenarios:
             raise ValueError("no behavioral scenarios matched")
 
+        judge_command = resolve_judge_command(agent_command)
         for scenario in scenarios:
-            run_scenario(agent_command, scenario)
+            run_scenario(agent_command, judge_command, scenario)
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -63,7 +72,7 @@ The response must include the expected skill name from the scenario registry."""
     )
 
 
-def run_scenario(agent_command: str, scenario: dict[str, object]) -> None:
+def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, object]) -> None:
     scenario_id = str(scenario["id"])
     skill = str(scenario["skill"])
     prompt = make_prompt(scenario)
@@ -73,11 +82,39 @@ def run_scenario(agent_command: str, scenario: dict[str, object]) -> None:
         print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
         raise ValueError(f"{scenario_id} did not select expected skill: {skill}")
 
-    for term in scenario["response_forbidden_terms"]:
-        term_text = str(term)
-        if term_text and term_text in response:
-            print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
-            raise ValueError(f"{scenario_id} repeated forbidden rationalization term: {term_text}")
+    try:
+        assert_forbidden_terms(
+            response,
+            tuple(str(term) for term in scenario["response_forbidden_terms"]),
+            scenario_id,
+        )
+        judge_response(
+            judge_command=judge_command,
+            scenario_id=scenario_id,
+            scenario_prompt=str(scenario["prompt"]),
+            response=response,
+            criteria=(
+                SemanticCriterion(
+                    "expected_skill_is_relevant",
+                    f"The response selects {skill} because it is relevant to the user request before any task work begins.",
+                ),
+                SemanticCriterion(
+                    "selection_is_from_prompt",
+                    "The rationale explains the trigger condition from the user request rather than relying on an injected skill list or performing the task.",
+                ),
+                SemanticCriterion(
+                    "does_not_perform_task",
+                    "The response only reports selected skills and a short rationale; it does not start executing the user request.",
+                ),
+            ),
+            context=(
+                "This is an installed-harness black-box skill trigger test. "
+                f"The deterministic expected skill is {skill}."
+            ),
+        )
+    except AssertionError as error:
+        print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
+        raise ValueError(f"{scenario_id} failed semantic trigger judgment: {error}") from error
 
     print(f"PASS: {scenario_id} selected {skill}", flush=True)
 

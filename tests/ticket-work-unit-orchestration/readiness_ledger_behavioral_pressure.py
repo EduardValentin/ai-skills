@@ -8,6 +8,7 @@ from stdin and writes the agent response to stdout.
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -17,16 +18,21 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ORCHESTRATION_SKILL = REPO_ROOT / "skills" / "ticket-work-unit-orchestration" / "SKILL.md"
 FALLBACK_SKILL = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 @dataclass(frozen=True)
 class Scenario:
     scenario_id: str
     user_request: str
-    units: tuple[str, ...]
-    per_unit_terms: tuple[str, ...]
-    global_terms: tuple[str, ...]
-    global_any_groups: tuple[tuple[str, ...], ...]
+    criteria: tuple[SemanticCriterion, ...]
     forbidden_terms: tuple[str, ...]
 
 
@@ -39,19 +45,27 @@ SCENARIOS = (
             "is backend-only, Onboarding UI is UI-facing, and Invite Flow is mixed. "
             "Describe how the main agent should track completion before Ship."
         ),
-        units=("Billing API", "Onboarding UI", "Invite Flow"),
-        per_unit_terms=(
-            "implementation",
-            "self-review",
-            "QA",
-        ),
-        global_terms=(
-            "readiness ledger",
-            "UI/UX",
-            "backend-only",
-        ),
-        global_any_groups=(
-            ("skip rationale", "backend-only rationale", "non-UI rationale"),
+        criteria=(
+            SemanticCriterion(
+                "separate_unit_rows",
+                "The response tracks Billing API, Onboarding UI, and Invite Flow as separate work units rather than one aggregate checklist.",
+            ),
+            SemanticCriterion(
+                "implementation_self_review_qa_per_unit",
+                "Each work unit has separate implementation, implementer self-review, and QA evidence expectations.",
+            ),
+            SemanticCriterion(
+                "uiux_for_ui_and_mixed_units",
+                "Onboarding UI and Invite Flow require UI/UX verification because they are UI-facing or mixed.",
+            ),
+            SemanticCriterion(
+                "backend_only_skip_rationale",
+                "Billing API has an explicit backend-only/non-UI UI/UX skip rationale rather than a missing UI/UX row.",
+            ),
+            SemanticCriterion(
+                "no_premature_completion",
+                "The response does not claim the overall workflow is complete until each unit's applicable ledger rows, findings status, and integration status are resolved.",
+            ),
         ),
         forbidden_terms=(
             "one aggregate checklist is enough",
@@ -82,9 +96,10 @@ def main() -> int:
 
     skill_path = ORCHESTRATION_SKILL if ORCHESTRATION_SKILL.exists() else FALLBACK_SKILL
     skill_text = skill_path.read_text(encoding="utf-8")
+    judge_command = resolve_judge_command(agent_command)
     for scenario in scenarios:
         response = run_agent(agent_command, make_prompt(skill_path, skill_text, scenario))
-        check_response(scenario, response)
+        check_response(scenario, response, judge_command, skill_path)
         print(f"PASS: {scenario.scenario_id}")
 
     print(f"PASS: {len(scenarios)} per-work-unit readiness ledger behavioral scenarios")
@@ -121,10 +136,9 @@ should use before Ship. Keep it concise.
 
 def run_agent(agent_command: str, prompt: str) -> str:
     completed = subprocess.run(
-        agent_command,
+        shlex.split(agent_command),
         input=prompt,
         text=True,
-        shell=True,
         cwd=REPO_ROOT,
         capture_output=True,
         check=False,
@@ -137,57 +151,23 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def check_response(scenario: Scenario, response: str) -> None:
-    normalized_response = response.lower()
-
-    missing_global = [term for term in scenario.global_terms if term.lower() not in normalized_response]
-    missing_groups = [
-        group for group in scenario.global_any_groups if not any(term.lower() in normalized_response for term in group)
-    ]
-    if missing_global or missing_groups:
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(
-            f"{scenario.scenario_id} missing global terms: {missing_global}; "
-            f"missing global term groups: {missing_groups}"
+def check_response(scenario: Scenario, response: str, judge_command: str, skill_path: Path) -> None:
+    try:
+        assert_forbidden_terms(response, scenario.forbidden_terms, scenario.scenario_id)
+        judge_response(
+            judge_command=judge_command,
+            scenario_id=scenario.scenario_id,
+            scenario_prompt=scenario.user_request,
+            response=response,
+            criteria=scenario.criteria,
+            context=(
+                f"Loaded skill path: {skill_path.relative_to(REPO_ROOT)}. "
+                "Judge per-work-unit readiness ledger behavior, not exact wording."
+            ),
         )
-
-    missing_by_unit: dict[str, list[str]] = {}
-    for unit in scenario.units:
-        unit_window = window_after(response, unit, 1000)
-        if not unit_window:
-            missing_by_unit[unit] = ["unit section"]
-            continue
-
-        normalized_window = unit_window.lower()
-        missing_terms = [term for term in scenario.per_unit_terms if term.lower() not in normalized_window]
-        if missing_terms:
-            missing_by_unit[unit] = missing_terms
-
-    if missing_by_unit:
+    except AssertionError:
         print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} missing per-unit terms: {missing_by_unit}")
-
-    ui_unit_windows = "\n".join(window_after(response, unit, 1000) for unit in ("Onboarding UI", "Invite Flow"))
-    if "ui/ux" not in ui_unit_windows.lower():
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} missing UI/UX verification on UI-facing units")
-
-    billing_window = window_after(response, "Billing API", 1000).lower()
-    if "ui/ux" not in billing_window or not any(term in billing_window for term in ("skip rationale", "backend-only", "non-ui")):
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} missing backend-only UI/UX skip rationale for Billing API")
-
-    forbidden = [term for term in scenario.forbidden_terms if term.lower() in normalized_response]
-    if forbidden:
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} included forbidden terms: {forbidden}")
-
-
-def window_after(text: str, marker: str, length: int) -> str:
-    index = text.lower().find(marker.lower())
-    if index < 0:
-        return ""
-    return text[index : index + length]
+        raise
 
 
 if __name__ == "__main__":

@@ -5,11 +5,20 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
@@ -51,20 +60,6 @@ RATIONALE: one short sentence
 
 Select every skill that should be loaded before acting on the delegated request.
 """
-
-
-def assert_concept_groups(text: str, groups: tuple[tuple[str, ...], ...], context: str) -> None:
-    normalized = text.casefold()
-    missing = [group for group in groups if not any(term.casefold() in normalized for term in group)]
-    if missing:
-        raise AssertionError(f"{context} missing concept groups: {missing}")
-
-
-def assert_forbidden_terms(text: str, terms: tuple[str, ...], context: str) -> None:
-    normalized = text.casefold()
-    present = [term for term in terms if term.casefold() in normalized]
-    if present:
-        raise AssertionError(f"{context} included forbidden terms: {present}")
 
 
 def action_lines(text: str) -> list[str]:

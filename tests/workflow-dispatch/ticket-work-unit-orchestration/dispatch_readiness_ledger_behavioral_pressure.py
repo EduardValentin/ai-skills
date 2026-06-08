@@ -15,10 +15,10 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from auto_discovery import (  # noqa: E402
     action_lines,
     assert_auto_discovers,
-    assert_concept_groups,
     assert_forbidden_terms,
     run_agent,
 )
+from auto_discovery import SemanticCriterion, judge_response, resolve_judge_command  # noqa: E402
 
 
 def main() -> int:
@@ -34,7 +34,7 @@ def main() -> int:
 
     try:
         response = run_agent(agent_command, make_prompt())
-        check_response(response, agent_command)
+        check_response(response, agent_command, resolve_judge_command(agent_command))
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -83,7 +83,7 @@ auto-discovery can select the right skill.
 """
 
 
-def check_response(response: str, agent_command: str) -> None:
+def check_response(response: str, agent_command: str, judge_command: str) -> None:
     lines = action_lines(response)
     if not lines:
         print(f"Response:\n{response}", file=sys.stderr)
@@ -94,33 +94,50 @@ def check_response(response: str, agent_command: str) -> None:
         print(f"Response:\n{response}", file=sys.stderr)
         raise AssertionError("first action must set up the readiness ledger")
 
-    required_groups = (
-        ("billing api",),
-        ("onboarding ui",),
-        ("invite flow",),
-        ("implementation", "implementer"),
-        ("self-review", "self review"),
-        ("qa", "acceptance-criteria verification", "behavior verification"),
-        ("ui/ux", "visual verification", "frontend review"),
-        ("backend-only", "backend only", "non-ui"),
-        ("skip rationale", "non-ui rationale", "backend-only rationale"),
-    )
-    assert_concept_groups(response, required_groups, "readiness ledger workflow")
-
     forbidden = ("ticket-implementation-unit", "ticket-qa-verification", "frontend-ui-review", "codebase-scope-map")
     assert_forbidden_terms(response, forbidden, "readiness ledger workflow")
 
     dispatch_lines = [line for line in lines if "dispatch_request" in line.casefold()]
+    if not dispatch_lines:
+        print(f"Response:\n{response}", file=sys.stderr)
+        raise AssertionError("missing DISPATCH_REQUEST actions")
     dispatch_text = "\n".join(dispatch_lines)
-    assert_concept_groups(
-        dispatch_text,
-        (
-            ("dispatch_request", "dispatch request", "delegated request"),
-            ("implementation work-unit", "approved work-unit plan slice", "implementer"),
-            ("qa", "acceptance-criteria verification", "behavior verification"),
-            ("ui/ux", "visual verification", "frontend review"),
+
+    judge_response(
+        judge_command=judge_command,
+        scenario_id="ticket-work-unit-orchestration-readiness-ledger-dispatch",
+        scenario_prompt=(
+            "Coordinate an approved implementation plan with Billing API backend-only, "
+            "Onboarding UI UI-facing, and Invite Flow mixed."
         ),
-        "readiness ledger dispatch actions",
+        response=response,
+        criteria=(
+            SemanticCriterion(
+                "ledger_first",
+                "The response builds the per-work-unit readiness ledger before work can be marked Ship-ready.",
+            ),
+            SemanticCriterion(
+                "classifies_each_unit",
+                "The response preserves Billing API as backend-only, Onboarding UI as UI-facing, and Invite Flow as mixed.",
+            ),
+            SemanticCriterion(
+                "separate_evidence_rows",
+                "The response keeps separate evidence rows for implementation report, implementer self-review, QA, UI/UX or backend-only skip rationale, findings, and integration.",
+            ),
+            SemanticCriterion(
+                "dispatches_required_capabilities",
+                "The response dispatches implementation, QA behavior verification, and UI/UX visual review where applicable using self-contained delegated requests.",
+            ),
+            SemanticCriterion(
+                "backend_only_uiux_skip",
+                "The backend-only Billing API unit receives an explicit UI/UX skip rationale while UI-facing/mixed units require UI/UX review.",
+            ),
+            SemanticCriterion(
+                "no_collapsed_readiness",
+                "The response does not collapse self-review into QA, treat one clean unit as all clean, or mark the workflow complete prematurely.",
+            ),
+        ),
+        context="Loaded parent skill under test: ticket-work-unit-orchestration. Judge workflow dispatch behavior, not exact wording.",
     )
 
     implementation_request = matching_dispatch_text(

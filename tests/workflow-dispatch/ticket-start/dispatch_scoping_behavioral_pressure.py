@@ -12,7 +12,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from auto_discovery import assert_auto_discovers, assert_concept_groups, assert_forbidden_terms, run_agent  # noqa: E402
+from auto_discovery import assert_auto_discovers, assert_forbidden_terms, run_agent  # noqa: E402
+from auto_discovery import SemanticCriterion, judge_response, resolve_judge_command  # noqa: E402
 
 
 def main() -> int:
@@ -26,7 +27,7 @@ def main() -> int:
 
     response = run_agent(agent_command, make_prompt())
     try:
-        check_response(response, agent_command)
+        check_response(response, agent_command, resolve_judge_command(agent_command))
     except Exception as error:
         print(f"Response:\n{response}", file=sys.stderr)
         print(f"FAIL: {error}", file=sys.stderr)
@@ -62,24 +63,32 @@ forwarded. Do not name downstream skill identifiers.
 """
 
 
-def check_response(response: str, agent_command: str) -> None:
-    normalized = response.lower()
-    required_groups = (
-        ("dispatch_request", "dispatch request", "delegated request"),
-        ("scoping", "scope map", "codebase mapping"),
-        ("token-efficient", "compact", "surgical"),
-        ("navigable", "file:line", "locators"),
-        ("entry points", "target modules", "target components"),
-        ("types", "contracts", "interfaces"),
-        ("tests", "test surfaces", "verification surfaces"),
-        ("affected surfaces", "affected ui/prototype surfaces", "affected ui surfaces", "impacted surfaces"),
-        ("downstream", "implementation slices", "delegation slices"),
-    )
-    assert_concept_groups(response, required_groups, "Scoping dispatch")
-
+def check_response(response: str, agent_command: str, judge_command: str) -> None:
     forbidden_terms = ("agents/scoping.md", "`codebase-scope-map`", "$codebase-scope-map")
     assert_forbidden_terms(response, forbidden_terms, "Scoping dispatch")
     assert_auto_discovers(agent_command, response, "codebase-scope-map")
+
+    judge_response(
+        judge_command=judge_command,
+        scenario_id="ticket-start-dispatch-scoping",
+        scenario_prompt="Use ticket-start to implement Linear issue APP-123 after ticket intake succeeds.",
+        response=response,
+        criteria=(
+            SemanticCriterion(
+                "scoping_dispatch_before_local_mapping",
+                "The response delegates scoping/codebase mapping before performing local code mapping; setup, source-control, workflow-selection, and intake actions may appear first.",
+            ),
+            SemanticCriterion(
+                "scoping_request_is_self_contained",
+                "The delegated request includes enough ticket, acceptance criteria, repository, workflow, and compact input context for a separate agent to map scope.",
+            ),
+            SemanticCriterion(
+                "asks_for_navigable_scope_map",
+                "The delegated request asks for a compact navigable scope map with file-line locators, entry points, modules/components, contracts/types, tests, affected surfaces, conflicts, and downstream slices.",
+            ),
+        ),
+        context="Loaded parent skill under test: ticket-start. Judge scoping dispatch behavior, not exact wording.",
+    )
 
     scoping_index = first_index(response, "dispatch_request", "scoping")
     if scoping_index < 0:

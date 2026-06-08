@@ -13,13 +13,21 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-implementation-unit" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 @dataclass(frozen=True)
 class Scenario:
     scenario_id: str
     user_request: str
-    required_terms: tuple[str, ...]
+    criteria: tuple[SemanticCriterion, ...]
     forbidden_terms: tuple[str, ...]
 
 
@@ -31,15 +39,23 @@ SCENARIOS = (
             "Do not edit files. Return the implementation approach and final report shape the "
             "implementer should produce after coding."
         ),
-        required_terms=(
-            "ready for verification",
-            "files changed",
-            "local tests",
-            "self-review",
-            "known risks",
-            "handoff",
-            "qa",
-            "ui/ux",
+        criteria=(
+            SemanticCriterion(
+                "approved_slice_report_shape",
+                "The response describes an implementation report shape for an approved work-unit slice, including files/surfaces changed, local checks, decisions, risks/blockers, and handoff notes.",
+            ),
+            SemanticCriterion(
+                "includes_implementer_self_review",
+                "The response includes a distinct implementer self-review boundary as part of implementation evidence.",
+            ),
+            SemanticCriterion(
+                "ready_for_verification_not_ship",
+                "The response marks completed implementation as ready for downstream verification, not ready to ship or merge.",
+            ),
+            SemanticCriterion(
+                "does_not_claim_qa_uiux",
+                "The response makes clear QA and UI/UX verification are separate downstream evidence, not claimed by the implementer.",
+            ),
         ),
         forbidden_terms=(
             "ready to ship",
@@ -53,16 +69,23 @@ SCENARIOS = (
             "'fix the invite flow' and provides no approved plan slice or Scoping locators. "
             "Describe the correct response."
         ),
-        required_terms=(
-            "implementation blocked",
-            "approved",
-            "plan",
-            "scope",
+        criteria=(
+            SemanticCriterion(
+                "blocks_without_approved_scope",
+                "The response blocks implementation when approved plan slice or scoping locators are missing.",
+            ),
+            SemanticCriterion(
+                "requests_missing_inputs",
+                "The response identifies the missing approved plan/scope inputs needed before coding can start.",
+            ),
+            SemanticCriterion(
+                "does_not_best_guess",
+                "The response avoids best-guess coding or starting implementation from an underspecified request.",
+            ),
         ),
         forbidden_terms=(
             "start coding",
             "best guess",
-            "ready for verification",
         ),
     ),
     Scenario(
@@ -72,12 +95,19 @@ SCENARIOS = (
             "boundary so the orchestrator knows this is self-reviewed implementation evidence, "
             "not QA or UI/UX completion."
         ),
-        required_terms=(
-            "self-review",
-            "report",
-            "qa",
-            "ui/ux",
-            "verification",
+        criteria=(
+            SemanticCriterion(
+                "self_review_is_implementation_evidence",
+                "The response treats self-review as implementer evidence for the focused fix.",
+            ),
+            SemanticCriterion(
+                "qa_uiux_remain_separate",
+                "The response clearly says QA and UI/UX verification remain separate downstream checks.",
+            ),
+            SemanticCriterion(
+                "no_global_completion_claim",
+                "The response does not claim the unit or workflow is globally complete based only on implementer self-review.",
+            ),
         ),
         forbidden_terms=(
             "globally complete",
@@ -106,10 +136,11 @@ def main() -> int:
         return 1
 
     skill = SKILL_PATH.read_text(encoding="utf-8")
+    judge_command = resolve_judge_command(agent_command)
     try:
         for scenario in scenarios:
             response = run_agent(agent_command, make_prompt(skill, scenario))
-            check_response(scenario, response)
+            check_response(scenario, response, judge_command)
             print(f"PASS: {scenario.scenario_id}")
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
@@ -165,17 +196,20 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def check_response(scenario: Scenario, response: str) -> None:
-    normalized = response.lower()
-    missing = [term for term in scenario.required_terms if term.lower() not in normalized]
-    if missing:
+def check_response(scenario: Scenario, response: str, judge_command: str) -> None:
+    try:
+        assert_forbidden_terms(response, scenario.forbidden_terms, scenario.scenario_id)
+        judge_response(
+            judge_command=judge_command,
+            scenario_id=scenario.scenario_id,
+            scenario_prompt=scenario.user_request,
+            response=response,
+            criteria=scenario.criteria,
+            context="Loaded skill under test: ticket-implementation-unit. Judge behavior/report boundaries.",
+        )
+    except AssertionError:
         print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} missing required terms: {missing}")
-
-    forbidden = [term for term in scenario.forbidden_terms if term.lower() in normalized]
-    if forbidden:
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} included forbidden terms: {forbidden}")
+        raise
 
 
 if __name__ == "__main__":

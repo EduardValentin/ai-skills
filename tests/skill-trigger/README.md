@@ -24,7 +24,8 @@ The static contract is deterministic. It verifies:
 Run manually, nightly, or in a model-enabled CI job:
 
 ```bash
-SKILL_TRIGGER_AGENT_COMMAND='<agent command that reads stdin>' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
+SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
   python3 tests/skill-trigger/behavioral_pressure.py
 ```
 
@@ -37,11 +38,23 @@ This test fails if the installed harness cannot pick up the expected skill from
 its real skill discovery mechanism. It also fails if the response repeats a
 phrase listed in `response_forbidden_terms`.
 
+The expected skill check is deterministic. The response is also evaluated by the
+shared semantic judge to confirm the selected skill is relevant to the prompt,
+the rationale comes from the prompt, and the agent did not perform the task. Set
+`SEMANTIC_JUDGE_AGENT_COMMAND` to use a separate judge command; otherwise the
+test falls back to `SKILL_TRIGGER_AGENT_COMMAND`.
+
+The recommended Codex command shim defaults actor and judge calls to
+`gpt-5.4-mini` with `low` reasoning so these simple selection checks do not
+inherit a heavyweight local Codex profile. Use `CODEX_ACTOR_MODEL` or
+`CODEX_JUDGE_MODEL` to opt into a stronger model for a specific run.
+
 Run one scenario:
 
 ```bash
 SKILL_TRIGGER_SCENARIO=bitbucket-pr-ui-test \
-SKILL_TRIGGER_AGENT_COMMAND='<agent command that reads stdin>' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
+SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
   python3 tests/skill-trigger/behavioral_pressure.py
 ```
 

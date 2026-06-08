@@ -17,14 +17,21 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 @dataclass(frozen=True)
 class Scenario:
     scenario_id: str
     user_request: str
-    required_terms: tuple[str, ...]
-    required_any_groups: tuple[tuple[str, ...], ...]
+    criteria: tuple[SemanticCriterion, ...]
     forbidden_terms: tuple[str, ...]
 
 
@@ -36,16 +43,27 @@ SCENARIOS = (
             "migration, backend API, onboarding UI, and analytics events. Explain how the "
             "main agent should route execution after requirements/design and plan approval."
         ),
-        required_terms=(
-            "approved requirements",
-            "approved implementation plan",
-            "scoping",
-            "readiness ledger",
-        ),
-        required_any_groups=(
-            ("main agent is the orchestrator", "main agent stays the orchestrator", "orchestrator"),
-            ("large workflow", "multiple tickets", "four linear tickets", "four tickets", "all four ticket"),
-            ("implementation", "QA", "UI/UX", "verification"),
+        criteria=(
+            SemanticCriterion(
+                "ticket_start_is_intake_router",
+                "The response keeps ticket-start as intake/routing orchestrator rather than execution owner.",
+            ),
+            SemanticCriterion(
+                "requires_approved_inputs_before_execution",
+                "The response treats approved requirements/design and approved implementation plan as prerequisites before execution routing.",
+            ),
+            SemanticCriterion(
+                "delegates_large_execution_orchestration",
+                "The response routes the multi-ticket implementation to a delegated execution-orchestration capability instead of dispatching implementation directly.",
+            ),
+            SemanticCriterion(
+                "forwards_compact_context",
+                "The response describes the compact context packet ticket-start should forward, including ticket/AC, approved artifacts, scope/codebase context, workflow or branch state, and UI/reference context when relevant.",
+            ),
+            SemanticCriterion(
+                "readiness_ledger_before_ship",
+                "The response explains that per-work-unit readiness ledger evidence is used before Ship.",
+            ),
         ),
         forbidden_terms=(
             "Depth budget:",
@@ -84,9 +102,10 @@ def main() -> int:
         return 1
 
     skill_text = SKILL_PATH.read_text(encoding="utf-8")
+    judge_command = resolve_judge_command(agent_command)
     for scenario in scenarios:
         response = run_agent(agent_command, make_prompt(skill_text, scenario))
-        check_response(scenario, response)
+        check_response(scenario, response, judge_command)
         print(f"PASS: {scenario.scenario_id}")
 
     print(f"PASS: {len(scenarios)} ticket-start large delegated orchestration behavioral scenarios")
@@ -140,23 +159,20 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def check_response(scenario: Scenario, response: str) -> None:
-    normalized_response = response.lower()
-    missing = [term for term in scenario.required_terms if term.lower() not in normalized_response]
-    missing_groups = [
-        group for group in scenario.required_any_groups if not any(term.lower() in normalized_response for term in group)
-    ]
-    if missing or missing_groups:
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(
-            f"{scenario.scenario_id} missing required terms: {missing}; "
-            f"missing required term groups: {missing_groups}"
+def check_response(scenario: Scenario, response: str, judge_command: str) -> None:
+    try:
+        assert_forbidden_terms(response, scenario.forbidden_terms, scenario.scenario_id)
+        judge_response(
+            judge_command=judge_command,
+            scenario_id=scenario.scenario_id,
+            scenario_prompt=scenario.user_request,
+            response=response,
+            criteria=scenario.criteria,
+            context="Loaded skill under test: ticket-start. Judge the routing plan, not exact wording.",
         )
-
-    forbidden = [term for term in scenario.forbidden_terms if term.lower() in normalized_response]
-    if forbidden:
+    except AssertionError:
         print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} included forbidden terms: {forbidden}")
+        raise
 
 
 if __name__ == "__main__":

@@ -13,13 +13,21 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-qa-verification" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 @dataclass(frozen=True)
 class Scenario:
     scenario_id: str
     user_request: str
-    required_terms: tuple[str, ...]
+    criteria: tuple[SemanticCriterion, ...]
     forbidden_terms: tuple[str, ...]
 
 
@@ -31,16 +39,19 @@ SCENARIOS = (
             "criteria require validating successful creation, duplicate rejection, "
             "auth boundaries, persisted state, and error payloads against the running service."
         ),
-        required_terms=(
-            "backend",
-            "service",
-            "unit",
-            "request",
-            "response",
-            "persisted",
-            "auth",
-            "error",
-            "QA report",
+        criteria=(
+            SemanticCriterion(
+                "live_service_behavior",
+                "The QA approach requires validating the running backend/service rather than relying only on unit tests.",
+            ),
+            SemanticCriterion(
+                "covers_api_outcomes",
+                "The QA approach covers successful creation, duplicate rejection, auth boundaries, persisted state, and error payloads.",
+            ),
+            SemanticCriterion(
+                "reports_not_fixes",
+                "The response produces a QA report with findings/status and does not take ownership of fixing bugs.",
+            ),
         ),
         forbidden_terms=(
             "unit tests are enough",
@@ -55,16 +66,23 @@ SCENARIOS = (
             "error, validation, disabled, rapid-click, and navigation-mid-save behavior "
             "in the running app. Do not perform visual parity review."
         ),
-        required_terms=(
-            "ui",
-            "app",
-            "loading",
-            "empty",
-            "success",
-            "error",
-            "validation",
-            "rapid",
-            "out-of-scope",
+        criteria=(
+            SemanticCriterion(
+                "running_app_ui_behavior",
+                "The QA approach requires exercising the user-facing settings form in the running app.",
+            ),
+            SemanticCriterion(
+                "covers_named_states_and_interactions",
+                "The QA approach requires covering loading, empty, success, error, validation, disabled, rapid-click, and navigation-mid-save behavior.",
+            ),
+            SemanticCriterion(
+                "visual_parity_out_of_scope",
+                "The response keeps visual parity/style review out of QA behavior verification scope.",
+            ),
+            SemanticCriterion(
+                "reports_not_fixes",
+                "The response reports QA coverage/results/findings and does not fix implementation bugs.",
+            ),
         ),
         forbidden_terms=(
             "visual parity is qa",
@@ -78,15 +96,19 @@ SCENARIOS = (
             "QA a mixed invite flow where the invite API and invite form changed together. "
             "Verify backend behavior and browser-visible behavior before Ship."
         ),
-        required_terms=(
-            "mixed",
-            "backend",
-            "ui",
-            "api",
-            "browser",
-            "clean",
-            "AC line",
-            "QA report",
+        criteria=(
+            SemanticCriterion(
+                "mixed_mode_covers_backend_and_ui",
+                "The QA approach requires covering both invite API/backend behavior and browser-visible invite form behavior.",
+            ),
+            SemanticCriterion(
+                "integration_before_ship",
+                "The response treats the mixed flow as not QA-clean before Ship until both API and UI behavior are verified.",
+            ),
+            SemanticCriterion(
+                "reports_acceptance_coverage",
+                "The response describes a QA report that ties checks/results/findings back to acceptance criteria.",
+            ),
         ),
         forbidden_terms=(
             "only backend",
@@ -115,10 +137,11 @@ def main() -> int:
         return 1
 
     skill = SKILL_PATH.read_text(encoding="utf-8")
+    judge_command = resolve_judge_command(agent_command)
     try:
         for scenario in scenarios:
             response = run_agent(agent_command, make_prompt(skill, scenario))
-            check_response(scenario, response)
+            check_response(scenario, response, judge_command)
             print(f"PASS: {scenario.scenario_id}")
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
@@ -174,17 +197,24 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def check_response(scenario: Scenario, response: str) -> None:
-    normalized = response.lower()
-    missing = [term for term in scenario.required_terms if term.lower() not in normalized]
-    if missing:
+def check_response(scenario: Scenario, response: str, judge_command: str) -> None:
+    try:
+        assert_forbidden_terms(response, scenario.forbidden_terms, scenario.scenario_id)
+        judge_response(
+            judge_command=judge_command,
+            scenario_id=scenario.scenario_id,
+            scenario_prompt=scenario.user_request,
+            response=response,
+            criteria=scenario.criteria,
+            context=(
+                "Loaded skill under test: ticket-qa-verification. Judge QA behavior, scope, "
+                "and report boundaries. The pressure prompt asks for the approach/report "
+                "shape only; do not require proof that QA was actually executed."
+            ),
+        )
+    except AssertionError:
         print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} missing required terms: {missing}")
-
-    forbidden = [term for term in scenario.forbidden_terms if term.lower() in normalized]
-    if forbidden:
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} included forbidden terms: {forbidden}")
+        raise
 
 
 if __name__ == "__main__":

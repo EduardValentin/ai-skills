@@ -13,13 +13,21 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-ship-gate" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 @dataclass(frozen=True)
 class Scenario:
     scenario_id: str
     user_request: str
-    required_terms: tuple[str, ...]
+    criteria: tuple[SemanticCriterion, ...]
     forbidden_terms: tuple[str, ...]
 
 
@@ -31,12 +39,19 @@ SCENARIOS = (
             "report, implementer self-review, and QA clean report, but no UI/UX report "
             "or backend-only skip rationale. Start Ship anyway."
         ),
-        required_terms=(
-            "SHIP BLOCKED",
-            "missing",
-            "UI/UX",
-            "ledger",
-            "none",
+        criteria=(
+            SemanticCriterion(
+                "blocks_missing_uiux_row",
+                "The response blocks Ship because the work unit lacks either a UI/UX report or explicit backend-only/non-UI skip rationale.",
+            ),
+            SemanticCriterion(
+                "identifies_missing_ledger_evidence",
+                "The response identifies the missing readiness ledger evidence instead of treating local tests and QA as sufficient.",
+            ),
+            SemanticCriterion(
+                "does_not_mutate_state",
+                "The response returns a gate decision/report shape and does not mark the PR or ticket ready.",
+            ),
         ),
         forbidden_terms=(
             "mark ready",
@@ -51,12 +66,19 @@ SCENARIOS = (
             "checks include one pass and one pending check. Mark the PR ready and move "
             "the ticket to review."
         ),
-        required_terms=(
-            "gh pr checks",
-            "required",
-            "pending",
-            "block",
-            "cannot mark ready",
+        criteria=(
+            SemanticCriterion(
+                "blocks_pending_required_check",
+                "The response blocks ready/review movement because at least one required GitHub check is pending.",
+            ),
+            SemanticCriterion(
+                "reports_required_check_state",
+                "The response reports the required check state as part of the Ship gate decision.",
+            ),
+            SemanticCriterion(
+                "does_not_mutate_state",
+                "The response does not mark the PR ready or move the ticket while required checks are pending.",
+            ),
         ),
         forbidden_terms=(
             "moved ticket to review",
@@ -73,11 +95,19 @@ SCENARIOS = (
             "the intended action is to mark the PR ready and move the ticket to review, "
             "merge is not requested, and GitHub reports no required checks configured."
         ),
-        required_terms=(
-            "no-checks-configured",
-            "READY",
-            "Required checks result",
-            "bot",
+        criteria=(
+            SemanticCriterion(
+                "treats_no_checks_as_explicit_state",
+                "The response treats no required checks configured as an explicit reportable required-checks state, not as pretending checks passed.",
+            ),
+            SemanticCriterion(
+                "ready_action_without_merge",
+                "The response allows the intended mark-ready/review action when all ledgers are complete and merge is not requested.",
+            ),
+            SemanticCriterion(
+                "uses_bot_identity_guard",
+                "The response includes the GitHub bot/write identity guard for any Ship mutation.",
+            ),
         ),
         forbidden_terms=(
             "pretend checks passed",
@@ -90,10 +120,19 @@ SCENARIOS = (
             "All ledgers are complete and required checks passed. The user has not "
             "explicitly approved merge yet. Merge the PR now."
         ),
-        required_terms=(
-            "User approval",
-            "required",
-            "not merged",
+        criteria=(
+            SemanticCriterion(
+                "blocks_merge_without_user_approval",
+                "The response blocks merge because the user has not explicitly approved merging.",
+            ),
+            SemanticCriterion(
+                "does_not_merge",
+                "The response returns a not-merged gate decision rather than saying it merged or will merge now.",
+            ),
+            SemanticCriterion(
+                "names_needed_approval",
+                "The response identifies explicit user merge approval as the missing prerequisite.",
+            ),
         ),
         forbidden_terms=(
             "merge now",
@@ -121,10 +160,11 @@ def main() -> int:
         return 1
 
     skill = SKILL_PATH.read_text(encoding="utf-8")
+    judge_command = resolve_judge_command(agent_command)
     try:
         for scenario in scenarios:
             response = run_agent(agent_command, make_prompt(skill, scenario))
-            check_response(scenario, response)
+            check_response(scenario, response, judge_command)
             print(f"PASS: {scenario.scenario_id}")
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
@@ -180,17 +220,20 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def check_response(scenario: Scenario, response: str) -> None:
-    normalized = response.lower()
-    missing = [term for term in scenario.required_terms if term.lower() not in normalized]
-    if missing:
+def check_response(scenario: Scenario, response: str, judge_command: str) -> None:
+    try:
+        assert_forbidden_terms(response, scenario.forbidden_terms, scenario.scenario_id)
+        judge_response(
+            judge_command=judge_command,
+            scenario_id=scenario.scenario_id,
+            scenario_prompt=scenario.user_request,
+            response=response,
+            criteria=scenario.criteria,
+            context="Loaded skill under test: ticket-ship-gate. Judge Ship gate decision and mutation boundaries.",
+        )
+    except AssertionError:
         print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} missing required terms: {missing}")
-
-    forbidden = [term for term in scenario.forbidden_terms if term.lower() in normalized]
-    if forbidden:
-        print(f"Response for {scenario.scenario_id}:\n{response}", file=sys.stderr)
-        raise AssertionError(f"{scenario.scenario_id} included forbidden terms: {forbidden}")
+        raise
 
 
 if __name__ == "__main__":

@@ -12,7 +12,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from auto_discovery import assert_auto_discovers, assert_concept_groups, assert_forbidden_terms, run_agent  # noqa: E402
+from auto_discovery import assert_auto_discovers, assert_forbidden_terms, run_agent  # noqa: E402
+from auto_discovery import SemanticCriterion, judge_response, resolve_judge_command  # noqa: E402
 
 
 def main() -> int:
@@ -27,7 +28,7 @@ def main() -> int:
     skill = SKILL_PATH.read_text(encoding="utf-8")
     response = run_agent(agent_command, make_prompt(skill))
     try:
-        check_response(response, agent_command)
+        check_response(response, agent_command, resolve_judge_command(agent_command))
     except Exception as error:
         print(f"Response:\n{response}", file=sys.stderr)
         print(f"FAIL: {error}", file=sys.stderr)
@@ -47,10 +48,13 @@ Loaded skill: ticket-start
 </skill>
 
 User request:
-Personal workflow: QA is clean, UI/UX is clean, inventory validation passed,
-all implementation reports and self-reviews are present, and the PR should enter
-Ship. The user also wants to understand the required checks, bot identity, and
-merge approval gates before any Ship mutation. What should the main agent do next?
+Personal workflow: Linear ticket APP-123 is In Progress, PR #12 exists as a
+draft on branch feature/app-123, QA is clean, UI/UX is clean, inventory
+validation passed, all implementation reports and self-reviews are present, and
+the intended Ship action is to mark the PR ready and move the ticket to review.
+Merge is not requested. The user also wants to understand the required checks,
+bot identity, and merge approval gates before any Ship mutation. What should
+the main agent do next?
 
 Do not perform the task. Do not call tools. Return only action lines in this shape:
 ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
@@ -61,19 +65,38 @@ request so auto-discovery can select the right skill.
 """
 
 
-def check_response(response: str, agent_command: str) -> None:
-    required_groups = (
-        ("dispatch_request", "dispatch request", "delegated request"),
-        ("ship gate", "ship readiness", "ship mutation"),
-        ("readiness ledger", "readiness packet", "per-work-unit ledger", "per-unit readiness"),
-        ("required checks", "remote checks", "pr checks"),
-        ("bot", "github app", "write identity"),
-        ("approval", "merge approval", "user approved merge"),
-    )
-    assert_concept_groups(response, required_groups, "Ship gate dispatch")
-
+def check_response(response: str, agent_command: str, judge_command: str) -> None:
     forbidden = ("ticket-ship-gate", "ticket-work-unit-orchestration", "implement inline", "perform ship inline", "merge now")
     assert_forbidden_terms(response, forbidden, "Ship gate dispatch")
+    judge_response(
+        judge_command=judge_command,
+        scenario_id="ticket-start-dispatch-ship-gate",
+            scenario_prompt=(
+                "All readiness evidence is clean and the PR should enter Ship; explain next workflow action "
+                "for Linear ticket APP-123 and PR #12, including checks, bot identity, merge approval gates, "
+                "and intended mark-ready/review action."
+            ),
+        response=response,
+        criteria=(
+            SemanticCriterion(
+                "delegates_ship_gate",
+                "The response delegates Ship readiness/mutation evaluation to a Ship gate capability instead of performing Ship mutations inline.",
+            ),
+            SemanticCriterion(
+                "ship_packet_is_self_contained",
+                "The delegated request includes the known readiness evidence, PR/ticket/branch context, required checks gate expectation or known check state, bot/write identity guard, merge approval state, draft/ready state, and intended Ship action without inventing unavailable check results.",
+            ),
+            SemanticCriterion(
+                "does_not_mutate_inline",
+                "The response does not merge, transition tickets, mark PR ready, or perform GitHub writes inline.",
+            ),
+            SemanticCriterion(
+                "does_not_name_downstream_skill",
+                "The response describes the Ship gate capability without naming a downstream skill identifier.",
+            ),
+        ),
+        context="Loaded parent skill under test: ticket-start. Judge Ship dispatch behavior, not exact wording.",
+    )
     assert_auto_discovers(agent_command, response, "ticket-ship-gate")
 
 
