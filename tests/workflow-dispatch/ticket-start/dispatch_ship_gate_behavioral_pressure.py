@@ -66,7 +66,7 @@ request so auto-discovery can select the right skill.
 
 
 def check_response(response: str, agent_command: str, judge_command: str) -> None:
-    forbidden = ("ticket-ship-gate", "ticket-work-unit-orchestration", "implement inline", "perform ship inline", "merge now")
+    forbidden = ("ticket-ship-gate", "multi-ticket-work", "implement inline", "perform ship inline", "merge now")
     assert_forbidden_terms(response, forbidden, "Ship gate dispatch")
     judge_response(
         judge_command=judge_command,

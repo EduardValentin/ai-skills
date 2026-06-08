@@ -1,4 +1,4 @@
 interface:
   display_name: "Ticket Start"
-  short_description: "Orchestrator skill that drives a ticket from intake through Ship via Scoping, requirements/design, planning, delegated implementation, QA, UI/UX verification, and large multi-ticket workflows. Supports Jira (acli + paste fallback) and Linear tickets."
-  default_prompt: "Use $ticket-start to begin implementation from this Jira or Linear ticket. The skill will drive Setup, Requirements/Design, Plan, Implement, Verify, and Ship, including delegated orchestration for large multi-ticket work."
+  short_description: "Run one Jira or Linear ticket from intake through delegated execution and Ship"
+  default_prompt: "Use $ticket-start to run one Jira or Linear ticket from intake through plan, delegated execution, verification, and Ship."

@@ -53,16 +53,16 @@ SCENARIOS = (
                 "The response treats approved requirements/design and approved implementation plan as prerequisites before execution routing.",
             ),
             SemanticCriterion(
-                "delegates_substantial_execution_orchestration",
-                "The response routes substantial single-ticket implementation work to a delegated execution-orchestration capability instead of dispatching implementation directly.",
+                "delegates_execution_and_verification_loop",
+                "The response delegates implementation, self-review/review, QA, UI/UX where applicable, and scoped fixes through a main-agent orchestration loop.",
             ),
             SemanticCriterion(
                 "forwards_compact_context",
-                "The response describes the compact context packet ticket-start should forward, including ticket/AC, approved artifacts, scope/codebase context, workflow or branch state, and UI/reference context when relevant.",
+                "The response describes compact context included in delegated requests, such as ticket/AC, approved artifacts, scope/codebase context, workflow or branch state, and UI/reference context when relevant.",
             ),
             SemanticCriterion(
-                "readiness_ledger_before_ship",
-                "The response explains that per-work-unit readiness ledger evidence is used before Ship.",
+                "status_table_and_clean_loop_before_ship",
+                "The response explains that work-unit status, verifier findings, scoped fixes, and reruns must be reconciled before Ship or handoff.",
             ),
         ),
         forbidden_terms=(
@@ -77,7 +77,7 @@ SCENARIOS = (
             "I would implement inline",
             "ticket-qa-verification",
             "ticket-implementation-unit",
-            "ticket-work-unit-orchestration",
+            "multi-ticket-work",
             "ticket-ship-gate",
             "frontend-ui-review",
         ),
@@ -136,9 +136,9 @@ User request:
 
 Do not execute the ticket. Return a concise routing plan only. It must explain:
 - how ticket-start stays the intake and routing orchestrator,
-- which delegated capability owns execution orchestration,
+- how implementation, review, QA, UI/UX, scoped fixes, and reruns are delegated,
 - which compact context ticket-start forwards,
-- how the readiness ledger is used before Ship.
+- how the status table and repeat-until-clean loop are used before Ship or handoff.
 Do not name downstream skill identifiers.
 """
 

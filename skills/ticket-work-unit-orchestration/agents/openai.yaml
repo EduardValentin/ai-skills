@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ticket Work Unit Orchestration"
-  short_description: "Track delegated work units through readiness"
-  default_prompt: "Use $ticket-work-unit-orchestration to coordinate this approved implementation plan with a per-work-unit readiness ledger."

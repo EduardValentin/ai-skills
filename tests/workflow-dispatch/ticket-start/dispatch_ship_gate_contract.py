@@ -29,7 +29,7 @@ def check_contract(skill: str) -> None:
     assert_contains(skill, "verify readiness and required approvals")
     assert_contains(skill, "require explicit user approval before merge")
     assert_not_contains(skill, "ticket-ship-gate")
-    assert_not_contains(skill, "ticket-work-unit-orchestration")
+    assert_not_contains(skill, "multi-ticket-work")
     assert_not_contains(skill, "gh pr checks <PR> --required --json name,state,bucket,workflow,link")
 
 

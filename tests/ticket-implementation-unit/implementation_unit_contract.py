@@ -9,13 +9,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TICKET_START = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
-WORK_UNIT = REPO_ROOT / "skills" / "ticket-work-unit-orchestration" / "SKILL.md"
+MULTI_TICKET_WORK = REPO_ROOT / "skills" / "multi-ticket-work" / "SKILL.md"
 
 
 def main() -> int:
     try:
         check_orchestrator(TICKET_START.read_text(encoding="utf-8"))
-        check_orchestrator(WORK_UNIT.read_text(encoding="utf-8"))
+        check_orchestrator(MULTI_TICKET_WORK.read_text(encoding="utf-8"))
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1

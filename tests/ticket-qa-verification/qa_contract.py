@@ -10,14 +10,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TICKET_START_QA_POINTER = REPO_ROOT / "skills" / "ticket-start" / "agents" / "qa.md"
 TICKET_START = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
-WORK_UNIT = REPO_ROOT / "skills" / "ticket-work-unit-orchestration" / "SKILL.md"
+MULTI_TICKET_WORK = REPO_ROOT / "skills" / "multi-ticket-work" / "SKILL.md"
 
 
 def main() -> int:
     try:
         check_ticket_start_has_no_qa_pointer()
         check_ticket_start_routes(TICKET_START.read_text(encoding="utf-8"))
-        check_orchestrator_references(WORK_UNIT.read_text(encoding="utf-8"))
+        check_orchestrator_references(MULTI_TICKET_WORK.read_text(encoding="utf-8"))
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -37,7 +37,7 @@ def check_orchestrator_references(skill: str) -> None:
 
 def check_ticket_start_routes(skill: str) -> None:
     assert_not_contains(skill, "Dispatch `ticket-qa-verification`", "ticket-start skill")
-    assert_not_contains(skill, "ticket-work-unit-orchestration", "ticket-start skill")
+    assert_not_contains(skill, "multi-ticket-work", "ticket-start skill")
     assert_not_contains(skill, "ticket-qa-verification", "ticket-start skill")
 
 

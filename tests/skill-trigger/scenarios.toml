@@ -45,12 +45,13 @@ storybook-only variants, or implementation proxy components.
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-work-unit-orchestration-approved-ledger"
-skill = "ticket-work-unit-orchestration"
+id = "multi-ticket-work-epic"
+skill = "multi-ticket-work"
 prompt = """
-Coordinate the approved implementation plan for Billing API, Onboarding UI, and
-Invite Flow. Keep a per-unit readiness ledger while delegating implementation,
-self-review, QA, and UI/UX verification before Ship.
+Work the whole Billing Revamp Epic. It has separate tickets for the invoice
+migration, pricing API, checkout UI, and analytics events. Decide what can run
+in parallel, what must be sequenced, dispatch one subagent per ticket or unit,
+and give me the opened PRs with the review order at the end.
 """
 forbidden_terms = []
 

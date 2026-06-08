@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 SKILL_DIR = SKILL_PATH.parent
 DOWNSTREAM_SKILL_IDS = (
-    "ticket-work-unit-orchestration",
+    "multi-ticket-work",
     "ticket-implementation-unit",
     "ticket-qa-verification",
     "ticket-ship-gate",
