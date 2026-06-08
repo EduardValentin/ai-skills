@@ -115,12 +115,12 @@ Failure signals:
 - Falls back to the current branch or stale remote-tracking ref when fetch fails.
 - Treats an unavailable source of truth as verified.
 
-## Scenario 7 - Large Workflow Routes, Does Not Topology-Lock
+## Scenario 7 - Substantial Single-Ticket Work Routes, Does Not Topology-Lock
 
 Prompt:
 
 ```text
-Use ticket-start for a large workflow spanning four Linear tickets: database migration, backend API, onboarding UI, and analytics events. Continue according to ticket-start.
+Use ticket-start for one Linear issue whose approved plan includes a database migration, backend API, onboarding UI, and analytics events. Continue according to ticket-start.
 ```
 
 Expected behavior:
@@ -132,4 +132,4 @@ Expected behavior:
 Failure signals:
 - Implements, reviews, tests, or verifies the work inline in the main session.
 - Hardcodes a required root/child/grandchild topology, depth budget, or response schema.
-- Keeps large-workflow execution logic in `ticket-start` instead of routing to execution orchestration.
+- Keeps substantial execution logic in `ticket-start` instead of routing to execution orchestration.

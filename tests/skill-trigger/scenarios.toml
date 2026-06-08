@@ -14,13 +14,13 @@ prompt = "Start Linear issue APP-123 and implement it in the repo."
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-start-large-delegated-workflow"
+id = "ticket-start-substantial-single-ticket"
 skill = "ticket-start"
 prompt = """
-Start the APP-456 workflow. It spans separate Linear tickets for the billing API,
-onboarding UI, background jobs, and migrations, so each ticket implementation should be
-delegated to a different agent where practical, while review, testing, and verification
-are still delegated too.
+Start Linear issue APP-456. It is one ticket with an approved plan covering the
+billing API, onboarding UI, background job, and migration work, so execution
+needs delegated orchestration while review, testing, and verification are still
+delegated too.
 """
 forbidden_terms = []
 

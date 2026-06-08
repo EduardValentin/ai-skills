@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for ticket-start delegated orchestration."""
+"""Contract checks for ticket-start delegated execution orchestration."""
 
 from __future__ import annotations
 
@@ -24,20 +24,24 @@ def main() -> int:
     skill = SKILL_PATH.read_text(encoding="utf-8")
 
     try:
-        check_large_orchestration_contract(skill)
+        check_delegated_execution_contract(skill)
     except AssertionError as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start delegated orchestration contract")
+    print("PASS: ticket-start delegated execution contract")
     return 0
 
 
-def check_large_orchestration_contract(skill: str) -> None:
+def check_delegated_execution_contract(skill: str) -> None:
     assert_line_count_at_most(skill, 175)
 
     forbidden_terms = (
         "## Large Workflows",
+        "large workflows spanning multiple tickets",
+        "spans multiple tickets",
+        "workflows spanning multiple tickets",
+        "each ticket implementation should be delegated",
         "## Implement",
         "## Verify",
         "Root -> child -> grandchild",
@@ -57,6 +61,9 @@ def check_large_orchestration_contract(skill: str) -> None:
     for forbidden in forbidden_terms:
         assert_not_contains(skill, forbidden)
 
+    assert_contains(skill, "Do not use for multi-ticket workflow intake")
+    assert_contains(skill, "substantial single-ticket work")
+
     for markdown_file in sorted(SKILL_DIR.rglob("*.md")):
         text = markdown_file.read_text(encoding="utf-8")
         for forbidden in DOWNSTREAM_SKILL_IDS:
@@ -66,6 +73,11 @@ def check_large_orchestration_contract(skill: str) -> None:
 def assert_not_contains(haystack: str, needle: str) -> None:
     if needle in haystack:
         raise AssertionError(f"expected not to find {needle!r}")
+
+
+def assert_contains(haystack: str, needle: str) -> None:
+    if needle not in haystack:
+        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_line_count_at_most(text: str, limit: int) -> None:

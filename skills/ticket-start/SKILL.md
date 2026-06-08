@@ -1,6 +1,6 @@
 ---
 name: ticket-start
-description: Use when the user wants to start implementation work from a ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for large workflows spanning multiple tickets or substantial implementation work that needs delegated orchestration, or follow-up status/progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for code review, planning-only, or debugging-only tasks.
+description: Use when the user wants to start implementation work from one ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for substantial single-ticket work that needs delegated execution orchestration, or follow-up status/progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for multi-ticket workflow intake, code review, planning-only, or debugging-only tasks.
 ---
 
 # Ticket Start
@@ -33,9 +33,9 @@ Implementation, review, testing, QA, UI/UX verification, focused fixes, readines
 - The user pastes a Jira/job ticket and asks for implementation.
 - The user gives a Linear ticket identifier in a personal project.
 - The user asks about a ticket already in this workflow.
-- The work is a large workflow spanning multiple tickets or substantial implementation areas that needs delegated orchestration.
+- The work is one ticket with substantial implementation areas or multiple work units that need delegated orchestration.
 
-Do not use for code review, pure planning, debugging-only tasks, or refactors with no ticket.
+Do not use for multi-ticket workflow intake, code review, pure planning, debugging-only tasks, or refactors with no ticket.
 
 ## Workflow selection
 
@@ -80,7 +80,7 @@ If ambiguous, ask the user before loading anything else.
 
 2. Keep UI-visible tasks traceable to Scoping's affected surface map and reference/prototype rows when present.
 
-3. If the plan spans multiple tickets or substantial implementation areas, describe the intended delegation shape at a high level. For workflows spanning multiple tickets, each ticket implementation should be delegated to a different implementation agent where practical, while review, testing, and verification remain delegated to subagents. The exact strategy belongs to the auto-discovered execution orchestration capability.
+3. If the single-ticket plan has multiple work units or substantial implementation areas, describe the intended delegation shape at a high level while keeping review, testing, and verification delegated to subagents. The exact strategy belongs to the auto-discovered execution orchestration capability.
 
 4. Wait for explicit user approval of the implementation plan before execution. No code or scaffolding happens between requirements/design approval and plan approval.
 

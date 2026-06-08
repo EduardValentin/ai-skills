@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral pressure tests for ticket-start large delegated orchestration.
+"""Behavioral pressure tests for ticket-start delegated execution orchestration.
 
 Requires TICKET_START_BEHAVIOR_AGENT_COMMAND to name a command that reads a
 prompt from stdin and writes the agent response to stdout.
@@ -37,24 +37,24 @@ class Scenario:
 
 SCENARIOS = (
     Scenario(
-        scenario_id="large-workflow-delegated-ownership",
+        scenario_id="substantial-single-ticket-delegated-execution",
         user_request=(
-            "Use ticket-start for a large workflow spanning four Linear tickets: database "
-            "migration, backend API, onboarding UI, and analytics events. Explain how the "
-            "main agent should route execution after requirements/design and plan approval."
+            "Use ticket-start for one Linear issue APP-456 whose approved plan includes a "
+            "database migration, backend API, onboarding UI, and analytics events. Explain "
+            "how the main agent should route execution after requirements/design and plan approval."
         ),
         criteria=(
             SemanticCriterion(
-                "ticket_start_is_intake_router",
-                "The response keeps ticket-start as intake/routing orchestrator rather than execution owner.",
+                "ticket_start_is_single_ticket_router",
+                "The response keeps ticket-start as intake/routing orchestrator for one ticket rather than execution owner.",
             ),
             SemanticCriterion(
                 "requires_approved_inputs_before_execution",
                 "The response treats approved requirements/design and approved implementation plan as prerequisites before execution routing.",
             ),
             SemanticCriterion(
-                "delegates_large_execution_orchestration",
-                "The response routes the multi-ticket implementation to a delegated execution-orchestration capability instead of dispatching implementation directly.",
+                "delegates_substantial_execution_orchestration",
+                "The response routes substantial single-ticket implementation work to a delegated execution-orchestration capability instead of dispatching implementation directly.",
             ),
             SemanticCriterion(
                 "forwards_compact_context",
@@ -73,6 +73,7 @@ SCENARIOS = (
             "orchestration map",
             "leaf-only",
             "grandchild",
+            "four Linear tickets",
             "I would implement inline",
             "ticket-qa-verification",
             "ticket-implementation-unit",
@@ -108,7 +109,7 @@ def main() -> int:
         check_response(scenario, response, judge_command)
         print(f"PASS: {scenario.scenario_id}")
 
-    print(f"PASS: {len(scenarios)} ticket-start large delegated orchestration behavioral scenarios")
+    print(f"PASS: {len(scenarios)} ticket-start delegated execution behavioral scenarios")
     return 0
 
 
@@ -116,7 +117,7 @@ def print_usage() -> None:
     print(
         """Usage:
   TICKET_START_BEHAVIOR_AGENT_COMMAND='<command reading stdin>' \\
-    python3 tests/ticket-start/large_orchestration_behavioral_pressure.py
+    python3 tests/ticket-start/delegated_execution_behavioral_pressure.py
 
 Optional:
   TICKET_START_BEHAVIOR_SCENARIO='<scenario-id>' to run one scenario.
