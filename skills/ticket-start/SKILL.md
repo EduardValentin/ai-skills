@@ -36,10 +36,11 @@ Do not use for multi-ticket workflow intake, pure planning, debugging-only tasks
 
 1. Identify the ticket source and workflow type: job/Jira ticket or personal/Linear ticket.
 2. Read the current ticket from the ticket-system MCP, or from the ticket system's REST API when MCP is unavailable. Capture title, description, acceptance criteria, links, status, dependencies, and ambiguity.
-3. Read nearby repo instructions and workflow references. For personal projects, inspect `PRD.md`, `designs/`, or reference apps only when they exist and are relevant.
-4. Inspect current git state, branches, existing PRs, and recent commits relevant to the ticket.
-5. Create or verify the ticket worktree from freshly fetched `origin/main`; halt if freshness cannot be established.
-6. Map the relevant code surface before planning. Prefer delegating codebase scoping when the affected surface is non-trivial, unfamiliar, shared, or UI/reference-backed. Include the ticket title, description, acceptance criteria, dependencies, repo instructions, and known constraints in the scoping request. Ask for a compact navigable scope map with file-line locators, entry points, affected surfaces, relevant tests, contracts/types, conflicts, and suggested implementation or verification slices.
+3. If the ticket is a child issue, subtask, story under an Epic, or otherwise linked into a parent hierarchy, read the parent tickets or Epic descriptions too. Carry forward the parent problem statement, goals, constraints, and acceptance context that explain why the child ticket exists.
+4. Read nearby repo instructions and workflow references. For personal projects, inspect `PRD.md`, `designs/`, or reference apps only when they exist and are relevant.
+5. Inspect current git state, branches, existing PRs, and recent commits relevant to the ticket.
+6. Create or verify the ticket worktree from freshly fetched `origin/main`; halt if freshness cannot be established.
+7. Map the relevant code surface before planning. Prefer delegating codebase scoping when the affected surface is non-trivial, unfamiliar, shared, or UI/reference-backed. Include the ticket title, description, acceptance criteria, dependencies, repo instructions, and known constraints in the scoping request. Ask for a compact navigable scope map with file-line locators, entry points, affected surfaces, relevant tests, contracts/types, conflicts, and suggested implementation or verification slices.
 
 ## Step 2 - Brainstorm Requirements
 

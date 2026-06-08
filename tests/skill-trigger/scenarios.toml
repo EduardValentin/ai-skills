@@ -25,6 +25,16 @@ delegated too.
 forbidden_terms = []
 
 [[scenario]]
+id = "ticket-start-child-ticket-context"
+skill = "ticket-start"
+prompt = """
+Start Linear issue APP-812. It is a child ticket under the Onboarding Redesign
+Epic, so read the parent Epic context and this child ticket before brainstorming
+requirements or planning implementation.
+"""
+forbidden_terms = []
+
+[[scenario]]
 id = "ticket-start-uiux-rendered-outcome"
 skill = "ticket-start"
 prompt = """

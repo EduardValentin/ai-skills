@@ -69,6 +69,8 @@ def check_delegated_execution_contract(skill: str) -> None:
 
     assert_contains(skill, "Do not use for multi-ticket workflow intake")
     assert_contains(skill, "Use this skill as the main-agent workflow for working one implementation ticket")
+    assert_contains(skill, "If the ticket is a child issue, subtask, story under an Epic")
+    assert_contains(skill, "read the parent tickets or Epic descriptions too")
     assert_contains(skill, "After plan approval, execute the ticket as an orchestration loop")
     assert_contains(skill, "repeat until no verifier reports findings")
 
