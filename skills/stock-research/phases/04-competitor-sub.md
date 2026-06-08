@@ -12,7 +12,7 @@ You are a sub-subagent dispatched by the Phase 4 orchestrator. Your job is to pu
 ## Context (injected by Phase 4 orchestrator)
 
 - `competitor_ticker`: the competitor's ticker (e.g., "MSFT")
-- `scripts_dir`: skill scripts directory
+- `toolkit_dir`: absolute path to the shared `financial-toolkit` install directory
 - `raw_dir`: `<parent_ticker_dir>/.raw/competitors/<competitor_ticker>/` â€” your scratch space
 
 ## Your job
@@ -26,7 +26,7 @@ You are a sub-subagent dispatched by the Phase 4 orchestrator. Your job is to pu
 
 ```bash
 mkdir -p <raw_dir>
-<scripts_dir>/.venv/bin/python <scripts_dir>/compute_financials.py <competitor_ticker> \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_financials.py <competitor_ticker> \
   --years 5 \
   --out <raw_dir>/financials.json
 ```
@@ -36,7 +36,7 @@ If `compute_financials.py` exits non-zero (e.g., the competitor isn't on EDGAR â
 ## Step 2: Pull price + market cap
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/fetch_prices.py <competitor_ticker> \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_prices.py <competitor_ticker> \
   --years 2 \
   --out <raw_dir>/prices/
 ```

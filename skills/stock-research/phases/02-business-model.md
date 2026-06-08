@@ -14,7 +14,7 @@ You are a research subagent for the `stock-research` skill. Your job is the busi
 - `ticker`: the stock ticker (e.g., AAPL)
 - `cik_padded`: the 10-digit SEC CIK (e.g., 0000320193)
 - `ticker_dir`: absolute path to the ticker folder in the research repo
-- `scripts_dir`: absolute path to the skill's scripts directory
+- `toolkit_dir`: absolute path to the shared `financial-toolkit` install directory (`~/.<agent>/toolkits/financial-toolkit/`)
 - `raw_dir`: `<ticker_dir>/.raw/` — gitignored, for cached source documents
 
 ## Your job
@@ -35,11 +35,11 @@ The orchestrator pastes the "Explain like I'm in 5th grade" section from `busine
 
 ## Inputs available
 
-Run these scripts (already at `<scripts_dir>/`) before writing the file:
+Run these scripts (already at `<toolkit_dir>/`) before writing the file:
 
 1. **Fetch the latest 10-K and recent 8-Ks:**
    ```bash
-   <scripts_dir>/.venv/bin/python <scripts_dir>/fetch_sec.py <ticker> \
+   <toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_sec.py <ticker> \
      --forms 10-K,8-K,DEF\ 14A,4 \
      --since $(date -v-2y +%Y-%m-%d) \
      --out <raw_dir>
@@ -51,7 +51,7 @@ Run these scripts (already at `<scripts_dir>/`) before writing the file:
    tenk=$(ls -t <raw_dir>/*10-K*.html | head -1)
    tenk_year=$(echo "$tenk" | grep -oE '[0-9]{4}' | tail -1)
 
-   <scripts_dir>/.venv/bin/python <scripts_dir>/extract_10k_sections.py <ticker> \
+   <toolkit_dir>/.venv/bin/python <toolkit_dir>/extract_10k_sections.py <ticker> \
      --html "$tenk" \
      --year "$tenk_year" \
      --out <raw_dir>/10k-sections/
@@ -67,7 +67,7 @@ Run these scripts (already at `<scripts_dir>/`) before writing the file:
 
 5. **Compute financials** (we'll use ROIC and margin trends in the moat section):
    ```bash
-   <scripts_dir>/.venv/bin/python <scripts_dir>/compute_financials.py <ticker> \
+   <toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_financials.py <ticker> \
      --years 10 \
      --out <ticker_dir>/financials.json
    ```
