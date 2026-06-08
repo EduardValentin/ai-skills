@@ -1,146 +1,126 @@
 ---
 name: ticket-start
-description: Use when the user wants to start implementation work from one ticket — phrases like "start ticket", a pasted Jira ticket, or a Linear issue ID. Also use for substantial single-ticket work that needs delegated execution orchestration, or follow-up status/progress questions about a ticket already in this workflow. Covers both job tickets (Jira/pasted; uses acli when available) and personal-project tickets (Linear, optionally with PRD.md and a designs/ React reference app). Do not use for multi-ticket workflow intake, code review, planning-only, or debugging-only tasks.
+description: Use when the user wants to start implementation work from one ticket - phrases like "start ticket", a Jira ticket, or a Linear issue ID. Also use for status/progress questions about a ticket already in this workflow. Covers job tickets and personal-project tickets through the ticket-system MCP or REST API fallback. Do not use for multi-ticket workflow intake, code review, planning-only, or debugging-only tasks.
 ---
 
 # Ticket Start
 
-## Overview
+## Purpose
 
-`ticket-start` is the thin intake and routing orchestrator for implementation work driven by a ticket. It owns user dialogue, source-of-truth freshness, requirements/design approval, implementation-plan approval, routing to execution orchestration, and routing to Ship.
+Use this skill as the main-agent workflow for working one implementation ticket from intake to final report. The main agent stays the user-facing orchestrator: it gathers facts, runs the requirements/design conversation, gets approval, delegates execution and verification work to subagents where available, reconciles reports, and keeps the user informed.
 
-Phase order is a hard gate:
+Prefer subagent orchestration for implementation, self-review/review, QA verification, UI/UX verification, focused fixes, and release checks. If required subagent capability is unavailable, tell the user before replacing it with inline work.
 
-**Setup -> Requirements/Design -> Plan -> Execute -> Ship**
+A personal project is a project that uses GitHub for code versioning and Linear for ticket tracking.
+A job project is a project that uses Bitbucket for code versioning and Jira for ticket tracking.
 
-Implementation, review, testing, QA, UI/UX verification, focused fixes, readiness ledger tracking, and Ship mutations are delegated through capability requests. The main session coordinates returned reports and user decisions; it does not implement, review, test, verify, or mutate release state inline.
+## When To Use
 
-**Scoping dispatch wording:** `ticket-start` dispatches the Scoping subagent and consumes its returned map. The Scoping prompt must be a self-contained codebase mapping request: implementation/ticket codebase mapping, token-efficient navigable scope map, file:line locators, entry points, target modules/components, domain logic, shared utilities, analogous implementations, project patterns, types/contracts, tests, imports/dependencies, prototype/reference elements when applicable, affected surfaces, conflict points, and suggested downstream slices.
+- The user asks to start, work on, build, or implement one ticket.
+- The user gives a Jira ticket or Linear issue ID.
+- The user asks for progress or status on a ticket already being handled here.
 
-**Implementation dispatch wording:** after plan approval, `ticket-start` dispatches a self-contained approved execution orchestration request and lets auto-discovery select the appropriate execution orchestration capability. The receiving capability chooses the implementation delegation strategy.
+Do not use for multi-ticket workflow intake, pure planning, debugging-only tasks, standalone code review, or refactors with no ticket.
 
-**UI/UX dispatch wording:** UI/UX verification remains delegated through execution orchestration for UI-facing or mixed work. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
+## Core Rules
 
-**GitHub write identity guard (personal workflow):** every GitHub write action must use the dedicated bot identity from `bot-identity.md`. This includes commits, branch pushes, PR creation, PR updates, PR comments, PR review comments, review-thread replies, labels, issue comments, merges, and any `gh api` mutation. Ambient `gh` authentication is not proof of the correct actor and must not be used for writes.
+- Memory and prior chat are hints, not source of truth. Re-read the ticket, repo, branch, PR, and relevant docs before making substantive decisions.
+- Use the ticket-system MCP first. If MCP is unavailable, use the ticket system's REST API.
+- Start work in a fresh worktree based on fetched `origin/main`. Fetch first; do not base ticket work on local `main`, the current branch, or a stale ref.
+- Keep the main session focused on orchestration and user decisions. Do not quietly turn it into the implementer, QA verifier, UI/UX verifier, or release mutator.
+- Keep delegated requests self-contained: ticket facts, acceptance criteria, approved decisions, relevant repo instructions, scope locators, constraints, expected checks, and output expectations.
+- Treat subagent reports as compact evidence, not transcripts. Carry forward locators and summaries so later agents can read surgically.
+- For personal workflows, use the repository's required GitHub write identity before commits, pushes, PR updates, comments, labels, transitions, or merges. Do not rely on ambient personal credentials for writes.
 
-**Context-economy contract:** every subagent report is a navigable index, not a transcript. Downstream readers consume the surgical slices upstream locators point at; never reload full files when a Scoping locator suffices.
+## Step 1 - Gather Facts
 
-**Subagent authorization contract:** a user who invokes `ticket-start` has authorized the mandatory dispatches still owned here: Scoping, approved execution orchestration, and Ship gate. If the host cannot dispatch required subagents or auto-discover capabilities from self-contained requests, halt and surface that blocker.
+1. Identify the ticket source and workflow type: job/Jira ticket or personal/Linear ticket.
+2. Read the current ticket from the ticket-system MCP, or from the ticket system's REST API when MCP is unavailable. Capture title, description, acceptance criteria, links, status, dependencies, and ambiguity.
+3. Read nearby repo instructions and workflow references. For personal projects, inspect `PRD.md`, `designs/`, or reference apps only when they exist and are relevant.
+4. Inspect current git state, branches, existing PRs, and recent commits relevant to the ticket.
+5. Create or verify the ticket worktree from freshly fetched `origin/main`; halt if freshness cannot be established.
+6. Map the relevant code surface before planning. Prefer delegating codebase scoping when the affected surface is non-trivial, unfamiliar, shared, or UI/reference-backed. Include the ticket title, description, acceptance criteria, dependencies, repo instructions, and known constraints in the scoping request. Ask for a compact navigable scope map with file-line locators, entry points, affected surfaces, relevant tests, contracts/types, conflicts, and suggested implementation or verification slices.
 
-## When to use
+## Step 2 - Brainstorm Requirements
 
-- The user asks to start, work on, build, or implement a ticket.
-- The user pastes a Jira/job ticket and asks for implementation.
-- The user gives a Linear ticket identifier in a personal project.
-- The user asks about a ticket already in this workflow.
-- The work is one ticket with substantial implementation areas or multiple work units that need delegated orchestration.
+Open with a short briefing grounded in the ticket and current repo: what is known, what is ambiguous, likely affected surfaces, relevant designs or product docs, and any conflicts.
 
-Do not use for multi-ticket workflow intake, code review, pure planning, debugging-only tasks, or refactors with no ticket.
+Then brainstorm relentlessly with the user before planning. Do not stop at vague agreement or first-pass assumptions; continue until the agent and user share a concrete understanding of the work to do, the boundaries, and what success means. Cover:
 
-## Workflow selection
+- intended user or system behavior
+- constraints, non-goals, dependencies, and rollout concerns
+- edge cases, failure modes, permissions, accessibility, and data/state effects
+- meaningful alternatives and tradeoffs
+- how success will be verified
 
-- **Job workflow** — Jira ticket or pasted by the user. Load `job-workflow.md`.
-- **Personal workflow** — Linear ticket. Load `personal-workflow.md`. `PRD.md` and a `designs/` React reference app are optional; see that file's `## Partial Setups` for what changes when either is absent.
+Ask for explicit approval of the requirements/design direction. This approval is separate from implementation-plan approval.
 
-If ambiguous, ask the user before loading anything else.
+## Step 3 - Build And Approve The Plan
 
-## Setup
+Write a concrete implementation plan from the approved requirements/design direction. Include:
 
-1. **Worktree.** Start feature work in an isolated worktree based on the latest `origin/main`. Hard rule: fetch `origin main` first, then create or verify the worktree from fetched `origin/main`, never from local `main`, the current branch, or a stale remote-tracking ref. Halt on fetch failure.
+- work units and sequencing
+- affected files, services, UI surfaces, data stores, jobs, or integrations
+- work areas that may benefit from delegated implementation or verification
+- self-review/review, QA, and UI/UX verification expectations
+- tests, commands, manual probes, and running-app checks
+- risks, assumptions, non-goals, and likely fix-loop points
 
-2. **Bot identity (personal workflow only).** Run the two activation checks in `bot-identity.md` -> `## Setup activation`: mint and verify a fresh GitHub installation token, then apply the bot's git name/email as per-worktree git config. Fail closed; never fall back to personal GitHub credentials. Job workflow skips this step.
+Ask the user to approve the plan before coding starts. Do not implement, scaffold, or mutate product code before plan approval.
 
-3. **Freshness.** Memory and prior chat are hints, not facts. Before substantive answers about scope, status, blockers, related tickets, progress, or git state, re-read the source of truth:
-   - Linear tickets through Linear MCP, including related tickets when relevant.
-   - Job/Jira tickets through `acli jira workitem view <KEY> --json` when available, otherwise the user paste.
-   - Repo branch, working tree, diffs, recent commits, PR metadata, docs, and code from disk.
-   - If a source is unavailable, say what could not be verified.
+## Step 4 - Execute Through Subagents
 
-4. **Workflow-specific reading.** Read the selected workflow file and gather only the relevant facts it points at.
+After plan approval, execute the ticket as an orchestration loop. Let the agent harness decide the exact subagent strategy, but preserve this sequence of work. When starting or summarizing execution, explicitly carry the status table, implementation, self-review/review, QA, UI/UX or skip, findings aggregation, scoped fixes, verification reruns, and integration phases. Scoped fixes and reruns are conditional when no findings exist yet, but they still need to be named as part of the loop. Do not collapse them into a generic integration step.
 
-5. **Dispatch Scoping subagent.** Forward ticket title/description/AC, relevant repo instructions, workflow facts, and scoped PRD/design slices when applicable. The returned scope map is the definitive relevant code surface for downstream routing.
+When returning an execution action list, make the status table its own first action and include an explicit repeat-until-clean action for the verifier/fix loop.
 
-6. **Clarify if needed.** If acceptance criteria are missing/vague/not testable, or Scoping surfaces a conflict, brief the user with Scoping evidence and ask before continuing.
+1. Initialize a compact work-unit status table with columns: `work unit`, `implementation`, `self-review/review`, `QA`, `UI/UX or skip reason`, `findings/fixes`, and `integration`.
+2. Delegate implementation for the approved work units. Implementation results must report changed surfaces, checks run, risks, and handoff notes.
+3. Delegate self-review or review against the ticket description, acceptance criteria, approved implementation plan, implementation evidence, and diff.
+4. Collect any self-review/review findings in the status table.
+5. Delegate QA verification against acceptance-criteria behavior in the running app, service, API, job, or integration.
+6. Collect any QA findings in the status table.
+7. For UI-facing or mixed work, delegate UI/UX verification. For backend-only/non-UI work, record the skip reason.
+8. Collect any UI/UX findings in the status table.
+9. Aggregate all verifier findings from self-review/review, QA, and UI/UX. Decide which findings are blockers, which are out of scope, and which need scoped fixes. Brief the user when a finding changes scope, plan, timeline, or acceptance criteria.
+10. Delegate scoped fixes for fixable findings. Each fix request should include the original ticket context, approved plan, finding evidence, affected surfaces, and the verification rows that must be rerun.
+11. Rerun the affected verification loops after fixes. If a fix touches broader behavior or UI surfaces, rerun every verifier that could be affected, not only the verifier that reported the finding.
+12. Reconcile integration status for the work units and repeat until no verifier reports findings, or until the remaining findings are explicitly blocked or out of scope.
 
-## Requirements/Design
+Do not mark a work unit clean because local tests passed. It is clean only when the applicable implementation, review, QA, UI/UX or backend-only skip, findings, and integration rows are resolved.
 
-1. Open with a Scoping-grounded briefing: entry points, target modules, prototype/reference elements if any, affected surfaces, and conflicts.
+## Step 5 - Ship Or Handoff
 
-2. Explore project context, user intent, requirements, constraints, design, alternatives, edge cases, failure modes, accessibility, and non-goals before implementation.
+Before any PR, ticket-state, release, or merge action:
 
-3. Surface at least one credible alternative when meaningful, and record the chosen direction plus dismissed alternatives in the requirements/design artifact.
+- re-read the ticket and PR/source-control state
+- confirm the work-unit status table is complete
+- confirm required remote checks are passing or explicitly not configured
+- confirm the correct write identity is active for the workflow
+- require explicit user approval before merge
 
-4. Ask the user to approve the requirements/design direction explicitly. Approval here is not implementation-plan approval.
+When delegating release readiness checks, include the ticket ID, PR or branch, current PR/ticket state, intended state change, completed work-unit status table, known verifier results, required-check expectation, write-identity requirement, and explicit merge approval state.
 
-5. Write the approved requirements/design artifact in the workflow's planning location. Keep agent-local planning artifacts out of product commits unless the repo explicitly asks to version them.
+Before changing PR, branch, ticket, or merge state, verify readiness and required approvals. If a release action cannot safely proceed, stop and report the blocker instead of partially changing state.
 
-## Plan
+## Final Report
 
-1. Produce a written implementation plan from the approved requirements/design artifact before touching code.
+End with a concise report:
 
-2. Keep UI-visible tasks traceable to Scoping's affected surface map and reference/prototype rows when present.
+- ticket and approved plan summary
+- what was implemented
+- what worked, what did not, and unresolved blockers
+- implementation reports, self-review/review results, QA results, UI/UX results, and skipped rows with reasons
+- plan-match or deviation findings from self-review/review, plus follow-up verification
+- tests/checks/run evidence and remote check state
+- PR/ticket/release state and recommended next step
 
-3. If the single-ticket plan has multiple work units or substantial implementation areas, describe the intended delegation shape at a high level while keeping review, testing, and verification delegated to subagents. The exact strategy belongs to the auto-discovered execution orchestration capability.
+## Red Flags
 
-4. Wait for explicit user approval of the implementation plan before execution. No code or scaffolding happens between requirements/design approval and plan approval.
+Stop and recover when:
 
-## Execution routing
-
-Dispatch a self-contained approved execution orchestration request after the implementation plan is approved. Do not name a downstream skill identifier; write the request so auto-discovery selects the appropriate execution orchestration capability.
-
-Forward a compact execution packet:
-
-- ticket source, ticket IDs, and acceptance criteria
-- approved requirements/design artifact
-- approved implementation plan
-- Scoping map with affected surfaces, entry points, tests, and constraints
-- workflow type and branch/worktree state
-- relevant repo instructions and non-goals
-- UI/prototype/reference context when applicable
-- expected handoff shape: per-work-unit readiness ledger for implementation report, implementer self-review report, QA verification report, UI/UX verification report or explicit backend-only/non-UI skip rationale, unresolved findings status, and integration/out-of-scope status
-
-Do not dispatch implementation, QA, UI/UX, review, testing, or fix-loop work directly from `ticket-start`. The auto-discovered execution orchestrator owns those details and returns the per-work-unit readiness ledger before Ship.
-
-## Ship routing
-
-Dispatch a self-contained Ship gate request for Ship. Do not name a downstream skill identifier; write the request so auto-discovery selects the appropriate Ship gate capability. Do not perform Ship mutations inline.
-
-Forward a compact Ship packet:
-
-- approved requirements/design artifact and approved implementation plan
-- per-work-unit readiness ledger from the execution orchestrator
-- PR/ticket context, workflow type, branch, and repository
-- bot identity guard context for personal workflow
-- required checks gate expectations
-- explicit user merge approval status
-- current PR draft/ready state
-- intended Ship action
-
-The auto-discovered Ship gate capability owns readiness preflight, PR creation/update, Remote checks gate, ticket transitions, merge approval, merge, and closeout mutation report.
-
-## Briefing rule
-
-When a routed skill or subagent returns a finding, blocker, or decision point that needs user input, brief the user with the same relevant context before asking. Include severity, locator or ticket reference, one-line description, and the material choice or blocker.
-
-## Closeout report
-
-When done, report:
-
-- what changed
-- what was validated and how, including delegated QA/UIUX status or backend-only skip
-- readiness ledger status from the execution orchestrator
-- Ship gate status
-- rules proposed or promoted in this session, if any
-- remaining risks, assumptions, blockers, or manual follow-up
-
-## Red flags
-
-Stop and recover if any of these happen:
-
-- worktree was not based on freshly fetched `origin/main`
-- source-of-truth ticket, repo, or PR state is stale or unavailable but treated as fact
-- requirements/design or implementation-plan approval is skipped or collapsed
-- implementation, review, testing, QA, UI/UX, fixes, or Ship mutations are done inline by `ticket-start`
-- visual verification is accepted without the rendered user-visible outcome and every visually meaningful state
-- personal-workflow GitHub writes would use ambient credentials
-- Ship starts without a complete per-work-unit readiness ledger
+- ticket, repo, branch, PR, or requirement facts are stale or unavailable but would affect the decision
+- requirements/design approval or implementation-plan approval is skipped
+- subagent work is silently replaced by inline implementation, QA, UI/UX verification, or release mutation
+- a work unit is called clean while required review, QA, UI/UX, finding, or integration rows are missing
+- merge or ticket completion is attempted without required checks and explicit user approval

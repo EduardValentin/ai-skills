@@ -51,6 +51,12 @@ def check_delegated_execution_contract(skill: str) -> None:
         "leaf-only",
         "Grandchildren are helper probes",
         "exact depth budget",
+        "dispatch wording",
+        "Scoping dispatch wording",
+        "Implementation dispatch wording",
+        "UI/UX dispatch wording",
+        "auto-discovery",
+        "downstream skill identifier",
         "Implementation is delegated through `ticket-implementation-unit` subagent(s)",
         "Dispatch `ticket-qa-verification`",
         "Dispatch UI/UX subagent",
@@ -62,7 +68,9 @@ def check_delegated_execution_contract(skill: str) -> None:
         assert_not_contains(skill, forbidden)
 
     assert_contains(skill, "Do not use for multi-ticket workflow intake")
-    assert_contains(skill, "substantial single-ticket work")
+    assert_contains(skill, "Use this skill as the main-agent workflow for working one implementation ticket")
+    assert_contains(skill, "After plan approval, execute the ticket as an orchestration loop")
+    assert_contains(skill, "repeat until no verifier reports findings")
 
     for markdown_file in sorted(SKILL_DIR.rglob("*.md")):
         text = markdown_file.read_text(encoding="utf-8")

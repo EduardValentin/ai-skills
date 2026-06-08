@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Contract checks for ticket-start dispatching approved execution orchestration."""
+"""Contract checks for ticket-start delegated execution sequence."""
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -20,34 +19,34 @@ def main() -> int:
         print(f"FAIL: {SKILL_PATH.relative_to(REPO_ROOT)}: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches approved execution orchestration")
+    print("PASS: ticket-start defines delegated execution sequence")
     return 0
 
 
 def check_contract(skill: str) -> None:
-    execution = section_between(skill, "## Execution routing", "## Ship routing")
-    assert_not_contains(execution, "ticket-work-unit-orchestration")
-    assert_not_contains(execution, "ticket-implementation-unit")
-    assert_not_contains(execution, "Dispatch `ticket-qa-verification`")
-    assert_not_contains(execution, "ticket-qa-verification")
-    assert_not_contains(execution, "frontend-ui-review")
-    assert_not_contains(execution, "QA mode (`backend` / `ui` / `mixed` from diff)")
-
-
-def section_between(document: str, start_heading: str, end_heading: str) -> str:
-    pattern = re.compile(
-        rf"^{re.escape(start_heading)}\n(?P<section>.*?)(?=^{re.escape(end_heading)}\n)",
-        re.MULTILINE | re.DOTALL,
-    )
-    match = pattern.search(document)
-    if not match:
-        raise AssertionError(f"missing section from {start_heading!r} to {end_heading!r}")
-    return match.group("section")
+    assert_contains(skill, "## Step 4 - Execute Through Subagents")
+    assert_contains(skill, "Let the agent harness decide the exact subagent strategy")
+    assert_contains(skill, "Delegate implementation for the approved work units")
+    assert_contains(skill, "Delegate self-review or review")
+    assert_contains(skill, "Delegate QA verification")
+    assert_contains(skill, "delegate UI/UX verification")
+    assert_contains(skill, "Delegate scoped fixes")
+    assert_not_contains(skill, "ticket-work-unit-orchestration")
+    assert_not_contains(skill, "ticket-implementation-unit")
+    assert_not_contains(skill, "Dispatch `ticket-qa-verification`")
+    assert_not_contains(skill, "ticket-qa-verification")
+    assert_not_contains(skill, "frontend-ui-review")
+    assert_not_contains(skill, "QA mode (`backend` / `ui` / `mixed` from diff)")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:
     if needle in haystack:
         raise AssertionError(f"expected not to find {needle!r}")
+
+
+def assert_contains(haystack: str, needle: str) -> None:
+    if needle not in haystack:
+        raise AssertionError(f"expected to find {needle!r}")
 
 
 if __name__ == "__main__":
