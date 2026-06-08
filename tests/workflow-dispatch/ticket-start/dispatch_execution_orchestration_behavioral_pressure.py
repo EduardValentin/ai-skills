@@ -73,7 +73,7 @@ self-contained and do not name downstream skill identifiers.
 
 
 def check_response(response: str, judge_command: str) -> None:
-    forbidden = ("multi-ticket-work", "ticket-qa-verification", "frontend-ui-review", "ticket-implementation-unit")
+    forbidden = ("multi-ticket-work", "ticket-qa-verification", "frontend-ui-review", "implement-unit-of-work")
     try:
         assert_forbidden_terms(response, forbidden, "execution orchestration dispatch")
         judge_response(

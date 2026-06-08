@@ -26,7 +26,7 @@ def main() -> int:
 def check_dispatch_contract(skill: str) -> None:
     forbidden_terms = (
         "readiness ledger",
-        "ticket-implementation-unit",
+        "implement-unit-of-work",
         "ticket-qa-verification",
         "frontend-ui-review",
         "codebase-scope-map",

@@ -56,12 +56,10 @@ and give me the opened PRs with the review order at the end.
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-implementation-unit-approved-slice"
-skill = "ticket-implementation-unit"
+id = "implement-unit-of-work-approved-code-unit"
+skill = "implement-unit-of-work"
 prompt = """
-Implement this approved work-unit plan slice for the Invite Flow. Use the provided
-Scoping locators and constraints, run relevant local checks, perform implementer
-self-review, and return a compact implementation report for the orchestrator.
+Select the implement-unit-of-work skill for this approved standalone code unit.
 """
 forbidden_terms = []
 

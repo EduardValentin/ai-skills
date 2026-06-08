@@ -76,7 +76,7 @@ SCENARIOS = (
             "four Linear tickets",
             "I would implement inline",
             "ticket-qa-verification",
-            "ticket-implementation-unit",
+            "implement-unit-of-work",
             "multi-ticket-work",
             "ticket-ship-gate",
             "frontend-ui-review",

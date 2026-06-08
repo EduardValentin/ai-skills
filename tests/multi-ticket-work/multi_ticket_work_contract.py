@@ -46,7 +46,7 @@ def check_contract(skill: str) -> None:
     forbidden_terms = (
         "readiness ledger",
         "Ship readiness",
-        "ticket-implementation-unit",
+        "implement-unit-of-work",
         "ticket-qa-verification",
         "frontend-ui-review",
         "ticket-ship-gate",

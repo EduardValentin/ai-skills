@@ -32,7 +32,7 @@ def check_contract(skill: str) -> None:
     assert_contains(skill, "delegate UI/UX verification")
     assert_contains(skill, "Delegate scoped fixes")
     assert_not_contains(skill, "multi-ticket-work")
-    assert_not_contains(skill, "ticket-implementation-unit")
+    assert_not_contains(skill, "implement-unit-of-work")
     assert_not_contains(skill, "Dispatch `ticket-qa-verification`")
     assert_not_contains(skill, "ticket-qa-verification")
     assert_not_contains(skill, "frontend-ui-review")
