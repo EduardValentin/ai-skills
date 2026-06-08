@@ -180,6 +180,12 @@ prompt = "Test this frontend PR against the acceptance criteria and PR notes, th
 forbidden_terms = []
 
 [[scenario]]
+id = "pr-reviewer-summary-current-branch"
+skill = "pr-reviewer-summary"
+prompt = "Generate a reviewer-friendly PR description for the current branch with Summary of Changes, Manual Testing, and reviewer notes."
+forbidden_terms = []
+
+[[scenario]]
 id = "design-studio-visual-bug"
 skill = "design-studio"
 prompt = "Fix the mobile spacing bug in the React reference app dashboard and keep the prototype style intact."
