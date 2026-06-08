@@ -117,6 +117,10 @@ def check_response(response: str, judge_command: str) -> None:
                     "The first phase gathers the full Epic ticket set and maps dependencies before dispatching work.",
                 ),
                 SemanticCriterion(
+                    "maintains_durable_orchestration_notes",
+                    "The response creates or updates a durable uncommitted orchestration note and plans to re-read it after context compaction or resume, before dependent dispatches, and before the final report.",
+                ),
+                SemanticCriterion(
                     "respects_dependency_order",
                     "The response sequences Invoice migration before Pricing API and Pricing API before Checkout UI.",
                 ),
@@ -138,7 +142,7 @@ def check_response(response: str, judge_command: str) -> None:
                 ),
                 SemanticCriterion(
                     "pr_descriptions_include_review_focus",
-                    "The workflow requires PR descriptions to surface what the human should inspect carefully.",
+                    "The workflow asks subagents for reviewer-friendly PR bodies or reviewer-summary wording so the human review focus is clear.",
                 ),
             ),
             context="Loaded parent skill under test: multi-ticket-work. Judge workflow dispatch behavior, not exact wording.",

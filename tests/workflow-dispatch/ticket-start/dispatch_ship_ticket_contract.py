@@ -25,9 +25,11 @@ def main() -> int:
 
 def check_contract(skill: str) -> None:
     assert_contains(skill, "## Step 5 - Ship Or Handoff")
-    assert_contains(skill, "Before changing PR, branch, ticket, or merge state")
-    assert_contains(skill, "verify readiness and required approvals")
-    assert_contains(skill, "require explicit user approval before merge")
+    assert_contains(skill, "delegate a self-contained shipping request")
+    assert_contains(skill, "current PR or branch")
+    assert_contains(skill, "intended shipping action")
+    assert_contains(skill, "explicit merge-approval state")
+    assert_contains(skill, "without partially changing PR, branch, tracker, release, or merge state")
     assert_not_contains(skill, "ship-ticket")
     assert_not_contains(skill, "multi-ticket-work")
     assert_not_contains(skill, "gh pr checks <PR> --required --json name,state,bucket,workflow,link")

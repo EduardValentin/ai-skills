@@ -73,6 +73,8 @@ def check_delegated_execution_contract(skill: str) -> None:
     assert_contains(skill, "read the parent tickets or Epic descriptions too")
     assert_contains(skill, "After plan approval, execute the ticket as an orchestration loop")
     assert_contains(skill, "repeat until no verifier reports findings")
+    assert_contains(skill, "CANNOT_VERIFY")
+    assert_contains(skill, "perform the needed verification in the main session")
 
     for markdown_file in sorted(SKILL_DIR.rglob("*.md")):
         text = markdown_file.read_text(encoding="utf-8")

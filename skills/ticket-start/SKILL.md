@@ -80,9 +80,9 @@ When returning an execution action list, make the status table its own first act
 3. Delegate self-review or review against the ticket description, acceptance criteria, approved implementation plan, implementation evidence, and diff.
 4. Collect any self-review/review findings in the status table.
 5. Delegate QA verification against acceptance-criteria behavior in the running app, service, API, job, or integration.
-6. Collect any QA findings in the status table.
+6. Collect any QA findings in the status table. If the verifier lacks required tooling or access, it must immediately report `CANNOT_VERIFY` with the reason and missing capability. Record that result, then perform the needed verification in the main session when the main session has the required tooling; otherwise report the blocker.
 7. For UI-facing or mixed work, delegate UI/UX verification. For backend-only/non-UI work, record the skip reason.
-8. Collect any UI/UX findings in the status table.
+8. Collect any UI/UX findings in the status table. If the verifier lacks required tooling such as browser access, it must immediately report `CANNOT_VERIFY` with the reason and missing capability. Record that result, then perform the needed verification in the main session when the main session has the required tooling; otherwise report the blocker.
 9. Aggregate all verifier findings from self-review/review, QA, and UI/UX. Decide which findings are blockers, which are out of scope, and which need scoped fixes. Brief the user when a finding changes scope, plan, timeline, or acceptance criteria.
 10. Delegate scoped fixes for fixable findings. Each fix request should include the original ticket context, approved plan, finding evidence, affected surfaces, and the verification rows that must be rerun.
 11. Rerun the affected verification loops after fixes. If a fix touches broader behavior or UI surfaces, rerun every verifier that could be affected, not only the verifier that reported the finding.
@@ -92,17 +92,11 @@ Do not mark a work unit clean because local tests passed. It is clean only when 
 
 ## Step 5 - Ship Or Handoff
 
-Before any PR, ticket-state, release, or merge action:
+When the work is ready for PR, tracker, release, or merge action, delegate a self-contained shipping request instead of performing state changes inline. Include the current PR or branch, current tracker and PR state, intended shipping action, completed status table, verifier summary, and explicit merge-approval state.
 
-- re-read the ticket and PR/source-control state
-- confirm the work-unit status table is complete
-- confirm required remote checks are passing or explicitly not configured
-- confirm the correct write identity is active for the workflow
-- require explicit user approval before merge
+When returning action lists, use a capability phrase like `ticket-linked PR shipping handoff` and explicitly copy any known current tracker state, intended tracker state, and whether merge approval is present or missing. Put known state values in the request itself, for example `current tracker state is In Review; intended tracker state is Done`. Do not leave known state values for the shipping handoff to rediscover.
 
-When delegating release readiness checks, include the ticket ID, PR or branch, current PR/ticket state, intended state change, completed work-unit status table, known verifier results, required-check expectation, write-identity requirement, and explicit merge approval state.
-
-Before changing PR, branch, ticket, or merge state, verify readiness and required approvals. If a release action cannot safely proceed, stop and report the blocker instead of partially changing state.
+Relay the shipping result to the user. If shipping cannot proceed, report the blocker without partially changing PR, branch, tracker, release, or merge state.
 
 ## Final Report
 

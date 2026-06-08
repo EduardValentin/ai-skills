@@ -81,7 +81,7 @@ def check_response(response: str, agent_command: str, judge_command: str) -> Non
             ),
             SemanticCriterion(
                 "shipping_request_is_self_contained",
-                "The delegated request includes ticket ID, PR or branch, current ticket state, intended ticket state, required checks expectation, and explicit merge approval state.",
+                "The delegated request includes PR or branch, current tracker state, intended tracker state, required checks expectation, and explicit merge approval state.",
             ),
             SemanticCriterion(
                 "does_not_mutate_inline",

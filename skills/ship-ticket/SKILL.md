@@ -1,6 +1,6 @@
 ---
 name: ship-ticket
-description: Use when a Jira or Linear ticket-linked pull request is ready to ship, merge, mark ready, or sync ticket state after review.
+description: Use when preparing a ticket-linked PR for shipping or release handoff after review is complete, including ship ticket, mark ready, merge an approved PR, transition Jira/Linear tickets to Done, or sync ticket state. Not for code review.
 ---
 
 # Ship Ticket
@@ -8,6 +8,8 @@ description: Use when a Jira or Linear ticket-linked pull request is ready to sh
 ## Purpose
 
 Ship Ticket decides whether a ticket-linked PR may be shipped and performs only the allowed PR and ticket state updates.
+
+Use it when the user or an orchestrator asks to prepare a ticket PR for shipping, mark it ready, merge it, or synchronize tracker state after review.
 
 It receives implementation, review, and verification details as inputs. It does not judge how that work was produced, fix failing work, or delegate fixes.
 

@@ -32,7 +32,10 @@ def main() -> int:
 def check_skill_contract(skill: str) -> None:
     required_terms = (
         "name: ship-ticket",
-        "Use when a Jira or Linear ticket-linked pull request is ready to ship",
+        "Use when preparing a ticket-linked PR for shipping or release handoff after review is complete",
+        "transition Jira/Linear tickets to Done",
+        "Not for code review",
+        "prepare a ticket PR for shipping",
         "CANNOT SHIP",
         "Jira or Linear",
         "review state",

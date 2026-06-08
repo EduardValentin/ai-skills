@@ -1,4 +1,4 @@
 interface:
   display_name: "Ship Ticket"
-  short_description: "Ship PRs and sync Jira or Linear ticket state"
-  default_prompt: "Use $ship-ticket to verify PR checks, merge when approved, and sync linked Jira or Linear ticket state."
+  short_description: "Handle ticket-linked PR shipping handoffs"
+  default_prompt: "Use $ship-ticket to prepare a ticket-linked PR shipping handoff, verify checks, merge when approved, and sync Jira or Linear ticket state."

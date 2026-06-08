@@ -53,6 +53,10 @@ SCENARIOS = (
                 "The response identifies dependencies, sequencing constraints, and which tickets can run in parallel.",
             ),
             SemanticCriterion(
+                "preserves_state_across_compaction",
+                "The response maintains a durable uncommitted orchestration note with scope, assignments, status, PRs, blockers, and decisions, and re-reads it after compaction/resume and before later dispatches or final reporting.",
+            ),
+            SemanticCriterion(
                 "dispatches_one_subagent_per_ticket_or_unit",
                 "The response dispatches one subagent per ticket or per explicitly split unit of work.",
             ),
@@ -70,7 +74,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "pr_description_surfaces_review_focus",
-                "The response requires each PR description to make the human review focus clear, including what changed, checks, risks, and what to inspect carefully.",
+                "The response asks for reviewer-friendly PR body or reviewer-summary wording so each PR makes the human review focus clear.",
             ),
         ),
         forbidden_terms=(

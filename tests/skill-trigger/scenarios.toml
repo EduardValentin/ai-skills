@@ -98,8 +98,10 @@ response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
 id = "ship-ticket-pr-checks"
 skill = "ship-ticket"
 prompt = """
-Ship Linear ticket APP-123 from In Review. The linked PR is #42; verify all
-required PR checks are passing before merge, then move the Linear ticket to Done.
+Implementation and review are complete; do not review the diff. Run only the
+ticket-linked PR shipping handoff for PR #42 linked to Linear ticket APP-123
+from In Review: check required PR checks and report whether it can be marked
+ready, merged, and transitioned to Done.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]

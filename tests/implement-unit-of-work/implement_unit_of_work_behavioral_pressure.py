@@ -54,6 +54,10 @@ SCENARIOS = (
                 "The response plans to inspect relevant files beyond the direct edit, including callers, contracts, analogous code, tests, or architecture surfaces.",
             ),
             SemanticCriterion(
+                "uses_tdd_when_feasible",
+                "The response requires TDD for required features or bug fixes when the project harness supports it: write or update a failing test first, observe the expected failure, implement to green, and report the evidence or a concrete skip rationale.",
+            ),
+            SemanticCriterion(
                 "clean_code_standards",
                 "The response emphasizes clear names, focused responsibilities, three-or-fewer parameters, maintainability, and performance.",
             ),
@@ -63,7 +67,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "implementation_report_shape",
-                "The response returns an implementation report shape with changed files, local checks, delegated self-review result, engineering notes, and risks or blockers.",
+                "The response returns an implementation report shape with changed files, TDD evidence or skip rationale, local checks, delegated self-review result, engineering notes, and risks or blockers.",
             ),
         ),
         forbidden_terms=(

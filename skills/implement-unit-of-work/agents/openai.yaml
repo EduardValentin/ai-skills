@@ -1,4 +1,4 @@
 interface:
   display_name: "Implement Unit Of Work"
-  short_description: "Implement approved code or scripts with delegated self-review"
-  default_prompt: "Use $implement-unit-of-work to implement approved code and return an implementation report."
+  short_description: "Implement approved code with TDD and delegated self-review"
+  default_prompt: "Use $implement-unit-of-work to implement approved code with TDD where feasible, delegate self-review, and return an implementation report."

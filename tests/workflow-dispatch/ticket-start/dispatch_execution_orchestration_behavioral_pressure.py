@@ -98,6 +98,10 @@ def check_response(response: str, judge_command: str) -> None:
                     "The response delegates self-review/review, QA verification, and UI/UX verification for UI-facing or mixed work.",
                 ),
                 SemanticCriterion(
+                    "handles_missing_verifier_tooling",
+                    "The response says a verifier that lacks required tooling or access should report CANNOT_VERIFY with a reason, after which the main session performs that verification if it has the tooling or reports the blocker.",
+                ),
+                SemanticCriterion(
                     "aggregates_findings_and_fixes",
                     "The response aggregates verifier findings, classifies blockers/out-of-scope/fixable items, delegates scoped fixes, and reruns affected verification loops.",
                 ),

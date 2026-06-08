@@ -33,12 +33,14 @@ def check_contract(skill: str) -> None:
         "parent ticket with child tickets or sub-tickets",
         "The main agent is the orchestrator",
         "does not implement ticket work inline",
+        "Save an uncommitted orchestration note",
+        "Re-read it at the start of work, after any context compaction or resume",
         "Dispatch one subagent per ticket or unit of work",
         "opened a PR and returned a completion report",
         "State plainly in each dispatch that the subagent must open a PR and return a completion report",
-        "State plainly in each dispatch that the PR description must tell the human what to review carefully",
+        "reviewer-friendly PR body expectation",
         "Put the PRs in the order the human should review them",
-        "Every PR description must make the human review focus obvious",
+        "Phrase it as a PR-description or reviewer-summary request",
     )
     for term in required_terms:
         assert_contains(skill, term)
@@ -51,6 +53,7 @@ def check_contract(skill: str) -> None:
         "frontend-ui-review",
         "ship-ticket",
         "codebase-scope-map",
+        "pr-reviewer-summary",
         "UI/UX verification",
         "QA verification",
     )

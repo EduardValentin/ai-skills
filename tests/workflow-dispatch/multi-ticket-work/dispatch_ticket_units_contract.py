@@ -35,10 +35,12 @@ def check_dispatch_contract(skill: str) -> None:
         assert_not_contains(skill, term)
 
     assert_contains(skill, "Dispatch one subagent per ticket or unit of work")
+    assert_contains(skill, "Save an uncommitted orchestration note")
+    assert_contains(skill, "Re-read it at the start of work, after any context compaction or resume")
     assert_contains(skill, "A ticket or unit is not complete until its subagent has opened a PR")
     assert_contains(skill, "returned a completion report")
     assert_contains(skill, "Put the PRs in the order the human should review them")
-    assert_contains(skill, "Every PR description must make the human review focus obvious")
+    assert_contains(skill, "Phrase it as a PR-description or reviewer-summary request")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:
