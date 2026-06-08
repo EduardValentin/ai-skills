@@ -1,0 +1,4 @@
+interface:
+  display_name: "QA Verification"
+  short_description: "Verify running behavior against acceptance criteria"
+  default_prompt: "Use $qa-verification to verify running behavior against acceptance criteria."

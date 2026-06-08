@@ -91,7 +91,7 @@ def check_response(response: str, judge_command: str) -> None:
     forbidden = (
         "readiness ledger",
         "implement-unit-of-work",
-        "ticket-qa-verification",
+        "qa-verification",
         "frontend-ui-review",
         "codebase-scope-map",
     )

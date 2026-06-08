@@ -76,7 +76,7 @@ SCENARIOS = (
         forbidden_terms=(
             "readiness ledger",
             "implement-unit-of-work",
-            "ticket-qa-verification",
+            "qa-verification",
             "frontend-ui-review",
             "ticket-ship-gate",
             "implementation inline",

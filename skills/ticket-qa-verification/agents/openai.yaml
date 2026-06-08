@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ticket QA Verification"
-  short_description: "Verify ticket behavior against acceptance criteria"
-  default_prompt: "Use $ticket-qa-verification to QA this running implementation against the ticket acceptance criteria."

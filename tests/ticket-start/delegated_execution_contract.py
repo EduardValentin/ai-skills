@@ -13,7 +13,7 @@ SKILL_DIR = SKILL_PATH.parent
 DOWNSTREAM_SKILL_IDS = (
     "multi-ticket-work",
     "implement-unit-of-work",
-    "ticket-qa-verification",
+    "qa-verification",
     "ticket-ship-gate",
     "frontend-ui-review",
     "codebase-scope-map",
@@ -58,7 +58,7 @@ def check_delegated_execution_contract(skill: str) -> None:
         "auto-discovery",
         "downstream skill identifier",
         "Implementation is delegated through `implement-unit-of-work` subagent(s)",
-        "Dispatch `ticket-qa-verification`",
+        "Dispatch `qa-verification`",
         "Dispatch UI/UX subagent",
         "Every verified row has non-blank",
         "gh pr checks <PR> --required --json name,state,bucket,workflow,link",

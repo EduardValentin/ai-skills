@@ -47,7 +47,7 @@ def check_contract(skill: str) -> None:
         "readiness ledger",
         "Ship readiness",
         "implement-unit-of-work",
-        "ticket-qa-verification",
+        "qa-verification",
         "frontend-ui-review",
         "ticket-ship-gate",
         "codebase-scope-map",

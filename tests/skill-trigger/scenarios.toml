@@ -64,36 +64,35 @@ Select the implement-unit-of-work skill for this approved standalone code unit.
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-qa-verification-backend-api"
-skill = "ticket-qa-verification"
+id = "qa-verification-backend-api"
+skill = "qa-verification"
 prompt = """
-QA this backend API ticket against the acceptance criteria. Unit tests passed,
+QA this backend API change against the acceptance criteria. Unit tests passed,
 but I need endpoint behavior, persistence, auth, and error responses verified
-against the running service before Ship.
+against the running service.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "ticket-qa-verification-ui-behavior"
-skill = "ticket-qa-verification"
+id = "qa-verification-ui-behavior"
+skill = "qa-verification"
 prompt = """
 QA this user-facing UI change. Exercise loading, empty, success, error,
-validation, disabled, and rapid-click behavior in the running app, but leave
-visual parity to the UI/UX verifier.
+validation, disabled, and rapid-click behavior in the running app.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "ticket-qa-verification-mixed-flow"
-skill = "ticket-qa-verification"
+id = "qa-verification-mixed-flow"
+skill = "qa-verification"
 prompt = """
 QA this mixed ticket where the invite API and invite form changed together.
-Verify both the API behavior and the browser-visible user flow before Ship.
+Verify both the API behavior and the browser-observed user flow.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "ticket-ship-gate-complete-ledgers"

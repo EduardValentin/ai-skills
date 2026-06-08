@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral pressure tests for ticket-qa-verification."""
+"""Behavioral pressure tests for qa-verification."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILL_PATH = REPO_ROOT / "skills" / "ticket-qa-verification" / "SKILL.md"
+SKILL_PATH = REPO_ROOT / "skills" / "qa-verification" / "SKILL.md"
 sys.path.append(str(REPO_ROOT / "tests"))
 
 from semantic_judge import (  # noqa: E402
@@ -35,36 +35,43 @@ SCENARIOS = (
     Scenario(
         scenario_id="backend-api-live-behavior",
         user_request=(
-            "QA a backend-only API change. Unit tests passed, but the acceptance "
-            "criteria require validating successful creation, duplicate rejection, "
-            "auth boundaries, persisted state, and error payloads against the running service."
+            "Use the loaded qa-verification skill for a backend API change. "
+            "Acceptance criteria require validating successful creation, duplicate "
+            "rejection, auth boundaries, persisted state, and error payloads against "
+            "the running service."
         ),
         criteria=(
             SemanticCriterion(
                 "live_service_behavior",
-                "The QA approach requires validating the running backend/service rather than relying only on unit tests.",
+                "The QA approach requires validating the running backend/service rather than relying only on unit tests or code inspection.",
             ),
             SemanticCriterion(
                 "covers_api_outcomes",
                 "The QA approach covers successful creation, duplicate rejection, auth boundaries, persisted state, and error payloads.",
             ),
             SemanticCriterion(
-                "reports_not_fixes",
-                "The response produces a QA report with findings/status and does not take ownership of fixing bugs.",
+                "maps_acceptance_criteria_to_evidence",
+                "The response requires the QA report to map each acceptance criterion to concrete observations and evidence.",
+            ),
+            SemanticCriterion(
+                "bug_report_boundary",
+                "The response includes a BUGS FOUND verdict path for failed behavior and requires reproduction steps and evidence for each bug.",
             ),
         ),
         forbidden_terms=(
             "unit tests are enough",
             "clean because tests passed",
-            "fix the bug",
+            "before Ship",
+            "visual parity",
+            "UI/UX",
         ),
     ),
     Scenario(
-        scenario_id="ui-behavior-not-visual-parity",
+        scenario_id="ui-behavior-states",
         user_request=(
-            "QA a user-facing settings form. Exercise loading, empty, success, "
-            "error, validation, disabled, rapid-click, and navigation-mid-save behavior "
-            "in the running app. Do not perform visual parity review."
+            "Use the loaded qa-verification skill for a user-facing settings form. "
+            "Exercise loading, empty, success, error, validation, disabled, rapid-click, "
+            "and navigation-mid-save behavior in the running app."
         ),
         criteria=(
             SemanticCriterion(
@@ -73,47 +80,47 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "covers_named_states_and_interactions",
-                "The QA approach requires covering loading, empty, success, error, validation, disabled, rapid-click, and navigation-mid-save behavior.",
+                "The QA approach covers loading, empty, success, error, validation, disabled, rapid-click, and navigation-mid-save behavior.",
             ),
             SemanticCriterion(
-                "visual_parity_out_of_scope",
-                "The response keeps visual parity/style review out of QA behavior verification scope.",
-            ),
-            SemanticCriterion(
-                "reports_not_fixes",
-                "The response reports QA coverage/results/findings and does not fix implementation bugs.",
+                "reports_evidence_and_verdict",
+                "The response describes a QA report with verdict, coverage performed, evidence, bugs, blockers, and notes.",
             ),
         ),
         forbidden_terms=(
-            "visual parity is qa",
+            "visual parity",
             "style review",
-            "fix the bug",
+            "UI/UX",
+            "before Ship",
         ),
     ),
     Scenario(
         scenario_id="mixed-api-and-ui",
         user_request=(
-            "QA a mixed invite flow where the invite API and invite form changed together. "
-            "Verify backend behavior and browser-visible behavior before Ship."
+            "Use the loaded qa-verification skill for a mixed invite flow where the "
+            "invite API and invite form changed together. Verify backend behavior, "
+            "browser-observed behavior, and the integration between them."
         ),
         criteria=(
             SemanticCriterion(
                 "mixed_mode_covers_backend_and_ui",
-                "The QA approach requires covering both invite API/backend behavior and browser-visible invite form behavior.",
+                "The QA approach covers both invite API/backend behavior and browser-observed invite form behavior.",
             ),
             SemanticCriterion(
-                "integration_before_ship",
-                "The response treats the mixed flow as not QA-clean before Ship until both API and UI behavior are verified.",
+                "integration_between_surfaces",
+                "The response verifies that API and UI behavior work together according to acceptance criteria.",
             ),
             SemanticCriterion(
                 "reports_acceptance_coverage",
-                "The response describes a QA report that ties checks/results/findings back to acceptance criteria.",
+                "The response describes a QA report that ties checks, results, findings, and evidence back to acceptance criteria.",
             ),
         ),
         forbidden_terms=(
             "only backend",
             "only ui",
-            "fix the bug",
+            "before Ship",
+            "visual parity",
+            "UI/UX",
         ),
     ),
 )
@@ -124,13 +131,13 @@ def main() -> int:
         print_usage()
         return 0
 
-    agent_command = os.environ.get("TICKET_QA_AGENT_COMMAND", "").strip()
+    agent_command = os.environ.get("QA_VERIFICATION_AGENT_COMMAND", "").strip()
     if not agent_command:
         print_usage()
-        print("FAIL: TICKET_QA_AGENT_COMMAND is required", file=sys.stderr)
+        print("FAIL: QA_VERIFICATION_AGENT_COMMAND is required", file=sys.stderr)
         return 1
 
-    scenario_filter = os.environ.get("TICKET_QA_SCENARIO", "").strip()
+    scenario_filter = os.environ.get("QA_VERIFICATION_SCENARIO", "").strip()
     scenarios = [scenario for scenario in SCENARIOS if not scenario_filter or scenario.scenario_id == scenario_filter]
     if not scenarios:
         print(f"FAIL: no scenario matched {scenario_filter!r}", file=sys.stderr)
@@ -147,18 +154,18 @@ def main() -> int:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print(f"PASS: {len(scenarios)} ticket-qa-verification behavioral scenarios")
+    print(f"PASS: {len(scenarios)} qa-verification behavioral scenarios")
     return 0
 
 
 def print_usage() -> None:
     print(
         """Usage:
-  TICKET_QA_AGENT_COMMAND='<command reading stdin>' \\
-    python3 tests/ticket-qa-verification/qa_behavioral_pressure.py
+  QA_VERIFICATION_AGENT_COMMAND='<command reading stdin>' \\
+    python3 tests/qa-verification/qa_behavioral_pressure.py
 
 Optional:
-  TICKET_QA_SCENARIO='<scenario-id>' to run one scenario.
+  QA_VERIFICATION_SCENARIO='<scenario-id>' to run one scenario.
 """
     )
 
@@ -166,7 +173,7 @@ Optional:
 def make_prompt(skill: str, scenario: Scenario) -> str:
     return f"""You are pressure-testing whether an agent follows a QA verification skill.
 
-Loaded skill: ticket-qa-verification
+Loaded skill: qa-verification
 
 <skill>
 {skill}
@@ -175,8 +182,7 @@ Loaded skill: ticket-qa-verification
 User request:
 {scenario.user_request}
 
-Do not execute QA. Return only the QA approach and report shape the QA agent
-should use. Keep it concise.
+Do not execute QA. Return only the QA approach and report shape the QA verifier should use. Keep it concise.
 """
 
 
@@ -207,7 +213,7 @@ def check_response(scenario: Scenario, response: str, judge_command: str) -> Non
             response=response,
             criteria=scenario.criteria,
             context=(
-                "Loaded skill under test: ticket-qa-verification. Judge QA behavior, scope, "
+                "Loaded skill under test: qa-verification. Judge QA behavior, scope, "
                 "and report boundaries. The pressure prompt asks for the approach/report "
                 "shape only; do not require proof that QA was actually executed."
             ),

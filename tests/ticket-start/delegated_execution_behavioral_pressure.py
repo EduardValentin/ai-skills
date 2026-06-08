@@ -75,7 +75,7 @@ SCENARIOS = (
             "grandchild",
             "four Linear tickets",
             "I would implement inline",
-            "ticket-qa-verification",
+            "qa-verification",
             "implement-unit-of-work",
             "multi-ticket-work",
             "ticket-ship-gate",
