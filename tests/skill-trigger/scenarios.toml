@@ -51,7 +51,7 @@ Invite Flow. Keep a per-unit readiness ledger while delegating implementation,
 self-review, QA, and UI/UX verification before Ship.
 """
 description_terms = ["coordinating approved ticket implementation", "multi-ticket delivery", "per-unit readiness ledger", "delegated implementation"]
-skill_terms = ["per-work-unit readiness ledger", "implementation work-unit request", "A work unit is not complete until", "Self-review is distinct from QA verification and UI/UX verification", "explicit backend-only/non-UI skip rationale", "Do not prescribe a rigid topology"]
+skill_terms = ["per-work-unit readiness ledger", "implementation work-unit request", "approved work-unit plan slice", "A work unit is not complete until", "Self-review is distinct from QA verification and UI/UX verification", "explicit backend-only/non-UI skip rationale", "reviewing implemented frontend UI for visual parity against a runnable prototype/reference or visual consistency against production analogs", "Do not prescribe a rigid topology"]
 forbidden_terms = []
 
 [[scenario]]

@@ -19,6 +19,7 @@ def main() -> int:
     try:
         scenarios = load_scenarios(SCENARIOS_PATH)
         check_scenarios(scenarios)
+        check_behavioral_harness_is_black_box()
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -102,6 +103,20 @@ def assert_contains(haystack: str, needle: str, context: str) -> None:
 def assert_not_contains(haystack: str, needle: str, context: str) -> None:
     if needle and needle in haystack:
         raise ValueError(f"{context} must not contain: {needle}")
+
+
+def check_behavioral_harness_is_black_box() -> None:
+    harness = SCRIPT_DIR / "behavioral_pressure.py"
+    source = harness.read_text(encoding="utf-8")
+    forbidden = (
+        "Available skills:",
+        "discover_skill_files",
+        "parse_frontmatter",
+        "skill_index",
+        "SKILL.md",
+    )
+    for term in forbidden:
+        assert_not_contains(source, term, f"{harness.relative_to(REPO_ROOT)}")
 
 
 if __name__ == "__main__":

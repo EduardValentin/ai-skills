@@ -39,7 +39,7 @@ Track every work unit independently with these rows:
 | Implementation | Completed implementation report from an implementation work-unit request, with changed surfaces, decisions, and any follow-up risk. |
 | Self-review | Completed implementer self-review report covering local diff review, edge cases, and obvious regressions. |
 | QA | Completed QA verification report from an acceptance-criteria QA behavior verification request, with the scenario, checks performed, result, and findings status. |
-| UI/UX | Completed UI/UX verification report from a frontend UI/UX visual review request for UI-facing or mixed units; otherwise an explicit backend-only/non-UI skip rationale. |
+| UI/UX | Completed UI/UX verification report from a frontend UI/UX visual review request for UI-facing or mixed units. The request must frame the work as reviewing implemented frontend UI for visual parity against a runnable prototype/reference or visual consistency against production analogs; otherwise use an explicit backend-only/non-UI skip rationale. |
 | Findings | Unresolved findings status, fix-loop status, and owner if not clean. |
 | Integration | Integrated, blocked, or explicitly out-of-scope status. |
 
@@ -66,7 +66,8 @@ Choose the delegation strategy that fits the work:
 
 - For independent tickets or slices, delegate each work unit separately where practical.
 - For tightly coupled slices, delegate implementation in the sequence that reduces conflicts, then still require per-unit ledger rows.
-- For UI-facing or mixed work, include affected surfaces, important states, running URLs when available, and any reference/prototype context in the UI/UX verification request.
+- For implementation work, make each request an approved work-unit plan slice that asks for implementation of the scoped unit, relevant local checks, a compact implementation report, and a distinct implementer self-review report.
+- For UI-facing or mixed work, make the UI/UX verification request a review of implemented frontend UI for visual parity against a runnable prototype/reference or visual consistency against production analogs. Include affected surfaces, important states, running URLs when available, and reference/prototype or production-analog context. Do not make this a generic screenshot validation request.
 - For backend-only work, include APIs, jobs, migrations, persistence behavior, and relevant test/probe expectations in the acceptance-criteria QA behavior verification request.
 - For findings, delegate focused fixes with the finding packet and rerun only the affected verification rows unless the fix changes broader behavior.
 

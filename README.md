@@ -29,3 +29,9 @@ SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
 WORKFLOW_DISPATCH_AGENT_COMMAND='<command reading stdin>' \
   python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```
+
+`skill-trigger` behavioral tests are black-box installed-harness tests: they do
+not inject skill bodies or available-skill indexes, and they fail when the target
+harness cannot discover the expected skill. `workflow-dispatch` behavioral tests
+are loaded-parent-skill pressure tests; their downstream discovery checks also
+call the installed harness without injecting a skill index.

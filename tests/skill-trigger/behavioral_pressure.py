@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Run skill trigger scenarios against an agent command."""
+"""Run skill trigger scenarios against an installed agent harness."""
 
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
-from trigger_scenarios import discover_skill_files, load_scenarios, parse_frontmatter
+from trigger_scenarios import load_scenarios
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -37,9 +38,8 @@ def main() -> int:
         if not scenarios:
             raise ValueError("no behavioral scenarios matched")
 
-        index = skill_index()
         for scenario in scenarios:
-            run_scenario(agent_command, index, scenario)
+            run_scenario(agent_command, scenario)
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -56,15 +56,17 @@ def print_usage() -> None:
 Optional:
   SKILL_TRIGGER_SCENARIO='<scenario-id>' to run one scenario.
 
-The agent command receives a prompt on stdin and must print its response on stdout.
+The agent command receives only the scenario user request plus an output format
+on stdin and must print its response on stdout. The harness must rely on its
+installed skill discovery; this test does not inject skill bodies or skill indexes.
 The response must include the expected skill name from the scenario registry."""
     )
 
 
-def run_scenario(agent_command: str, index: str, scenario: dict[str, object]) -> None:
+def run_scenario(agent_command: str, scenario: dict[str, object]) -> None:
     scenario_id = str(scenario["id"])
     skill = str(scenario["skill"])
-    prompt = make_prompt(index, scenario)
+    prompt = make_prompt(scenario)
     response = run_agent(agent_command, prompt)
 
     if skill not in response:
@@ -82,10 +84,9 @@ def run_scenario(agent_command: str, index: str, scenario: dict[str, object]) ->
 
 def run_agent(agent_command: str, prompt: str) -> str:
     completed = subprocess.run(
-        agent_command,
+        shlex.split(agent_command),
         input=prompt,
         text=True,
-        shell=True,
         cwd=REPO_ROOT,
         capture_output=True,
         check=False,
@@ -98,11 +99,8 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def make_prompt(skill_index_text: str, scenario: dict[str, object]) -> str:
-    return f"""You are testing skill-trigger selection before any task work begins.
-
-Available skills:
-{skill_index_text}
+def make_prompt(scenario: dict[str, object]) -> str:
+    return f"""You are testing installed black-box skill discovery before any task work begins.
 
 User request:
 {scenario["prompt"]}
@@ -114,14 +112,6 @@ RATIONALE: one short sentence
 Select every skill that should be loaded before acting. Do not perform the user request.
 Scenario id: {scenario["id"]}
 """
-
-
-def skill_index() -> str:
-    rows: list[str] = []
-    for skill_name, skill_file in sorted(discover_skill_files(REPO_ROOT).items()):
-        frontmatter = parse_frontmatter(skill_file.read_text(encoding="utf-8"))
-        rows.append(f"- {frontmatter.get('name', skill_name)}: {frontmatter.get('description', '')}")
-    return "\n".join(rows)
 
 
 if __name__ == "__main__":

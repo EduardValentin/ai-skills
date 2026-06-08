@@ -69,7 +69,9 @@ Coordinate an approved implementation plan with three work units:
 - Invite Flow is mixed.
 
 Do not perform the implementation. Do not call tools. Based only on the loaded
-skill, return the first workflow actions the main agent must take before Ship.
+skill, return the workflow actions the main agent must take before a work unit
+can be marked Ship-ready. Include setup actions and the mandatory delegated
+capability requests for implementation, QA, and UI/UX where applicable.
 
 Return only action lines in this exact shape:
 ACTION: <number> | <kind> | <target> | <details>
@@ -108,21 +110,45 @@ def check_response(response: str, agent_command: str) -> None:
     forbidden = ("ticket-implementation-unit", "ticket-qa-verification", "frontend-ui-review", "codebase-scope-map")
     assert_forbidden_terms(response, forbidden, "readiness ledger workflow")
 
-    dispatch_text = "\n".join(lines)
+    dispatch_lines = [line for line in lines if "dispatch_request" in line.casefold()]
+    dispatch_text = "\n".join(dispatch_lines)
     assert_concept_groups(
         dispatch_text,
         (
             ("dispatch_request", "dispatch request", "delegated request"),
-            ("implementation work-unit", "implementation unit", "implementer"),
+            ("implementation work-unit", "approved work-unit plan slice", "implementer"),
             ("qa", "acceptance-criteria verification", "behavior verification"),
             ("ui/ux", "visual verification", "frontend review"),
         ),
         "readiness ledger dispatch actions",
     )
 
-    assert_auto_discovers(agent_command, dispatch_text, "ticket-implementation-unit")
-    assert_auto_discovers(agent_command, dispatch_text, "ticket-qa-verification")
-    assert_auto_discovers(agent_command, dispatch_text, "frontend-ui-review")
+    implementation_request = matching_dispatch_text(
+        dispatch_lines,
+        ("implementation work-unit", "approved work-unit plan slice", "implementation report", "implementer"),
+        "implementation",
+    )
+    qa_request = matching_dispatch_text(
+        dispatch_lines,
+        ("acceptance-criteria", "behavior qa", "qa verification", "api routes", "persistence"),
+        "QA",
+    )
+    uiux_request = matching_dispatch_text(
+        dispatch_lines,
+        ("implemented frontend ui", "visual parity", "visual consistency", "production analog", "runnable prototype"),
+        "UI/UX",
+    )
+
+    assert_auto_discovers(agent_command, implementation_request, "ticket-implementation-unit")
+    assert_auto_discovers(agent_command, qa_request, "ticket-qa-verification")
+    assert_auto_discovers(agent_command, uiux_request, "frontend-ui-review")
+
+
+def matching_dispatch_text(lines: list[str], terms: tuple[str, ...], capability: str) -> str:
+    matches = [line for line in lines if any(term.casefold() in line.casefold() for term in terms)]
+    if not matches:
+        raise AssertionError(f"missing {capability} DISPATCH_REQUEST line")
+    return "\n".join(matches)
 
 
 if __name__ == "__main__":

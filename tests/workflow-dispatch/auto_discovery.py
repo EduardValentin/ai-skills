@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
-"""Helpers for workflow-dispatch behavioral auto-discovery checks."""
+"""Helpers for workflow-dispatch installed-harness discovery checks."""
 
 from __future__ import annotations
 
 import shlex
 import subprocess
-import sys
 from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-sys.path.append(str(REPO_ROOT / "tests" / "skill-trigger"))
-
-from trigger_scenarios import discover_skill_files, parse_frontmatter  # noqa: E402
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
@@ -33,16 +29,8 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def skill_index() -> str:
-    rows: list[str] = []
-    for skill_name, skill_file in sorted(discover_skill_files(REPO_ROOT).items()):
-        frontmatter = parse_frontmatter(skill_file.read_text(encoding="utf-8"))
-        rows.append(f"- {frontmatter.get('name', skill_name)}: {frontmatter.get('description', '')}")
-    return "\n".join(rows)
-
-
 def assert_auto_discovers(agent_command: str, delegated_request: str, expected_skill: str) -> str:
-    response = run_agent(agent_command, make_selection_prompt(delegated_request, expected_skill))
+    response = run_agent(agent_command, make_selection_prompt(delegated_request))
     if expected_skill not in response:
         raise AssertionError(
             f"delegated request did not auto-discover {expected_skill}\n"
@@ -51,11 +39,8 @@ def assert_auto_discovers(agent_command: str, delegated_request: str, expected_s
     return response
 
 
-def make_selection_prompt(delegated_request: str, expected_skill: str) -> str:
-    return f"""You are testing skill auto-discovery for a delegated work request.
-
-Available skills:
-{skill_index()}
+def make_selection_prompt(delegated_request: str) -> str:
+    return f"""You are testing installed black-box skill discovery for a delegated work request.
 
 Delegated request:
 {delegated_request}

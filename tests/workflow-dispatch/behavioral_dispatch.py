@@ -51,8 +51,9 @@ Fallback:
   If WORKFLOW_DISPATCH_AGENT_COMMAND is unset, SKILL_TRIGGER_AGENT_COMMAND is used.
 
 The agent command receives a prompt on stdin and must print a workflow action
-ledger on stdout. The harness runs grouped behavioral tests from
-tests/workflow-dispatch/<skill-under-test>/."""
+ledger on stdout. Grouped tests may inject the loaded parent skill body to
+pressure-test workflow instructions. Downstream skill discovery checks must rely
+on the installed harness without an injected skill index."""
     )
 
 

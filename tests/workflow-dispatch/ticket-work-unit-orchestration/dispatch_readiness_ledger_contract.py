@@ -27,6 +27,7 @@ def check_dispatch_contract(skill: str) -> None:
     required_terms = (
         "Build the ledger before delegating implementation",
         "Delegate implementation through an implementation work-unit request",
+        "approved work-unit plan slice",
         "Require returned reports to update the ledger",
         "implementation report",
         "implementer self-review report",
@@ -34,6 +35,8 @@ def check_dispatch_contract(skill: str) -> None:
         "acceptance-criteria QA behavior verification request",
         "UI/UX verification report",
         "frontend UI/UX visual review request",
+        "reviewing implemented frontend UI for visual parity against a runnable prototype/reference or visual consistency against production analogs",
+        "Do not make this a generic screenshot validation request",
         "explicit backend-only/non-UI skip rationale",
         "unresolved findings status",
         "integration/out-of-scope status",

@@ -20,7 +20,7 @@ The static contract is deterministic. It verifies:
 - scenario-specific trigger terms appear in the description or skill body;
 - forbidden stale wording is absent.
 
-## Behavioral Pressure
+## Installed-Harness Behavioral Trigger
 
 Run manually, nightly, or in a model-enabled CI job:
 
@@ -29,10 +29,14 @@ SKILL_TRIGGER_AGENT_COMMAND='<agent command that reads stdin>' \
   python3 tests/skill-trigger/behavioral_pressure.py
 ```
 
-The behavioral harness sends each scenario to an agent with the current skill
-index and asks it to return the skills it would load before acting. It fails if
-the expected skill is missing or if the response repeats a phrase listed in
-`response_forbidden_terms`.
+The behavioral harness is a black-box installed-harness test. It sends only the
+scenario's user request plus a reporting format to the target agent command. It
+does not inject `SKILL.md` content, an `Available skills` list, or any repo-built
+skill index.
+
+This test fails if the installed harness cannot pick up the expected skill from
+its real skill discovery mechanism. It also fails if the response repeats a
+phrase listed in `response_forbidden_terms`.
 
 Run one scenario:
 
@@ -46,5 +50,6 @@ SKILL_TRIGGER_AGENT_COMMAND='<agent command that reads stdin>' \
 
 1. RED: add or update a `[[scenario]]` table in `scenarios.toml` that captures the missed trigger.
 2. GREEN: update the skill description/body until the static contract passes.
-3. REFACTOR: run the behavioral harness against an agent and tighten forbidden
-   terms or prompt coverage if the agent still rationalizes past the skill.
+3. REFACTOR: run the installed-harness behavioral trigger against an agent and
+   tighten forbidden terms or prompt coverage if the agent still rationalizes
+   past the skill.
