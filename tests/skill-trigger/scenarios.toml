@@ -95,26 +95,36 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "ticket-ship-gate-complete-ledgers"
-skill = "ticket-ship-gate"
+id = "ship-ticket-pr-checks"
+skill = "ship-ticket"
 prompt = """
-Run the Ship gate for this PR. The per-work-unit readiness ledgers are complete,
-QA and UI/UX verification are clean, and I need required GitHub checks evaluated
-before the PR or ticket is marked ready.
+Ship Linear ticket APP-123 from In Review. The linked PR is #42; verify all
+required PR checks are passing before merge, then move the Linear ticket to Done.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "ticket-ship-gate-merge-approval"
-skill = "ticket-ship-gate"
+id = "ship-ticket-merge-approval"
+skill = "ship-ticket"
 prompt = """
-Merge this ticket PR after checking that all required checks passed and that the
-user explicitly approved the merge. Use the personal workflow bot identity for
-any GitHub write.
+Merge the PR for Jira ticket PROJ-44 after confirming the ticket is in Code
+Review, required checks pass, and I explicitly approve the merge; then sync the
+Jira ticket state.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
+
+[[scenario]]
+id = "ship-ticket-parent-sync"
+skill = "ship-ticket"
+prompt = """
+Ship Jira child ticket PROJ-4. After PR checks pass and merge is approved, move
+the child to Done and, if all sibling tickets under parent PROJ-1 are also done,
+move the parent ticket to Done too.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "codebase-scope-map-implementation-handoff"

@@ -14,7 +14,7 @@ DOWNSTREAM_SKILL_IDS = (
     "multi-ticket-work",
     "implement-unit-of-work",
     "qa-verification",
-    "ticket-ship-gate",
+    "ship-ticket",
     "frontend-ui-review",
     "codebase-scope-map",
 )

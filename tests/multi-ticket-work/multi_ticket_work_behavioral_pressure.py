@@ -78,7 +78,7 @@ SCENARIOS = (
             "implement-unit-of-work",
             "qa-verification",
             "frontend-ui-review",
-            "ticket-ship-gate",
+            "ship-ticket",
             "implementation inline",
         ),
     ),

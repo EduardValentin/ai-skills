@@ -49,7 +49,7 @@ def check_contract(skill: str) -> None:
         "implement-unit-of-work",
         "qa-verification",
         "frontend-ui-review",
-        "ticket-ship-gate",
+        "ship-ticket",
         "codebase-scope-map",
         "UI/UX verification",
         "QA verification",
