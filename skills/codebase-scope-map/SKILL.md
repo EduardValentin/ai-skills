@@ -101,6 +101,7 @@ When the task touches UI and a runnable prototype/reference app is in scope, `##
 
 ## Forbidden Behaviors
 
+- Do not mutate the repository: no file edits, generated-file writes, formatting rewrites, dependency changes, staging, commits, or cleanup changes. Scoping output is the only deliverable.
 - Proposing the solution, selecting an implementation approach, or writing code.
 - Returning claims without locators.
 - Loading full files when targeted reads are enough.

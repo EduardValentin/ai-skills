@@ -162,6 +162,7 @@ You are a Scoping subagent in a ticket workflow. Map the codebase for this
 implementation task as a token-efficient navigable scope map with file:line
 locators, tests, types/contracts, analogous implementations, dependencies,
 prototype/reference elements where relevant, affected surfaces, conflict points, and downstream slices.
+This scoping task is read-only: do not edit, format, generate, stage, commit, or clean up repository files.
 """
 forbidden_terms = []
 

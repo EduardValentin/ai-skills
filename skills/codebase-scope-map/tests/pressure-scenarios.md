@@ -14,12 +14,14 @@ Expected behavior:
 - Picks up the reusable scope-map protocol from the wording.
 - Produces a structured scope map with file:line locators.
 - Includes entry points, target modules, analogous implementations, tests, types/contracts, dependencies, affected surfaces, conflict points, and downstream slices.
+- Does not mutate the repository: no edits, generated files, formatting rewrites, staging, commits, or cleanup changes.
 - Does not propose a solution or write code.
 
 Failure signals:
 - Gives a prose summary without locators.
 - Loads broad files or dumps source into the report.
 - Skips tests/types/analogous implementations because the entry point seems obvious.
+- Edits files, runs mutating formatters/generators, stages/commits, or performs cleanup changes.
 
 ## Scenario 2 - Token Pressure
 
