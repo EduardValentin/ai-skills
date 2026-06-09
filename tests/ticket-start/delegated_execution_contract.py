@@ -71,6 +71,9 @@ def check_delegated_execution_contract(skill: str) -> None:
     assert_contains(skill, "Use this skill as the main-agent workflow for working one implementation ticket")
     assert_contains(skill, "If the ticket is a child issue, subtask, story under an Epic")
     assert_contains(skill, "read the parent tickets or Epic descriptions too")
+    assert_contains(skill, "check `PRD.md` when the ticket or unit of work adds or changes business rules")
+    assert_contains(skill, "Check `designs/` or reference apps only when the ticket adds or modifies UI components")
+    assert_contains(skill, "corresponding reference surface or component")
     assert_contains(skill, "For UI-facing or mixed tickets, UI/UX verification depends on project type")
     assert_contains(skill, "Personal projects / Linear tickets")
     assert_contains(skill, "production app matches the runnable reference app")
@@ -86,6 +89,12 @@ def check_delegated_execution_contract(skill: str) -> None:
         text = markdown_file.read_text(encoding="utf-8")
         for forbidden in DOWNSTREAM_SKILL_IDS:
             assert_not_contains(text, forbidden)
+
+    personal_workflow = (SKILL_DIR / "personal-workflow.md").read_text(encoding="utf-8")
+    assert_contains(personal_workflow, "ticket or unit of work adds or changes business rules")
+    assert_contains(personal_workflow, "adds or modifies UI components that have a corresponding reference surface or component")
+    assert_contains(personal_workflow, "No `PRD.md` when business rules changed")
+    assert_contains(personal_workflow, "No relevant `designs/` reference for a changed UI component")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

@@ -19,10 +19,10 @@ See `bot-identity.md` for the full one-time setup runbook, the two Setup activat
 
 ## Scoped Reading
 
-Inspect only the areas of `PRD.md` and `designs/` that are relevant to this ticket. Do not load either in full by default.
+Do not load `PRD.md` or `designs/` in full by default. Read only the slices that are required by the ticket.
 
-- **PRD.md** — narrow scope by feature name, user flow, domain terms, affected screens, and nearby sections. Read only the matching slices. Use this for business logic, edge cases, and rules.
-- **designs/** — narrow scope to the relevant routes, screens, mocked API flows, state transitions, and components. Use this for UX, styling, interaction flow, and front-end behavior.
+- **PRD.md** — check it when the ticket or unit of work adds or changes business rules. Narrow scope by feature name, user flow, domain terms, affected screens, and nearby sections. Use it for business logic, edge cases, and rules.
+- **designs/** — check it only when the ticket adds or modifies UI components that have a corresponding reference surface or component. Narrow scope to the relevant routes, screens, mocked API flows, state transitions, and components. Use it for UX, styling, interaction flow, and front-end behavior already represented by the reference.
 - Keep technical implementation decisions in the production codebase, not in the PRD.
 
 The scoped slices feed directly into the Scoping subagent's input set.
@@ -89,8 +89,8 @@ If the Linear MCP server is unavailable or the team/state cannot be resolved saf
 
 ## Partial Setups
 
-If the project has a Linear ticket but is missing `PRD.md`, `designs/`, or both, treat it as personal workflow and adapt as follows. Surface the gap to the user during Setup so the Requirements/Design dialogue can compensate.
+If the project has a Linear ticket but a relevant required artifact is missing, treat it as personal workflow and adapt as follows. Surface the gap to the user during Setup so the Requirements/Design dialogue can compensate.
 
-- **No `PRD.md`:** gather requirements from the Linear ticket alone and flag missing context during Requirements/Design. Do not invent business rules to fill the gap.
-- **No `designs/`:** skip the React reference app and skip parity mode. UI/UX runs in **consistency mode** instead.
+- **No `PRD.md` when business rules changed:** gather requirements from the Linear ticket alone and flag missing business-rule context during Requirements/Design. Do not invent business rules to fill the gap.
+- **No relevant `designs/` reference for a changed UI component:** skip the React reference app and skip parity mode for that surface. UI/UX runs in **consistency mode** instead.
 - **Neither present:** gather everything from the ticket, confirm scope and acceptance criteria with the user before Requirements/Design. UI/UX runs in **consistency mode** during Verify.

@@ -35,6 +35,16 @@ requirements or planning implementation.
 forbidden_terms = []
 
 [[scenario]]
+id = "ticket-start-personal-artifact-scope"
+skill = "ticket-start"
+prompt = """
+Start Linear issue APP-924. It adds a new billing eligibility business rule and
+modifies a checkout UI component that has a corresponding route in designs/, so
+use ticket-start and gather only the relevant PRD and reference-app context.
+"""
+forbidden_terms = []
+
+[[scenario]]
 id = "ticket-start-uiux-rendered-outcome"
 skill = "ticket-start"
 prompt = """
