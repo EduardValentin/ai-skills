@@ -28,7 +28,7 @@ def check_dispatch_contract(skill: str) -> None:
         "readiness ledger",
         "implement-unit-of-work",
         "qa-verification",
-        "frontend-ui-review",
+        "ui-verification",
         "codebase-scope-map",
     )
     for term in forbidden_terms:

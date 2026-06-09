@@ -57,12 +57,16 @@ SCENARIOS = (
                 "The response delegates implementation, self-review/review, QA, UI/UX where applicable, and scoped fixes through a main-agent orchestration loop.",
             ),
             SemanticCriterion(
+                "defines_uiux_verification_by_project_type",
+                "The response explains that personal/Linear UI/UX verification compares changed production UI against the runnable reference app, while job/Jira UI/UX verification checks visual consistency with the rest of the application and similar existing elements.",
+            ),
+            SemanticCriterion(
                 "forwards_compact_context",
                 "The response describes compact context included in delegated requests, such as ticket/AC, approved artifacts, scope/codebase context, workflow or branch state, and UI/reference context when relevant.",
             ),
             SemanticCriterion(
-                "status_table_and_clean_loop_before_ship",
-                "The response explains that work-unit status, verifier findings, scoped fixes, and reruns must be reconciled before Ship or handoff.",
+                "status_table_and_clean_loop_before_readiness",
+                "The response explains that work-unit status, verifier findings, scoped fixes, and reruns must be reconciled before PR readiness or handoff.",
             ),
         ),
         forbidden_terms=(
@@ -78,8 +82,8 @@ SCENARIOS = (
             "qa-verification",
             "implement-unit-of-work",
             "multi-ticket-work",
-            "ship-ticket",
-            "frontend-ui-review",
+            "verify-pr-readiness",
+            "ui-verification",
         ),
     ),
 )
@@ -137,8 +141,9 @@ User request:
 Do not execute the ticket. Return a concise routing plan only. It must explain:
 - how ticket-start stays the intake and routing orchestrator,
 - how implementation, review, QA, UI/UX, scoped fixes, and reruns are delegated,
+- how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,
 - which compact context ticket-start forwards,
-- how the status table and repeat-until-clean loop are used before Ship or handoff.
+- how the status table and repeat-until-clean loop are used before PR readiness or handoff.
 Do not name downstream skill identifiers.
 """
 

@@ -30,13 +30,15 @@ def check_contract(skill: str) -> None:
     assert_contains(skill, "Delegate self-review or review")
     assert_contains(skill, "Delegate QA verification")
     assert_contains(skill, "delegate UI/UX verification")
+    assert_contains(skill, "Personal projects / Linear tickets")
+    assert_contains(skill, "Job projects / Jira tickets")
     assert_contains(skill, "CANNOT_VERIFY")
     assert_contains(skill, "Delegate scoped fixes")
     assert_not_contains(skill, "multi-ticket-work")
     assert_not_contains(skill, "implement-unit-of-work")
     assert_not_contains(skill, "Dispatch `qa-verification`")
     assert_not_contains(skill, "qa-verification")
-    assert_not_contains(skill, "frontend-ui-review")
+    assert_not_contains(skill, "ui-verification")
     assert_not_contains(skill, "QA mode (`backend` / `ui` / `mixed` from diff)")
 
 

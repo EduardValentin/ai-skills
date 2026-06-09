@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral pressure tests for ship-ticket."""
+"""Behavioral pressure tests for verify-pr-readiness."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILL_PATH = REPO_ROOT / "skills" / "ship-ticket" / "SKILL.md"
+SKILL_PATH = REPO_ROOT / "skills" / "verify-pr-readiness" / "SKILL.md"
 sys.path.append(str(REPO_ROOT / "tests"))
 
 from semantic_judge import (  # noqa: E402
@@ -33,16 +33,16 @@ class Scenario:
 
 SCENARIOS = (
     Scenario(
-        scenario_id="checks-failing-cannot-ship",
+        scenario_id="checks-failing-not-ready",
         user_request=(
-            "Ship Linear ticket APP-123. The linked PR is #42, the ticket is In Review, "
+            "Check readiness for Linear ticket APP-123. The linked PR is #42, the ticket is In Review, "
             "merge is approved, but required PR checks show build=pass, lint=fail, "
             "and e2e=pending."
         ),
         criteria=(
             SemanticCriterion(
                 "blocks_on_required_checks",
-                "The response returns CANNOT SHIP because required PR or CI checks are failing or pending.",
+                "The response returns NOT_READY because required PR or CI checks are failing or pending.",
             ),
             SemanticCriterion(
                 "reports_blocking_checks",
@@ -62,22 +62,23 @@ SCENARIOS = (
             "moved APP-123 to Done",
             "delegating fixes",
             "start a fix agent",
+            "CANNOT " + "SHIP",
         ),
     ),
     Scenario(
-        scenario_id="in-progress-ticket-cannot-ship-to-done",
+        scenario_id="in-progress-ticket-not-ready-for-done",
         user_request=(
-            "Ship Jira ticket PROJ-88 to Done. The PR checks are passing and merge is "
+            "Check readiness for Jira ticket PROJ-88 to move to Done. The PR checks are passing and merge is "
             "approved, but the Jira ticket status is still In Progress."
         ),
         criteria=(
             SemanticCriterion(
                 "blocks_in_progress_to_done",
-                "The response returns CANNOT SHIP because the ticket is still In Progress and cannot move directly to Done.",
+                "The response returns NOT_READY because the ticket is still In Progress and cannot move directly to Done.",
             ),
             SemanticCriterion(
                 "requires_review_state",
-                "The response says the ticket must first be in a review or code-review state before shipping.",
+                "The response says the ticket must first be in a review or code-review state before readiness actions.",
             ),
             SemanticCriterion(
                 "does_not_mutate_when_state_invalid",
@@ -87,25 +88,27 @@ SCENARIOS = (
         forbidden_terms=(
             "merged successfully",
             "moved PROJ-88 to Done",
-            "safe to ship",
+            "ready to merge",
+            "CANNOT " + "SHIP",
         ),
     ),
     Scenario(
         scenario_id="merge-and-parent-sync",
         user_request=(
-            "Ship Jira child ticket PROJ-4. PR #77 is linked, required checks are "
+            "Check readiness and perform approved actions for Jira child ticket PROJ-4. PR #77 is linked, required checks are "
             "passing, merge is explicitly approved, and PROJ-4 is in Code Review. "
-            "Its parent Epic PROJ-1 has children PROJ-4 and PROJ-5; PROJ-5 is already Done, "
-            "so after PROJ-4 ships there will be no non-final child tickets."
+            "The intended actions are merge PR #77 and move PROJ-4 to Done. Its parent Epic "
+            "PROJ-1 has children PROJ-4 and PROJ-5; PROJ-5 is already Done, so after PROJ-4 "
+            "is done there will be no non-final child tickets."
         ),
         criteria=(
             SemanticCriterion(
-                "allows_shipping_when_gates_pass",
-                "The response treats the ticket as shippable because it is in a review state, checks pass, and merge is approved.",
+                "allows_readiness_when_gates_pass",
+                "The response treats the PR and ticket as ready because the ticket is in a review state, checks pass, and merge is approved.",
             ),
             SemanticCriterion(
                 "moves_child_to_final_state",
-                "The response says to merge or ship the PR and move child ticket PROJ-4 to a final state, or in dry-run mode lists those exact mutations as the actions that would be performed.",
+                "The response says to merge the PR and move child ticket PROJ-4 to a final state, or in dry-run mode lists those exact mutations as the actions that would be performed.",
             ),
             SemanticCriterion(
                 "rereads_hierarchy",
@@ -134,13 +137,13 @@ def main() -> int:
         print_usage()
         return 0
 
-    agent_command = os.environ.get("SHIP_TICKET_AGENT_COMMAND", "").strip()
+    agent_command = os.environ.get("VERIFY_PR_READINESS_AGENT_COMMAND", "").strip()
     if not agent_command:
         print_usage()
-        print("FAIL: SHIP_TICKET_AGENT_COMMAND is required", file=sys.stderr)
+        print("FAIL: VERIFY_PR_READINESS_AGENT_COMMAND is required", file=sys.stderr)
         return 1
 
-    scenario_filter = os.environ.get("SHIP_TICKET_SCENARIO", "").strip()
+    scenario_filter = os.environ.get("VERIFY_PR_READINESS_SCENARIO", "").strip()
     scenarios = [scenario for scenario in SCENARIOS if not scenario_filter or scenario.scenario_id == scenario_filter]
     if not scenarios:
         print(f"FAIL: no scenario matched {scenario_filter!r}", file=sys.stderr)
@@ -157,26 +160,26 @@ def main() -> int:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print(f"PASS: {len(scenarios)} ship-ticket behavioral scenarios")
+    print(f"PASS: {len(scenarios)} verify-pr-readiness behavioral scenarios")
     return 0
 
 
 def print_usage() -> None:
     print(
         """Usage:
-  SHIP_TICKET_AGENT_COMMAND='<command reading stdin>' \\
-    python3 tests/ship-ticket/ship_ticket_behavioral_pressure.py
+  VERIFY_PR_READINESS_AGENT_COMMAND='<command reading stdin>' \\
+    python3 tests/verify-pr-readiness/verify_pr_readiness_behavioral_pressure.py
 
 Optional:
-  SHIP_TICKET_SCENARIO='<scenario-id>' to run one scenario.
+  VERIFY_PR_READINESS_SCENARIO='<scenario-id>' to run one scenario.
 """
     )
 
 
 def make_prompt(skill: str, scenario: Scenario) -> str:
-    return f"""You are pressure-testing whether an agent follows a ticket shipping skill.
+    return f"""You are pressure-testing whether an agent follows a PR readiness skill.
 
-Loaded skill: ship-ticket
+Loaded skill: verify-pr-readiness
 
 <skill>
 {skill}
@@ -185,7 +188,7 @@ Loaded skill: ship-ticket
 User request:
 {scenario.user_request}
 
-Do not perform external mutations. Return only the shipping decision and report
+Do not perform external mutations. Return only the readiness decision and report
 shape the agent should use. If gates pass, list the exact mutations that would
 be performed. Keep it concise.
 """
@@ -218,7 +221,7 @@ def check_response(scenario: Scenario, response: str, judge_command: str) -> Non
             response=response,
             criteria=scenario.criteria,
             context=(
-                "Loaded skill under test: ship-ticket. Judge ticket-shipping "
+                "Loaded skill under test: verify-pr-readiness. Judge PR readiness "
                 "gates, mutation boundaries, and parent ticket synchronization."
             ),
         )

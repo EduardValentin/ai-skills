@@ -14,8 +14,8 @@ DOWNSTREAM_SKILL_IDS = (
     "multi-ticket-work",
     "implement-unit-of-work",
     "qa-verification",
-    "ship-ticket",
-    "frontend-ui-review",
+    "verify-pr-readiness",
+    "ui-verification",
     "codebase-scope-map",
 )
 
@@ -71,6 +71,12 @@ def check_delegated_execution_contract(skill: str) -> None:
     assert_contains(skill, "Use this skill as the main-agent workflow for working one implementation ticket")
     assert_contains(skill, "If the ticket is a child issue, subtask, story under an Epic")
     assert_contains(skill, "read the parent tickets or Epic descriptions too")
+    assert_contains(skill, "For UI-facing or mixed tickets, UI/UX verification depends on project type")
+    assert_contains(skill, "Personal projects / Linear tickets")
+    assert_contains(skill, "production app matches the runnable reference app")
+    assert_contains(skill, "Job projects / Jira tickets")
+    assert_contains(skill, "visual consistency with the rest of the application")
+    assert_contains(skill, "sizing, spacing, component usage")
     assert_contains(skill, "After plan approval, execute the ticket as an orchestration loop")
     assert_contains(skill, "repeat until no verifier reports findings")
     assert_contains(skill, "CANNOT_VERIFY")

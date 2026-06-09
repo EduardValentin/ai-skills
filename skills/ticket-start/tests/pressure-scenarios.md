@@ -19,8 +19,8 @@ Expected behavior:
 
 Failure signals:
 - Says the user did not authorize Scoping or delegated execution.
-- Performs local scoping, implementation, QA, UI/UX, or Ship mutations as a substitute for routed skills.
-- Advances to Ship while saying local checks "effectively covered" missing delegated verification reports.
+- Performs local scoping, implementation, QA, UI/UX, or PR/ticket mutations as a substitute for routed skills.
+- Advances to PR readiness while saying local checks "effectively covered" missing delegated verification reports.
 
 ## Scenario 2 - Requirements/Design Must Precede Plan
 
@@ -59,7 +59,7 @@ Expected behavior:
 Failure signals:
 - Implements, reviews, tests, QA-verifies, UI/UX-verifies, or fixes findings inline.
 - Collapses implementation, review, QA, and UI/UX into one generic "looks good" step.
-- Claims execution is ready for Ship without reconciled status-table evidence.
+- Claims execution is ready for PR readiness without reconciled status-table evidence.
 
 ## Scenario 4 - Visual Rule Stays, UI/UX Detail Routes Away
 
@@ -77,9 +77,9 @@ Expected behavior:
 Failure signals:
 - Loads or paraphrases the full visual verification protocol in the main `ticket-start` context.
 - Accepts checks against hidden templates, implementation proxy components, storybook-only renders, static mockups, or source inspection as visual verification.
-- Advances to Ship with missing UI/UX verifier evidence for UI-facing work.
+- Advances to PR readiness with missing UI/UX verifier evidence for UI-facing work.
 
-## Scenario 5 - Ship Routes To Ship Gate
+## Scenario 5 - PR Readiness Routes To Readiness Gate
 
 Prompt:
 
@@ -95,7 +95,7 @@ Expected behavior:
 Failure signals:
 - Runs PR or ticket mutations from `ticket-start`.
 - Checks only the Validate job or local tests in the router.
-- Claims Ship completion without delegated readiness output.
+- Claims PR readiness completion without delegated readiness output.
 
 ## Scenario 6 - Worktree Must Start From Latest Origin Main
 

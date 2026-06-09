@@ -95,11 +95,11 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "ship-ticket-pr-checks"
-skill = "ship-ticket"
+id = "verify-pr-readiness-pr-checks"
+skill = "verify-pr-readiness"
 prompt = """
 Implementation and review are complete; do not review the diff. Run only the
-ticket-linked PR shipping handoff for PR #42 linked to Linear ticket APP-123
+ticket-linked PR readiness check for PR #42 linked to Linear ticket APP-123
 from In Review: check required PR checks and report whether it can be marked
 ready, merged, and transitioned to Done.
 """
@@ -107,8 +107,8 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "ship-ticket-merge-approval"
-skill = "ship-ticket"
+id = "verify-pr-readiness-merge-approval"
+skill = "verify-pr-readiness"
 prompt = """
 Merge the PR for Jira ticket PROJ-44 after confirming the ticket is in Code
 Review, required checks pass, and I explicitly approve the merge; then sync the
@@ -118,10 +118,10 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "ship-ticket-parent-sync"
-skill = "ship-ticket"
+id = "verify-pr-readiness-parent-sync"
+skill = "verify-pr-readiness"
 prompt = """
-Ship Jira child ticket PROJ-4. After PR checks pass and merge is approved, move
+Check readiness for Jira child ticket PROJ-4. After PR checks pass and merge is approved, move
 the child to Done and, if all sibling tickets under parent PROJ-1 are also done,
 move the parent ticket to Done too.
 """
@@ -146,22 +146,22 @@ prototype/reference elements where relevant, affected surfaces, conflict points,
 forbidden_terms = []
 
 [[scenario]]
-id = "frontend-ui-review-runnable-reference"
-skill = "frontend-ui-review"
-prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before ship."
+id = "ui-verification-runnable-reference"
+skill = "ui-verification"
+prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before release."
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
-id = "frontend-ui-review-production-consistency"
-skill = "frontend-ui-review"
+id = "ui-verification-production-consistency"
+skill = "ui-verification"
 prompt = "There is no prototype for this frontend change; review whether the new settings panel is visually consistent with the existing production settings and profile panels."
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
-id = "frontend-ui-review-delegated-uiux-gate"
-skill = "frontend-ui-review"
+id = "ui-verification-delegated-uiux-gate"
+skill = "ui-verification"
 prompt = """
 You are a UI/UX verification subagent in a ticket workflow.
 Review the implemented frontend UI against the runnable prototype/reference app
@@ -169,6 +169,17 @@ for visual parity. Build the matched-element inventory from the affected surface
 map, approved artifacts, changed UI files, and live DOM inspection. Compare DOM
 computed styles and bounding rects for every row, check keyboard, focus, contrast,
 and accessibility, then return a structured verdict and findings.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
+
+[[scenario]]
+id = "ui-verification-missing-inventory-scoping"
+skill = "ui-verification"
+prompt = """
+Verify this frontend change against the ticket description and diff. No affected-element
+inventory was provided, so scope the visible element inventory first from the diff,
+ticket description, changed UI files, routes, and reference or production comparison basis.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
@@ -207,8 +218,9 @@ forbidden_terms = []
 id = "bitbucket-pr-ui-test"
 skill = "manage-bitbucket-pr"
 prompt = """
-Verify the UI changes in the current PR. The repo remote is
-https://bitbucket.org/acme/widget.git and the PR branch is feature/auth-panel.
+In the Bitbucket Cloud repo acme/widget, find the pull request for branch
+feature/auth-panel from remote https://bitbucket.org/acme/widget.git, read its
+PR metadata and comments, and report the Bitbucket PR details needed before UI testing.
 """
 forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
 

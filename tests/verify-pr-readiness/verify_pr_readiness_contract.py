@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for ship-ticket."""
+"""Contract checks for verify-pr-readiness."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILL_PATH = REPO_ROOT / "skills" / "ship-ticket" / "SKILL.md"
-OPENAI_METADATA = REPO_ROOT / "skills" / "ship-ticket" / "agents" / "openai.yaml"
+SKILL_PATH = REPO_ROOT / "skills" / "verify-pr-readiness" / "SKILL.md"
+OPENAI_METADATA = REPO_ROOT / "skills" / "verify-pr-readiness" / "agents" / "openai.yaml"
 TICKET_START = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 MULTI_TICKET_WORK = REPO_ROOT / "skills" / "multi-ticket-work" / "SKILL.md"
 
@@ -20,23 +20,23 @@ def main() -> int:
         metadata = OPENAI_METADATA.read_text(encoding="utf-8")
         check_skill_contract(skill)
         check_metadata(metadata)
-        check_parent_skills_do_not_hardcode_ship_skill()
+        check_parent_skills_do_not_hardcode_readiness_skill()
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ship-ticket contract")
+    print("PASS: verify-pr-readiness contract")
     return 0
 
 
 def check_skill_contract(skill: str) -> None:
     required_terms = (
-        "name: ship-ticket",
-        "Use when preparing a ticket-linked PR for shipping or release handoff after review is complete",
-        "transition Jira/Linear tickets to Done",
+        "name: verify-pr-readiness",
+        "Use when checking whether a ticket-linked PR is ready",
+        "Jira/Linear transitions",
         "Not for code review",
-        "prepare a ticket PR for shipping",
-        "CANNOT SHIP",
+        "check readiness",
+        "NOT_READY",
         "Jira or Linear",
         "review state",
         "In Progress",
@@ -46,12 +46,14 @@ def check_skill_contract(skill: str) -> None:
         "does not judge how that work was produced",
         "does not",
         "delegate fixes",
+        "When blocked, perform no partial PR, branch, tracker, release, or merge mutations.",
         "parent or Epic",
         "child or sibling ticket statuses",
         "non-final state",
+        "# PR readiness report",
     )
     for term in required_terms:
-        assert_contains(skill, term, "ship-ticket skill")
+        assert_contains(skill, term, "verify-pr-readiness skill")
 
     forbidden_terms = (
         "readiness ledger",
@@ -66,18 +68,18 @@ def check_skill_contract(skill: str) -> None:
         "UIUX",
     )
     for term in forbidden_terms:
-        assert_not_contains(skill, term, "ship-ticket skill")
+        assert_not_contains(skill, term, "verify-pr-readiness skill")
 
 
 def check_metadata(metadata: str) -> None:
-    for term in ("Ship Ticket", "$ship-ticket", "Jira or Linear"):
-        assert_contains(metadata, term, "ship-ticket metadata")
+    for term in ("Verify PR Readiness", "$verify-pr-readiness", "Jira/Linear"):
+        assert_contains(metadata, term, "verify-pr-readiness metadata")
 
 
-def check_parent_skills_do_not_hardcode_ship_skill() -> None:
+def check_parent_skills_do_not_hardcode_readiness_skill() -> None:
     for path in (TICKET_START, MULTI_TICKET_WORK):
         skill = path.read_text(encoding="utf-8")
-        assert_not_contains(skill, "ship-ticket", f"{path.relative_to(REPO_ROOT)}")
+        assert_not_contains(skill, "verify-pr-readiness", f"{path.relative_to(REPO_ROOT)}")
 
 
 def assert_contains(haystack: str, needle: str, context: str) -> None:

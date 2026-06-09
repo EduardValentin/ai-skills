@@ -1,4 +1,0 @@
-interface:
-  display_name: "Frontend UI Review"
-  short_description: "Verify frontend visual parity or consistency"
-  default_prompt: "Use $frontend-ui-review to review this frontend change for parity against a reference or consistency with production analogs."

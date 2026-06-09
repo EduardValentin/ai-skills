@@ -14,7 +14,7 @@ Produce a compact, read-only map of the code surface relevant to a requested cha
 - A task needs implementation scoping before planning or coding.
 - A downstream reader needs a token-efficient map of relevant code.
 - A ticket, PRD, bug report, or feature brief names behavior but not exact files.
-- A UI task has a runnable prototype/reference app and needs prototype element locators for later frontend UI review.
+- A UI task has a runnable prototype/reference app and needs prototype element locators for later UI verification.
 - A caller needs a strict, reusable input/output contract for scoping handoff.
 
 ## Role

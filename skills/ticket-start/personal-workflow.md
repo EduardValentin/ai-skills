@@ -29,7 +29,7 @@ The scoped slices feed directly into the Scoping subagent's input set.
 
 ## React Reference App
 
-If `designs/` is a runnable React app, treat the reference app as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior. During Verify, the UI/UX subagent receives a self-contained frontend UI review request in parity mode.
+If `designs/` is a runnable React app, treat the reference app as the absolute source of truth for the feature's UI, UX, styling, layout, animation, and front-end behavior. During Verify, the UI/UX subagent receives a self-contained UI verification request in parity mode.
 
 Identify up front:
 

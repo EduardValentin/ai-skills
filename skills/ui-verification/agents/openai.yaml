@@ -1,0 +1,4 @@
+interface:
+  display_name: "UI Verification"
+  short_description: "Verify frontend visual parity or consistency"
+  default_prompt: "Use $ui-verification to review this frontend change for parity against a reference or consistency with production analogs."

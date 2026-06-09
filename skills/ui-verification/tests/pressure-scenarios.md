@@ -1,17 +1,17 @@
-# Frontend UI Review Pressure Scenarios
+# UI Verification Pressure Scenarios
 
-Run these with a fresh agent after changing `frontend-ui-review`. They target rationalizations that make visual review collapse into screenshots, summaries, or "close enough" design judgment. Do not leak the expected behavior into the test prompt.
+Run these with a fresh agent after changing `ui-verification`. They target rationalizations that make visual review collapse into screenshots, summaries, or "close enough" design judgment. Do not leak the expected behavior into the test prompt.
 
 ## Scenario 1 - Reference Comparison Without Explicit Skill Name
 
 Prompt:
 
 ```text
-Compare the implemented React dashboard against the runnable designs/ reference app before ship. I care about every visible element matching the prototype, not just the obvious cards.
+Compare the implemented React dashboard against the runnable designs/ reference app before release. I care about every visible element matching the prototype, not just the obvious cards.
 ```
 
 Expected behavior:
-- Loads `frontend-ui-review` from the request wording even though the skill is not named.
+- Loads `ui-verification` from the request wording even though the skill is not named.
 - Uses parity mode because a runnable reference app is present.
 - Builds or verifies a matched-element inventory and uses DOM computed-style plus bounding-rect evidence.
 - Treats screenshots as secondary evidence.
@@ -30,7 +30,7 @@ Ticket-start delegated the UI/UX gate to you. You received production and protot
 ```
 
 Expected behavior:
-- Picks up the reusable frontend UI review protocol automatically from the delegated UI/UX prompt wording.
+- Picks up the reusable UI verification protocol automatically from the delegated UI/UX prompt wording.
 - Uses parity mode because production and prototype URLs are present.
 - Builds the matched-element inventory from the affected surface map, approved artifacts, changed UI files, and live DOM inspection.
 - Fills `font-*`, `color/bg`, `box`, `layout`, `size`, and `verdict` cells with DOM evidence for every in-scope row.
@@ -51,7 +51,7 @@ There is no prototype for this UI change. Review whether the new settings panel 
 ```
 
 Expected behavior:
-- Loads `frontend-ui-review` from the no-reference visual consistency wording.
+- Loads `ui-verification` from the no-reference visual consistency wording.
 - Uses consistency mode because no runnable reference is present.
 - Builds a matched-element inventory by pairing changed visible elements with credible production siblings or analogs.
 - Returns BLOCKED or degraded evidence for rows where no credible analog can be identified instead of inventing a basis.
@@ -61,7 +61,25 @@ Failure signals:
 - Invents a prototype/reference from production analogs.
 - Returns CLEAN without DOM evidence for the implemented elements and their analogs.
 
-## Scenario 4 - Browser Capability Degradation
+## Scenario 4 - Missing Inventory Requires Scoping
+
+Prompt:
+
+```text
+Verify this frontend change against the ticket description and diff. No affected-element inventory was provided.
+```
+
+Expected behavior:
+- Requires an affected-element inventory before normal verification starts.
+- Supplies a scoping agent to produce the inventory from the ticket description, acceptance criteria, diff or changed UI files, routes/states, and comparison basis.
+- Uses the scoped inventory as the starting point, then refines it with live DOM inspection.
+
+Failure signals:
+- Starts normal visual verification with no inventory.
+- Invents a visual inventory from screenshots or impressions alone.
+- Asks the caller to manually construct the inventory instead of using scoping support.
+
+## Scenario 5 - Browser Capability Degradation
 
 Prompt:
 
@@ -79,7 +97,7 @@ Failure signals:
 - Claims parity is verified without naming the degraded evidence.
 - Stops without explaining what capability or input is missing.
 
-## Scenario 5 - Concrete Drift Is Actionable
+## Scenario 6 - Concrete Drift Is Actionable
 
 Prompt:
 

@@ -92,7 +92,7 @@ def check_response(response: str, judge_command: str) -> None:
         "readiness ledger",
         "implement-unit-of-work",
         "qa-verification",
-        "frontend-ui-review",
+        "ui-verification",
         "codebase-scope-map",
     )
     assert_forbidden_terms(response, forbidden, "multi-ticket dispatch workflow")

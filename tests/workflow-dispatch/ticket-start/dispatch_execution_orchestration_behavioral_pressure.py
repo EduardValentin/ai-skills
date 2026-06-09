@@ -60,7 +60,7 @@ Loaded skill: ticket-start
 User request:
 The requirements/design artifact and implementation plan are approved for a mixed
 backend and UI ticket. Return only the delegated execution workflow actions the
-main agent must take before Ship.
+main agent must take before PR readiness or handoff.
 
 Do not execute the ticket. Do not call tools.
 
@@ -73,7 +73,7 @@ self-contained and do not name downstream skill identifiers.
 
 
 def check_response(response: str, judge_command: str) -> None:
-    forbidden = ("multi-ticket-work", "qa-verification", "frontend-ui-review", "implement-unit-of-work")
+    forbidden = ("multi-ticket-work", "qa-verification", "ui-verification", "implement-unit-of-work")
     try:
         assert_forbidden_terms(response, forbidden, "execution orchestration dispatch")
         judge_response(
@@ -81,7 +81,7 @@ def check_response(response: str, judge_command: str) -> None:
             scenario_id="ticket-start-delegated-execution-sequence",
             scenario_prompt=(
                 "Requirements/design artifact and implementation plan are approved for a mixed backend/UI ticket; "
-                "return delegated execution workflow actions before Ship."
+                "return delegated execution workflow actions before PR readiness or handoff."
             ),
             response=response,
             criteria=(

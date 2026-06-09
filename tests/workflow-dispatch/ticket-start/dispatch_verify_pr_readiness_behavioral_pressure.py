@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral dispatch tests for ticket-start -> ticket shipping capability."""
+"""Behavioral dispatch tests for ticket-start -> PR readiness capability."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def main() -> int:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches ticket shipping capability behaviorally")
+    print("PASS: ticket-start dispatches PR readiness capability behaviorally")
     return 0
 
 
@@ -64,23 +64,23 @@ request so auto-discovery can select the right skill.
 
 
 def check_response(response: str, agent_command: str, judge_command: str) -> None:
-    forbidden = ("ship-ticket", "multi-ticket-work", "implement inline", "perform shipping inline", "merge now")
-    assert_forbidden_terms(response, forbidden, "ticket shipping dispatch")
+    forbidden = ("verify-pr-readiness", "multi-ticket-work", "implement inline", "perform readiness inline", "merge now")
+    assert_forbidden_terms(response, forbidden, "PR readiness dispatch")
     judge_response(
         judge_command=judge_command,
-        scenario_id="ticket-start-dispatch-ship-ticket",
+        scenario_id="ticket-start-dispatch-verify-pr-readiness",
         scenario_prompt=(
-            "The ticket work is complete and PR/ticket shipping is requested, but checks "
+            "The ticket work is complete and PR/ticket readiness is requested, but checks "
             "must be re-read and explicit merge approval is missing."
         ),
         response=response,
         criteria=(
             SemanticCriterion(
-                "delegates_ticket_shipping",
-                "The response delegates PR and ticket shipping readiness evaluation instead of performing merge or ticket mutations inline.",
+                "delegates_pr_readiness",
+                "The response delegates PR and ticket readiness evaluation instead of performing merge or ticket mutations inline.",
             ),
             SemanticCriterion(
-                "shipping_request_is_self_contained",
+                "readiness_request_is_self_contained",
                 "The delegated request includes PR or branch, current tracker state, intended tracker state, required checks expectation, and explicit merge approval state.",
             ),
             SemanticCriterion(
@@ -89,12 +89,12 @@ def check_response(response: str, agent_command: str, judge_command: str) -> Non
             ),
             SemanticCriterion(
                 "does_not_name_downstream_skill",
-                "The response describes the shipping capability without naming a downstream skill identifier.",
+                "The response describes the PR readiness capability without naming a downstream skill identifier.",
             ),
         ),
-        context="Loaded parent skill under test: ticket-start. Judge shipping dispatch behavior, not exact wording.",
+        context="Loaded parent skill under test: ticket-start. Judge PR readiness dispatch behavior, not exact wording.",
     )
-    assert_auto_discovers(agent_command, response, "ship-ticket")
+    assert_auto_discovers(agent_command, response, "verify-pr-readiness")
 
 
 if __name__ == "__main__":

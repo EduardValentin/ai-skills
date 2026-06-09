@@ -14,6 +14,11 @@ Prefer subagent orchestration for implementation, self-review/review, QA verific
 A personal project is a project that uses GitHub for code versioning and Linear for ticket tracking.
 A job project is a project that uses Bitbucket for code versioning and Jira for ticket tracking.
 
+For UI-facing or mixed tickets, UI/UX verification depends on project type:
+
+- Personal projects / Linear tickets: verify the production app matches the runnable reference app for the changed user-visible surfaces and every visually meaningful changed state.
+- Job projects / Jira tickets: verify visual consistency with the rest of the application and similar existing elements, especially sizing, spacing, component usage, typography, state styling, and interaction patterns.
+
 ## When To Use
 
 - The user asks to start, work on, build, or implement one ticket.
@@ -90,13 +95,13 @@ When returning an execution action list, make the status table its own first act
 
 Do not mark a work unit clean because local tests passed. It is clean only when the applicable implementation, review, QA, UI/UX or backend-only skip, findings, and integration rows are resolved.
 
-## Step 5 - Ship Or Handoff
+## Step 5 - PR Readiness Or Handoff
 
-When the work is ready for PR, tracker, release, or merge action, delegate a self-contained shipping request instead of performing state changes inline. Include the current PR or branch, current tracker and PR state, intended shipping action, completed status table, verifier summary, and explicit merge-approval state.
+When the work is ready for PR, tracker, release, or merge action, delegate a self-contained PR readiness request instead of performing state changes inline. Include the current PR or branch, current tracker and PR state, intended PR or tracker action, completed status table, verifier summary, and explicit merge-approval state.
 
-When returning action lists, use a capability phrase like `ticket-linked PR shipping handoff` and explicitly copy any known current tracker state, intended tracker state, and whether merge approval is present or missing. Put known state values in the request itself, for example `current tracker state is In Review; intended tracker state is Done`. Do not leave known state values for the shipping handoff to rediscover.
+When returning action lists, use a capability phrase like `ticket-linked PR readiness check` and explicitly copy any known current tracker state, intended tracker state, and whether merge approval is present or missing. Put known state values in the request itself, for example `current tracker state is In Review; intended tracker state is Done`. Do not leave known state values for the readiness handoff to rediscover.
 
-Relay the shipping result to the user. If shipping cannot proceed, report the blocker without partially changing PR, branch, tracker, release, or merge state.
+Relay the readiness result to the user. If readiness cannot be confirmed, report the blocker without partially changing PR, branch, tracker, release, or merge state.
 
 ## Final Report
 

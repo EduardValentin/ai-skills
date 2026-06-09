@@ -25,7 +25,7 @@ def main() -> int:
 
 
 def check_uiux_contract(skill: str) -> None:
-    assert_not_contains(skill, "frontend-ui-review")
+    assert_not_contains(skill, "ui-verification")
 
     assert_not_contains(skill, "Do not accept template/source inspection")
     assert_not_contains(skill, "proxy-component screenshots")

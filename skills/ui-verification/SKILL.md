@@ -1,9 +1,9 @@
 ---
-name: frontend-ui-review
+name: ui-verification
 description: Use when reviewing implemented frontend UI for visual parity against a runnable prototype/reference or visual consistency against production analogs, including accessibility states or scoped reruns after visual findings.
 ---
 
-# Frontend UI Review
+# UI Verification
 
 ## Overview
 
@@ -39,6 +39,12 @@ Treat prior evidence as context, not as gate completion.
 
 Important states means every visually meaningful user-visible state named by the task, approved artifacts, runnable reference, changed UI, or adjacent feature surface. Hidden templates, implementation-only component variants, and proxy render targets do not count as state coverage.
 
+## Inventory Scoping
+
+UI verification requires an affected-element inventory before normal verification starts.
+
+If the caller did not provide an affected-element or matched-element inventory, a scoping agent must be supplied to produce one from the ticket description, acceptance criteria, approved artifacts, diff or changed UI files, routes and states, and the reference or production comparison basis. The verifier may refine the scoped inventory during live DOM inspection, but must not skip the scoping step or invent an inventory from visual impressions alone.
+
 ## Mode Selection
 
 - **Parity mode**: use when a runnable prototype, reference app, design implementation, or `designs/` React app is available. The reference is the visual source of truth.
@@ -48,14 +54,14 @@ If the caller does not name a mode, choose parity when a runnable reference URL/
 
 ## Browser Bootstrap
 
-Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the evidence status **degraded** and do not claim a normal CLEAN verdict from visual impression alone. If even that fallback cannot run, return `Frontend UI review cannot proceed` with the blocker and required input.
+Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the evidence status **degraded** and do not claim a normal CLEAN verdict from visual impression alone. If even that fallback cannot run, return `UI verification cannot proceed` with the blocker and required input.
 
 ## Output Format
 
 Return Markdown:
 
 ```markdown
-# Frontend UI review — <task or surface>
+# UI verification — <task or surface>
 
 ## Verdict
 - [ ] CLEAN — no visual or accessibility findings
@@ -103,7 +109,7 @@ Any visual finding flips the verdict to FINDINGS. Do not create a "recommendatio
 Use when a runnable prototype/reference app exists.
 
 1. Start or open both production and reference apps. Match route, state, viewport, device scale, and browser zoom before each comparison.
-2. Build the matched-element inventory from the caller-supplied affected surface map if available, prototype/reference rows, changed UI files, approved artifacts, and live DOM inspection. Do not ask the caller to prebuild it.
+2. Use the supplied inventory, or the scoped inventory produced from the ticket description and diff, as the starting matched-element inventory. Refine it with prototype/reference rows, changed UI files, approved artifacts, and live DOM inspection. Do not ask the caller to prebuild it.
 3. For each inventory row and state, locate the rendered DOM atoms in both apps, capture element-level screenshots, evaluate `scripts/extract-element-style.browser.js`, fill every computed-style cell, and set verdict to MATCH, DRIFT, or MISSING.
 4. Compare font, color/background, padding/margin/border/radius/shadow/outline, display/flex/gap/position, width/height, and transform. Different numbers mean rendered drift unless an approved artifact explicitly accepted the divergence.
 5. Compare parent and sibling geometry with bounding rects, especially for rows sharing a parent declaration.
@@ -117,7 +123,7 @@ Parity mode is clean only when the inventory covers caller-supplied affected sur
 Use when there is no runnable reference and the implemented UI should fit existing production patterns.
 
 1. Start or open the production app and any relevant analog routes/states. Match viewport, device scale, and browser zoom before comparing.
-2. Build the matched-element inventory from the affected surface map if available, changed UI files, live DOM inspection, reusable component usage, and credible production sibling or analog elements.
+2. Use the supplied inventory, or the scoped inventory produced from the ticket description and diff, as the starting matched-element inventory. Refine it with changed UI files, live DOM inspection, reusable component usage, and credible production sibling or analog elements.
 3. For each implemented element, pair it with the closest production analog by role and purpose: same component family, same route region, same interaction pattern, or same documented token/component contract.
 4. Extract DOM computed styles and bounding rects for both the implemented element and its analog. Fill every inventory cell; do not rely on "looks consistent" prose.
 5. Treat unexplained differences in typography, spacing, color, borders, radii, shadow, focus style, density, or responsive geometry as findings when they break the local production pattern.
@@ -147,7 +153,8 @@ After fixes, rerun only the affected rows and affected states unless the fix tou
 - Accepting hidden templates, implementation proxies, storybook-only renders, static mockups, or source inspection as substitutes for the integrated rendered surface the user actually sees.
 - Skipping DOM evaluation because screenshots "look the same."
 - Accepting or returning a report with blank computed-style cells for in-scope rows.
-- Asking the caller to construct the matched-element inventory for you.
+- Starting normal verification without a caller-supplied inventory or a scoped inventory produced from the ticket description and diff.
+- Asking the caller to construct the matched-element inventory instead of using available scoping support.
 - Inventing a prototype, reference, or production analog when none is available.
 - Treating local design-system preferences as a reason to override parity mode's runnable reference.
 - Asking low-value questions whose answer is already determined by the comparison basis, approved artifacts, or concrete visual finding.

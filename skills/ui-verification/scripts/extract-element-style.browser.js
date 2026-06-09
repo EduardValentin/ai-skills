@@ -2,7 +2,7 @@
 //
 // Evaluate this in the page against a CSS selector for the element being
 // inspected. It returns the computed-style and bounding-rect fields needed to
-// fill the frontend-ui-review matched-element inventory.
+// fill the ui-verification matched-element inventory.
 
 ((selector) => {
   const el = document.querySelector(selector);
