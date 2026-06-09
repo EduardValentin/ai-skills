@@ -54,7 +54,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "delegates_execution_and_verification_loop",
-                "The response routes implementation, independent review, QA, UI/UX where applicable, scoped fixes, and reruns to delegated capabilities instead of doing them inline.",
+                "The response routes implementation to implementer subagents, then routes independent review, QA, UI/UX where applicable, scoped fixes, and reruns instead of doing them inline.",
             ),
             SemanticCriterion(
                 "defines_uiux_verification_by_project_type",
@@ -65,8 +65,8 @@ SCENARIOS = (
                 "The response describes compact context included in delegated requests, such as ticket/AC, approved artifacts, scope/codebase context, workflow or branch state, and UI/reference context when relevant.",
             ),
             SemanticCriterion(
-                "methodology_boundary",
-                "The response treats ticket-start as defining ticket-specific gates and routing, without prescribing detailed brainstorming, plan-writing, subagent execution, or code-review mechanics.",
+                "execution_order",
+                "The response preserves the ticket work order: implement first, verify through independent review plus QA plus UI/UX when applicable, aggregate findings, delegate scoped fixes, rerun affected verification, then readiness.",
             ),
             SemanticCriterion(
                 "readiness_requires_resolved_reports",
@@ -92,6 +92,8 @@ SCENARIOS = (
             "two-stage review",
             "spec compliance reviewer",
             "code quality reviewer",
+            "does not define",
+            "does not prescribe",
         ),
     ),
 )
@@ -148,7 +150,8 @@ User request:
 
 Do not execute the ticket. Return a concise routing plan only. It must explain:
 - how ticket-start stays the intake and routing orchestrator,
-- how implementation, review, QA, UI/UX, scoped fixes, and reruns are routed without prescribing detailed methodology mechanics,
+- how implementation begins with implementer subagents in a strategy that minimizes dependencies and maximizes throughput and quality,
+- the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, and readiness,
 - how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,
 - which compact context ticket-start forwards,
 - how returned reports are reconciled before PR readiness or handoff.

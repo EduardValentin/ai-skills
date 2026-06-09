@@ -25,15 +25,18 @@ def main() -> int:
 
 def check_contract(skill: str) -> None:
     assert_contains(skill, "## Step 4 - Route Execution And Verification")
-    assert_contains(skill, "Let the agent harness and active methodology skills decide the exact subagent strategy")
-    assert_contains(skill, "implementation for the approved plan")
-    assert_contains(skill, "independent review against the ticket")
-    assert_contains(skill, "QA verification against acceptance-criteria behavior")
-    assert_contains(skill, "UI/UX verification for UI-facing or mixed work")
+    assert_contains(skill, "implementation begins by delegating work to implementer subagents")
+    assert_contains(skill, "minimize dependencies and maximize throughput and quality of work")
+    assert_contains(skill, "Respect this ticket sequence")
+    assert_contains(skill, "Delegate implementation for the approved plan")
+    assert_contains(skill, "Delegate independent review")
+    assert_contains(skill, "Delegate QA verification")
+    assert_contains(skill, "delegate UI/UX verification")
+    assert_contains(skill, "Aggregate findings from independent review, QA, and UI/UX verification")
     assert_contains(skill, "Personal projects / Linear tickets")
     assert_contains(skill, "Job projects / Jira tickets")
     assert_contains(skill, "CANNOT_VERIFY")
-    assert_contains(skill, "scoped fixes for verifier findings")
+    assert_contains(skill, "Delegate scoped fixes")
     assert_contains(skill, "Do not route the ticket to PR readiness")
     assert_not_contains(skill, "multi-ticket-work")
     assert_not_contains(skill, "implement-unit-of-work")
@@ -41,6 +44,10 @@ def check_contract(skill: str) -> None:
     assert_not_contains(skill, "qa-verification")
     assert_not_contains(skill, "ui-verification")
     assert_not_contains(skill, "QA mode (`backend` / `ui` / `mixed` from diff)")
+    assert_not_contains(skill, "does not define")
+    assert_not_contains(skill, "does not prescribe")
+    assert_not_contains(skill, "Let the agent harness")
+    assert_not_contains(skill, "active methodology skills")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

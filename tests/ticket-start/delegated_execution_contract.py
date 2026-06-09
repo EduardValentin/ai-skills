@@ -17,6 +17,7 @@ DOWNSTREAM_SKILL_IDS = (
     "verify-pr-readiness",
     "ui-verification",
     "codebase-scope-map",
+    "github-interaction",
 )
 
 
@@ -73,6 +74,14 @@ def check_delegated_execution_contract(skill: str) -> None:
         "Initialize a compact work-unit status table",
         "work-unit status table with columns",
         "When returning an execution action list",
+        "does not define",
+        "does not prescribe",
+        "historical context",
+        "detailed method",
+        "active methodology skills",
+        "Let the agent harness",
+        "bot-identity.md",
+        "get-bot-gh-token.sh",
         *DOWNSTREAM_SKILL_IDS,
     )
     for forbidden in forbidden_terms:
@@ -80,8 +89,7 @@ def check_delegated_execution_contract(skill: str) -> None:
 
     assert_contains(skill, "Do not use for multi-ticket workflow intake")
     assert_contains(skill, "Use this skill as the main-agent workflow for working one implementation ticket")
-    assert_contains(skill, "It defines ticket-specific source-of-truth, approval, routing, and reporting gates")
-    assert_contains(skill, "does not define the detailed method for brainstorming, plan writing, implementation, review, QA, UI verification, or PR readiness")
+    assert_contains(skill, "The main agent stays the user-facing orchestrator")
     assert_contains(skill, "If the ticket is a child issue, subtask, story under an Epic")
     assert_contains(skill, "read the parent tickets or Epic descriptions too")
     assert_contains(skill, "check `PRD.md` when the ticket or unit of work adds or changes business rules")
@@ -93,11 +101,19 @@ def check_delegated_execution_contract(skill: str) -> None:
     assert_contains(skill, "Job projects / Jira tickets")
     assert_contains(skill, "visual consistency with the rest of the application")
     assert_contains(skill, "sizing, spacing, component usage")
-    assert_contains(skill, "Run a user-facing alignment phase until the agent and user share a concrete understanding")
-    assert_contains(skill, "ticket-start does not prescribe the plan format or task mechanics")
-    assert_contains(skill, "Let the agent harness and active methodology skills decide the exact subagent strategy")
-    assert_contains(skill, "Read `bot-identity.md` when setup or activation details are needed")
-    assert_contains(skill, "Route these work categories when applicable")
+    assert_contains(skill, "Run a user-facing brainstorming session until the agent and user share a concrete understanding")
+    assert_contains(skill, "trigger implementation-plan writing from that confirmed ticket context")
+    assert_contains(skill, "Get user approval for the implementation plan before coding starts")
+    assert_contains(skill, "implementation begins by delegating work to implementer subagents")
+    assert_contains(skill, "minimize dependencies and maximize throughput and quality of work")
+    assert_contains(skill, "every GitHub write must use the configured GitHub bot identity")
+    assert_contains(skill, "Do not rely on ambient personal GitHub credentials")
+    assert_contains(skill, "Respect this ticket sequence")
+    assert_contains(skill, "Delegate implementation for the approved plan")
+    assert_contains(skill, "Delegate independent review")
+    assert_contains(skill, "Delegate QA verification")
+    assert_contains(skill, "delegate UI/UX verification")
+    assert_contains(skill, "Aggregate findings from independent review, QA, and UI/UX verification")
     assert_contains(skill, "Track returned reports compactly enough")
     assert_contains(skill, "Do not route the ticket to PR readiness until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved")
     assert_contains(skill, "CANNOT_VERIFY")
@@ -109,9 +125,17 @@ def check_delegated_execution_contract(skill: str) -> None:
         for forbidden in DOWNSTREAM_SKILL_IDS:
             assert_not_contains(text, forbidden)
 
-    for removed in ("personal-workflow.md", "job-workflow.md", "verification-fix-loops.md"):
+    for removed in (
+        "personal-workflow.md",
+        "job-workflow.md",
+        "verification-fix-loops.md",
+        "bot-identity.md",
+    ):
         if (SKILL_DIR / removed).exists():
             raise AssertionError(f"ticket-start should not keep stale companion file: {removed}")
+
+    if (SKILL_DIR / "scripts" / "get-bot-gh-token.sh").exists():
+        raise AssertionError("ticket-start should not own the GitHub bot token helper")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

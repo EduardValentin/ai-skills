@@ -7,9 +7,7 @@ description: Use when the user wants to start implementation work from one ticke
 
 ## Purpose
 
-Use this skill as the main-agent workflow for working one implementation ticket from intake to final report. It defines ticket-specific source-of-truth, approval, routing, and reporting gates. It does not define the detailed method for brainstorming, plan writing, implementation, review, QA, UI verification, or PR readiness.
-
-The main agent stays the user-facing orchestrator: it gathers ticket facts, aligns requirements/design with the user, gets approval, routes execution and verification work to appropriate capabilities, reconciles returned reports, and keeps the user informed.
+Use this skill as the main-agent workflow for working one implementation ticket from intake to final report. The main agent stays the user-facing orchestrator: it gathers ticket facts, brainstorms requirements/design with the user, gets approval, routes execution and verification work, reconciles returned reports, and keeps the user informed.
 
 Prefer delegated work for implementation, independent review, QA verification, UI/UX verification, focused fixes, and release checks. If required delegated capability is unavailable, tell the user before replacing it with inline work.
 
@@ -37,7 +35,7 @@ Do not use for multi-ticket workflow intake, pure planning, debugging-only tasks
 - Keep the main session focused on orchestration and user decisions. Do not quietly turn it into the implementer, QA verifier, UI/UX verifier, or release mutator.
 - Keep delegated requests self-contained: ticket facts, acceptance criteria, approved decisions, relevant repo instructions, scope locators, constraints, expected checks, and output expectations.
 - Treat subagent reports as compact evidence, not transcripts. Carry forward locators and summaries so later agents can read surgically.
-- For personal workflows, use the repository's required GitHub write identity before commits, pushes, PR updates, comments, labels, transitions, or merges. Read `bot-identity.md` when setup or activation details are needed. Do not rely on ambient personal credentials for writes.
+- For personal workflows, every GitHub write must use the configured GitHub bot identity. Do not rely on ambient personal GitHub credentials for commits, pushes, PR creation or updates, comments, reviews, labels, or merges.
 
 ## Step 1 - Gather Facts
 
@@ -53,28 +51,30 @@ Do not use for multi-ticket workflow intake, pure planning, debugging-only tasks
 
 Open with a short briefing grounded in the ticket and current repo: what is known, what is ambiguous, likely affected surfaces, relevant designs or product docs, and any conflicts.
 
-Run a user-facing alignment phase until the agent and user share a concrete understanding of the work, boundaries, and success criteria. Keep the discussion grounded in the ticket, parent context, approved artifacts, PRD/design slices, and current codebase facts.
+Run a user-facing brainstorming session until the agent and user share a concrete understanding of the work, boundaries, and success criteria. Keep the discussion grounded in the ticket, parent context, approved artifacts, PRD/design slices, and current codebase facts.
 
-Ask for explicit approval of the requirements/design direction. This approval is separate from implementation-plan approval.
+When the user confirms the shared requirements/design understanding, trigger implementation-plan writing from that confirmed ticket context.
 
 ## Step 3 - Approve The Implementation Plan
 
-Produce an implementation plan from the approved requirements/design direction and ask the user to approve it before coding starts. The plan must be concrete enough to route implementation and verification work, but ticket-start does not prescribe the plan format or task mechanics.
+Get user approval for the implementation plan before coding starts. The plan must be concrete enough to route implementation and verification work.
 
 Do not implement, scaffold, or mutate product code before plan approval.
 
 ## Step 4 - Route Execution And Verification
 
-After plan approval, route the ticket work through delegated capabilities. Let the agent harness and active methodology skills decide the exact subagent strategy, task granularity, review mechanics, and execution sequence.
+After plan approval, implementation begins by delegating work to implementer subagents in the most optimal way to minimize dependencies and maximize throughput and quality of work.
 
-Route these work categories when applicable:
+Respect this ticket sequence:
 
-- implementation for the approved plan
-- independent review against the ticket, acceptance criteria, approved plan, implementation evidence, and diff
-- QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration
-- UI/UX verification for UI-facing or mixed work; for backend-only/non-UI work, record the skip reason
-- scoped fixes for verifier findings
-- reruns of affected verification after fixes
+1. Delegate implementation for the approved plan.
+2. Delegate independent review against the ticket, acceptance criteria, approved plan, implementation evidence, and diff.
+3. Delegate QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
+4. For UI-facing or mixed work, delegate UI/UX verification. For backend-only/non-UI work, record the skip reason.
+5. Aggregate findings from independent review, QA, and UI/UX verification.
+6. Delegate scoped fixes for fixable findings.
+7. Rerun the affected verification after fixes.
+8. Repeat the finding, fix, and rerun loop until all required reports are clean, explicitly blocked, or explicitly out of scope.
 
 If a verifier lacks required tooling or access, it must immediately report `CANNOT_VERIFY` with the reason and missing capability. Record that result, then perform the needed verification in the main session when the main session has the required tooling; otherwise report the blocker.
 
@@ -84,11 +84,9 @@ Track returned reports compactly enough to know what is implemented, reviewed, v
 
 ## Step 5 - PR Readiness Or Handoff
 
-When the work is ready for PR, tracker, release, or merge action, delegate a self-contained PR readiness request instead of performing state changes inline. Include the current PR or branch, current tracker and PR state, intended PR or tracker action, execution and verification summary, and explicit merge-approval state.
+When implementation, review, QA, UI/UX or skip, scoped fixes, and reruns are resolved, delegate a self-contained PR readiness request. Include the ticket, PR or branch, current known tracker/PR state, intended action, execution and verification summary, and merge-approval status.
 
-When returning action lists, use a capability phrase like `ticket-linked PR readiness check` and explicitly copy any known current tracker state, intended tracker state, and whether merge approval is present or missing. Put known state values in the request itself, for example `current tracker state is In Review; intended tracker state is Done`. Do not leave known state values for the readiness handoff to rediscover.
-
-Relay the readiness result to the user. If readiness cannot be confirmed, report the blocker without partially changing PR, branch, tracker, release, or merge state.
+Relay the readiness result to the user. Do not perform PR, branch, tracker, release, or merge mutations inline.
 
 ## Final Report
 
@@ -107,7 +105,7 @@ End with a concise report:
 Stop and recover when:
 
 - ticket, repo, branch, PR, or requirement facts are stale or unavailable but would affect the decision
-- requirements/design approval or implementation-plan approval is skipped
+- confirmed requirements/design understanding or implementation-plan approval is skipped
 - subagent work is silently replaced by inline implementation, QA, UI/UX verification, or release mutation
-- a work unit is called clean while required review, QA, UI/UX, finding, or integration rows are missing
+- PR readiness is requested while required implementation, review, QA, UI/UX, finding, fix, or rerun reports are missing
 - merge or ticket completion is attempted without required checks and explicit user approval

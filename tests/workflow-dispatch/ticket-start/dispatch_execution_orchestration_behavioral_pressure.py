@@ -58,7 +58,7 @@ Loaded skill: ticket-start
 </skill>
 
 User request:
-The requirements/design artifact and implementation plan are approved for a mixed
+The confirmed requirements/design understanding and implementation plan are approved for a mixed
 backend and UI ticket. Return only the delegated execution workflow actions the
 main agent must take before PR readiness or handoff.
 
@@ -80,14 +80,14 @@ def check_response(response: str, judge_command: str) -> None:
             judge_command=judge_command,
             scenario_id="ticket-start-delegated-execution-sequence",
             scenario_prompt=(
-                "Requirements/design artifact and implementation plan are approved for a mixed backend/UI ticket; "
+                "Confirmed requirements/design understanding and implementation plan are approved for a mixed backend/UI ticket; "
                 "return delegated execution workflow actions before PR readiness or handoff."
             ),
             response=response,
             criteria=(
                 SemanticCriterion(
                     "delegates_implementation_without_inline_work",
-                    "The response delegates implementation for the approved work instead of doing it inline.",
+                    "The response begins implementation by delegating work to implementer subagents rather than doing it inline.",
                 ),
                 SemanticCriterion(
                     "delegates_verifiers",
@@ -102,8 +102,8 @@ def check_response(response: str, judge_command: str) -> None:
                     "The response aggregates verifier findings, delegates scoped fixes for fixable findings, and reruns affected verification as needed.",
                 ),
                 SemanticCriterion(
-                    "does_not_prescribe_methodology_mechanics",
-                    "The response does not prescribe fixed status-table columns, a specific subagent topology, or detailed code-review methodology.",
+                    "uses_ordered_ticket_sequence",
+                    "The response follows the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, affected verification reruns, then PR readiness.",
                 ),
                 SemanticCriterion(
                     "readiness_waits_for_resolved_reports",

@@ -66,6 +66,16 @@ and give me the opened PRs with the review order at the end.
 forbidden_terms = []
 
 [[scenario]]
+id = "github-interaction-bot-pr-write"
+skill = "github-interaction"
+prompt = """
+Create a GitHub PR comment for my personal project using the configured GitHub
+App bot identity. Do not post it with my ambient personal gh credentials.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
+
+[[scenario]]
 id = "implement-unit-of-work-approved-code-unit"
 skill = "implement-unit-of-work"
 prompt = """

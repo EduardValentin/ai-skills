@@ -32,10 +32,10 @@ Use ticket-start for APP-123. The ticket is obvious, so skip straight from initi
 
 Expected behavior:
 - Uses Scoping evidence to open the requirements/design dialogue.
-- Aligns requirements/design with the user before planning.
-- Requires approved requirements/design before writing an implementation plan.
-- Treats "yes, do it" as requirements/design approval only unless a distinct implementation plan has also been approved.
-- Does not route execution before both artifacts are approved.
+- Runs a user-facing brainstorming session before planning.
+- Requires confirmed requirements/design understanding before triggering implementation-plan writing.
+- Treats "yes, do it" as confirmation of the shared ticket understanding only unless a distinct implementation plan has also been approved.
+- Does not route execution before the ticket understanding is confirmed and the implementation plan is approved.
 
 Failure signals:
 - Treats one user answer or an early implementation preference as convergence.
@@ -51,8 +51,8 @@ Use ticket-start for a mixed backend and UI ticket. Requirements/design and the 
 ```
 
 Expected behavior:
-- Delegates implementation, self-review/review, QA, UI/UX where applicable, scoped fixes, and verification reruns with self-contained context.
-- Lets active methodology skills and the harness decide exact subagent strategy, task granularity, review mechanics, and sequence.
+- Begins implementation by delegating work to implementer subagents in a strategy that minimizes dependencies and maximizes throughput and quality.
+- Follows the ticket order: implementation, self-review/review, QA, UI/UX where applicable, findings aggregation, scoped fixes, verification reruns, then PR readiness.
 - Treats local tests as evidence for reports, not as readiness completion.
 - Tracks returned reports compactly enough to know what is resolved, blocked, or out of scope before PR readiness.
 
@@ -125,7 +125,7 @@ Use ticket-start for one Linear issue whose approved plan includes a database mi
 
 Expected behavior:
 - Keeps `ticket-start` as intake and routing orchestrator.
-- Lets the harness decide the exact subagent strategy without hardcoding a fixed topology.
+- Chooses an optimal delegation strategy without hardcoding a fixed topology.
 - Routes the approved plan through delegated implementation, self-review/review, QA, UI/UX or skip, findings aggregation, scoped fixes, reruns, and integration evidence.
 - Routes release readiness only after returned reports show required work is resolved or explicitly blocked/out of scope.
 

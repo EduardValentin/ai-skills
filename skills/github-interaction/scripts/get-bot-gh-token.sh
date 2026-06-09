@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# get-bot-gh-token.sh — mint a fresh GitHub App installation access token.
+# get-bot-gh-token.sh - mint a fresh GitHub App installation access token.
 #
 # Reads App ID, Installation ID, and the App's private key from macOS Keychain
-# (entries: ai-skills.gh-bot.{app-id,installation-id,private-key}; see
-# bot-identity.md runbook Step A). Mints a 9-minute RS256 JWT signed with the
-# private key, exchanges it for an installation access token, prints the token
-# to stdout. Exits non-zero on any failure with the error context on stderr.
+# (entries: ai-skills.gh-bot.{app-id,installation-id,private-key}). Mints a
+# 9-minute RS256 JWT, exchanges it for an installation access token, prints the
+# token to stdout, and exits non-zero with useful stderr on failure.
 #
 # Usage:
 #   GH_TOKEN=$(./get-bot-gh-token.sh) gh pr create ...
@@ -19,7 +18,7 @@ read_keychain() {
   local raw
   if ! raw=$(security find-generic-password -s "$service" -a "$USER" -w 2>/dev/null); then
     echo "Missing Keychain entry: $service (account: $USER)" >&2
-    echo "See bot-identity.md runbook Step A." >&2
+    echo "Configure the ai-skills.gh-bot Keychain entries before GitHub writes." >&2
     exit 1
   fi
   # macOS `security ... -w` returns hex-encoded output (no leading 0x) when the
@@ -44,7 +43,7 @@ PRIVATE_KEY=$(read_keychain "${KEYCHAIN_PREFIX}.private-key")
 # letting openssl emit a generic "Unable to load Private Key".
 if ! printf '%s' "$PRIVATE_KEY" | grep -q "BEGIN .* PRIVATE KEY"; then
   echo "Private key in Keychain does not look like a PEM block." >&2
-  echo "Re-import the key per bot-identity.md runbook Step A.4." >&2
+  echo "Re-import ai-skills.gh-bot.private-key from the GitHub App PEM file." >&2
   echo "Hint: pass the file contents in unquoted via \"\$(cat /path/to/key.pem)\", not as an escaped string." >&2
   exit 2
 fi

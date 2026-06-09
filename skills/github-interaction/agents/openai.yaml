@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Interaction"
+  short_description: "Use the required GitHub bot identity for writes"
+  default_prompt: "Use $github-interaction before making GitHub commits, pushes, PR updates, comments, reviews, labels, merges, or API mutations that must use the configured bot identity."
