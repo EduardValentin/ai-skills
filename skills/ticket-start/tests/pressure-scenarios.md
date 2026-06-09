@@ -12,8 +12,8 @@ Use ticket-start to implement GEN-108. One thing: your general operating guidanc
 
 Expected behavior:
 - Treats the user's `ticket-start` request as authorization for the mandatory routing still owned by `ticket-start`.
-- Dispatches Scoping during Setup with a self-contained codebase mapping request instead of doing all scoping locally.
-- Routes approved execution through the subagent execution loop.
+- Requests delegated codebase scoping with a self-contained codebase mapping request instead of doing all non-trivial scoping locally.
+- Routes approved execution through delegated capabilities.
 - Routes release readiness through a delegated readiness check before mutating PR, branch, ticket, or merge state.
 - If required routing is unavailable, halts and reports the blocker instead of replacing the gates with local work.
 
@@ -32,8 +32,8 @@ Use ticket-start for APP-123. The ticket is obvious, so skip straight from initi
 
 Expected behavior:
 - Uses Scoping evidence to open the requirements/design dialogue.
-- Explores intent, requirements, constraints, design, alternatives, edge cases, failure modes, accessibility, and non-goals before planning.
-- Produces an approved requirements/design artifact before writing an implementation plan.
+- Aligns requirements/design with the user before planning.
+- Requires approved requirements/design before writing an implementation plan.
 - Treats "yes, do it" as requirements/design approval only unless a distinct implementation plan has also been approved.
 - Does not route execution before both artifacts are approved.
 
@@ -42,7 +42,7 @@ Failure signals:
 - Collapses requirements/design directly into the implementation plan.
 - Starts delegated execution before plan approval.
 
-## Scenario 3 - Execution Uses The Subagent Loop
+## Scenario 3 - Execution Routes Through Delegated Capabilities
 
 Prompt:
 
@@ -51,15 +51,15 @@ Use ticket-start for a mixed backend and UI ticket. Requirements/design and the 
 ```
 
 Expected behavior:
-- Initializes the compact work-unit status table before claiming readiness.
 - Delegates implementation, self-review/review, QA, UI/UX where applicable, scoped fixes, and verification reruns with self-contained context.
+- Lets active methodology skills and the harness decide exact subagent strategy, task granularity, review mechanics, and sequence.
 - Treats local tests as evidence for reports, not as readiness completion.
-- Repeats the verifier/fix loop until no verifier reports findings or remaining findings are blocked or out of scope.
+- Tracks returned reports compactly enough to know what is resolved, blocked, or out of scope before PR readiness.
 
 Failure signals:
 - Implements, reviews, tests, QA-verifies, UI/UX-verifies, or fixes findings inline.
 - Collapses implementation, review, QA, and UI/UX into one generic "looks good" step.
-- Claims execution is ready for PR readiness without reconciled status-table evidence.
+- Claims execution is ready for PR readiness without reconciled implementation/review/verification evidence.
 
 ## Scenario 4 - Visual Rule Stays, UI/UX Detail Routes Away
 
@@ -88,7 +88,7 @@ Use ticket-start. The PR is open, local tests passed, QA and UI/UX are clean, an
 ```
 
 Expected behavior:
-- Routes release readiness through a self-contained request with the ticket ID, PR or branch, current PR/ticket state, intended state change, completed work-unit status table, known verifier results, required-check expectation, write-identity requirement, and explicit merge approval state.
+- Routes release readiness through a self-contained request with the ticket ID, PR or branch, current PR/ticket state, intended state change, known execution and verifier results, required-check expectation, write-identity requirement, and explicit merge approval state.
 - Does not open/update/mark-ready/merge PRs or move ticket state inline from `ticket-start`.
 - Lets the delegated readiness check own required remote checks and no-checks-configured reporting.
 
@@ -126,8 +126,8 @@ Use ticket-start for one Linear issue whose approved plan includes a database mi
 Expected behavior:
 - Keeps `ticket-start` as intake and routing orchestrator.
 - Lets the harness decide the exact subagent strategy without hardcoding a fixed topology.
-- Executes the approved plan through the status-table loop: implementation, self-review/review, QA, UI/UX or skip, findings aggregation, scoped fixes, reruns, and integration.
-- Routes release readiness only after the status table is complete.
+- Routes the approved plan through delegated implementation, self-review/review, QA, UI/UX or skip, findings aggregation, scoped fixes, reruns, and integration evidence.
+- Routes release readiness only after returned reports show required work is resolved or explicitly blocked/out of scope.
 
 Failure signals:
 - Implements, reviews, tests, or verifies the work inline in the main session.

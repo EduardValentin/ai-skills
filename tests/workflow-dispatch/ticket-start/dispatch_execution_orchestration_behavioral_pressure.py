@@ -86,12 +86,8 @@ def check_response(response: str, judge_command: str) -> None:
             response=response,
             criteria=(
                 SemanticCriterion(
-                    "initializes_work_unit_status",
-                    "The response initializes or maintains a compact work-unit status table or equivalent status ledger before claiming readiness.",
-                ),
-                SemanticCriterion(
-                    "delegates_implementation",
-                    "The response delegates implementation for approved work units and asks for changed surfaces, checks, risks, and handoff notes.",
+                    "delegates_implementation_without_inline_work",
+                    "The response delegates implementation for the approved work instead of doing it inline.",
                 ),
                 SemanticCriterion(
                     "delegates_verifiers",
@@ -103,11 +99,15 @@ def check_response(response: str, judge_command: str) -> None:
                 ),
                 SemanticCriterion(
                     "aggregates_findings_and_fixes",
-                    "The response aggregates verifier findings, classifies blockers/out-of-scope/fixable items, delegates scoped fixes, and reruns affected verification loops.",
+                    "The response aggregates verifier findings, delegates scoped fixes for fixable findings, and reruns affected verification as needed.",
                 ),
                 SemanticCriterion(
-                    "stops_only_when_verifiers_clean_or_blocked",
-                    "The response repeats the loop until no verifier reports findings or remaining findings are explicitly blocked or out of scope.",
+                    "does_not_prescribe_methodology_mechanics",
+                    "The response does not prescribe fixed status-table columns, a specific subagent topology, or detailed code-review methodology.",
+                ),
+                SemanticCriterion(
+                    "readiness_waits_for_resolved_reports",
+                    "The response waits to route PR readiness until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
                 ),
             ),
             context="Loaded parent skill under test: ticket-start. Judge the delegated execution sequence, not exact wording.",

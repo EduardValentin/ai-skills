@@ -54,7 +54,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "delegates_execution_and_verification_loop",
-                "The response delegates implementation, self-review/review, QA, UI/UX where applicable, and scoped fixes through a main-agent orchestration loop.",
+                "The response routes implementation, independent review, QA, UI/UX where applicable, scoped fixes, and reruns to delegated capabilities instead of doing them inline.",
             ),
             SemanticCriterion(
                 "defines_uiux_verification_by_project_type",
@@ -65,8 +65,12 @@ SCENARIOS = (
                 "The response describes compact context included in delegated requests, such as ticket/AC, approved artifacts, scope/codebase context, workflow or branch state, and UI/reference context when relevant.",
             ),
             SemanticCriterion(
-                "status_table_and_clean_loop_before_readiness",
-                "The response explains that work-unit status, verifier findings, scoped fixes, and reruns must be reconciled before PR readiness or handoff.",
+                "methodology_boundary",
+                "The response treats ticket-start as defining ticket-specific gates and routing, without prescribing detailed brainstorming, plan-writing, subagent execution, or code-review mechanics.",
+            ),
+            SemanticCriterion(
+                "readiness_requires_resolved_reports",
+                "The response says PR readiness or handoff waits until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
             ),
         ),
         forbidden_terms=(
@@ -84,6 +88,10 @@ SCENARIOS = (
             "multi-ticket-work",
             "verify-pr-readiness",
             "ui-verification",
+            "TodoWrite",
+            "two-stage review",
+            "spec compliance reviewer",
+            "code quality reviewer",
         ),
     ),
 )
@@ -140,10 +148,10 @@ User request:
 
 Do not execute the ticket. Return a concise routing plan only. It must explain:
 - how ticket-start stays the intake and routing orchestrator,
-- how implementation, review, QA, UI/UX, scoped fixes, and reruns are delegated,
+- how implementation, review, QA, UI/UX, scoped fixes, and reruns are routed without prescribing detailed methodology mechanics,
 - how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,
 - which compact context ticket-start forwards,
-- how the status table and repeat-until-clean loop are used before PR readiness or handoff.
+- how returned reports are reconciled before PR readiness or handoff.
 Do not name downstream skill identifiers.
 """
 

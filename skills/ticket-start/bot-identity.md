@@ -1,6 +1,6 @@
 # Bot Identity (Personal Workflow)
 
-Loaded by `personal-workflow.md` whenever the personal workflow is selected. This file owns the bot-identity contract: how the bot is set up (one-time runbook), how the skill activates the bot at Setup (two checks), and what to do when something fails.
+Read this when ticket-start is handling a personal project and a GitHub write may be needed. This file owns the bot-identity contract: how the bot is set up, how the skill activates the bot before GitHub writes, and what to do when something fails.
 
 The bot identity applies **only** to the personal workflow. Job-workflow tickets continue to use the user's personal credentials.
 
@@ -8,17 +8,17 @@ The bot identity applies **only** to the personal workflow. Job-workflow tickets
 
 ## Overview
 
-When the agent works on a personal-workflow ticket:
+When the agent works on a personal-project ticket:
 
 - **GitHub** — a GitHub App you installed on your personal repos. The bot opens PRs, authors commits, and posts GitHub comments/review replies. You do not appear in the commit history, PR metadata, or PR comment threads for the agent's work.
 - **Linear** — your personal Linear identity (via the hosted Linear MCP). Ticket interactions are attributed to you.
 - **Credentials** — GitHub App credentials live in macOS Keychain. Keep an out-of-band copy (e.g., NordPass) for disaster recovery.
 
-The skill is **fail-closed**: if any expected Keychain entry is missing or the GitHub token mint fails, the workflow halts at Setup with a pointer to the relevant runbook section. The skill never silently substitutes personal GitHub credentials.
+The skill is **fail-closed**: if any expected Keychain entry is missing or the GitHub token mint fails, the workflow halts with a pointer to the relevant runbook section. The skill never silently substitutes personal GitHub credentials.
 
 ## Setup runbook (one-time, manual)
 
-Run this once per machine. After it's done, the skill picks up the bot identity automatically on every personal-workflow ticket.
+Run this once per machine. After it's done, ticket-start can pick up the bot identity automatically on every personal-project ticket.
 
 ### Step A — GitHub App
 
@@ -63,12 +63,12 @@ These don't require any setup; they're documented here for reference:
 
 - **Activation:** always-on for personal workflow.
 - **Helper-script stack:** bash + `openssl` + `python3` (no `jq`, no npm, no pip).
-- **Token mint:** every Setup phase and every GitHub write action mints a fresh GitHub installation token. Auto-retry-once with a fresh token if `gh` returns 401 mid-session.
+- **Token mint:** activation and every GitHub write action mint a fresh GitHub installation token. Auto-retry-once with a fresh token if `gh` returns 401 mid-session.
 - **Per-worktree git config:** the activation step sets `user.name` and `user.email` per-worktree, so your global git config and other repos are unaffected.
 
-## Setup activation (two checks, fail-closed)
+## Activation (two checks, fail-closed)
 
-The main agent runs these two checks at the start of the Setup phase, after the worktree is created and before the Scoping subagent is dispatched. If either check fails, the workflow halts with the pointer named.
+The main agent runs these two checks before any GitHub write in a personal project, preferably during ticket context gathering after the worktree is available. If either check fails, the workflow halts with the pointer named.
 
 ### Check 1 — Mint a fresh GitHub installation token
 
@@ -115,9 +115,9 @@ If `security find-generic-password` fails on either entry: **halt**. Point at ru
 
 ### After both checks pass
 
-Setup continues normally: read repository instructions, dispatch the Scoping subagent, etc.
+Continue the ticket-start workflow normally.
 
-## Implement phase — no new logic
+## Commit author identity
 
 The per-worktree git config set in Check 2 automatically applies to every `git commit` invocation in the worktree. The existing `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` trailer pattern is preserved. No new commit-time machinery.
 
@@ -156,7 +156,7 @@ Do not run `gh pr comment`, `gh pr review`, `gh api --method POST/PATCH/PUT/DELE
 
 Read-only GitHub operations may use ambient credentials if needed. Writes may not.
 
-## Ship phase — PR creation
+## PR readiness handoff — PR creation
 
 Before invoking `gh pr create`, follow the GitHub write-action guard above. `<skill-root>` is the same value as in Check 1 (`~/.codex/skills/ticket-start` on Codex or `~/.claude/skills/ticket-start` on Claude Code):
 

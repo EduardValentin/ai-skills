@@ -7,9 +7,11 @@ description: Use when the user wants to start implementation work from one ticke
 
 ## Purpose
 
-Use this skill as the main-agent workflow for working one implementation ticket from intake to final report. The main agent stays the user-facing orchestrator: it gathers facts, runs the requirements/design conversation, gets approval, delegates execution and verification work to subagents where available, reconciles reports, and keeps the user informed.
+Use this skill as the main-agent workflow for working one implementation ticket from intake to final report. It defines ticket-specific source-of-truth, approval, routing, and reporting gates. It does not define the detailed method for brainstorming, plan writing, implementation, review, QA, UI verification, or PR readiness.
 
-Prefer subagent orchestration for implementation, self-review/review, QA verification, UI/UX verification, focused fixes, and release checks. If required subagent capability is unavailable, tell the user before replacing it with inline work.
+The main agent stays the user-facing orchestrator: it gathers ticket facts, aligns requirements/design with the user, gets approval, routes execution and verification work to appropriate capabilities, reconciles returned reports, and keeps the user informed.
+
+Prefer delegated work for implementation, independent review, QA verification, UI/UX verification, focused fixes, and release checks. If required delegated capability is unavailable, tell the user before replacing it with inline work.
 
 A personal project is a project that uses GitHub for code versioning and Linear for ticket tracking.
 A job project is a project that uses Bitbucket for code versioning and Jira for ticket tracking.
@@ -35,7 +37,7 @@ Do not use for multi-ticket workflow intake, pure planning, debugging-only tasks
 - Keep the main session focused on orchestration and user decisions. Do not quietly turn it into the implementer, QA verifier, UI/UX verifier, or release mutator.
 - Keep delegated requests self-contained: ticket facts, acceptance criteria, approved decisions, relevant repo instructions, scope locators, constraints, expected checks, and output expectations.
 - Treat subagent reports as compact evidence, not transcripts. Carry forward locators and summaries so later agents can read surgically.
-- For personal workflows, use the repository's required GitHub write identity before commits, pushes, PR updates, comments, labels, transitions, or merges. Do not rely on ambient personal credentials for writes.
+- For personal workflows, use the repository's required GitHub write identity before commits, pushes, PR updates, comments, labels, transitions, or merges. Read `bot-identity.md` when setup or activation details are needed. Do not rely on ambient personal credentials for writes.
 
 ## Step 1 - Gather Facts
 
@@ -45,59 +47,44 @@ Do not use for multi-ticket workflow intake, pure planning, debugging-only tasks
 4. Read nearby repo instructions and workflow references. For personal projects, check `PRD.md` when the ticket or unit of work adds or changes business rules. Check `designs/` or reference apps only when the ticket adds or modifies UI components that have a corresponding reference surface or component. Read only the relevant slices.
 5. Inspect current git state, branches, existing PRs, and recent commits relevant to the ticket.
 6. Create or verify the ticket worktree from freshly fetched `origin/main`; halt if freshness cannot be established.
-7. Map the relevant code surface before planning. Prefer delegating codebase scoping when the affected surface is non-trivial, unfamiliar, shared, or UI/reference-backed. Include the ticket title, description, acceptance criteria, dependencies, repo instructions, and known constraints in the scoping request. Ask for a compact navigable scope map with file-line locators, entry points, affected surfaces, relevant tests, contracts/types, conflicts, and suggested implementation or verification slices.
+7. Map the relevant code surface before planning. Prefer delegated codebase scoping when the affected surface is non-trivial, unfamiliar, shared, or UI/reference-backed. Include the ticket title, description, acceptance criteria, dependencies, repo instructions, and known constraints in the scoping request.
 
-## Step 2 - Brainstorm Requirements
+## Step 2 - Align Requirements And Design
 
 Open with a short briefing grounded in the ticket and current repo: what is known, what is ambiguous, likely affected surfaces, relevant designs or product docs, and any conflicts.
 
-Then brainstorm relentlessly with the user before planning. Do not stop at vague agreement or first-pass assumptions; continue until the agent and user share a concrete understanding of the work to do, the boundaries, and what success means. Cover:
-
-- intended user or system behavior
-- constraints, non-goals, dependencies, and rollout concerns
-- edge cases, failure modes, permissions, accessibility, and data/state effects
-- meaningful alternatives and tradeoffs
-- how success will be verified
+Run a user-facing alignment phase until the agent and user share a concrete understanding of the work, boundaries, and success criteria. Keep the discussion grounded in the ticket, parent context, approved artifacts, PRD/design slices, and current codebase facts.
 
 Ask for explicit approval of the requirements/design direction. This approval is separate from implementation-plan approval.
 
-## Step 3 - Build And Approve The Plan
+## Step 3 - Approve The Implementation Plan
 
-Write a concrete implementation plan from the approved requirements/design direction. Include:
+Produce an implementation plan from the approved requirements/design direction and ask the user to approve it before coding starts. The plan must be concrete enough to route implementation and verification work, but ticket-start does not prescribe the plan format or task mechanics.
 
-- work units and sequencing
-- affected files, services, UI surfaces, data stores, jobs, or integrations
-- work areas that may benefit from delegated implementation or verification
-- self-review/review, QA, and UI/UX verification expectations
-- tests, commands, manual probes, and running-app checks
-- risks, assumptions, non-goals, and likely fix-loop points
+Do not implement, scaffold, or mutate product code before plan approval.
 
-Ask the user to approve the plan before coding starts. Do not implement, scaffold, or mutate product code before plan approval.
+## Step 4 - Route Execution And Verification
 
-## Step 4 - Execute Through Subagents
+After plan approval, route the ticket work through delegated capabilities. Let the agent harness and active methodology skills decide the exact subagent strategy, task granularity, review mechanics, and execution sequence.
 
-After plan approval, execute the ticket as an orchestration loop. Let the agent harness decide the exact subagent strategy, but preserve this sequence of work. When starting or summarizing execution, explicitly carry the status table, implementation, self-review/review, QA, UI/UX or skip, findings aggregation, scoped fixes, verification reruns, and integration phases. Scoped fixes and reruns are conditional when no findings exist yet, but they still need to be named as part of the loop. Do not collapse them into a generic integration step.
+Route these work categories when applicable:
 
-When returning an execution action list, make the status table its own first action and include an explicit repeat-until-clean action for the verifier/fix loop.
+- implementation for the approved plan
+- independent review against the ticket, acceptance criteria, approved plan, implementation evidence, and diff
+- QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration
+- UI/UX verification for UI-facing or mixed work; for backend-only/non-UI work, record the skip reason
+- scoped fixes for verifier findings
+- reruns of affected verification after fixes
 
-1. Initialize a compact work-unit status table with columns: `work unit`, `implementation`, `self-review/review`, `QA`, `UI/UX or skip reason`, `findings/fixes`, and `integration`.
-2. Delegate implementation for the approved work units. Implementation results must report changed surfaces, checks run, risks, and handoff notes.
-3. Delegate self-review or review against the ticket description, acceptance criteria, approved implementation plan, implementation evidence, and diff.
-4. Collect any self-review/review findings in the status table.
-5. Delegate QA verification against acceptance-criteria behavior in the running app, service, API, job, or integration.
-6. Collect any QA findings in the status table. If the verifier lacks required tooling or access, it must immediately report `CANNOT_VERIFY` with the reason and missing capability. Record that result, then perform the needed verification in the main session when the main session has the required tooling; otherwise report the blocker.
-7. For UI-facing or mixed work, delegate UI/UX verification. For backend-only/non-UI work, record the skip reason.
-8. Collect any UI/UX findings in the status table. If the verifier lacks required tooling such as browser access, it must immediately report `CANNOT_VERIFY` with the reason and missing capability. Record that result, then perform the needed verification in the main session when the main session has the required tooling; otherwise report the blocker.
-9. Aggregate all verifier findings from self-review/review, QA, and UI/UX. Decide which findings are blockers, which are out of scope, and which need scoped fixes. Brief the user when a finding changes scope, plan, timeline, or acceptance criteria.
-10. Delegate scoped fixes for fixable findings. Each fix request should include the original ticket context, approved plan, finding evidence, affected surfaces, and the verification rows that must be rerun.
-11. Rerun the affected verification loops after fixes. If a fix touches broader behavior or UI surfaces, rerun every verifier that could be affected, not only the verifier that reported the finding.
-12. Reconcile integration status for the work units and repeat until no verifier reports findings, or until the remaining findings are explicitly blocked or out of scope.
+If a verifier lacks required tooling or access, it must immediately report `CANNOT_VERIFY` with the reason and missing capability. Record that result, then perform the needed verification in the main session when the main session has the required tooling; otherwise report the blocker.
 
-Do not mark a work unit clean because local tests passed. It is clean only when the applicable implementation, review, QA, UI/UX or backend-only skip, findings, and integration rows are resolved.
+Include the `CANNOT_VERIFY` fallback in delegated QA and UI/UX verification requests so verifier agents fail fast instead of inventing evidence.
+
+Track returned reports compactly enough to know what is implemented, reviewed, verified, fixed, rerun, clean, blocked, or explicitly out of scope. Do not route the ticket to PR readiness until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.
 
 ## Step 5 - PR Readiness Or Handoff
 
-When the work is ready for PR, tracker, release, or merge action, delegate a self-contained PR readiness request instead of performing state changes inline. Include the current PR or branch, current tracker and PR state, intended PR or tracker action, completed status table, verifier summary, and explicit merge-approval state.
+When the work is ready for PR, tracker, release, or merge action, delegate a self-contained PR readiness request instead of performing state changes inline. Include the current PR or branch, current tracker and PR state, intended PR or tracker action, execution and verification summary, and explicit merge-approval state.
 
 When returning action lists, use a capability phrase like `ticket-linked PR readiness check` and explicitly copy any known current tracker state, intended tracker state, and whether merge approval is present or missing. Put known state values in the request itself, for example `current tracker state is In Review; intended tracker state is Done`. Do not leave known state values for the readiness handoff to rediscover.
 
