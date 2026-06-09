@@ -1,6 +1,6 @@
 # UIUX Skill Evaluations
 
-These scenarios are the regression set for the UIUX plugin and the `design-studio` refactor. Run them in fresh sessions when changing these skills.
+These scenarios are the regression set for the UIUX plugin. Run them in fresh sessions when changing these skills.
 
 ## Evaluation 1: Token-First Styling
 
