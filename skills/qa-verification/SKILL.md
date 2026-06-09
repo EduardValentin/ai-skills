@@ -1,99 +1,60 @@
 ---
 name: qa-verification
-description: Use when verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, or mixed executable surface. Use for backend/API checks, UI behavior checks, mixed API-and-UI flows, persistence, auth, validation, error handling, state transitions, and regression probes. The QA verifier exercises the system, records evidence, reports bugs with reproduction steps, and returns a QA report.
+description: Use when verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, frontend PR, or mixed executable surface. Use for browser behavior, backend/API checks, persistence, auth, validation, error handling, state transitions, regression probes, and blocked PR/ticket metadata during QA.
 ---
 
 # QA Verification
 
 ## Purpose
 
-Use this skill to verify whether a running implementation satisfies its acceptance criteria. The verifier exercises the executable surface, records what happened, and reports bugs with evidence.
+Verify whether a running implementation satisfies its acceptance criteria. Exercise the executable surface, record what happened, and report bugs with evidence.
 
-The verifier does not edit the system under test. If behavior cannot be exercised, return `QA cannot proceed` and name the blocker.
+Do not edit the system under test. If required inputs, metadata, access, tooling, or executable behavior are unavailable, return `QA cannot proceed` and name the blocker.
 
 ## Inputs
 
 Expect a compact, self-contained QA request with:
 
 - work item title, description, and acceptance criteria
-- approved requirements/design and implementation plan when available
-- changed surfaces or relevant scope notes
-- QA mode: `backend`, `ui`, `mixed`, or `other`
 - path, command, URL, environment, or entry point for the executable surface
-- relevant credentials, seed data, fixtures, feature flags, or test users when required
-- known constraints, non-goals, and adjacent behavior that may regress
+- mode: `backend`, `ui`, `mixed`, or `other`
+- changed surfaces, scope notes, non-goals, and adjacent behavior that may regress
+- credentials, seed data, fixtures, feature flags, or test users when required
+- PR/ticket metadata, PR notes, or bug report details when QA is PR-linked
 
 If required inputs are missing or contradictory, return `QA cannot proceed` with the exact missing input or conflict.
 
+## PR-Linked QA
+
+For PR-linked QA, verify the branch being reviewed:
+
+1. Fetch or confirm the latest PR branch and base branch before setup.
+2. Read PR metadata and ticket/bug details before diff-derived scoping or browser testing.
+3. If PR metadata is blocked by auth, network, missing connector, unavailable CLI, or login wall, stop with `QA cannot proceed`. Ask for restored access, pasted PR notes, or another authenticated source. The report must name that required next input. Do not start the app, scope from the diff, or infer PR testing instructions. A ticket ID, local diff, or user permission to proceed without PR notes does not replace blocked PR metadata.
+4. Run PR testing notes first and map them to acceptance criteria.
+5. If metadata was read but testing notes are absent or vague, scope from the PR, ticket, diff, changed files, entry points, setup/data needs, focused tests, and regression risks before exercising behavior.
+
 ## Evidence Standard
 
-QA reports require exercised behavior evidence. Passing unit tests, static review, local confidence, screenshots without interaction, or "the diff looks right" can support the report, but they do not replace exercising the running surface.
+QA reports require exercised behavior evidence. Unit tests, static review, source inspection, screenshots without interaction, or "the diff looks right" can support the report, but they do not replace exercising the running surface.
 
 Each acceptance criterion must map to a concrete observation:
 
 - request, response, side effect, and persisted state for backend/API/service work
-- user action and resulting browser-observed state for UI behavior
+- user action, route, active state, and browser-observed result for UI behavior
 - command output, file output, logs, or external side effects for scripts, jobs, and integrations
 - both backend and UI observations for mixed work
 
 Any observed bug changes the verdict to `BUGS FOUND`.
 
-## Execution Fallbacks
-
-Use the best available capability to exercise the running surface:
-
-1. Native browser, HTTP, database, job, or command automation when available.
-2. Project-local scripts, shell-invokable clients, or browser automation when native automation is unavailable.
-3. Degraded manual confirmation only when automation cannot be used. Label the verdict as degraded and list exactly what the user must confirm.
-
-If none of these can exercise the behavior, stop with `QA cannot proceed`.
-
 ## Modes
 
-### Backend/API/Service
+- `backend`: verify request/response payloads, auth, validation, errors, persistence, side effects, events, queues, logs, idempotency, retries, and adjacent shared paths.
+- `ui`: start the app as specified and use browser-capable evidence for happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior.
+- `mixed`: exercise both backend and UI surfaces, then verify their integration satisfies the acceptance criteria.
+- `other`: exercise scripts, CLIs, scheduled tasks, data jobs, migrations, or integrations through their command/trigger path, outputs, logs, external calls, exit codes, reruns, and failure modes.
 
-Use for API, service, job, consumer, migration, persistence, queue, cache, or integration behavior.
-
-Verify:
-
-- reachability and setup assumptions
-- happy paths with valid inputs
-- validation failures and error responses
-- auth, permission, role, and tenant boundaries where relevant
-- state transitions, persistence, emitted events, queues, cache updates, and logs
-- idempotency, retry, and concurrency behavior when touched
-- adjacent endpoints, handlers, jobs, consumers, or shared code paths that may regress
-
-Inspect more than status codes. Payload, persistence, side effects, and logs must match the acceptance criteria.
-
-### UI Behavior
-
-Use for behavior exercised through a browser or comparable user interface.
-
-Verify:
-
-- happy path end to end
-- loading, empty, success, error, and validation states
-- focus, active, disabled, expanded/collapsed, modal-open, and navigation states tied to behavior
-- invalid values, boundary inputs, rapid clicks, double submits, and navigating mid-action
-- cross-feature impact on adjacent flows reachable from the feature surface
-- responsive behavior when it affects functionality or state reachability
-
-### Mixed
-
-Use when the work touches both API/service behavior and UI behavior. Exercise both surfaces and verify that the integration between them satisfies the acceptance criteria.
-
-### Other Executable Surface
-
-Use for scripts, CLIs, scheduled tasks, data jobs, migrations, or integrations that are not cleanly backend or UI.
-
-Verify:
-
-- command or trigger path
-- inputs, flags, environment, fixtures, and permissions
-- output files, stdout/stderr, logs, database writes, external calls, and exit codes
-- rerun/idempotency behavior when relevant
-- failure modes and cleanup behavior
+Use focused tests as supporting evidence, never as a replacement for the relevant running behavior.
 
 ## Report Format
 
@@ -101,21 +62,23 @@ Verify:
 # QA report - <work item>
 
 ## Verdict
-- [ ] CLEAN - no bugs found
-- [ ] BUGS FOUND - at least one bug found
-- [ ] QA cannot proceed - blocker named below
+- <CLEAN | BUGS FOUND | QA cannot proceed>
 
-## Mode used
+## Mode
 - <backend | ui | mixed | other>
 
-## Coverage performed
+## Metadata source
+- <PR/ticket/user-supplied notes/none, plus blockers if any>
+
+## Scope basis
+- <PR, ticket, diff, changed files, entry points, setup/data needs, focused tests, regression risks>
+
+## Coverage
 - Acceptance criteria: <AC1 observed | AC2 observed | AC3 failed -> B1>
-- Happy paths exercised: <list>
-- Error paths exercised: <list>
-- State transitions or side effects: <list>
-- Adversarial inputs tried: <list>
-- Adjacent regression checks: <list>
-- Evidence: <request logs, browser observations, persisted state, command output, traces, screenshots, or files>
+- Behavior exercised: <routes, requests, commands, states, side effects>
+- Focused tests: <supporting output or explicitly none>
+- Regression/adversarial checks: <list>
+- Evidence: <logs, responses, browser observations, persisted state, command output, traces, screenshots, files>
 
 ## Bugs found
 - **B1** | severity: <blocker | major | minor> | reproduction steps:
@@ -128,6 +91,7 @@ Verify:
 
 ## Blockers
 - <blocker or explicitly empty>
+- Required next input: <restored access, pasted PR notes, authenticated metadata source, or explicitly empty>
 
 ## Notes
 - <coverage limits, degraded checks, or explicitly empty>
@@ -137,11 +101,8 @@ Verify:
 
 - Declaring `CLEAN` without exercising every acceptance criterion against the running surface.
 - Treating unit tests, type checks, static review, or source inspection as full QA evidence by themselves.
+- Inferring blocked PR testing instructions from the diff.
 - Skipping adversarial inputs because the happy path works.
 - Modifying product code while acting as the QA verifier.
 - Omitting adjacent regression checks when changed behavior is shared by adjacent flows.
 - Reporting a bug without reproduction steps and evidence.
-
-## Stop Conditions
-
-Stop when every acceptance criterion has been exercised and is either observed clean or mapped to a bug, coverage performed names what was actually checked, and bugs include reproduction evidence.

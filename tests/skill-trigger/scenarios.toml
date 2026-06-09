@@ -205,10 +205,11 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
-id = "frontend-pr-test-acceptance"
-skill = "frontend-pr-test"
-prompt = "Test this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes."
+id = "qa-verification-frontend-pr-acceptance"
+skill = "qa-verification"
+prompt = "QA this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes with evidence."
 forbidden_terms = []
+response_forbidden_terms = ["frontend-pr-test"]
 
 [[scenario]]
 id = "pr-reviewer-summary-current-branch"
@@ -242,25 +243,29 @@ In the Bitbucket Cloud repo acme/widget, find the pull request for branch
 feature/auth-panel from remote https://bitbucket.org/acme/widget.git, read its
 PR metadata and comments, and report the Bitbucket PR details needed before UI testing.
 """
-forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
+response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "bitbucket-current-branch"
 skill = "manage-bitbucket-pr"
 prompt = "In the Bitbucket repo for acme/widget, check the current branch PR before I test it."
-forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
+response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "bitbucket-review-summary"
 skill = "manage-bitbucket-pr"
 prompt = "Summarize the review discussion and PR notes for https://bitbucket.org/acme/widget/pull-requests/42."
-forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
+response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "bitbucket-merge-status"
 skill = "manage-bitbucket-pr"
 prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report blockers."
-forbidden_terms = ["frontend-pr-test", "frontend PR", "another workflow", "generic Bitbucket connector"]
+forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
+response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "uiux-frontend-interface-design-accessible-page"

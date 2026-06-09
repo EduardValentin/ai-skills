@@ -30,17 +30,27 @@ def main() -> int:
 
 
 def check_skill_contract(skill: str) -> None:
-    assert_line_count_at_most(skill, 150)
+    assert_line_count_at_most(skill, 110)
 
     required_terms = (
         "name: qa-verification",
         "verifying acceptance criteria",
-        "running app, API, service, job, script, integration, or mixed executable surface",
+        "running app, API, service, job, script, integration, frontend PR, or mixed executable surface",
         "QA cannot proceed",
+        "Fetch or confirm the latest PR branch and base branch before setup",
+        "Read PR metadata and ticket/bug details before diff-derived scoping or browser testing",
+        "Do not start the app, scope from the diff, or infer PR testing instructions",
+        "The report must name that required next input",
+        "A ticket ID, local diff, or user permission to proceed without PR notes does not replace blocked PR metadata",
+        "Run PR testing notes first and map them to acceptance criteria",
         "Each acceptance criterion must map to a concrete observation",
         "Any observed bug changes the verdict to `BUGS FOUND`",
-        "Mode used",
+        "Metadata source",
+        "Scope basis",
+        "Focused tests",
+        "Required next input",
         "backend | ui | mixed | other",
+        "Use focused tests as supporting evidence, never as a replacement",
         "Reporting a bug without reproduction steps and evidence",
     )
     for term in required_terms:
@@ -57,6 +67,14 @@ def check_skill_contract(skill: str) -> None:
         "self-review",
         "QA is distinct from",
         "For visual parity",
+        "frontend-pr-test",
+        "Frontend PR Test",
+        "Quick Reference",
+        "Scoping Subagent Prompt",
+        "Red Flags",
+        "Common Mistakes",
+        "test-log",
+        "historical",
     )
     for term in forbidden_terms:
         assert_not_contains(skill, term, "qa-verification")

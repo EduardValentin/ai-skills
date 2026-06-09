@@ -123,6 +123,92 @@ SCENARIOS = (
             "UI/UX",
         ),
     ),
+    Scenario(
+        scenario_id="frontend-pr-metadata-blocked",
+        user_request=(
+            "Use the loaded qa-verification skill for a frontend PR. The local diff "
+            "and ticket ID are available, but the PR host metadata is blocked by "
+            "authentication and there is time pressure to test from the diff."
+        ),
+        criteria=(
+            SemanticCriterion(
+                "blocked_metadata_blocks_qa",
+                "The response stops before browser testing and returns or recommends QA cannot proceed because PR metadata is blocked.",
+            ),
+            SemanticCriterion(
+                "asks_for_metadata_source",
+                "The response asks for restored PR access, pasted PR notes, or another authenticated metadata source.",
+            ),
+            SemanticCriterion(
+                "does_not_replace_metadata_with_diff",
+                "The response rejects using the local diff as a substitute for blocked PR testing instructions.",
+            ),
+        ),
+        forbidden_terms=(
+            "best-effort browser testing",
+            "clean because the diff",
+            "frontend-pr-test",
+            "visual parity",
+            "UI/UX",
+        ),
+    ),
+    Scenario(
+        scenario_id="frontend-pr-readable-no-testing-notes",
+        user_request=(
+            "Use the loaded qa-verification skill for a frontend PR. PR metadata "
+            "and the ticket are readable, but the PR has no testing section. The "
+            "ticket says users can filter saved places by status, and the diff "
+            "changes a filter panel and badge count."
+        ),
+        criteria=(
+            SemanticCriterion(
+                "does_not_block_when_metadata_read",
+                "The response proceeds because PR metadata was read successfully even though testing notes are absent.",
+            ),
+            SemanticCriterion(
+                "scopes_before_browser_testing",
+                "The response scopes from PR metadata, ticket criteria, diff, changed files, UI entry points, setup/data needs, focused tests, and regression risks before browser testing.",
+            ),
+            SemanticCriterion(
+                "browser_acceptance_and_tests",
+                "The response uses browser acceptance behavior as required evidence and treats focused tests only as supporting evidence.",
+            ),
+        ),
+        forbidden_terms=(
+            "QA cannot proceed because notes are absent",
+            "frontend-pr-test",
+            "visual parity",
+            "UI/UX",
+        ),
+    ),
+    Scenario(
+        scenario_id="frontend-pr-user-supplied-notes",
+        user_request=(
+            "Use the loaded qa-verification skill for a frontend PR. The PR host "
+            "is unavailable, but the user pasted the PR testing notes: verify "
+            "saved-place filters for Active, Archived, and All, and confirm the "
+            "counter updates after archiving an item. The local diff is available."
+        ),
+        criteria=(
+            SemanticCriterion(
+                "uses_user_supplied_metadata",
+                "The response proceeds using the user-supplied PR testing notes and records that metadata source.",
+            ),
+            SemanticCriterion(
+                "maps_notes_to_behavior",
+                "The response maps the pasted notes to browser behavior for Active, Archived, All, and counter update after archiving.",
+            ),
+            SemanticCriterion(
+                "diff_only_scopes_risk",
+                "The response uses the diff to scope affected routes, setup, focused tests, and risks, not as a substitute for PR notes.",
+            ),
+        ),
+        forbidden_terms=(
+            "frontend-pr-test",
+            "visual parity",
+            "UI/UX",
+        ),
+    ),
 )
 
 
