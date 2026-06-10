@@ -48,7 +48,7 @@ Read only what the selected path needs:
 - Prototype boundaries: [references/prototype-boundaries.md](references/prototype-boundaries.md)
 - Quality bar: [references/ticket-quality.md](references/ticket-quality.md)
 - Workflows: [workflows/single-epic.md](workflows/single-epic.md), [workflows/bulk-planning.md](workflows/bulk-planning.md), [workflows/user-story.md](workflows/user-story.md), [workflows/epic-with-stories.md](workflows/epic-with-stories.md)
-- Regression evals: [tests/evals.md](tests/evals.md)
+- Regression evals: repo-level `tests/ticket-planner/ticket_planner_behavioral_pressure.py`
 
 ## Scenario Selection
 

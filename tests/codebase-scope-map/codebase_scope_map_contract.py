@@ -9,15 +9,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "codebase-scope-map" / "SKILL.md"
-PRESSURE_PATH = REPO_ROOT / "skills" / "codebase-scope-map" / "tests" / "pressure-scenarios.md"
 
 
 def main() -> int:
     try:
         skill = SKILL_PATH.read_text(encoding="utf-8")
-        pressure = PRESSURE_PATH.read_text(encoding="utf-8")
         check_skill_contract(skill)
-        check_pressure_scenarios(pressure)
     except AssertionError as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -50,11 +47,6 @@ def check_skill_contract(skill: str) -> None:
     )
     for term in forbidden_terms:
         assert_not_contains(skill, term)
-
-
-def check_pressure_scenarios(pressure: str) -> None:
-    assert_contains(pressure, "Does not mutate the repository")
-    assert_contains(pressure, "Edits files, runs mutating formatters/generators")
 
 
 def assert_contains(haystack: str, needle: str) -> None:
