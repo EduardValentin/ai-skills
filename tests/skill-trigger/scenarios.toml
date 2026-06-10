@@ -115,35 +115,35 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "verify-pr-readiness-pr-checks"
-skill = "verify-pr-readiness"
+id = "verify-pr-pr-checks"
+skill = "verify-pr"
 prompt = """
-Implementation and review are complete; do not review the diff. Run only the
-ticket-linked PR readiness check for PR #42 linked to Linear ticket APP-123
-from In Review: check required PR checks and report whether it can be marked
-ready, merged, and transitioned to Done.
+Implementation and review are complete; do not review the diff. Verify PR #42
+linked to Linear ticket APP-123 from In Review: fetch PR metadata, required
+checks, implemented-surface test evidence, review approval, and unresolved
+comments before reporting whether it is ready.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "verify-pr-readiness-merge-approval"
-skill = "verify-pr-readiness"
+id = "verify-pr-merge-monitoring"
+skill = "verify-pr"
 prompt = """
-Merge the PR for Jira ticket PROJ-44 after confirming the ticket is in Code
-Review, required checks pass, and I explicitly approve the merge; then sync the
-Jira ticket state.
+The Verify PR report says Jira ticket PROJ-44 is in Code Review and PR #44 is
+ready. I explicitly approve merging the PR; merge it and monitor post-merge CI,
+reporting any failing source-control checks with a proposed action plan.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
-id = "verify-pr-readiness-parent-sync"
-skill = "verify-pr-readiness"
+id = "verify-pr-unresolved-comments"
+skill = "verify-pr"
 prompt = """
-Check readiness for Jira child ticket PROJ-4. After PR checks pass and merge is approved, move
-the child to Done and, if all sibling tickets under parent PROJ-1 are also done,
-move the parent ticket to Done too.
+Verify whether PR #70 is ready for final approval. CI and surface tests are
+passing, but the source-control review metadata may have unresolved review
+threads or requested changes that must block readiness.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]

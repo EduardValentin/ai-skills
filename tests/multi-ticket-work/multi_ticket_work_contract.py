@@ -51,7 +51,7 @@ def check_contract(skill: str) -> None:
         "implement-unit-of-work",
         "qa-verification",
         "ui-verification",
-        "verify-pr-readiness",
+        "verify-pr",
         "codebase-scope-map",
         "pr-reviewer-summary",
         "UI/UX verification",

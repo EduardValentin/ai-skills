@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for ticket-start dispatching PR readiness capability."""
+"""Contract checks for ticket-start dispatching Verify PR capability."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def main() -> int:
         print(f"FAIL: {SKILL_PATH.relative_to(REPO_ROOT)}: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches PR readiness capability")
+    print("PASS: ticket-start dispatches Verify PR capability")
     return 0
 
 
@@ -32,7 +32,7 @@ def check_contract(skill: str) -> None:
     assert_contains(skill, "execution and verification summary")
     assert_contains(skill, "merge-approval status")
     assert_contains(skill, "Do not perform PR, branch, tracker, release, or merge mutations inline.")
-    assert_not_contains(skill, "verify-pr-readiness")
+    assert_not_contains(skill, "verify-pr")
     assert_not_contains(skill, "multi-ticket-work")
     assert_not_contains(skill, "gh pr checks <PR> --required --json name,state,bucket,workflow,link")
     assert_not_contains(skill, "without partially changing PR, branch, tracker, release, or merge state")

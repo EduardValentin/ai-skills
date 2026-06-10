@@ -1,4 +1,0 @@
-interface:
-  display_name: "Verify PR Readiness"
-  short_description: "Check ticket-linked PR readiness"
-  default_prompt: "Use $verify-pr-readiness to check whether this ticket-linked PR is ready for mark-ready, merge, or Jira/Linear ticket sync after review."

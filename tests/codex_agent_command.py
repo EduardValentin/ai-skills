@@ -19,10 +19,13 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+# CODEX_TEST_CWD is the single execution directory for both subprocess cwd and
+# Codex's -C flag, so relative paths resolve the same way in the shim and child.
 DEFAULT_CODEX_CLI = "/Applications/Codex.app/Contents/Resources/codex"
 DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_REASONING_EFFORT = "low"
 REASONING_CONFIG_KEY = "model_reasoning_effort"
+ALLOWED_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
 
 
 def main() -> int:
@@ -43,7 +46,8 @@ def main() -> int:
     args = parser.parse_args()
 
     prompt = sys.stdin.read()
-    command = build_command(args.role)
+    cwd = resolve_test_cwd()
+    command = build_command(args.role, cwd=cwd)
 
     if args.print_command:
         print(shlex.join(command))
@@ -54,7 +58,7 @@ def main() -> int:
             [*command, "--output-last-message", output.name, "-"],
             input=prompt,
             text=True,
-            cwd=REPO_ROOT,
+            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
@@ -70,12 +74,12 @@ def main() -> int:
     return 0
 
 
-def build_command(role: str) -> list[str]:
+def build_command(role: str, cwd: str | None = None) -> list[str]:
     role_prefix = f"CODEX_{role.upper()}"
     codex_cli = os.environ.get("CODEX_CLI", default_codex_cli())
-    cwd = os.environ.get("CODEX_TEST_CWD", str(REPO_ROOT))
+    cwd = cwd or resolve_test_cwd()
     model = get_setting(role_prefix, "MODEL", DEFAULT_MODEL)
-    effort = get_setting(role_prefix, "REASONING_EFFORT", DEFAULT_REASONING_EFFORT)
+    effort = validate_reasoning_effort(get_setting(role_prefix, "REASONING_EFFORT", DEFAULT_REASONING_EFFORT))
 
     command = [
         codex_cli,
@@ -90,6 +94,17 @@ def build_command(role: str) -> list[str]:
     if effort:
         command.extend(["-c", f'{REASONING_CONFIG_KEY}="{effort}"'])
     return command
+
+
+def resolve_test_cwd() -> str:
+    return os.environ.get("CODEX_TEST_CWD", str(REPO_ROOT))
+
+
+def validate_reasoning_effort(effort: str) -> str:
+    if effort and effort not in ALLOWED_REASONING_EFFORTS:
+        allowed = ", ".join(sorted(ALLOWED_REASONING_EFFORTS))
+        raise ValueError(f"invalid reasoning effort {effort!r}; expected one of: {allowed}")
+    return effort
 
 
 def default_codex_cli() -> str:

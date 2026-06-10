@@ -82,7 +82,7 @@ SCENARIOS = (
             "implement-unit-of-work",
             "qa-verification",
             "ui-verification",
-            "verify-pr-readiness",
+            "verify-pr",
             "implementation inline",
         ),
     ),

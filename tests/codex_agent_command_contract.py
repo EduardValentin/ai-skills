@@ -16,6 +16,8 @@ def main() -> int:
         test_default_command_uses_efficient_model_and_reasoning()
         test_role_specific_overrides_win()
         test_shared_overrides_apply_when_role_specific_absent()
+        test_test_cwd_is_used_for_codex_c_flag()
+        test_invalid_reasoning_effort_is_rejected()
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -57,6 +59,24 @@ def test_shared_overrides_apply_when_role_specific_absent() -> None:
 
     assert command[command.index("-m") + 1] == "gpt-5.4"
     assert 'model_reasoning_effort="medium"' in command
+
+
+def test_test_cwd_is_used_for_codex_c_flag() -> None:
+    with clean_env(), patched_env(CODEX_TEST_CWD="/tmp/ai-skills-test-cwd"):
+        command = build_command("actor")
+
+    assert "-C" in command
+    assert command[command.index("-C") + 1] == "/tmp/ai-skills-test-cwd"
+
+
+def test_invalid_reasoning_effort_is_rejected() -> None:
+    with clean_env(), patched_env(CODEX_TEST_REASONING_EFFORT='low"\n-m unsafe'):
+        try:
+            build_command("actor")
+        except ValueError as error:
+            assert "invalid reasoning effort" in str(error)
+        else:
+            raise AssertionError("expected invalid reasoning effort to be rejected")
 
 
 @contextmanager

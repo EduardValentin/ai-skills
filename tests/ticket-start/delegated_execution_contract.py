@@ -14,7 +14,7 @@ DOWNSTREAM_SKILL_IDS = (
     "multi-ticket-work",
     "implement-unit-of-work",
     "qa-verification",
-    "verify-pr-readiness",
+    "verify-pr",
     "ui-verification",
     "codebase-scope-map",
     "github-interaction",

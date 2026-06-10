@@ -86,7 +86,7 @@ SCENARIOS = (
             "qa-verification",
             "implement-unit-of-work",
             "multi-ticket-work",
-            "verify-pr-readiness",
+            "verify-pr",
             "ui-verification",
             "TodoWrite",
             "two-stage review",

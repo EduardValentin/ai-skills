@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavioral dispatch tests for ticket-start -> PR readiness capability."""
+"""Behavioral dispatch tests for ticket-start -> Verify PR capability."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def main() -> int:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: ticket-start dispatches PR readiness capability behaviorally")
+    print("PASS: ticket-start dispatches Verify PR capability behaviorally")
     return 0
 
 
@@ -50,8 +50,9 @@ Loaded skill: ticket-start
 User request:
 Personal workflow: Linear ticket APP-123 is In Review, PR #12 exists as a draft
 on branch feature/app-123, implementation and verification reports are clean,
-the intended action is to merge the PR and move the ticket to Done, merge has
-not been explicitly approved yet, and required checks have not been re-read.
+the intended action is final PR verification before merge approval, merge has
+not been explicitly approved yet, and PR metadata/checks/reviews/comments have
+not been re-read.
 What should the main agent do next?
 
 Do not perform the task. Do not call tools. Return only action lines in this shape:
@@ -64,11 +65,17 @@ request so auto-discovery can select the right skill.
 
 
 def check_response(response: str, agent_command: str, judge_command: str) -> None:
-    forbidden = ("verify-pr-readiness", "multi-ticket-work", "implement inline", "perform readiness inline", "merge now")
+    forbidden = (
+        "verify-pr",
+        "multi-ticket-work",
+        "implement inline",
+        "perform readiness inline",
+        "merge now",
+    )
     assert_forbidden_terms(response, forbidden, "PR readiness dispatch")
     judge_response(
         judge_command=judge_command,
-        scenario_id="ticket-start-dispatch-verify-pr-readiness",
+        scenario_id="ticket-start-dispatch-verify-pr",
         scenario_prompt=(
             "The ticket work is complete and PR/ticket readiness is requested, but checks "
             "must be re-read and explicit merge approval is missing."
@@ -77,15 +84,15 @@ def check_response(response: str, agent_command: str, judge_command: str) -> Non
         criteria=(
             SemanticCriterion(
                 "delegates_pr_readiness",
-                "The response delegates PR and ticket readiness evaluation instead of performing merge or ticket mutations inline.",
+                "The response delegates PR verification instead of evaluating readiness, merging, or mutating source-control state inline.",
             ),
             SemanticCriterion(
                 "readiness_request_is_self_contained",
-                "The delegated request includes PR or branch, current tracker state, intended tracker state, required checks expectation, and explicit merge approval state.",
+                "The delegated request includes PR or branch, current tracker state, intended PR action, required checks expectation, review/comment status expectation, and explicit merge approval state.",
             ),
             SemanticCriterion(
                 "does_not_mutate_inline",
-                "The response does not merge, transition tickets, mark PR ready, or perform source-control writes inline.",
+                "The response does not merge, mark the PR ready, update tickets, dismiss comments, or perform source-control writes inline.",
             ),
             SemanticCriterion(
                 "does_not_name_downstream_skill",
@@ -94,7 +101,7 @@ def check_response(response: str, agent_command: str, judge_command: str) -> Non
         ),
         context="Loaded parent skill under test: ticket-start. Judge PR readiness dispatch behavior, not exact wording.",
     )
-    assert_auto_discovers(agent_command, response, "verify-pr-readiness")
+    assert_auto_discovers(agent_command, response, "verify-pr")
 
 
 if __name__ == "__main__":
