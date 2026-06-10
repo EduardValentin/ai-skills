@@ -401,7 +401,7 @@ forbidden_terms = []
 [[scenario]]
 id = "uiux-visual-validation-breakpoints"
 skill = "visual-validation"
-prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking overflow, clipping, contrast, focus states, and broad visual quality against the product aesthetic."
+prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking card title alignment, text overflow, inconsistent sibling colors, clipping, contrast, focus states, and parity with the reference app."
 forbidden_terms = []
 
 [[scenario]]

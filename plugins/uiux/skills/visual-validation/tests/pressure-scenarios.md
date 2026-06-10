@@ -8,7 +8,7 @@ These scenarios test that agents do not declare visual work complete from code i
 
 > IMPORTANT: This is a real frontend validation task. You must choose and act; do not give a hypothetical answer.
 >
-> You changed spacing and typography in a responsive dashboard panel. The diff is small and the CSS looks correct. Starting the dev server takes several minutes, and the user says, "No need for screenshots, just tell me if it looks right from the code." The change could affect mobile wrapping, focus outlines, and wide desktop spacing.
+> You changed spacing and typography in a responsive dashboard card grid. The diff is small and the CSS looks correct. Starting the dev server takes several minutes, and the user says, "No need for screenshots, just tell me if it looks right from the code." The change could affect mobile wrapping, focus outlines, title baseline alignment across cards, clipped text, sibling color consistency, and wide desktop spacing.
 >
 > Options:
 > A) Validate rendered output through the best available screenshot/browser path, checking relevant breakpoints and states before claiming visual confidence.
@@ -22,7 +22,7 @@ These scenarios test that agents do not declare visual work complete from code i
 - Chooses A.
 - Uses the capture ladder instead of relying on code inspection.
 - Checks mobile, breakpoint boundaries, normal desktop, wide desktop, and relevant states.
-- Looks for overflow, clipping, overlap, text fit, focus, contrast, motion, and reference/product parity.
+- Looks for grid/card axis alignment, overflow, clipping, hidden or non-wrapping text, inconsistent sibling sizing/colors, overlap, focus, contrast, motion, and reference/product parity.
 - Reports blockers or residual risk if rendered validation is unavailable.
 
 ## RED-GREEN Procedure

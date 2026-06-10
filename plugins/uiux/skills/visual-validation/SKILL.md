@@ -40,12 +40,14 @@ For stateful UI, capture the relevant states: default, loading, empty, error, di
 ## What To Check
 
 - No unintended horizontal scroll, clipping, overlap, 0-height sections, or broken alignment.
-- Text remains readable and fits its container.
+- Repeated items align on shared axes. In grids, card titles, media, controls, and baselines should not drift up, down, left, or right unless the layout intentionally varies them.
+- Text remains readable and visible. Watch for labels, headings, buttons, cards, and long strings that overflow, are cut off by hidden overflow, cannot wrap, wrap awkwardly, or disappear behind adjacent UI.
+- Related sibling elements use consistent sizing, spacing, color roles, icon sizes, border radii, and visual weight unless a visible state or hierarchy explains the difference.
 - Interactive controls have visible focus, hover, active, selected, and disabled states.
 - Color contrast works for key text and controls.
 - Keyboard order matches visual order.
 - Motion does not block use and respects reduced-motion preferences.
-- The UI matches the intended screenshots, design notes, token system, or surrounding product aesthetic.
+- New surfaces visually fit nearby product surfaces: same density logic, alignment rhythm, type scale, color roles, and component proportions.
 
 ## Report Format
 
