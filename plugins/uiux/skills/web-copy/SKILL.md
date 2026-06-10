@@ -1,19 +1,17 @@
 ---
-name: web-copy-from-brand-voice
-description: Use when writing, rewriting, or reviewing website, app, product, marketing, onboarding, empty-state, error, CTA, hero, navigation, or microcopy that should follow a brand voice, audience, message, tone, or conversion goal without becoming generic or off-brand.
+name: web-copy
+description: Use when writing, rewriting, or reviewing website, app, product, marketing, onboarding, empty-state, error, CTA, hero, navigation, or microcopy.
 ---
 
-# Web Copy From Brand Voice
+# Web Copy
 
 ## Overview
 
-Write copy from the brand's voice, the page's job, and the user's context. Good UI copy is clear, specific, human, and useful at the moment it appears.
+Write copy from the product's language, the page's job, and the user's context. Good UI copy is clear, specific, human, and useful at the moment it appears.
 
 ## When To Use
 
 - Writing, rewriting, or reviewing website, app, product, onboarding, empty-state, error, CTA, hero, navigation, or microcopy.
-- Copy must follow a brand voice, audience, message, tone, conversion goal, or product context.
-- The risk is generic, off-brand, unclear, or inaccessible UI copy.
 
 ## Workflow
 
@@ -25,6 +23,8 @@ Write copy from the brand's voice, the page's job, and the user's context. Good 
 
 ## Copy Principles
 
+- Copy must follow the product's brand voice, audience, message, tone, conversion goal, and context.
+- Copy must be coherent with the rest of the application. Reuse the product's established nouns and labels exactly; if an e-learning app calls course pages `lessons`, do not call them courses, modules, classes, or anything else elsewhere.
 - Lead with the user's problem or outcome, not the company's internal framing.
 - Prefer concrete nouns and verbs over generic adjectives.
 - Keep CTAs action-specific: `Create plan`, `Compare tiers`, `Invite client`.

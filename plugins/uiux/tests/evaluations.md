@@ -43,11 +43,12 @@ Expected behavior:
 - Presents distinct design directions with tradeoffs plus a recommended option.
 - Waits for shared understanding before implementation.
 
-## Evaluation 5: Brand-Voice Copy
+## Evaluation 5: Web Copy
 
 Prompt: "Rewrite this hero and CTA so it sounds more confident."
 
 Expected behavior:
 - Uses brand-voice guidance or asks for the missing copy brief.
+- Preserves established application terminology exactly.
 - Produces human, specific page copy without drifting into generic marketing language.
 - Verifies CTA clarity and fit in the UI.

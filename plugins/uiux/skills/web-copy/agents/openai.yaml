@@ -1,0 +1,4 @@
+interface:
+  display_name: "Web Copy"
+  short_description: "Write coherent product and web copy"
+  default_prompt: "Write copy for this page"

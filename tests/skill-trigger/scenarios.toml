@@ -411,8 +411,8 @@ prompt = "I want to change the visual direction of this dashboard so it feels mo
 forbidden_terms = []
 
 [[scenario]]
-id = "uiux-web-copy-brand-voice-hero-cta"
-skill = "web-copy-from-brand-voice"
+id = "uiux-web-copy-hero-cta"
+skill = "web-copy"
 prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so it fits our brand voice and conversion goal."
 forbidden_terms = []
 
