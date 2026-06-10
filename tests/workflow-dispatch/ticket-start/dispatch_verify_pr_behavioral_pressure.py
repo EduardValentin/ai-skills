@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -11,76 +10,33 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(REPO_ROOT / "tests"))
 
-from auto_discovery import assert_auto_discovers, assert_forbidden_terms, run_agent  # noqa: E402
-from auto_discovery import SemanticCriterion, judge_response, resolve_judge_command  # noqa: E402
-
-
-def main() -> int:
-    agent_command = (
-        os.environ.get("WORKFLOW_DISPATCH_AGENT_COMMAND", "").strip()
-        or os.environ.get("SKILL_TRIGGER_AGENT_COMMAND", "").strip()
-    )
-    if not agent_command:
-        print("FAIL: WORKFLOW_DISPATCH_AGENT_COMMAND or SKILL_TRIGGER_AGENT_COMMAND is required", file=sys.stderr)
-        return 1
-
-    skill = SKILL_PATH.read_text(encoding="utf-8")
-    response = run_agent(agent_command, make_prompt(skill))
-    try:
-        check_response(response, agent_command, resolve_judge_command(agent_command))
-    except Exception as error:
-        print(f"Response:\n{response}", file=sys.stderr)
-        print(f"FAIL: {error}", file=sys.stderr)
-        return 1
-
-    print("PASS: ticket-start dispatches Verify PR capability behaviorally")
-    return 0
+from harness import WorkflowDispatchScenario, run_workflow_dispatch_suite  # noqa: E402
+from semantic_judge import SemanticCriterion  # noqa: E402
 
 
-def make_prompt(skill: str) -> str:
-    return f"""You are testing workflow compliance for a loaded skill.
-
-Loaded skill: ticket-start
-
-<skill>
-{skill}
-</skill>
-
-User request:
-Personal workflow: Linear ticket APP-123 is In Review, PR #12 exists as a draft
-on branch feature/app-123, implementation and verification reports are clean,
-the intended action is final PR verification before merge approval, merge has
-not been explicitly approved yet, and PR metadata/checks/reviews/comments have
-not been re-read.
-What should the main agent do next?
-
-Do not perform the task. Do not call tools. Return only action lines in this shape:
-ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
-
-Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Do not
-name downstream skill identifiers; describe the capability and self-contained
-request so auto-discovery can select the right skill.
-"""
-
-
-def check_response(response: str, agent_command: str, judge_command: str) -> None:
-    forbidden = (
-        "verify-pr",
-        "multi-ticket-work",
-        "implement inline",
-        "perform readiness inline",
-        "merge now",
-    )
-    assert_forbidden_terms(response, forbidden, "PR verification dispatch")
-    judge_response(
-        judge_command=judge_command,
+SCENARIOS = (
+    WorkflowDispatchScenario(
         scenario_id="ticket-start-dispatch-verify-pr",
-        scenario_prompt=(
-            "The ticket work is complete and PR verification is requested, but checks "
-            "must be re-read and explicit merge approval is missing."
+        user_request=(
+            "Personal workflow: Linear ticket APP-123 is In Review, PR #12 exists as a draft\n"
+            "on branch feature/app-123, implementation and verification reports are clean,\n"
+            "the intended action is final PR verification before merge approval, merge has\n"
+            "not been explicitly approved yet, and PR metadata/checks/reviews/comments have\n"
+            "not been re-read.\n"
+            "What should the main agent do next?"
         ),
-        response=response,
+        prompt_instructions=(
+            "Do not perform the task. Do not call tools. Return only action lines in this shape:\n"
+            "ACTION: <number> | <kind> | <capability> | <self-contained delegated request>\n\n"
+            "Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Do not\n"
+            "name downstream skill identifiers; describe the capability and self-contained\n"
+            "request so auto-discovery can select the right skill. Carry forward all concrete\n"
+            "current-state facts provided in the user request, including tracker status, PR\n"
+            "draft/readiness state, branch, clean report state, stale metadata, and merge\n"
+            "approval state."
+        ),
         criteria=(
             SemanticCriterion(
                 "delegates_pr_readiness",
@@ -99,9 +55,21 @@ def check_response(response: str, agent_command: str, judge_command: str) -> Non
                 "The response describes the PR verification capability without naming a downstream skill identifier.",
             ),
         ),
-        context="Loaded parent skill under test: ticket-start. Judge PR verification dispatch behavior, not exact wording.",
+        forbidden_terms=("verify-pr", "multi-ticket-work", "implement inline", "perform readiness inline", "merge now"),
+        expected_auto_discovery=("verify-pr",),
+        require_action_ledger=True,
+    ),
+)
+
+
+def main() -> int:
+    return run_workflow_dispatch_suite(
+        suite_name="ticket-start Verify PR dispatch scenarios",
+        parent_skill_name="ticket-start",
+        skill_path=SKILL_PATH,
+        scenarios=SCENARIOS,
+        scenario_filter_env_var="TICKET_START_VERIFY_PR_DISPATCH_SCENARIO",
     )
-    assert_auto_discovers(agent_command, response, "verify-pr")
 
 
 if __name__ == "__main__":

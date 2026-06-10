@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -11,111 +10,70 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(REPO_ROOT / "tests"))
 
-from auto_discovery import assert_forbidden_terms, run_agent  # noqa: E402
-from auto_discovery import SemanticCriterion, judge_response, resolve_judge_command  # noqa: E402
+from harness import WorkflowDispatchScenario, run_workflow_dispatch_suite  # noqa: E402
+from semantic_judge import SemanticCriterion  # noqa: E402
+
+
+SCENARIOS = (
+    WorkflowDispatchScenario(
+        scenario_id="ticket-start-delegated-execution-sequence",
+        user_request=(
+            "The confirmed requirements/design understanding and implementation plan are approved for a mixed\n"
+            "backend and UI ticket. Return the delegated execution workflow actions and final\n"
+            "PR verification gate the main agent must use before handoff."
+        ),
+        prompt_instructions=(
+            "Do not execute the ticket. Do not call tools.\n\n"
+            "Return only action lines in this shape:\n"
+            "ACTION: <number> | <kind> | <capability> | <self-contained delegated request>\n\n"
+            "Use kind DISPATCH_REQUEST for delegated subagent work and GATE for the final\n"
+            "PR verification gate. Keep each request self-contained and do not name downstream\n"
+            "skill identifiers. Include explicit actions for aggregating verifier findings,\n"
+            "delegating scoped fixes for fixable findings, rerunning affected verification,\n"
+            "and only then reaching the PR verification gate."
+        ),
+        criteria=(
+            SemanticCriterion(
+                "delegates_implementation_without_inline_work",
+                "The response begins implementation by delegating work to implementer subagents rather than doing it inline.",
+            ),
+            SemanticCriterion(
+                "delegates_verifiers",
+                "The response delegates self-review/review, QA verification, and UI/UX verification for UI-facing or mixed work.",
+            ),
+            SemanticCriterion(
+                "handles_missing_verifier_tooling",
+                "The response says a verifier that lacks required tooling or access should report CANNOT_VERIFY with a reason, after which the main session performs that verification if it has the tooling or reports the blocker.",
+            ),
+            SemanticCriterion(
+                "aggregates_findings_and_fixes",
+                "The response aggregates verifier findings, delegates scoped fixes for fixable findings, and reruns affected verification as needed.",
+            ),
+            SemanticCriterion(
+                "uses_ordered_ticket_sequence",
+                "The response follows the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, affected verification reruns, then PR verification.",
+            ),
+            SemanticCriterion(
+                "readiness_waits_for_resolved_reports",
+                "The response waits to route PR verification until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
+            ),
+        ),
+        forbidden_terms=("multi-ticket-work", "qa-verification", "ui-verification", "implement-unit-of-work"),
+        require_action_ledger=True,
+    ),
+)
 
 
 def main() -> int:
-    if "--help" in sys.argv:
-        print_usage()
-        return 0
-
-    agent_command = os.environ.get("WORKFLOW_DISPATCH_AGENT_COMMAND", "").strip()
-    if not agent_command:
-        print_usage()
-        print("FAIL: WORKFLOW_DISPATCH_AGENT_COMMAND is required", file=sys.stderr)
-        return 1
-
-    try:
-        response = run_agent(agent_command, make_prompt())
-        check_response(response, resolve_judge_command(agent_command))
-    except Exception as error:
-        print(f"FAIL: {error}", file=sys.stderr)
-        return 1
-
-    print("PASS: ticket-start defines delegated execution sequence")
-    return 0
-
-
-def print_usage() -> None:
-    print(
-        """Usage:
-  WORKFLOW_DISPATCH_AGENT_COMMAND='<command reading stdin>' \\
-    python3 tests/workflow-dispatch/ticket-start/dispatch_execution_orchestration_behavioral_pressure.py
-"""
+    return run_workflow_dispatch_suite(
+        suite_name="ticket-start delegated execution dispatch scenarios",
+        parent_skill_name="ticket-start",
+        skill_path=SKILL_PATH,
+        scenarios=SCENARIOS,
+        scenario_filter_env_var="TICKET_START_EXECUTION_DISPATCH_SCENARIO",
     )
-
-
-def make_prompt() -> str:
-    skill = SKILL_PATH.read_text(encoding="utf-8")
-    return f"""You are testing workflow compliance for a loaded skill.
-
-Loaded skill: ticket-start
-
-<skill>
-{skill}
-</skill>
-
-User request:
-The confirmed requirements/design understanding and implementation plan are approved for a mixed
-backend and UI ticket. Return the delegated execution workflow actions and final
-PR verification gate the main agent must use before handoff.
-
-Do not execute the ticket. Do not call tools.
-
-Return only action lines in this shape:
-ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
-
-Use kind DISPATCH_REQUEST for delegated subagent work and GATE for the final
-PR verification gate. Keep each request self-contained and do not name downstream
-skill identifiers.
-"""
-
-
-def check_response(response: str, judge_command: str) -> None:
-    forbidden = ("multi-ticket-work", "qa-verification", "ui-verification", "implement-unit-of-work")
-    try:
-        assert_forbidden_terms(response, forbidden, "execution orchestration dispatch")
-        judge_response(
-            judge_command=judge_command,
-            scenario_id="ticket-start-delegated-execution-sequence",
-            scenario_prompt=(
-                "Confirmed requirements/design understanding and implementation plan are approved for a mixed backend/UI ticket; "
-                "return delegated execution workflow actions and the final PR verification gate before handoff."
-            ),
-            response=response,
-            criteria=(
-                SemanticCriterion(
-                    "delegates_implementation_without_inline_work",
-                    "The response begins implementation by delegating work to implementer subagents rather than doing it inline.",
-                ),
-                SemanticCriterion(
-                    "delegates_verifiers",
-                    "The response delegates self-review/review, QA verification, and UI/UX verification for UI-facing or mixed work.",
-                ),
-                SemanticCriterion(
-                    "handles_missing_verifier_tooling",
-                    "The response says a verifier that lacks required tooling or access should report CANNOT_VERIFY with a reason, after which the main session performs that verification if it has the tooling or reports the blocker.",
-                ),
-                SemanticCriterion(
-                    "aggregates_findings_and_fixes",
-                    "The response aggregates verifier findings, delegates scoped fixes for fixable findings, and reruns affected verification as needed.",
-                ),
-                SemanticCriterion(
-                    "uses_ordered_ticket_sequence",
-                    "The response follows the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, affected verification reruns, then PR verification.",
-                ),
-                SemanticCriterion(
-                    "readiness_waits_for_resolved_reports",
-                    "The response waits to route PR verification until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
-                ),
-            ),
-            context="Loaded parent skill under test: ticket-start. Judge the delegated execution sequence, not exact wording.",
-        )
-    except AssertionError as error:
-        print(f"Response:\n{response}", file=sys.stderr)
-        raise error
 
 
 if __name__ == "__main__":

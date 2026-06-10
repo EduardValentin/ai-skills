@@ -3,13 +3,15 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from nested_suite import run_grouped_python_scripts  # noqa: E402
 
 
 def main() -> int:
@@ -25,27 +27,11 @@ def main() -> int:
 
 
 def run_nested_contracts() -> int:
-    scripts = sorted(SCRIPT_DIR.glob("*/*_contract.py"))
-    if not scripts:
-        raise RuntimeError("workflow-dispatch requires grouped *_contract.py tests")
-
-    for script in scripts:
-        completed = subprocess.run(
-            [sys.executable, str(script)],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if completed.stdout:
-            print(completed.stdout, end="")
-        if completed.stderr:
-            print(completed.stderr, end="", file=sys.stderr)
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"{script.relative_to(REPO_ROOT)} failed with exit code {completed.returncode}"
-            )
-    return len(scripts)
+    return run_grouped_python_scripts(
+        suite_dir=SCRIPT_DIR,
+        pattern="*/*_contract.py",
+        missing_message="workflow-dispatch requires grouped *_contract.py tests",
+    )
 
 
 def check_downstream_discovery_is_black_box() -> None:

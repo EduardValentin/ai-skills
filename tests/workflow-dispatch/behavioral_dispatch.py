@@ -4,13 +4,15 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
+sys.path.append(str(REPO_ROOT / "tests"))
+
+from nested_suite import run_grouped_python_scripts  # noqa: E402
 
 
 def main() -> int:
@@ -58,31 +60,15 @@ on the installed harness without an injected skill index."""
 
 
 def run_nested_behavioral_pressure(agent_command: str) -> int:
-    scripts = sorted(SCRIPT_DIR.glob("*/*_behavioral_pressure.py"))
-    if not scripts:
-        raise RuntimeError("workflow-dispatch requires grouped *_behavioral_pressure.py tests")
-
     env = os.environ.copy()
     env["WORKFLOW_DISPATCH_AGENT_COMMAND"] = agent_command
 
-    for script in scripts:
-        completed = subprocess.run(
-            [sys.executable, str(script)],
-            cwd=REPO_ROOT,
-            env=env,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if completed.stdout:
-            print(completed.stdout, end="")
-        if completed.stderr:
-            print(completed.stderr, end="", file=sys.stderr)
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"{script.relative_to(REPO_ROOT)} failed with exit code {completed.returncode}"
-            )
-    return len(scripts)
+    return run_grouped_python_scripts(
+        suite_dir=SCRIPT_DIR,
+        pattern="*/*_behavioral_pressure.py",
+        missing_message="workflow-dispatch requires grouped *_behavioral_pressure.py tests",
+        env=env,
+    )
 
 
 if __name__ == "__main__":
