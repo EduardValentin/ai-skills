@@ -5,13 +5,17 @@ actions after the parent skill body is loaded. It is separate from
 `skill-trigger`, whose behavioral suite is the black-box installed-harness test
 for whether a user request picks up a skill without injected context.
 
-Keep workflow tests here when the behavior being tested is "skill X dispatches
-or coordinates a downstream capability." Group Python tests by the skill under
-test, for example:
+Keep workflow tests here only when the behavior being tested is "skill X emits
+a delegated request that the installed harness can auto-discover as skill Y."
+Do not duplicate broad loaded-skill behavioral pressure tests here. Group tests
+by the skill under test. Keep scenario data in TOML when scenarios share the same
+harness, and use Python only for the grouped runner, static contract, or custom
+response checks, for example:
 
 ```text
-tests/workflow-dispatch/ticket-start/dispatch_scoping_contract.py
-tests/workflow-dispatch/ticket-start/dispatch_scoping_behavioral_pressure.py
+tests/workflow-dispatch/ticket-start/scenarios.toml
+tests/workflow-dispatch/ticket-start/ticket_start_contract.py
+tests/workflow-dispatch/ticket-start/ticket_start_behavioral_pressure.py
 ```
 
 ## Static Contract
@@ -46,11 +50,13 @@ workflow action ledger. This is a loaded-skill pressure test, not proof that the
 parent skill was discovered by the installed harness. Parent-skill discovery
 belongs in `tests/skill-trigger/behavioral_pressure.py`.
 
-For downstream discovery coverage, workflow behavioral tests then send the
-delegated request alone to the installed harness and assert that the intended
-downstream skill is selected. The downstream check does not provide a skill body,
-an `Available skills` list, or any repo-built skill index. If the harness cannot
-discover the downstream skill from the delegated request, the test fails.
+For downstream discovery coverage, workflow behavioral tests then send only the
+emitted action rows for the handoff to the installed harness and assert that the
+intended downstream skill is selected. `DISPATCH_REQUEST` rows are preferred when
+present, but user-facing skill handoffs can use another action kind. The
+downstream check does not provide a skill body, an `Available skills` list, or
+any repo-built skill index. If the harness cannot discover the downstream skill
+from the delegated request, the test fails.
 
 Behavioral checks use a hybrid model:
 

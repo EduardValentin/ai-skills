@@ -52,17 +52,18 @@ Open with a short briefing grounded in the ticket and current repo: what is know
 
 Run a user-facing brainstorming session until the agent and user share a concrete understanding of the work, boundaries, and success criteria. Keep the discussion grounded in the ticket, parent context, approved artifacts, PRD/design slices, and current codebase facts.
 
-When the user confirms the shared requirements/design understanding, trigger implementation-plan writing from that confirmed ticket context.
+The brainstorming phase produces the user-approved spec/design. Do not route plan writing before that approval.
 
-## Step 3 - Approve The Implementation Plan
+## Step 3 - Create And Approve The Spec And Plan
 
-Get user approval for the implementation plan before coding starts. The plan must be concrete enough to route implementation and verification work.
+1. After the spec/design is approved, route implementation-plan writing from the approved spec and ticket context.
+2. Get user approval for the implementation plan before coding starts. The plan must be concrete enough to route implementation and verification work.
 
-Do not implement, scaffold, or mutate product code before plan approval.
+Do not implement, scaffold, mutate product code, or route execution before both spec approval and implementation-plan approval.
 
 ## Step 4 - Route Execution And Verification
 
-After plan approval, implementation begins by delegating work to implementer subagents in the most optimal way to minimize dependencies and maximize throughput and quality of work.
+After both spec approval and plan approval, implementation begins by delegating work to implementer subagents in the most optimal way to minimize dependencies and maximize throughput and quality of work.
 
 Respect this ticket sequence:
 
@@ -94,7 +95,7 @@ Relay the readiness result to the user. Do not perform PR, branch, tracker, or m
 
 End with a concise report:
 
-- ticket and approved plan summary
+- ticket, approved spec, and approved plan summary
 - what was implemented
 - what worked, what did not, and unresolved blockers
 - implementation reports, self-review/review results, QA results, UI/UX results, and skipped rows with reasons
@@ -107,7 +108,7 @@ End with a concise report:
 Stop and recover when:
 
 - ticket, repo, branch, PR, or requirement facts are stale or unavailable but would affect the decision
-- confirmed requirements/design understanding or implementation-plan approval is skipped
+- spec approval or implementation-plan approval is skipped
 - subagent work is silently replaced by inline implementation, QA, UI/UX verification, or PR/ticket mutation
 - PR verification is requested while required implementation, review, QA, UI/UX, finding, fix, or rerun reports are missing
 - merge or ticket completion is attempted without required checks and explicit user approval

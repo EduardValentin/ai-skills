@@ -1,0 +1,142 @@
+[[scenario]]
+id = "ticket-start-dispatch-scoping"
+user_request = """
+Ticket intake for Linear issue APP-123 is complete: title, description, acceptance
+criteria, parent context, repo instructions, and known constraints are available.
+Implementation planning has not started. What workflow handoff should the main agent
+perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers.
+"""
+forbidden_terms = ["agents/scoping.md", "`codebase-scope-map`", "$codebase-scope-map"]
+expected_auto_discovery = ["codebase-scope-map"]
+require_action_ledger = true
+response_checks = ["scoping_before_local_mapping"]
+
+[[scenario.criteria]]
+key = "scoping_dispatch_before_local_mapping"
+description = "The response delegates scoping/codebase mapping before performing local code mapping; setup, source-control, workflow-selection, and intake actions may appear first."
+
+[[scenario.criteria]]
+key = "scoping_request_is_self_contained"
+description = "The delegated request includes enough ticket, acceptance criteria, repository, workflow, and compact input context for a separate agent to map scope."
+
+[[scenario.criteria]]
+key = "asks_for_scope_evidence"
+description = "The delegated request asks the scoping agent to return compact scope evidence such as affected files or surfaces, relevant locators, risks, constraints, tests, or downstream implementation slices."
+
+[[scenario]]
+id = "ticket-start-dispatch-brainstorming"
+user_request = """
+Ticket intake and codebase scoping for one Linear issue are complete. Parent context,
+relevant artifact slices, repo state, worktree freshness, and a compact scope report
+are available. The user and agent have not yet reached shared requirements/design
+understanding. What workflow handoff should the main agent perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers.
+"""
+forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans"]
+expected_auto_discovery = ["superpowers:brainstorming"]
+require_action_ledger = true
+
+[[scenario.criteria]]
+key = "delegates_brainstorming_phase"
+description = "The response routes a user-facing brainstorming phase rather than writing a spec, writing a plan, or starting implementation."
+
+[[scenario.criteria]]
+key = "brainstorming_request_is_grounded"
+description = "The delegated request is grounded in available ticket context, known ambiguities, affected surfaces, constraints, and success criteria so brainstorming can produce the approved spec/design."
+
+[[scenario.criteria]]
+key = "blocks_plan_and_execution"
+description = "The response makes clear that plan writing and execution wait until the brainstorming phase produces an approved spec/design."
+
+[[scenario.criteria]]
+key = "does_not_name_downstream_skill"
+description = "The response avoids exact downstream skill identifiers such as plugin-prefixed names while allowing generic capability labels."
+
+[[scenario]]
+id = "ticket-start-dispatch-writing-plans"
+user_request = """
+The brainstorming phase for one Linear issue has produced a user-approved spec/design.
+Ticket context, parent context, artifact slices, codebase scope, and repo constraints are
+available. No implementation plan has been written or approved yet. What workflow handoff
+should the main agent perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers.
+"""
+forbidden_terms = ["superpowers:writing-plans", "$writing-plans", "start coding", "execute now"]
+expected_auto_discovery = ["superpowers:writing-plans"]
+require_action_ledger = true
+
+[[scenario.criteria]]
+key = "delegates_plan_writing"
+description = "The response routes implementation-plan writing from the approved spec/design and ticket context instead of writing code or dispatching implementation."
+
+[[scenario.criteria]]
+key = "plan_request_is_self_contained"
+description = "The delegated request includes the approved spec/design and ticket context needed to write an implementation plan for later user approval."
+
+[[scenario.criteria]]
+key = "blocks_execution_until_plan_approval"
+description = "The response keeps execution out of scope and indicates the plan is for user approval before coding."
+
+[[scenario.criteria]]
+key = "does_not_name_downstream_skill"
+description = "The response avoids exact downstream skill identifiers such as plugin-prefixed names while allowing generic capability labels."
+
+[[scenario]]
+id = "ticket-start-dispatch-verify-pr"
+user_request = """
+Personal workflow: Linear ticket APP-123 is In Review, PR #12 exists as a draft
+on branch feature/app-123, implementation and verification reports are clean,
+the intended action is final PR verification before merge approval, merge has
+not been explicitly approved yet, and PR metadata/checks/reviews/comments have
+not been re-read.
+What should the main agent do next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Do not
+name downstream skill identifiers; describe the capability and self-contained
+request so auto-discovery can select the right skill. Carry forward all concrete
+current-state facts provided in the user request, including tracker status, PR
+draft/readiness state, branch, clean report state, stale metadata, and merge
+approval state.
+"""
+forbidden_terms = ["verify-pr", "multi-ticket-work", "implement inline", "perform readiness inline", "merge now"]
+expected_auto_discovery = ["verify-pr"]
+require_action_ledger = true
+
+[[scenario.criteria]]
+key = "delegates_pr_readiness"
+description = "The response delegates PR verification instead of evaluating readiness, merging, or mutating source-control state inline."
+
+[[scenario.criteria]]
+key = "readiness_request_is_self_contained"
+description = "The delegated request includes PR or branch, current tracker state, intended PR action, required checks expectation, review/comment status expectation, and explicit merge approval state."
+
+[[scenario.criteria]]
+key = "does_not_mutate_inline"
+description = "The response does not merge, mark the PR ready, update tickets, dismiss comments, or perform source-control writes inline."
+
+[[scenario.criteria]]
+key = "does_not_name_downstream_skill"
+description = "The response avoids exact downstream skill identifiers such as plugin-prefixed names while allowing generic capability labels."
