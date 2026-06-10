@@ -1,24 +1,23 @@
 ---
 name: design-direction-brainstorming
-description: Use when a UI or UX task changes the visual direction of a page, component, flow, or product surface; has multiple plausible design directions; has unclear audience, emotional tone, or success criteria; or needs alignment before visual or interaction decisions.
+description: Use when a UI or UX task changes the visual direction of a screen, flow, feature, or product surface; has multiple plausible design directions; has unclear audience, emotional tone, or success criteria; or needs alignment before visual or interaction decisions.
 ---
 
 # Design Direction Brainstorming
 
 ## Overview
 
-Run a relentless collaborative interview before changing visual direction. The goal is shared, common understanding: the user and agent agree on audience, intent, constraints, desired reaction, and the design direction before pixels, components, or styling decisions are chosen.
+Run a relentless collaborative interview before changing visual direction. The goal is shared, common understanding: the user and agent agree on audience, intent, constraints, desired reaction, and the design direction before layout or styling decisions are chosen.
 
 ## When To Use
 
 Pause before implementation or redesign when:
 
-- The user wants to change how a page, component, section, flow, or product surface should land visually.
+- The user wants to change how a screen, flow, feature, or product surface should land visually.
 - Several aesthetics, layouts, densities, interaction models, or emotional tones could reasonably fit.
 - The user asks for broad improvement like "make it better", "more premium", "cleaner", "friendlier", or "less cluttered".
 - The change affects first impression, trust, perceived quality, or product positioning.
 - The audience, workflow, or success criteria are unstated.
-- The component may become a reusable pattern.
 
 ## Relentless Brainstorm Interview
 
@@ -42,7 +41,7 @@ After enough context is gathered, propose two or three distinct directions. Each
 - Core idea.
 - Best fit.
 - Tradeoff.
-- Visual language: hierarchy, density, color rhythm, typography, motion, component shape.
+- Visual language: hierarchy, density, color rhythm, typography, motion, and shape language.
 
 Then recommend one option and explain why it best fits the audience, goal, constraints, and desired impression. The recommendation should be opinionated, but still invite correction before implementation.
 

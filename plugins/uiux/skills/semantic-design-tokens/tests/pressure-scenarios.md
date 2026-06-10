@@ -11,19 +11,18 @@ These scenarios test that agents preserve token discipline when visual polish, s
 > The user asks you to make a pricing card match a screenshot. The exact colors are easy to sample as `#2563eb` and `#f8fafc`, but similar colors already exist as semantic app tokens. The fastest layout uses local sizing values like `22px` padding and `412px` width. The user says, "Don't overthink the design system, just make it match."
 >
 > Options:
-> A) Inventory existing tokens, reuse matching semantic color and sizing tokens, add global tokens only for reusable missing roles, keep genuine one-off sizing local, and use component-scoped color tokens only for genuinely unique component colors.
+> A) Inventory existing tokens, reuse matching semantic color and sizing tokens, add global tokens only for reusable missing roles, and keep genuine one-off values local.
 > B) Use the raw values locally because screenshot parity matters more than token naming for this one card.
-> C) Add global primitive or component-specific tokens for the sampled colors and pixel values, then use them directly in the component.
+> C) Add global primitive or surface-specific tokens for the sampled colors and pixel values, then use them directly in the surface.
 >
 > Choose A, B, or C and write the exact next message or implementation approach.
 
 **Pass criteria:**
 
 - Chooses A.
-- Inventories theme/global CSS/component variants before styling.
+- Inventories theme files, global CSS, token docs, and design docs before styling.
 - Reuses existing semantic tokens for colors and sizes that already exist in the system.
-- Does not create global component-specific tokens for values used only by this component.
-- Allows component-scoped color tokens only for genuinely unique one-off component colors.
+- Does not create global tokens for values used only by this surface.
 - Keeps genuinely one-off sizing local with the chosen styling utilities instead of adding global sizing tokens.
 - Rejects primitive, screenshot-derived names as the global token contract.
 
@@ -33,7 +32,7 @@ These scenarios test that agents preserve token discipline when visual polish, s
 
 > IMPORTANT: This is a real styling review. You must choose and act; do not give a hypothetical answer.
 >
-> A scroll-driven section uses a local bracketed height value such as `min-h-[250vh]` to create enough scroll distance for an animation. The audit scanner reports it as a bracketed literal style value. There is no existing scroll-distance token, the value is not repeated elsewhere, and it is not standing in for color, typography, radius, shadow, motion, spacing hierarchy, or a reusable component variant.
+> A scroll-driven section uses a local bracketed height value such as `min-h-[250vh]` to create enough scroll distance for an animation. The audit scanner reports it as a bracketed literal style value. There is no existing scroll-distance token, the value is not repeated elsewhere, and it is not standing in for color, typography, radius, shadow, motion, spacing hierarchy, or another reusable semantic role.
 >
 > Options:
 > A) Treat the scanner output as a review prompt, keep the local scroll-distance value, and document that it is not a semantic-token concern unless it becomes a repeated pattern.
@@ -46,7 +45,7 @@ These scenarios test that agents preserve token discipline when visual polish, s
 
 - Chooses A.
 - Does not classify local styling utility usage as a token violation by itself.
-- Does not add a global token for a component-only scroll-distance value.
+- Does not add a global token for a local scroll-distance value.
 - Explains that the scanner output requires judgment against existing semantic roles and reuse.
 
 ## RED-GREEN Procedure

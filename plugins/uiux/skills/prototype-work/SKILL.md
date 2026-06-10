@@ -20,7 +20,7 @@ Prototype reference applications define product UX before production work: user 
 
 - Read and write access to the working tree.
 - Ability to run the reference React app with its existing JavaScript tooling.
-- Native browser tooling to navigate, click through flows, take screenshots, inspect states, and validate changes.
+- Native browser tooling to navigate the app, click through flows, and capture screenshots or browser evidence.
 
 ## Preparation
 
@@ -42,15 +42,12 @@ The script only auto-detects React apps under `designs/`. If it cannot find one,
    - Design: design philosophy, visual direction, accessibility priorities, and design-system rules.
    - App scope: routes, mock boundaries, semantic tokens, theme configuration, component inventory, variants, and design-system configuration.
 
-Keep task notes clear about any relevant semantic tokens, reusable components, accessible interface work, visual direction, screenshots, validation needs, or brand voice constraints.
-
 ## Prototype Rules
 
 - Keep mocks, routing, and business rules separate from presentational components.
-- Use configured router primitives and validate flows by clicking through the app instead of manually typing URLs that lose app state.
+- Use configured router primitives and exercise flows by clicking through the app instead of manually typing URLs that lose app state.
 - Mock new or changed business rules explicitly in the prototype.
 - Represent async prototype behavior with appropriate loading, success, empty, and error states.
-- Use the existing design-system contract; add a new primitive only for a reusable semantic role.
 
 ## PRD Consolidation
 
@@ -61,7 +58,6 @@ Keep PRD edits concise and non-redundant. The PRD contains business rules and pr
 ## Completion
 
 - Click through the changed flow in the running prototype.
-- Capture screenshots for the changed surfaces and relevant states.
-- Validate affected breakpoints and states before calling the work done.
+- Capture browser evidence for the changed surfaces.
 - Confirm PRD consolidation was completed when product behavior changed.
-- In the final response, name browser evidence, docs changed, and any residual validation gap.
+- In the final response, name browser evidence, docs changed, and any remaining blocker.

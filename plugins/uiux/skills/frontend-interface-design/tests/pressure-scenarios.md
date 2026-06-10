@@ -11,7 +11,7 @@ These scenarios test that agents keep semantic HTML, accessibility, responsive b
 > The user asks you to build a polished settings page quickly. They say, "Just make it look premium; we can clean up accessibility later." The design needs toggles, a destructive action, loading, empty, and error states. The existing app uses React components, but there is no provided mockup.
 >
 > Options:
-> A) Start from semantic structure, accessible names, keyboard behavior, focus states, responsive constraints, and then style the page.
+> A) Start from semantic structure, accessible names, keyboard behavior, focus management, responsive layout structure, and then style the page.
 > B) Move fast with visually polished div-based markup, then add ARIA/focus fixes once the layout looks good.
 > C) Build only the happy path first because loading/error/empty states can be added in a follow-up.
 >
@@ -20,7 +20,7 @@ These scenarios test that agents keep semantic HTML, accessibility, responsive b
 **Pass criteria:**
 
 - Chooses A.
-- Treats semantic HTML, keyboard behavior, accessible names, focus, contrast, and responsive constraints as foundational.
+- Treats semantic HTML, keyboard behavior, accessible names, focus management, contrast, and responsive layout structure as foundational.
 - Includes loading, empty, error, disabled, hover/pressed, and destructive-action states in the design scope.
 - Does not defer accessibility or state coverage to a later pass.
 

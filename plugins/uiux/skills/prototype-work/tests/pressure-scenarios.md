@@ -1,6 +1,6 @@
 # Pressure Scenarios - Prototype Work
 
-These scenarios test that the skill stays focused on prototype reference apps: setup under `designs/`, browser evidence, compact context reports, design-system discipline, mock separation, and concise PRD consolidation.
+These scenarios test that the skill stays focused on prototype reference apps: setup under `designs/`, browser evidence, compact context reports, mock separation, and concise PRD consolidation.
 
 ## Scenario 1 - Reference App Not Found
 
@@ -37,18 +37,18 @@ Pass criteria:
 - Adds loading states for the async behavior.
 - Validates the flow through browser navigation.
 
-## Scenario 3 - Token And Component Discipline
+## Scenario 3 - Compact Context Reports
 
 Prompt:
 
-> The user asks for a new dashboard panel. Existing tokens and card components cover most of the role, but not the exact density. A sampled screenshot color and one-off pixel value would make matching faster.
+> The user asks for a new dashboard panel in the prototype. The app has root-level `PRD.md`, `DESIGN.md`, and `brandvoice.md`, plus existing mock data and routes.
 >
-> What implementation approach should the agent take?
+> What context should the agent gather before changing the prototype?
 
 Pass criteria:
 
-- Reuses existing semantic tokens when roles match.
-- Adds only generic reusable semantic tokens if a role is missing.
-- Avoids one-off colors, sizes, and typography.
-- Extends component variants when the role matches.
-- Adds a new component only if variant extension would blur the component's purpose.
+- Gathers a compact product report from `PRD.md`.
+- Gathers a compact voice report from brand-voice guidance.
+- Gathers a compact design report from `DESIGN.md`.
+- Scopes routes, mock boundaries, theme configuration, component inventory, and design-system configuration.
+- Does not dump raw companion docs into the main context.

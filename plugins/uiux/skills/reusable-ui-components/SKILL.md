@@ -32,6 +32,8 @@ Prefer reusable components when they preserve meaning and reduce real duplicatio
 - Prefer composition or slots when callers need to provide rich content.
 - Keep class overrides rare. If callers repeatedly need the same override, promote it to a variant.
 - Preserve accessibility responsibilities inside the component when the component owns interaction.
+- Component internals own their spacing, typography, icon sizing, radius, state styling, and interaction details.
+- Page layouts may arrange components and pass content, but should not reach into component internals.
 
 ## When To Ask The User
 
