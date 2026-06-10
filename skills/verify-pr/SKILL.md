@@ -11,9 +11,11 @@ Verify PR validates whether a pull request is ready for the requested next step:
 
 Read PR and ticket metadata directly through available tooling such as MCP connectors, REST APIs, CLIs, or authenticated local metadata. Treat user-provided state as a hint unless direct source-of-truth access is unavailable.
 
-Do not return a final report with unknown PR state just because the prompt omitted current metadata. First fetch, or in a dry-run/no-tools context state the required fetch sequence: PR metadata, linked ticket IDs and status, CI checks, implemented-surface test evidence, review approval, and unresolved comments. A report with `unknown` or `not available` fields is valid only after the fetch was actually attempted and blocked. Ask the user for missing details only when the available tooling cannot fetch the required metadata; then return `NOT_READY` with the required next input.
+## Metadata Resolution
 
-For missing current state, spell out this fetch path: source-control PR metadata first; linked ticket IDs from the PR metadata, branch, title, or body; ticket status from Jira or Linear; then CI checks, implemented-surface tests, review approvals, and unresolved comments. Include the fallback sentence that if tooling, API, CLI, auth, or connector access is blocked, the user must provide the missing PR/ticket/check/review details.
+For missing current state, fetch or state this fetch path before a readiness verdict: source-control PR metadata first; linked ticket IDs from the PR metadata, branch, title, or body; ticket status from Jira or Linear; then CI checks, implemented-surface tests, review approvals, and unresolved comments.
+
+If tooling, API, CLI, auth, or connector access is blocked, return `NOT_READY` and ask the user for the missing PR, ticket, check, test, review, or comment details required for the next verdict.
 
 ## Inputs
 
@@ -34,17 +36,25 @@ Return `READY` only when all gates needed for the requested action pass.
 4. Tests that cover the implemented surface area are passing. Prefer authoritative CI evidence; otherwise run or inspect the relevant project test command and report exactly what covered the changed behavior.
 5. The PR has the required review approval for the repository's policy and has no active unresolved review comments, unresolved threads, or requested-changes reviews.
 
-Do not merge, mark ready, update tickets, dismiss comments, or perform source-control mutations while any gate is blocked.
-
 ## After-Merge Monitoring
 
 When the user explicitly asks to merge a PR, first confirm the PR is already `READY` and that the user explicitly approved the merge. Record both preconditions in the report. Then perform the merge through the source-control system and start a background process or subagent to monitor post-merge CI on the merge commit or target branch.
 
 If post-merge CI passes, report the merged PR, monitored checks, and final status.
 
-If post-merge CI fails, fetch the failing check details from the source-control system and report `POST_MERGE_BLOCKED` with the failing job, error summary, affected commit or branch, and a proposed plan of action. A failing observed check means monitoring ran and found a failure; do not call that "monitoring blocked." Do not implement the fix unless the user asks for follow-up work.
+If post-merge CI fails, fetch the failing check details from the source-control system and report `POST_MERGE_BLOCKED` with the failing job, error summary, affected commit or branch, and a proposed plan of action. The report must include a `Source-control failure details fetched` line, or `Source-control failure details requested` when the fetch is blocked, plus a `Proposed plan` line that names the likely investigation or fix path while leaving implementation for a separate user request.
 
 If monitoring cannot be started because tooling, auth, or provider metadata is unavailable, report that monitoring is blocked and name the required access.
+
+## Forbidden Behavior
+
+- Returning a final report with `unknown` or `not available` PR state because the prompt omitted current metadata and no fetch was attempted.
+- Treating user-provided PR, check, review, comment, or ticket state as authoritative while source-of-truth access is available.
+- Asking the user for missing metadata before trying available MCP, API, CLI, connector, or authenticated local metadata access.
+- Marking the PR `READY` when required metadata is missing, required CI checks are pending/failing/cancelled/unknown, implemented-surface test evidence is missing or failing, the linked ticket is outside a review-state column, required approval is absent, requested changes are active, or review comments/threads are unresolved.
+- Merging, marking ready, updating tickets, dismissing comments, or performing source-control mutations while any readiness gate is blocked.
+- Calling an observed post-merge CI failure "monitoring blocked"; it is `POST_MERGE_BLOCKED`.
+- Implementing post-merge CI fixes unless the user asks for follow-up implementation work.
 
 ## Report
 
@@ -75,4 +85,10 @@ Actions:
 
 Blockers:
 - <none or concrete blockers with required next input>
+
+Source-control failure details fetched/requested:
+- <required only for POST_MERGE_BLOCKED; include fetched check/job/error details or the blocked fetch input needed>
+
+Proposed plan:
+- <required only for POST_MERGE_BLOCKED>
 ```
