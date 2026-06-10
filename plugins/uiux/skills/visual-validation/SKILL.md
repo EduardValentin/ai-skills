@@ -9,6 +9,12 @@ description: Use when validating frontend UI changes, screenshots, responsive la
 
 Do not declare visual work complete from code inspection alone. Validate the rendered interface through screenshots or live browser inspection, then fix what the evidence shows.
 
+## When To Use
+
+- Validating frontend UI changes, screenshots, responsive layouts, visual regressions, or breakpoint behavior.
+- Checking overflow, clipping, focus states, contrast, visual parity, canvas/3D output, or browser-rendered states.
+- A task is ready to be judged by rendered evidence rather than source inspection alone.
+
 ## Capture Ladder
 
 Use the highest available capability:

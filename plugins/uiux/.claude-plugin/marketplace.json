@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "uiux",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "UI/UX craft skills for React prototype reference app work, accessible frontend design, semantic design tokens, reusable components, visual validation, design direction, and brand-voice web copy.",
       "author": {
         "name": "Eduard Trocan"

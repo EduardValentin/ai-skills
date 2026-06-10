@@ -9,6 +9,12 @@ description: Use when designing, implementing, or reviewing frontend pages, comp
 
 Design from structure outward: correct semantics and accessible interaction first, then visual hierarchy, composition, motion, and polish. The result should feel intentionally designed for the product, not assembled from generic defaults.
 
+## When To Use
+
+- Designing, implementing, or reviewing frontend pages, components, layouts, forms, dashboards, or app surfaces.
+- The work depends on semantic HTML, accessibility, responsive behavior, UI states, motion, or production-grade visual polish.
+- The UI direction is already clear enough to implement or critique.
+
 ## Workflow
 
 1. Establish context: audience, task, product tone, density needs, existing design system, and technical constraints.
@@ -27,16 +33,6 @@ Design from structure outward: correct semantics and accessible interaction firs
 - Color use supports hierarchy, contrast, and state. Avoid one-note palettes and decorative gradients that do not serve the product.
 - Motion clarifies cause and effect. Respect reduced-motion preferences and avoid animation that delays core tasks.
 - Design choices match the domain: operational apps should be dense, scannable, and restrained; editorial or expressive surfaces can take more visual risk.
-
-## Common Mistakes
-
-| Mistake | Correction |
-|---|---|
-| Styling divs before choosing the right elements | Build the native document structure first, then style it. |
-| Treating accessibility as a final audit | Include accessible names, focus, keyboard paths, and contrast in the first implementation. |
-| Copying generic card-heavy layouts | Choose density, hierarchy, and rhythm based on the user's actual workflow. |
-| Adding decorative effects to compensate for weak structure | Fix hierarchy and spacing before adding atmosphere. |
-| Designing only the happy path | Include loading, empty, error, disabled, and long-content states. |
 
 ## Done Means
 

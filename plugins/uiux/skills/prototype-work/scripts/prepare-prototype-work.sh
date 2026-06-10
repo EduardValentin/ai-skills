@@ -107,7 +107,7 @@ locate_prototype_app() {
       dirname "$package_file"
       return 0
     fi
-  done < <(find "$designs_dir" -mindepth 2 -maxdepth 4 -name package.json -not -path '*/node_modules/*' | sort)
+  done < <(find "$designs_dir" -mindepth 1 -maxdepth 4 -name package.json -not -path '*/node_modules/*' | sort)
 
   fail "Could not find a React package.json under $designs_dir. Ask the user for the reference app path, then rerun with --app-root."
 }

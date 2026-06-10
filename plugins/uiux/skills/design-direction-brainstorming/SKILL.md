@@ -9,7 +9,7 @@ description: Use when a UI or UX task changes the visual direction of a page, co
 
 Run a relentless collaborative interview before changing visual direction. The goal is shared, common understanding: the user and agent agree on audience, intent, constraints, desired reaction, and the design direction before pixels, components, or styling decisions are chosen.
 
-## When Direction Is Unclear
+## When To Use
 
 Pause before implementation or redesign when:
 
@@ -64,12 +64,3 @@ Shared design direction:
 ```
 
 Do not implement until the brief is confirmed or the remaining open questions are clearly non-blocking. If the user disagrees with the recommendation, keep brainstorming until a common direction emerges.
-
-## Common Mistakes
-
-| Mistake | Correction |
-|---|---|
-| Asking one vague question and moving on | Continue the interview until the design tradeoffs are explicit. |
-| Treating "you decide" as permission to skip alignment | Present options, recommend one, and confirm the reasoning. |
-| Offering options before understanding audience or constraints | Gather the decision-shaping context first. |
-| Making every option a mild variation of the same idea | Make options meaningfully different in density, tone, hierarchy, or interaction model. |

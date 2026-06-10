@@ -9,6 +9,12 @@ description: Use when writing, rewriting, or reviewing website, app, product, ma
 
 Write copy from the brand's voice, the page's job, and the user's context. Good UI copy is clear, specific, human, and useful at the moment it appears.
 
+## When To Use
+
+- Writing, rewriting, or reviewing website, app, product, onboarding, empty-state, error, CTA, hero, navigation, or microcopy.
+- Copy must follow a brand voice, audience, message, tone, conversion goal, or product context.
+- The risk is generic, off-brand, unclear, or inaccessible UI copy.
+
 ## Workflow
 
 1. Gather the copy brief: audience, page or component goal, key message, tone, must-use terms, banned terms, and desired user action.

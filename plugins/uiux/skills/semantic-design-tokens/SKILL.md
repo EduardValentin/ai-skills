@@ -9,6 +9,12 @@ description: Use when styling, auditing, or extending frontend UI that needs sem
 
 Use tokens as the design-system contract. Global semantic tokens should express reusable roles across the application, not component-specific implementation details.
 
+## When To Use
+
+- Styling, auditing, or extending UI where semantic color, spacing, typography, radii, shadows, or motion roles matter.
+- Reviewing raw values, duplicated style constants, or component-local values that may bypass the design system.
+- Deciding whether a new value belongs in global tokens, component-scoped tokens, a variant, or local styling.
+
 ## Token-First Workflow
 
 1. Inventory existing tokens before styling: theme files, global CSS, component variants, and DESIGN.md or equivalent docs.
