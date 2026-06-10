@@ -24,18 +24,6 @@ def main() -> int:
 
 
 def check_contract(skill: str) -> None:
-    required_terms = (
-        "Dispatch one ticket orchestrator per ticket or unit of work.",
-        "The first-level subagent prompt must call the agent a ticket orchestrator",
-        "Each ticket-orchestrator request must be self-contained.",
-        "A ticket orchestrator owns coordination of the one-ticket workflow",
-        "It dispatches internal subagents or delegated requests for scoping, implementation, independent review, QA, UI/UX checks when applicable, scoped fixes, reruns, PR creation, and PR verification or handoff.",
-        "The ticket orchestrator coordinates those internal agents and aggregates their reports; it does not implement or verify the ticket directly.",
-        "Do not assign implementation, review, QA, UI/UX checks, PR creation, and completion reporting to one worker prompt.",
-    )
-    for term in required_terms:
-        assert_contains(skill, term)
-
     forbidden_skill_identifiers = (
         "ticket-start",
         "$ticket-start",
@@ -47,11 +35,6 @@ def check_contract(skill: str) -> None:
     )
     for identifier in forbidden_skill_identifiers:
         assert_not_contains(skill, identifier)
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

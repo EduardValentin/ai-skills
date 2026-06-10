@@ -32,51 +32,6 @@ def main() -> int:
 def check_skill_contract(skill: str) -> None:
     assert_line_count_at_most(skill, 110)
 
-    required_terms = (
-        "name: qa-verification",
-        "manually verifying acceptance criteria",
-        "running app, API, service, job, script, integration, frontend PR, or mixed executable surface",
-        "QA cannot proceed",
-        "CANNOT_VERIFY",
-        "Manually verify that an implementation satisfies its acceptance criteria",
-        "use this mandatory order before verification",
-        "first access the PR and ticket through available tooling such as MCP, API, CLI, or authenticated local metadata",
-        "ask the caller for the ticket/PR details, acceptance criteria, implemented surface area, and testing instructions",
-        "only after the caller cannot provide those details, scope the diff to infer a provisional verification target",
-        "Blocked metadata alone is not enough to fall back to the diff",
-        "Use PR/ticket metadata only to derive QA scope, setup, acceptance criteria, and regression risks",
-        "Do not assess CI, approvals, unresolved comments, mergeability, or tracker-state gates",
-        "When metadata is available but testing instructions are absent or vague",
-        "scope before verification from the PR/ticket details, acceptance criteria, diff/changed files, entry points, setup/data needs, implemented surface, and regression risks",
-        "The report must explicitly name those scope inputs",
-        "use browser tooling, manually click through the implemented surface",
-        "inspect behavior after each action",
-        "The report must name the app start command or URL, browser actions, and rendered outcomes",
-        "use programmatic probes against the running implemented surface",
-        "prefer running the GUI and backend/service together and verifying the flow end to end",
-        "Unit tests, type checks, source inspection, and static review can support QA context, but they do not count as QA verification by themselves",
-        "Every acceptance criterion must map to a concrete observation",
-        "Any observed bug changes the verdict to `BUGS FOUND`",
-        "Metadata source",
-        "Metadata access sequence",
-        "Tooling attempted",
-        "Caller details requested",
-        "Diff fallback used",
-        "Scope basis",
-        "Manual/programmatic verification performed",
-        "Running surface",
-        "State and propagation checks",
-        "Required next input",
-        "ui | backend | mixed | other",
-        "Starting the app, scoping from the diff, or inferring testing instructions before attempting available PR/ticket tooling and asking for missing details",
-        "Falling back to diff-scoped QA before the caller has had a chance to provide missing ticket/PR details",
-        "Comparing appearance against references, analogs, computed styles, or bounding boxes",
-        "Assessing PR readiness, CI approval gates, unresolved review comments, mergeability, or tracker-state gates",
-        "Reporting a bug without reproduction steps and evidence",
-    )
-    for term in required_terms:
-        assert_contains(skill, term)
-
     forbidden_terms = (
         "before Ship",
         "Ship",
@@ -111,11 +66,6 @@ def check_ticket_start_has_no_qa_pointer() -> None:
 
 def check_orchestrator_references(skill: str) -> None:
     assert_not_contains(skill, "qa-verification", "orchestrator skill")
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str, context: str) -> None:

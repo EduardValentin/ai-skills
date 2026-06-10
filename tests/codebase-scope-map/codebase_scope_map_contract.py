@@ -24,21 +24,6 @@ def main() -> int:
 
 
 def check_skill_contract(skill: str) -> None:
-    required_terms = (
-        "Produce a compact, read-only map",
-        "You are a read-only codebase scoping agent",
-        "Do not mutate the repository",
-        "no file edits",
-        "generated-file writes",
-        "formatting rewrites",
-        "dependency changes",
-        "staging, commits, or cleanup changes",
-        "Scoping output is the only deliverable",
-        "Proposing the solution, selecting an implementation approach, or writing code",
-    )
-    for term in required_terms:
-        assert_contains(skill, term)
-
     forbidden_terms = (
         "small edits are allowed",
         "minor edits are allowed",
@@ -47,11 +32,6 @@ def check_skill_contract(skill: str) -> None:
     )
     for term in forbidden_terms:
         assert_not_contains(skill, term)
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

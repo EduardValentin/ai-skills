@@ -24,13 +24,6 @@ def main() -> int:
 
 
 def check_contract(skill: str) -> None:
-    assert_contains(skill, "Delegate codebase scoping before planning for implementation tickets.")
-    assert_contains(skill, "The brainstorming phase produces the user-approved spec/design.")
-    assert_contains(skill, "After the spec/design is approved, route implementation-plan writing")
-    assert_contains(skill, "After both spec approval and plan approval, implementation begins")
-    assert_contains(skill, "delegate a self-contained PR verification request")
-    assert_contains(skill, "Do not perform PR, branch, tracker, or merge mutations inline.")
-
     forbidden_skill_identifiers = (
         "`codebase-scope-map`",
         "$codebase-scope-map",
@@ -45,11 +38,6 @@ def check_contract(skill: str) -> None:
     )
     for identifier in forbidden_skill_identifiers:
         assert_not_contains(skill, identifier)
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

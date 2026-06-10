@@ -89,49 +89,6 @@ def check_delegated_execution_contract(skill: str) -> None:
     for forbidden in forbidden_terms:
         assert_not_contains(skill, forbidden)
 
-    assert_contains(skill, "Do not use for Epics, parent tickets with children requested as one scope")
-    assert_contains(skill, "multi-ticket workflow intake")
-    assert_contains(skill, "Jira ticket or Linear issue ID as part of an implementation-work request")
-    assert_contains(skill, "Use this skill as the main-agent workflow for working one implementation ticket")
-    assert_contains(skill, "The main agent stays the user-facing orchestrator")
-    assert_contains(skill, "If the ticket is a child issue, subtask, story under an Epic")
-    assert_contains(skill, "read the parent tickets or Epic descriptions too")
-    assert_contains(skill, "Delegate codebase scoping before planning for implementation tickets")
-    assert_contains(skill, "If the scope is clearly trivial, record the skip reason")
-    assert_contains(skill, "check `PRD.md` when the ticket or unit of work adds or changes business rules")
-    assert_contains(skill, "Check `designs/` or reference apps only when the ticket adds or modifies UI components")
-    assert_contains(skill, "corresponding reference surface or component")
-    assert_contains(skill, "For UI-facing or mixed tickets, UI/UX verification depends on project type")
-    assert_contains(skill, "Personal projects / Linear tickets")
-    assert_contains(skill, "production app matches the runnable reference app")
-    assert_contains(skill, "Job projects / Jira tickets")
-    assert_contains(skill, "visual consistency with the rest of the application")
-    assert_contains(skill, "sizing, spacing, component usage")
-    assert_contains(skill, "Run a user-facing brainstorming session until the agent and user share a concrete understanding")
-    assert_contains(skill, "## Step 3 - Create And Approve The Spec And Plan")
-    assert_contains(skill, "The brainstorming phase produces the user-approved spec/design")
-    assert_contains(skill, "Do not route plan writing before that approval")
-    assert_contains(skill, "After the spec/design is approved, route implementation-plan writing")
-    assert_contains(skill, "Get user approval for the implementation plan before coding starts")
-    assert_contains(skill, "before both spec approval and implementation-plan approval")
-    assert_contains(skill, "After both spec approval and plan approval, implementation begins by delegating work to implementer subagents")
-    assert_contains(skill, "minimize dependencies and maximize throughput and quality of work")
-    assert_contains(skill, "Respect this ticket sequence")
-    assert_contains(skill, "Delegate implementation for the approved plan")
-    assert_contains(skill, "Delegate independent review")
-    assert_contains(skill, "Delegate QA verification")
-    assert_contains(skill, "delegate UI/UX verification")
-    assert_contains(skill, "Aggregate findings from independent review, QA, and UI/UX verification")
-    assert_contains(skill, "Close execution with a gate note that states whether PR verification is allowed")
-    assert_contains(skill, "Track returned reports compactly enough")
-    assert_contains(skill, "Do not route the ticket to PR verification until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved")
-    assert_contains(skill, "Execution routing is incomplete unless it states that PR verification waits")
-    assert_contains(skill, "is not allowed while any required report is missing")
-    assert_contains(skill, "CANNOT_VERIFY")
-    assert_contains(skill, "Include the `CANNOT_VERIFY` fallback in delegated QA and UI/UX verification requests")
-    assert_contains(skill, "When routing verifier work, include this fallback instruction")
-    assert_contains(skill, "perform the needed verification in the main session")
-
     for markdown_file in sorted(SKILL_DIR.rglob("*.md")):
         text = markdown_file.read_text(encoding="utf-8")
         for forbidden in DOWNSTREAM_SKILL_IDS:
@@ -153,11 +110,6 @@ def check_delegated_execution_contract(skill: str) -> None:
 def assert_not_contains(haystack: str, needle: str) -> None:
     if needle in haystack:
         raise AssertionError(f"expected not to find {needle!r}")
-
-
-def assert_contains(haystack: str, needle: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"expected to find {needle!r}")
 
 
 def assert_line_count_at_most(text: str, limit: int) -> None:

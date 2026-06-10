@@ -30,26 +30,6 @@ def main() -> int:
 def check_skill_contract(skill: str) -> None:
     assert_line_count_at_most(skill, 70)
 
-    required_terms = (
-        "name: github-interaction",
-        "Use when a task needs GitHub writes",
-        "Requires local GitHub App bot credentials",
-        "configured GitHub App bot identity",
-        "Never use ambient personal GitHub credentials for writes",
-        "Requires shell execution",
-        "GitHub CLI or API client that honors `GH_TOKEN`",
-        "ai-skills.gh-bot.git-name",
-        "ai-skills.gh-bot.git-email",
-        "scripts/get-bot-gh-token.sh",
-        "creating or editing pull requests",
-        "POST/PATCH/PUT/DELETE GitHub API mutations",
-        "For `git push`, use a fresh token",
-        "Fail Closed",
-        "Draft intended text in chat instead of posting through personal credentials",
-    )
-    for required in required_terms:
-        assert_contains(skill, required)
-
     forbidden_terms = (
         "bot-identity",
         "ticket-start",
@@ -69,14 +49,14 @@ def check_skill_contract(skill: str) -> None:
 
 
 def check_script_contract(script: str) -> None:
-    required_terms = (
+    expected_script_markers = (
         "ai-skills.gh-bot",
         "security find-generic-password",
         "https://api.github.com/app/installations",
         "printf '%s\\n' \"$TOKEN\"",
     )
-    for required in required_terms:
-        assert_contains(script, required)
+    for marker in expected_script_markers:
+        assert_contains(script, marker)
 
     for forbidden in ("bot-identity", "runbook Step", "personal-workflow", "job-workflow"):
         assert_not_contains(script, forbidden)

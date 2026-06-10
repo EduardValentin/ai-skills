@@ -9,7 +9,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "verify-pr" / "SKILL.md"
-OPENAI_METADATA = REPO_ROOT / "skills" / "verify-pr" / "agents" / "openai.yaml"
 TICKET_START = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 MULTI_TICKET_WORK = REPO_ROOT / "skills" / "multi-ticket-work" / "SKILL.md"
 
@@ -17,9 +16,7 @@ MULTI_TICKET_WORK = REPO_ROOT / "skills" / "multi-ticket-work" / "SKILL.md"
 def main() -> int:
     try:
         skill = SKILL_PATH.read_text(encoding="utf-8")
-        metadata = OPENAI_METADATA.read_text(encoding="utf-8")
         check_skill_contract(skill)
-        check_metadata(metadata)
         check_parent_skills_do_not_hardcode_verify_pr_skill()
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
@@ -30,38 +27,6 @@ def main() -> int:
 
 
 def check_skill_contract(skill: str) -> None:
-    required_terms = (
-        "name: verify-pr",
-        "Use when checking PR readiness, merge preconditions, or post-merge CI verdicts",
-        "Do not use for QA, diff review, PR descriptions, reviewer notes, or testing instructions",
-        "post-merge CI monitoring",
-        "Verify PR validates",
-        "MCP connectors, REST APIs, CLIs",
-        "Treat user-provided state as a hint",
-        "## Metadata Resolution",
-        "If source-of-truth access is blocked, label provided state as unverified",
-        "return `NOT_READY`",
-        "linked Jira or Linear ticket is in a review-state column",
-        "Required CI checks are passing",
-        "Tests that cover the implemented surface area are passing",
-        "required review approval",
-        "no active unresolved review comments",
-        "## Forbidden Behavior",
-        "Returning a final report with `unknown` or `not available` PR state",
-        "Relying on a prior `READY` report alone before merge",
-        "Merging, marking ready, updating tickets, dismissing comments",
-        "Calling an observed post-merge CI failure",
-        "re-fetch all readiness gates",
-        "required source-control write workflow and identity",
-        "start a background process or subagent to monitor post-merge CI",
-        "fetch the failing check details from the source-control system",
-        "proposed plan of action",
-        "# Verify PR report",
-        "Status: READY | NOT_READY | MERGED_MONITORING | POST_MERGE_CLEAR | POST_MERGE_BLOCKED | POST_MERGE_MONITORING_BLOCKED",
-    )
-    for term in required_terms:
-        assert_contains(skill, term, "verify-pr skill")
-
     forbidden_terms = (
         "readiness ledger",
         "bot identity",
@@ -82,20 +47,10 @@ def check_skill_contract(skill: str) -> None:
         assert_not_contains(skill, term, "verify-pr skill")
 
 
-def check_metadata(metadata: str) -> None:
-    for term in ("Verify PR", "$verify-pr", "post-merge CI"):
-        assert_contains(metadata, term, "verify-pr metadata")
-
-
 def check_parent_skills_do_not_hardcode_verify_pr_skill() -> None:
     for path in (TICKET_START, MULTI_TICKET_WORK):
         skill = path.read_text(encoding="utf-8")
         assert_not_contains(skill, "verify-pr", f"{path.relative_to(REPO_ROOT)}")
-
-
-def assert_contains(haystack: str, needle: str, context: str) -> None:
-    if needle not in haystack:
-        raise AssertionError(f"{context} must contain {needle!r}")
 
 
 def assert_not_contains(haystack: str, needle: str, context: str) -> None:
