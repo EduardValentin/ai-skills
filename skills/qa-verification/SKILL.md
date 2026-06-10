@@ -1,60 +1,48 @@
 ---
 name: qa-verification
-description: Use when verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, frontend PR, or mixed executable surface. Use for browser behavior, backend/API checks, persistence, auth, validation, error handling, state transitions, regression probes, and blocked PR/ticket metadata during QA.
+description: Use when manually verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, frontend PR, or mixed executable surface. Use for browser click-through QA, backend/API probes, CLI checks, persistence, auth, validation, state transitions, regression probes, and PR/ticket-linked QA.
 ---
 
 # QA Verification
 
 ## Purpose
 
-Verify whether a running implementation satisfies its acceptance criteria. Exercise the executable surface, record what happened, and report bugs with evidence.
+Manually verify that an implementation satisfies its acceptance criteria by exercising the implemented surface the way a user, client, job runner, or integration would.
 
-Do not edit the system under test. If required inputs, metadata, access, tooling, or executable behavior are unavailable, return `QA cannot proceed` and name the blocker.
+Do not edit the system under test. If required access, tooling, credentials, data, or an executable surface is unavailable, return `QA cannot proceed` and name the blocker.
 
 ## Inputs
 
-Expect a compact, self-contained QA request with:
+Expect a compact QA request with:
 
-- work item title, description, and acceptance criteria
-- path, command, URL, environment, or entry point for the executable surface
-- mode: `backend`, `ui`, `mixed`, or `other`
-- changed surfaces, scope notes, non-goals, and adjacent behavior that may regress
-- credentials, seed data, fixtures, feature flags, or test users when required
-- PR/ticket metadata, PR notes, or bug report details when QA is PR-linked
+- implemented surface area and entry point: URL, command, API, job trigger, script, or integration path
+- ticket, PR, bug report, acceptance criteria, and testing instructions when available
+- mode: `ui`, `backend`, `mixed`, or `other`
+- environment setup, credentials, seed data, fixtures, feature flags, and known non-goals
+- changed surfaces, adjacent flows, integrations, and state that may regress
 
-If required inputs are missing or contradictory, return `QA cannot proceed` with the exact missing input or conflict.
+For ticket/PR-linked QA, use this mandatory order before verification: first access the PR and ticket through available tooling such as MCP, API, CLI, or authenticated local metadata; then, if unavailable, ask the caller for the ticket/PR details, acceptance criteria, implemented surface area, and testing instructions; only after the caller cannot provide those details, scope the diff to infer a provisional verification target and clearly label it as inferred. Blocked metadata alone is not enough to fall back to the diff.
 
-## PR-Linked QA
+When metadata is available but testing instructions are absent or vague, scope before verification from the PR/ticket details, acceptance criteria, diff/changed files, entry points, setup/data needs, implemented surface, and regression risks.
 
-For PR-linked QA, verify the branch being reviewed:
+## Verification Modes
 
-1. Fetch or confirm the latest PR branch and base branch before setup.
-2. Read PR metadata and ticket/bug details before diff-derived scoping or browser testing.
-3. If PR metadata is blocked by auth, network, missing connector, unavailable CLI, or login wall, stop with `QA cannot proceed`. Ask for restored access, pasted PR notes, or another authenticated source. The report must name that required next input. Do not start the app, scope from the diff, or infer PR testing instructions. A ticket ID, local diff, or user permission to proceed without PR notes does not replace blocked PR metadata.
-4. Run PR testing notes first and map them to acceptance criteria.
-5. If metadata was read but testing notes are absent or vague, scope from the PR, ticket, diff, changed files, entry points, setup/data needs, focused tests, and regression risks before exercising behavior.
+- `ui`: start the application, use browser tooling, manually click through the implemented surface, and inspect the rendered outcome after each action. The report must name the app start command or URL, browser actions, and rendered outcomes. Cover happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior when relevant.
+- `backend`: use programmatic probes against the running implemented surface, such as HTTP requests, CLI invocations, job triggers, database reads, logs, queues, emitted events, or cache checks. Validate outputs, state transitions, persistence, side effects, auth, validation, error handling, idempotency, retries, and third-party/state propagation when relevant.
+- `mixed`: prefer running the GUI and backend/service together and verifying the flow end to end. If that is not possible, verify each surface separately, state the limitation, and still validate the integration contract and propagated state.
+- `other`: exercise scripts, scheduled tasks, data jobs, migrations, or integrations through their real command/trigger path. Check inputs, outputs, logs, external calls, exit codes, reruns, failure modes, cleanup, and state changes.
+
+Unit tests, type checks, source inspection, and static review can support QA context, but they do not count as QA verification by themselves.
 
 ## Evidence Standard
 
-QA reports require exercised behavior evidence. Unit tests, static review, source inspection, screenshots without interaction, or "the diff looks right" can support the report, but they do not replace exercising the running surface.
+Every acceptance criterion must map to a concrete observation:
 
-Each acceptance criterion must map to a concrete observation:
-
-- request, response, side effect, and persisted state for backend/API/service work
-- user action, route, active state, and browser-observed result for UI behavior
-- command output, file output, logs, or external side effects for scripts, jobs, and integrations
-- both backend and UI observations for mixed work
+- browser action, route, visible state, and rendered result for GUI behavior
+- request/command/trigger, response/output, side effect, and persisted/propagated state for non-GUI behavior
+- both GUI and non-GUI observations for mixed work
 
 Any observed bug changes the verdict to `BUGS FOUND`.
-
-## Modes
-
-- `backend`: verify request/response payloads, auth, validation, errors, persistence, side effects, events, queues, logs, idempotency, retries, and adjacent shared paths.
-- `ui`: start the app as specified and use browser-capable evidence for happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior.
-- `mixed`: exercise both backend and UI surfaces, then verify their integration satisfies the acceptance criteria.
-- `other`: exercise scripts, CLIs, scheduled tasks, data jobs, migrations, or integrations through their command/trigger path, outputs, logs, external calls, exit codes, reruns, and failure modes.
-
-Use focused tests as supporting evidence, never as a replacement for the relevant running behavior.
 
 ## Report Format
 
@@ -65,20 +53,26 @@ Use focused tests as supporting evidence, never as a replacement for the relevan
 - <CLEAN | BUGS FOUND | QA cannot proceed>
 
 ## Mode
-- <backend | ui | mixed | other>
+- <ui | backend | mixed | other>
 
 ## Metadata source
-- <PR/ticket/user-supplied notes/none, plus blockers if any>
+- <PR/ticket/user-supplied/inferred-from-diff/none, plus blockers if any>
+
+## Metadata access sequence
+- Tooling attempted: <MCP/API/CLI/local metadata or not applicable>
+- Caller details requested: <yes/no/not needed>
+- Diff fallback used: <no | yes, only after details unavailable>
 
 ## Scope basis
-- <PR, ticket, diff, changed files, entry points, setup/data needs, focused tests, regression risks>
+- <acceptance criteria, testing instructions, implemented surface, diff, entry points, data needs, regression risks>
 
 ## Coverage
 - Acceptance criteria: <AC1 observed | AC2 observed | AC3 failed -> B1>
-- Behavior exercised: <routes, requests, commands, states, side effects>
-- Focused tests: <supporting output or explicitly none>
+- Manual/programmatic verification performed: <browser actions, requests, commands, job triggers, integrations>
+- Running surface: <app start command or URL, API base, CLI command, job trigger, or integration endpoint>
+- State and propagation checks: <database, queues, events, files, external systems, logs, cache, UI state>
 - Regression/adversarial checks: <list>
-- Evidence: <logs, responses, browser observations, persisted state, command output, traces, screenshots, files>
+- Evidence: <browser observations, responses, command output, persisted state, traces, screenshots, files>
 
 ## Bugs found
 - **B1** | severity: <blocker | major | minor> | reproduction steps:
@@ -91,18 +85,19 @@ Use focused tests as supporting evidence, never as a replacement for the relevan
 
 ## Blockers
 - <blocker or explicitly empty>
-- Required next input: <restored access, pasted PR notes, authenticated metadata source, or explicitly empty>
+- Required next input: <ticket/PR details, acceptance criteria, testing instructions, credentials, runnable surface, or explicitly empty>
 
 ## Notes
-- <coverage limits, degraded checks, or explicitly empty>
+- <coverage limits, inferred scope, degraded checks, or explicitly empty>
 ```
 
 ## Forbidden Behaviors
 
-- Declaring `CLEAN` without exercising every acceptance criterion against the running surface.
-- Treating unit tests, type checks, static review, or source inspection as full QA evidence by themselves.
-- Inferring blocked PR testing instructions from the diff.
-- Skipping adversarial inputs because the happy path works.
+- Declaring `CLEAN` without manually exercising every acceptance criterion against the running surface.
+- Treating unit tests, type checks, static review, screenshots without interaction, or source inspection as QA verification by themselves.
+- Starting the app, scoping from the diff, or inferring testing instructions before attempting available PR/ticket tooling and asking for missing details.
+- Falling back to diff-scoped QA before the caller has had a chance to provide missing ticket/PR details, acceptance criteria, implemented surface area, and testing instructions.
+- Treating inferred diff scope as authoritative when ticket/PR details, acceptance criteria, or testing instructions are available.
 - Modifying product code while acting as the QA verifier.
-- Omitting adjacent regression checks when changed behavior is shared by adjacent flows.
+- Omitting state-transition, persistence, side-effect, or propagation checks when the acceptance criteria depend on them.
 - Reporting a bug without reproduction steps and evidence.

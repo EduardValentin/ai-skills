@@ -43,11 +43,11 @@ SCENARIOS = (
         criteria=(
             SemanticCriterion(
                 "live_service_behavior",
-                "The QA approach requires validating the running backend/service rather than relying only on unit tests or code inspection.",
+                "The QA approach requires validating the running backend/service through programmatic probes against the implemented surface rather than relying on unit tests or code inspection.",
             ),
             SemanticCriterion(
                 "covers_api_outcomes",
-                "The QA approach covers successful creation, duplicate rejection, auth boundaries, persisted state, and error payloads.",
+                "The QA approach covers successful creation, duplicate rejection, auth boundaries, persisted state, state transitions, side effects, and error payloads.",
             ),
             SemanticCriterion(
                 "maps_acceptance_criteria_to_evidence",
@@ -76,7 +76,7 @@ SCENARIOS = (
         criteria=(
             SemanticCriterion(
                 "running_app_ui_behavior",
-                "The QA approach requires exercising the user-facing settings form in the running app.",
+                "The QA approach requires starting the app and manually exercising the user-facing settings form with browser tooling.",
             ),
             SemanticCriterion(
                 "covers_named_states_and_interactions",
@@ -104,11 +104,11 @@ SCENARIOS = (
         criteria=(
             SemanticCriterion(
                 "mixed_mode_covers_backend_and_ui",
-                "The QA approach covers both invite API/backend behavior and browser-observed invite form behavior.",
+                "The QA approach covers both invite API/backend behavior with programmatic probes and browser-observed invite form behavior.",
             ),
             SemanticCriterion(
                 "integration_between_surfaces",
-                "The response verifies that API and UI behavior work together according to acceptance criteria.",
+                "The response prefers running the GUI and backend/service together for end-to-end verification, or states a limitation and verifies each surface plus the integration contract separately.",
             ),
             SemanticCriterion(
                 "reports_acceptance_coverage",
@@ -127,21 +127,22 @@ SCENARIOS = (
         scenario_id="frontend-pr-metadata-blocked",
         user_request=(
             "Use the loaded qa-verification skill for a frontend PR. The local diff "
-            "and ticket ID are available, but the PR host metadata is blocked by "
-            "authentication and there is time pressure to test from the diff."
+            "and ticket ID are available, but the browser PR page is blocked by "
+            "authentication and there is time pressure to test from the diff. "
+            "You have not yet tried MCP, API, CLI, or authenticated local metadata."
         ),
         criteria=(
             SemanticCriterion(
                 "blocked_metadata_blocks_qa",
-                "The response stops before browser testing and returns or recommends QA cannot proceed because PR metadata is blocked.",
+                "The response requires attempting PR/ticket access through available tooling such as MCP, API, CLI, or authenticated metadata before QA can proceed.",
             ),
             SemanticCriterion(
-                "asks_for_metadata_source",
-                "The response asks for restored PR access, pasted PR notes, or another authenticated metadata source.",
+                "asks_for_missing_details",
+                "The response asks the caller for ticket/PR details, acceptance criteria, implemented surface area, and testing instructions if PR/ticket metadata tooling is unavailable.",
             ),
             SemanticCriterion(
-                "does_not_replace_metadata_with_diff",
-                "The response rejects using the local diff as a substitute for blocked PR testing instructions.",
+                "diff_scope_is_last_resort",
+                "The response uses diff scoping only as a fallback when metadata and caller-provided details remain unavailable, and labels the inferred scope as provisional.",
             ),
         ),
         forbidden_terms=(
@@ -167,11 +168,11 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "scopes_before_browser_testing",
-                "The response scopes from PR metadata, ticket criteria, diff, changed files, UI entry points, setup/data needs, focused tests, and regression risks before browser testing.",
+                "The response scopes from PR metadata, ticket criteria, diff, changed files, UI entry points, setup/data needs, implemented surface, and regression risks before browser testing.",
             ),
             SemanticCriterion(
-                "browser_acceptance_and_tests",
-                "The response uses browser acceptance behavior as required evidence and treats focused tests only as supporting evidence.",
+                "manual_browser_acceptance",
+                "The response uses manual browser click-through and rendered outcome inspection as the required evidence for UI QA.",
             ),
         ),
         forbidden_terms=(
@@ -200,7 +201,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "diff_only_scopes_risk",
-                "The response uses the diff to scope affected routes, setup, focused tests, and risks, not as a substitute for PR notes.",
+                "The response uses the diff to scope affected routes, setup, implemented surfaces, and risks, not as a substitute for available PR notes.",
             ),
         ),
         forbidden_terms=(

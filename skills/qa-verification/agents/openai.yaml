@@ -1,4 +1,4 @@
 interface:
   display_name: "QA Verification"
-  short_description: "Verify running behavior and PR-linked QA"
-  default_prompt: "Use $qa-verification to verify running behavior, acceptance criteria, browser/API flows, or PR-linked QA evidence."
+  short_description: "Manually verify running behavior"
+  default_prompt: "Use $qa-verification to manually verify acceptance criteria through browser click-through, backend/API probes, CLI checks, or mixed end-to-end QA."
