@@ -11,10 +11,12 @@ Prototype reference applications define product UX before production work: user 
 
 ## When To Use
 
-- Any user request to change the prototype reference app.
-- Adding or changing prototype pages, routes, flows, states, mocks, or backend-facing behavior.
+- Adding or changing prototype reference app pages, routes, flows, states, mocks, mocked integrations, or backend-facing behavior.
 - Updating companion product/design/voice docs because prototype behavior or direction changed.
-- Not for production app implementation unless the user explicitly asks to port prototype behavior into production.
+
+## Forbidden Behavior
+
+- Do not treat production app implementation as prototype work. Only use this skill for production code when the user explicitly asks to port prototype behavior into production.
 
 ## Requirements
 
