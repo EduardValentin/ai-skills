@@ -40,7 +40,7 @@ skill = "ticket-start"
 prompt = """
 Start Linear issue APP-924. It adds a new billing eligibility business rule and
 modifies a checkout UI component that has a corresponding route in designs/, so
-use ticket-start and gather only the relevant PRD and reference-app context.
+gather only the relevant PRD and reference-app context before implementation.
 """
 forbidden_terms = []
 
@@ -156,9 +156,10 @@ response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity",
 id = "verify-pr-merge-monitoring"
 skill = "verify-pr"
 prompt = """
-The Verify PR report says Jira ticket PROJ-44 is in Code Review and PR #44 is
-ready. I explicitly approve merging the PR; merge it and monitor post-merge CI,
-reporting any failing source-control checks with a proposed action plan.
+The latest PR readiness report says Jira ticket PROJ-44 is in Code Review and
+PR #44 is ready. I explicitly approve merging the PR; merge it and monitor
+post-merge CI, reporting any failing source-control checks with a proposed
+action plan.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]

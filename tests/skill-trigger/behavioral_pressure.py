@@ -137,7 +137,7 @@ def run_agent(agent_command: str, prompt: str) -> str:
 
 
 def make_prompt(scenario: dict[str, object]) -> str:
-    return f"""You are testing installed black-box skill discovery before any task work begins.
+    return f"""Select skills for this request and stop. Do not perform the task.
 
 User request:
 {scenario["prompt"]}
@@ -146,7 +146,6 @@ Return only this format:
 SELECTED_SKILLS: comma-separated skill names
 RATIONALE: one short sentence
 
-Select every skill that should be loaded before acting. Do not perform the user request.
 Scenario id: {scenario["id"]}
 """
 

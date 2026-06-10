@@ -44,6 +44,7 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
         if scenario_id in seen_ids:
             raise ValueError(f"duplicate scenario id: {scenario_id}")
         seen_ids.add(scenario_id)
+        check_prompt_does_not_name_expected_skill(scenario_id, skill, prompt)
 
         skill_file = skill_files.get(skill)
         if skill_file is None:
@@ -92,6 +93,14 @@ def parse_frontmatter(skill_file: Path, skill_doc: str) -> dict[str, str]:
 def assert_not_contains(haystack: str, needle: str, context: str) -> None:
     if needle and needle in haystack:
         raise ValueError(f"{context} must not contain: {needle}")
+
+
+def check_prompt_does_not_name_expected_skill(scenario_id: str, skill: str, prompt: str) -> None:
+    if re.search(rf"(?<![\w-]){re.escape(skill)}(?![\w-])", prompt, re.IGNORECASE):
+        raise ValueError(
+            f"{scenario_id} prompt must not name expected skill id {skill!r}; "
+            "trigger prompts must be natural user requests"
+        )
 
 
 def check_behavioral_harness_is_black_box() -> None:
