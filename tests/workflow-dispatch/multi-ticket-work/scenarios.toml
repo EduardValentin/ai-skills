@@ -1,0 +1,44 @@
+[[scenario]]
+id = "multi-ticket-work-dispatch-ticket-orchestrator"
+user_request = """
+The Billing Revamp Epic scope and dependency map are ready. Tickets are APP-10
+invoice migration, APP-11 pricing API after APP-10, APP-12 checkout UI after
+APP-11, and APP-13 analytics events independent of the stack. Repository
+instructions are: follow AGENTS.md, keep orchestration notes uncommitted, and
+include downstream dependency notes in every ticket report. What workflow handoff
+should the main agent emit for APP-10?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the
+request self-contained and do not name downstream skill identifiers. The first-level
+handoff must be the per-ticket orchestrator handoff, not an implementation-worker
+handoff.
+"""
+forbidden_terms = ["ticket-start", "$ticket-start", "`ticket-start`"]
+expected_auto_discovery = ["ticket-start"]
+require_action_ledger = true
+first_action_contains = ["dispatch_request", "ticket orchestrator"]
+response_checks = ["no_implementation_worker_handoff"]
+
+[[scenario.criteria]]
+key = "dispatches_ticket_orchestrator"
+description = "The response emits a first-level handoff for APP-10 to a ticket orchestrator, not an implementation worker."
+
+[[scenario.criteria]]
+key = "handoff_is_self_contained"
+description = "The delegated request includes APP-10 ticket context, Epic or parent context, dependency constraints, repository instructions, PR expectations, completion-report expectations, and downstream dependency notes."
+
+[[scenario.criteria]]
+key = "orchestrator_owns_complete_one_ticket_coordination"
+description = "The delegated request tells the ticket orchestrator to coordinate the complete one-ticket workflow by dispatching internal agents or delegated requests for scoping, implementation, independent review, QA, UI/UX checks when applicable, scoped fixes, reruns, PR creation, and PR verification or handoff."
+
+[[scenario.criteria]]
+key = "does_not_collapse_into_worker_prompt"
+description = "The delegated request does not assign implementation, review, QA, UI/UX checks, PR creation, and completion reporting to one worker."
+
+[[scenario.criteria]]
+key = "does_not_name_downstream_skill"
+description = "The response avoids exact downstream skill identifiers while allowing generic capability labels."

@@ -60,8 +60,8 @@ skill = "multi-ticket-work"
 prompt = """
 Work the whole Billing Revamp Epic. It has separate tickets for the invoice
 migration, pricing API, checkout UI, and analytics events. Decide what can run
-in parallel, what must be sequenced, dispatch one subagent per ticket or unit,
-and give me the opened PRs with the review order at the end.
+in parallel, what must be sequenced, dispatch one ticket orchestrator per
+ticket or unit, and give me the opened PRs with the review order at the end.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
@@ -71,7 +71,8 @@ id = "multi-ticket-work-ticket-set"
 skill = "multi-ticket-work"
 prompt = """
 Work Jira APP-101, APP-102, and APP-103 as one coordinated scope. Map their
-dependencies, delegate each ticket, and return the opened PRs in review order.
+dependencies, delegate each ticket to a ticket orchestrator, and return the
+opened PRs in review order.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]

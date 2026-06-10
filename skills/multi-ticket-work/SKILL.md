@@ -9,7 +9,7 @@ description: Use when the user asks to work a set of Jira or Linear tickets, an 
 
 Use this skill when the requested unit of work is a full multi-ticket scope: several Jira or Linear tickets, an Epic with multiple tickets, or a parent ticket with child tickets or sub-tickets.
 
-The main agent is the orchestrator. It identifies the complete ticket scope, chooses the execution order, decides what can run in parallel, dispatches the work, coordinates blockers, collects completion reports, and gives the human a final PR review order. The main agent does not implement ticket work inline.
+The main agent is the portfolio orchestrator. It identifies the complete ticket scope, chooses the execution order, decides what can run in parallel, dispatches one ticket orchestrator per ticket or unit, coordinates blockers, collects completion reports, and gives the human a final PR review order. The main agent does not implement ticket work inline.
 
 ## Workflow
 
@@ -31,12 +31,15 @@ The main agent is the orchestrator. It identifies the complete ticket scope, cho
    - Re-read it at the start of work, after any context compaction or resume, before dispatching dependent work, and before the final report.
    - When returning workflow actions, make note creation/update and the required re-read checkpoints explicit instead of hiding them inside generic status tracking.
 
-4. Dispatch the work.
-   - Dispatch one subagent per ticket or unit of work.
-   - Each subagent request must include its ticket context, relevant parent/Epic context, dependency constraints, repository instructions, PR expectations, reviewer-friendly PR body expectation, and the required completion report.
-   - Each subagent owns the normal one-ticket workflow for its ticket or unit: confirm required approvals, run appropriate implementation, review, verification, and PR-verdict steps, and report blocked when required context, approval, delegated checks, or PR creation is unavailable.
-   - State plainly in each dispatch that the subagent must open a PR and return a completion report before the ticket or unit is complete.
-   - A ticket or unit is not complete until its subagent has opened a PR and returned a completion report.
+4. Dispatch ticket orchestrators.
+   - Dispatch one ticket orchestrator per ticket or unit of work.
+   - The first-level subagent prompt must call the agent a ticket orchestrator, not an implementation worker.
+   - Each ticket-orchestrator request must be self-contained. Include ticket context, relevant parent/Epic context, dependency constraints, repository instructions, PR expectations, reviewer-friendly PR body expectation, and the required completion report.
+   - A ticket orchestrator owns coordination of the one-ticket workflow for its ticket or unit. It dispatches internal subagents or delegated requests for scoping, implementation, independent review, QA, UI/UX checks when applicable, scoped fixes, reruns, PR creation, and PR verification or handoff.
+   - The ticket orchestrator coordinates those internal agents and aggregates their reports; it does not implement or verify the ticket directly.
+   - Do not assign implementation, review, QA, UI/UX checks, PR creation, and completion reporting to one worker prompt.
+   - State plainly in each dispatch that the ticket orchestrator must open a PR and return the required phase reports before the ticket or unit is complete.
+   - A ticket or unit is not complete until its ticket orchestrator has opened a PR and returned the required implementation, review, QA, UI/UX-or-skip, fixes/reruns, risk, and dependency evidence.
    - The main agent tracks status and blockers, but does not take over implementation inline.
 
 5. Coordinate sequencing.
@@ -54,11 +57,16 @@ The main agent is the orchestrator. It identifies the complete ticket scope, cho
 
 ## Subagent Completion Report
 
-Each subagent must report back with:
+Each ticket orchestrator must report back with:
 
 - ticket or unit worked
 - PR link
 - summary of what changed
+- implementation report
+- independent review report
+- QA report
+- UI/UX report, or not-applicable/cannot-verify reason
+- scoped fixes and reruns after verifier findings
 - important decisions or deviations
 - tests or checks performed
 - known risks, blockers, or follow-up needed
@@ -71,6 +79,12 @@ In each dispatch, ask for a reviewer-friendly PR body with summary, manual testi
 ## Failure Signals
 
 - The main agent starts implementing a ticket itself.
+- The first-level subagent is framed as an implementation worker instead of a ticket orchestrator.
+- A ticket orchestrator implements, reviews, QA-checks, or UI-checks directly instead of delegating those phases.
+- A first-level prompt assigns implementation, review, QA, UI/UX checks, PR creation, and completion reporting to one worker.
+- Parent-side review is treated as a replacement for independent per-ticket review.
+- Completion is summarized as a generic report instead of the required phase evidence.
+- A combined worker report is accepted instead of distinct implementation, review, QA, and UI/UX-or-skip evidence.
 - The ticket set, Epic children, or sub-tickets were not fully gathered.
 - Work begins before dependencies and parallelization are mapped.
 - The durable orchestration note is missing, stale, or not re-read after compaction or resume.
