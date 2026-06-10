@@ -4,7 +4,7 @@ These scenarios are the regression set for the UIUX plugin. Run them in fresh se
 
 ## Evaluation 1: Token-First Styling
 
-Prompt: "Using the design-studio workflow, add a stats section to the React reference app. Keep it visually polished."
+Prompt: "Using the prototype-work workflow, add a stats section to the React prototype reference app. Keep it visually polished."
 
 Expected behavior:
 - Inspects existing design tokens before styling.

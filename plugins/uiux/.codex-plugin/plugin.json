@@ -1,7 +1,7 @@
 {
   "name": "uiux",
-  "version": "0.1.1",
-  "description": "UI/UX craft skills for React design-studio work, accessible frontend design, semantic design tokens, reusable components, visual validation, design direction, and brand-voice web copy.",
+  "version": "0.1.2",
+  "description": "UI/UX craft skills for React prototype reference app work, accessible frontend design, semantic design tokens, reusable components, visual validation, design direction, and brand-voice web copy.",
   "author": {
     "name": "Eduard Trocan"
   },
@@ -17,7 +17,7 @@
   "interface": {
     "displayName": "UIUX",
     "shortDescription": "Design, validate, and refine accessible frontend interfaces.",
-    "longDescription": "A focused set of UI/UX skills for React reference-app design studio work, frontend interface design, semantic token discipline, reusable component architecture, visual validation, collaborative design direction, and brand-voice web copy.",
+    "longDescription": "A focused set of UI/UX skills for React prototype reference app work, frontend interface design, semantic token discipline, reusable component architecture, visual validation, collaborative design direction, and brand-voice web copy.",
     "developerName": "Eduard Trocan",
     "category": "Development",
     "capabilities": [
@@ -25,7 +25,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Update a React reference app design.",
+      "Update a prototype reference app flow.",
       "Design an accessible frontend component.",
       "Audit this UI for reusable components.",
       "Validate this page across breakpoints."

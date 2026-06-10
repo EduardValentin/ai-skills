@@ -3,13 +3,13 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: prepare-design-studio.sh [options]
+Usage: prepare-prototype-work.sh [options]
 
-Prepare a React reference design app before design-studio work starts.
+Prepare a React prototype reference app before prototype-work starts.
 
 Options:
   --project-root PATH   Project/worktree root. Defaults to git top-level or cwd.
-  --app-root PATH       React reference app root. Defaults to auto-detecting under designs/.
+  --app-root PATH       React reference app root. Required when auto-detection under designs/ fails.
   --port PORT           Preview port. Defaults to 5173.
   --force-install       Install dependencies even outside a worktree.
   --skip-install        Skip dependency installation.
@@ -19,11 +19,11 @@ USAGE
 }
 
 log() {
-  printf '[design-studio] %s\n' "$*"
+  printf '[prototype-work] %s\n' "$*"
 }
 
 fail() {
-  printf '[design-studio] ERROR: %s\n' "$*" >&2
+  printf '[prototype-work] ERROR: %s\n' "$*" >&2
   exit 1
 }
 
@@ -95,11 +95,11 @@ find_project_root() {
   fi
 }
 
-locate_design_app() {
+locate_prototype_app() {
   local project_root="$1"
   local designs_dir="$project_root/designs"
 
-  [ -d "$designs_dir" ] || fail "No designs/ directory found under $project_root"
+  [ -d "$designs_dir" ] || fail "No designs/ directory found under $project_root. Ask the user for the reference app path, then rerun with --app-root."
 
   local package_file
   while IFS= read -r package_file; do
@@ -109,7 +109,7 @@ locate_design_app() {
     fi
   done < <(find "$designs_dir" -mindepth 2 -maxdepth 4 -name package.json -not -path '*/node_modules/*' | sort)
 
-  fail "Could not find a React package.json under $designs_dir"
+  fail "Could not find a React package.json under $designs_dir. Ask the user for the reference app path, then rerun with --app-root."
 }
 
 read_node_version() {
@@ -314,10 +314,10 @@ build_dev_command() {
 
 PROJECT_ROOT=""
 APP_ROOT=""
-PORT="${DESIGN_STUDIO_PORT:-5173}"
+PORT="${PROTOTYPE_WORK_PORT:-5173}"
 FORCE_INSTALL=0
-SKIP_INSTALL="${DESIGN_STUDIO_SKIP_INSTALL:-0}"
-SKIP_NODE_CHECK="${DESIGN_STUDIO_SKIP_NODE_CHECK:-0}"
+SKIP_INSTALL="${PROTOTYPE_WORK_SKIP_INSTALL:-0}"
+SKIP_NODE_CHECK="${PROTOTYPE_WORK_SKIP_NODE_CHECK:-0}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -362,15 +362,15 @@ fi
 PROJECT_ROOT="$(absolute_path "$PROJECT_ROOT")"
 
 if [ -z "$APP_ROOT" ]; then
-  APP_ROOT="$(locate_design_app "$PROJECT_ROOT")"
+  APP_ROOT="$(locate_prototype_app "$PROJECT_ROOT")"
 fi
 
 APP_ROOT="$(absolute_path "$APP_ROOT")"
 
-[ -f "$APP_ROOT/package.json" ] || fail "Design app package.json not found at $APP_ROOT/package.json"
+[ -f "$APP_ROOT/package.json" ] || fail "Prototype app package.json not found at $APP_ROOT/package.json"
 
 DEV_SCRIPT="$(read_dev_script "$APP_ROOT/package.json")"
-[ -n "$DEV_SCRIPT" ] || fail "Design app package.json must define scripts.dev"
+[ -n "$DEV_SCRIPT" ] || fail "Prototype app package.json must define scripts.dev"
 
 NODE_VERSION="$(read_node_version "$PROJECT_ROOT")"
 if [ "$SKIP_NODE_CHECK" != "1" ]; then

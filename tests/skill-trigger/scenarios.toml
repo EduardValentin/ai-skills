@@ -321,10 +321,10 @@ forbidden_terms = []
 response_forbidden_terms = ["verify-pr", "qa-verification"]
 
 [[scenario]]
-id = "design-studio-visual-bug"
-skill = "design-studio"
-prompt = "Fix the mobile spacing bug in the React reference app dashboard and keep the prototype style intact."
-forbidden_terms = []
+id = "prototype-work-flow-change"
+skill = "prototype-work"
+prompt = "In the React prototype reference app under designs/, add a new onboarding page with mocked eligibility rules, a mocked CRM handoff, and browser validation."
+forbidden_terms = ["design-studio", "prepare-design-studio.sh"]
 
 [[scenario]]
 id = "ticket-planner-prd-to-stories"

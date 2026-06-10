@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prototype Work"
+  short_description: "Work in React prototype reference apps"
+  default_prompt: "Update this prototype reference app"

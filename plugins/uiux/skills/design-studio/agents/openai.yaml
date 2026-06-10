@@ -1,4 +1,0 @@
-interface:
-  display_name: "Design Studio"
-  short_description: "Work in React reference design apps"
-  default_prompt: "Update this React reference app design"
