@@ -32,12 +32,14 @@ def main() -> int:
 def check_skill_contract(skill: str) -> None:
     required_terms = (
         "name: verify-pr",
-        "Use when checking whether a pull request is ready",
+        "Use when checking PR readiness, merge preconditions, or post-merge CI verdicts",
+        "Do not use for QA, diff review, PR descriptions, reviewer notes, or testing instructions",
         "post-merge CI monitoring",
         "Verify PR validates",
         "MCP connectors, REST APIs, CLIs",
         "Treat user-provided state as a hint",
         "## Metadata Resolution",
+        "If source-of-truth access is blocked, label provided state as unverified",
         "return `NOT_READY`",
         "linked Jira or Linear ticket is in a review-state column",
         "Required CI checks are passing",
@@ -46,13 +48,16 @@ def check_skill_contract(skill: str) -> None:
         "no active unresolved review comments",
         "## Forbidden Behavior",
         "Returning a final report with `unknown` or `not available` PR state",
+        "Relying on a prior `READY` report alone before merge",
         "Merging, marking ready, updating tickets, dismissing comments",
         "Calling an observed post-merge CI failure",
+        "re-fetch all readiness gates",
+        "required source-control write workflow and identity",
         "start a background process or subagent to monitor post-merge CI",
         "fetch the failing check details from the source-control system",
         "proposed plan of action",
         "# Verify PR report",
-        "Status: READY | NOT_READY | MERGED_MONITORING | POST_MERGE_CLEAR | POST_MERGE_BLOCKED",
+        "Status: READY | NOT_READY | MERGED_MONITORING | POST_MERGE_CLEAR | POST_MERGE_BLOCKED | POST_MERGE_MONITORING_BLOCKED",
     )
     for term in required_terms:
         assert_contains(skill, term, "verify-pr skill")

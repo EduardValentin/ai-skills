@@ -1,17 +1,17 @@
 ---
 name: implement-unit-of-work
-description: Use when handling standalone code implementation or implementer subagent requests for an approved unit of code, including tickets, feature slices, ad hoc code requests, scripts, migrations, focused fixes, and scoped programming tasks after requirements, acceptance criteria, implementation plan, and codebase scope are approved.
+description: Use when acting as the implementer for an already approved standalone code unit or delegated implementation slice, including feature slices, ad hoc code requests, scripts, migrations, focused fixes, and scoped programming tasks after requirements, acceptance criteria, implementation plan, and codebase scope are approved.
 ---
 
 # Implement Unit Of Work
 
 ## Purpose
 
-Use this skill to implement one approved unit of code. The unit may be a ticket, plan slice, focused fix, ad hoc user request, script, migration, service change, UI change, integration, or any other scoped programming task.
+Use this skill to implement one approved unit of code. The unit may be a delegated ticket slice, plan slice, focused fix, ad hoc user request, script, migration, service change, UI change, integration, or any other scoped programming task.
 
 The agent using this skill is the implementer. It uses TDD for behavior changes where the project test harness supports it, writes the code, runs relevant local checks, delegates self-review of the produced diff to a separate subagent, applies necessary fixes, and returns an implementation report.
 
-This skill does not own intake, requirements approval, design approval, implementation-plan approval, product acceptance, PR review, release, merge, or tracker-state changes.
+This skill does not own user-facing ticket intake, requirements approval, design approval, implementation-plan approval, product acceptance, PR review, release, merge, or tracker-state changes.
 
 ## Required Inputs
 
@@ -20,7 +20,7 @@ Expect a self-contained implementation request with:
 - unit goal and acceptance criteria
 - approved requirements/design direction
 - approved implementation plan
-- codebase scope, affected surfaces, and architecture notes
+- approved codebase scope, either as a scope map or explicit affected files/surfaces, architecture notes, and known unknowns
 - repository instructions and ownership constraints
 - expected local checks or test areas
 - current branch/worktree state
@@ -34,7 +34,7 @@ If required inputs are missing, stale, or contradictory, stop with `IMPLEMENTATI
 2. Inspect the relevant code ambitiously before editing. Read the files directly in scope, nearby callers/callees, shared types/contracts, analogous implementations, tests, configuration, and any architecture surfaces that could be affected.
 3. Use TDD for required features and bug fixes when the project test harness supports it: write or update a focused failing test first, run it to confirm the expected failure, implement the smallest change that turns it green, then refactor while keeping tests green. If TDD is not feasible, record the concrete reason and the alternate verification before coding.
 4. Implement within the approved boundary using existing project patterns and the smallest safe design that still fits the architecture. When describing the approach or report, explicitly name the clean-code checks: clear names, focused responsibilities, three-or-fewer parameters, maintainability, and performance.
-5. Run relevant local checks. Start narrow, then broaden when the change touches shared behavior, contracts, performance-sensitive paths, or integration points.
+5. Run relevant developer checks, such as tests, type/lint/build, and targeted smoke commands. Start narrow, then broaden when the change touches shared behavior, contracts, performance-sensitive paths, or integration points.
 6. Delegate self-review of the produced work to a separate subagent. Include the approved inputs, diff summary, changed files, local checks, TDD evidence or skip rationale, architecture concerns, and any areas where you want extra scrutiny.
 7. Fix valid self-review findings, rerun affected local checks, and repeat delegated self-review if the fix materially changes the implementation.
 8. Return the implementation report.
@@ -110,5 +110,6 @@ If blocked, do not fill a success report. Return `IMPLEMENTATION BLOCKED` with t
 - Reading only the file to edit when nearby architecture, callers, contracts, or tests could affect the change.
 - Skipping delegated self-review or treating the implementer's own pass as the required review.
 - Returning only a prose summary with no changed files, checks, self-review result, or engineering notes.
+- Treating developer checks as acceptance, visual, or PR-verdict verification.
 - Adding poorly named, over-broad, hard-to-maintain, or needlessly slow code when a cleaner option is available.
 - Broadening beyond the approved unit without approval.

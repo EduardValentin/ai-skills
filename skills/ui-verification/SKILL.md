@@ -1,6 +1,6 @@
 ---
 name: ui-verification
-description: Use when reviewing implemented frontend UI for visual parity against a runnable prototype/reference or visual consistency against production analogs, including accessibility states or scoped reruns after visual findings.
+description: Use when a request asks for UI verification, UI/UX verification, frontend UI review, visual parity, or visual consistency of implemented UI and needs a structured CLEAN/FINDINGS/BLOCKED verdict, matched-element inventory, DOM computed-style or bounding-rect evidence, accessibility states, or scoped reruns after visual findings.
 ---
 
 # UI Verification
@@ -43,7 +43,7 @@ Important states means every visually meaningful user-visible state named by the
 
 UI verification requires an affected-element inventory before normal verification starts.
 
-If the caller did not provide an affected-element or matched-element inventory, a scoping agent must be supplied to produce one from the ticket description, acceptance criteria, approved artifacts, diff or changed UI files, routes and states, and the reference or production comparison basis. The verifier may refine the scoped inventory during live DOM inspection, but must not skip the scoping step or invent an inventory from visual impressions alone.
+If the caller did not provide an affected-element or matched-element inventory, produce or obtain one before normal verification. Prefer delegated scoping when available; otherwise return `BLOCKED` unless the caller explicitly requests best-effort in-session scoping from the ticket description, acceptance criteria, approved artifacts, diff or changed UI files, routes and states, and the reference or production comparison basis. The verifier may refine the scoped inventory during live DOM inspection, but must not skip the scoping step or invent an inventory from visual impressions alone.
 
 ## Mode Selection
 
@@ -54,7 +54,7 @@ If the caller does not name a mode, choose parity when a runnable reference URL/
 
 ## Browser Bootstrap
 
-Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the evidence status **degraded** and do not claim a normal CLEAN verdict from visual impression alone. If even that fallback cannot run, return `UI verification cannot proceed` with the blocker and required input.
+Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the evidence status **degraded manual evidence**. CLEAN requires complete DOM evidence; degraded evidence returns BLOCKED unless the caller explicitly requested best-effort. If even that fallback cannot run, return `UI verification cannot proceed` with the blocker and required input.
 
 ## Output Format
 
@@ -153,7 +153,7 @@ After fixes, rerun only the affected rows and affected states unless the fix tou
 - Accepting hidden templates, implementation proxies, storybook-only renders, static mockups, or source inspection as substitutes for the integrated rendered surface the user actually sees.
 - Skipping DOM evaluation because screenshots "look the same."
 - Accepting or returning a report with blank computed-style cells for in-scope rows.
-- Starting normal verification without a caller-supplied inventory or a scoped inventory produced from the ticket description and diff.
+- Starting normal verification without a caller-supplied inventory, delegated scoped inventory, or explicitly requested best-effort in-session scoped inventory.
 - Asking the caller to construct the matched-element inventory instead of using available scoping support.
 - Inventing a prototype, reference, or production analog when none is available.
 - Treating local design-system preferences as a reason to override parity mode's runnable reference.

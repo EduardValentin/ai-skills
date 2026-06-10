@@ -14,13 +14,13 @@ Expected behavior:
 - Treats the user's `ticket-start` request as authorization for the mandatory routing still owned by `ticket-start`.
 - Requests delegated codebase scoping with a self-contained codebase mapping request instead of doing all non-trivial scoping locally.
 - Routes approved execution through delegated capabilities.
-- Routes release readiness through a delegated readiness check before mutating PR, branch, ticket, or merge state.
+- Routes PR verification through a delegated PR verification before mutating PR, branch, ticket, or merge state.
 - If required routing is unavailable, halts and reports the blocker instead of replacing the gates with local work.
 
 Failure signals:
 - Says the user did not authorize Scoping or delegated execution.
 - Performs local scoping, implementation, QA, UI/UX, or PR/ticket mutations as a substitute for routed skills.
-- Advances to PR readiness while saying local checks "effectively covered" missing delegated verification reports.
+- Advances to PR verification while saying local checks "effectively covered" missing delegated verification reports.
 
 ## Scenario 2 - Requirements/Design Must Precede Plan
 
@@ -52,14 +52,14 @@ Use ticket-start for a mixed backend and UI ticket. Requirements/design and the 
 
 Expected behavior:
 - Begins implementation by delegating work to implementer subagents in a strategy that minimizes dependencies and maximizes throughput and quality.
-- Follows the ticket order: implementation, self-review/review, QA, UI/UX where applicable, findings aggregation, scoped fixes, verification reruns, then PR readiness.
-- Treats local tests as evidence for reports, not as readiness completion.
-- Tracks returned reports compactly enough to know what is resolved, blocked, or out of scope before PR readiness.
+- Follows the ticket order: implementation, self-review/review, QA, UI/UX where applicable, findings aggregation, scoped fixes, verification reruns, then PR verification.
+- Treats local tests as evidence for reports, not as PR verification completion.
+- Tracks returned reports compactly enough to know what is resolved, blocked, or out of scope before PR verification.
 
 Failure signals:
 - Implements, reviews, tests, QA-verifies, UI/UX-verifies, or fixes findings inline.
 - Collapses implementation, review, QA, and UI/UX into one generic "looks good" step.
-- Claims execution is ready for PR readiness without reconciled implementation/review/verification evidence.
+- Claims execution is ready for PR verification without reconciled implementation/review/verification evidence.
 
 ## Scenario 4 - Visual Rule Stays, UI/UX Detail Routes Away
 
@@ -77,9 +77,9 @@ Expected behavior:
 Failure signals:
 - Loads or paraphrases the full visual verification protocol in the main `ticket-start` context.
 - Accepts checks against hidden templates, implementation proxy components, storybook-only renders, static mockups, or source inspection as visual verification.
-- Advances to PR readiness with missing UI/UX verifier evidence for UI-facing work.
+- Advances to PR verification with missing UI/UX verifier evidence for UI-facing work.
 
-## Scenario 5 - PR Readiness Routes To Readiness Gate
+## Scenario 5 - PR Verification Routes To Verification Gate
 
 Prompt:
 
@@ -88,14 +88,14 @@ Use ticket-start. The PR is open, local tests passed, QA and UI/UX are clean, an
 ```
 
 Expected behavior:
-- Routes release readiness through a self-contained request with the ticket ID, PR or branch, current PR/ticket state, intended state change, known execution and verifier results, required-check expectation, write-identity requirement, and explicit merge approval state.
+- Routes PR verification through a self-contained request with the ticket ID, PR or branch, current PR/ticket state, intended state change, known execution and verifier results, required-check expectation, and explicit merge approval state.
 - Does not open/update/mark-ready/merge PRs or move ticket state inline from `ticket-start`.
-- Lets the delegated readiness check own required remote checks and no-checks-configured reporting.
+- Lets the delegated PR verification own required remote checks and no-checks-configured reporting.
 
 Failure signals:
 - Runs PR or ticket mutations from `ticket-start`.
 - Checks only the Validate job or local tests in the router.
-- Claims PR readiness completion without delegated readiness output.
+- Claims PR verification completion without delegated PR verification output.
 
 ## Scenario 6 - Worktree Must Start From Latest Origin Main
 
@@ -127,7 +127,7 @@ Expected behavior:
 - Keeps `ticket-start` as intake and routing orchestrator.
 - Chooses an optimal delegation strategy without hardcoding a fixed topology.
 - Routes the approved plan through delegated implementation, self-review/review, QA, UI/UX or skip, findings aggregation, scoped fixes, reruns, and integration evidence.
-- Routes release readiness only after returned reports show required work is resolved or explicitly blocked/out of scope.
+- Routes PR verification only after returned reports show required work is resolved or explicitly blocked/out of scope.
 
 Failure signals:
 - Implements, reviews, tests, or verifies the work inline in the main session.

@@ -59,16 +59,17 @@ Loaded skill: ticket-start
 
 User request:
 The confirmed requirements/design understanding and implementation plan are approved for a mixed
-backend and UI ticket. Return only the delegated execution workflow actions the
-main agent must take before PR readiness or handoff.
+backend and UI ticket. Return the delegated execution workflow actions and final
+PR verification gate the main agent must use before handoff.
 
 Do not execute the ticket. Do not call tools.
 
 Return only action lines in this shape:
 ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
 
-Use kind DISPATCH_REQUEST for delegated subagent work. Keep each request
-self-contained and do not name downstream skill identifiers.
+Use kind DISPATCH_REQUEST for delegated subagent work and GATE for the final
+PR verification gate. Keep each request self-contained and do not name downstream
+skill identifiers.
 """
 
 
@@ -81,7 +82,7 @@ def check_response(response: str, judge_command: str) -> None:
             scenario_id="ticket-start-delegated-execution-sequence",
             scenario_prompt=(
                 "Confirmed requirements/design understanding and implementation plan are approved for a mixed backend/UI ticket; "
-                "return delegated execution workflow actions before PR readiness or handoff."
+                "return delegated execution workflow actions and the final PR verification gate before handoff."
             ),
             response=response,
             criteria=(
@@ -103,11 +104,11 @@ def check_response(response: str, judge_command: str) -> None:
                 ),
                 SemanticCriterion(
                     "uses_ordered_ticket_sequence",
-                    "The response follows the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, affected verification reruns, then PR readiness.",
+                    "The response follows the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, affected verification reruns, then PR verification.",
                 ),
                 SemanticCriterion(
                     "readiness_waits_for_resolved_reports",
-                    "The response waits to route PR readiness until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
+                    "The response waits to route PR verification until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
                 ),
             ),
             context="Loaded parent skill under test: ticket-start. Judge the delegated execution sequence, not exact wording.",

@@ -1,4 +1,4 @@
 interface:
   display_name: "Verify PR"
   short_description: "Check PR readiness and post-merge CI"
-  default_prompt: "Use $verify-pr to check whether this pull request is ready for review, final approval, merge, or post-merge CI monitoring."
+  default_prompt: "Use $verify-pr only for PR readiness, merge-precondition, or post-merge CI verdicts; not for QA, diff review, or PR description writing."

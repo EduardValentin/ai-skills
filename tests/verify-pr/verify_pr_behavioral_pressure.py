@@ -153,13 +153,14 @@ SCENARIOS = (
     Scenario(
         scenario_id="after-merge-monitoring-failure",
         user_request=(
-            "The previous Verify PR report was READY for PR #99 and I explicitly approve merging it now. "
-            "After merge, the target-branch CI monitor reports deploy-smoke failed on merge commit abc123."
+            "The previous Verify PR report was READY for PR #99, and I explicitly approve merging it if the "
+            "current source-control gates still pass. Re-check the gates before merge. After merge, the "
+            "target-branch CI monitor reports deploy-smoke failed on merge commit abc123."
         ),
         criteria=(
             SemanticCriterion(
                 "merges_only_after_ready_and_approval",
-                "The response treats explicit merge approval and an existing READY report as prerequisites before merge.",
+                "The response treats explicit merge approval plus freshly re-fetched passing readiness gates as prerequisites before merge, and treats the prior READY report only as a hint.",
             ),
             SemanticCriterion(
                 "starts_post_merge_monitoring",
@@ -171,7 +172,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "fetches_failure_details_and_plan",
-                "The response says to fetch failing check details from the source-control system and provide a proposed plan of action without implementing the fix automatically.",
+                "For POST_MERGE_BLOCKED, the response includes a Source-control failure details fetched/requested line and a Proposed plan line, without implementing the fix automatically.",
             ),
         ),
         forbidden_terms=(

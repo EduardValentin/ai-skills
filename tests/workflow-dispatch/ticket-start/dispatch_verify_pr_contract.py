@@ -24,18 +24,18 @@ def main() -> int:
 
 
 def check_contract(skill: str) -> None:
-    assert_contains(skill, "## Step 5 - PR Readiness Or Handoff")
+    assert_contains(skill, "## Step 5 - PR Verification Or Handoff")
     assert_contains(skill, "When implementation, review, QA, UI/UX or skip, scoped fixes, and reruns are resolved")
-    assert_contains(skill, "delegate a self-contained PR readiness request")
+    assert_contains(skill, "delegate a self-contained PR verification request")
     assert_contains(skill, "ticket, PR or branch")
     assert_contains(skill, "intended action")
     assert_contains(skill, "execution and verification summary")
     assert_contains(skill, "merge-approval status")
-    assert_contains(skill, "Do not perform PR, branch, tracker, release, or merge mutations inline.")
+    assert_contains(skill, "Do not perform PR, branch, tracker, or merge mutations inline.")
     assert_not_contains(skill, "verify-pr")
     assert_not_contains(skill, "multi-ticket-work")
     assert_not_contains(skill, "gh pr checks <PR> --required --json name,state,bucket,workflow,link")
-    assert_not_contains(skill, "without partially changing PR, branch, tracker, release, or merge state")
+    assert_not_contains(skill, "without partially changing PR, branch, tracker, or merge state")
 
 
 def assert_not_contains(haystack: str, needle: str) -> None:

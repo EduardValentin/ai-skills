@@ -1,13 +1,13 @@
 ---
 name: verify-pr
-description: Use when checking whether a pull request is ready for human review, final approval, merge, or post-merge CI monitoring. Verifies source-control PR metadata, CI status, implemented-surface test evidence, review/comment state, and linked Jira or Linear ticket review status through available tooling.
+description: Use when checking PR readiness, merge preconditions, or post-merge CI verdicts. Verifies source-control PR metadata, CI status, implemented-surface test evidence, review/comment state, and linked Jira or Linear ticket review status through available tooling. Do not use for QA, diff review, PR descriptions, reviewer notes, or testing instructions.
 ---
 
 # Verify PR
 
 ## Purpose
 
-Verify PR validates whether a pull request is ready for the requested next step: review handoff, final approval, merge, or after-merge monitoring.
+Verify PR validates whether a pull request is ready for the requested next step: review handoff, final approval, merge, or post-merge CI monitoring.
 
 Read PR and ticket metadata directly through available tooling such as MCP connectors, REST APIs, CLIs, or authenticated local metadata. Treat user-provided state as a hint unless direct source-of-truth access is unavailable.
 
@@ -15,7 +15,7 @@ Read PR and ticket metadata directly through available tooling such as MCP conne
 
 For missing current state, fetch or state this fetch path before a readiness verdict: source-control PR metadata first; linked ticket IDs from the PR metadata, branch, title, or body; ticket status from Jira or Linear; then CI checks, implemented-surface tests, review approvals, and unresolved comments.
 
-If tooling, API, CLI, auth, or connector access is blocked, return `NOT_READY` and ask the user for the missing PR, ticket, check, test, review, or comment details required for the next verdict.
+If source-of-truth access is blocked, label provided state as unverified. Return `READY` only when complete current source-system output covers every required gate; otherwise return `NOT_READY` with the missing PR, ticket, check, test, review, or comment fields required for the next verdict.
 
 ## Inputs
 
@@ -38,13 +38,13 @@ Return `READY` only when all gates needed for the requested action pass.
 
 ## After-Merge Monitoring
 
-When the user explicitly asks to merge a PR, first confirm the PR is already `READY` and that the user explicitly approved the merge. Record both preconditions in the report. Then perform the merge through the source-control system and start a background process or subagent to monitor post-merge CI on the merge commit or target branch.
+When the user explicitly asks to merge a PR, first re-fetch all readiness gates unless the `READY` verdict was produced from current source-of-truth data in this same verification step. Treat prior `READY` reports as hints, not merge authorization. Confirm the PR is `READY` and the user explicitly approved the merge, then perform the merge through the repository's required source-control write workflow and identity. If that write path or credentials are unavailable, report the blocker instead of merging. After merge, start a background process or subagent to monitor post-merge CI on the merge commit or target branch.
 
 If post-merge CI passes, report the merged PR, monitored checks, and final status.
 
 If post-merge CI fails, fetch the failing check details from the source-control system and report `POST_MERGE_BLOCKED` with the failing job, error summary, affected commit or branch, and a proposed plan of action. The report must include a `Source-control failure details fetched` line, or `Source-control failure details requested` when the fetch is blocked, plus a `Proposed plan` line that names the likely investigation or fix path while leaving implementation for a separate user request.
 
-If monitoring cannot be started because tooling, auth, or provider metadata is unavailable, report that monitoring is blocked and name the required access.
+If monitoring cannot be started because tooling, auth, or provider metadata is unavailable, report `POST_MERGE_MONITORING_BLOCKED` and name the required access.
 
 ## Forbidden Behavior
 
@@ -52,6 +52,7 @@ If monitoring cannot be started because tooling, auth, or provider metadata is u
 - Treating user-provided PR, check, review, comment, or ticket state as authoritative while source-of-truth access is available.
 - Asking the user for missing metadata before trying available MCP, API, CLI, connector, or authenticated local metadata access.
 - Marking the PR `READY` when required metadata is missing, required CI checks are pending/failing/cancelled/unknown, implemented-surface test evidence is missing or failing, the linked ticket is outside a review-state column, required approval is absent, requested changes are active, or review comments/threads are unresolved.
+- Relying on a prior `READY` report alone before merge instead of re-fetching current gates.
 - Merging, marking ready, updating tickets, dismissing comments, or performing source-control mutations while any readiness gate is blocked.
 - Calling an observed post-merge CI failure "monitoring blocked"; it is `POST_MERGE_BLOCKED`.
 - Implementing post-merge CI fixes unless the user asks for follow-up implementation work.
@@ -63,7 +64,7 @@ Return a compact report:
 ```markdown
 # Verify PR report - <PR or ticket>
 
-Status: READY | NOT_READY | MERGED_MONITORING | POST_MERGE_CLEAR | POST_MERGE_BLOCKED
+Status: READY | NOT_READY | MERGED_MONITORING | POST_MERGE_CLEAR | POST_MERGE_BLOCKED | POST_MERGE_MONITORING_BLOCKED
 
 PR:
 - Source: <provider/repo/pr>

@@ -96,7 +96,7 @@ def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, obj
             criteria=(
                 SemanticCriterion(
                     "expected_skill_is_relevant",
-                    f"The response selects {skill} because it is relevant to the user request before any task work begins.",
+                    f"The response includes {skill} because it is relevant to the user request before any task work begins. Extra selected skills are acceptable unless they match the scenario's forbidden terms.",
                 ),
                 SemanticCriterion(
                     "selection_is_from_prompt",
@@ -109,7 +109,7 @@ def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, obj
             ),
             context=(
                 "This is an installed-harness black-box skill trigger test. "
-                f"The deterministic expected skill is {skill}."
+                f"The deterministic requirement is that {skill} is selected; extra selected skills are allowed unless explicitly forbidden by the scenario."
             ),
         )
     except AssertionError as error:

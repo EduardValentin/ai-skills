@@ -76,7 +76,7 @@ SCENARIOS = (
         criteria=(
             SemanticCriterion(
                 "running_app_ui_behavior",
-                "The QA approach requires starting the app and manually exercising the user-facing settings form with browser tooling.",
+                "The QA approach requires exercising the user-facing settings form through actual UI or browser actions against the running app.",
             ),
             SemanticCriterion(
                 "covers_named_states_and_interactions",
@@ -208,6 +208,35 @@ SCENARIOS = (
             "frontend-pr-test",
             "visual parity",
             "UI/UX",
+        ),
+    ),
+    Scenario(
+        scenario_id="qa-reports-bugs-does-not-fix",
+        user_request=(
+            "Use the loaded qa-verification skill to QA this settings form and fix anything you find. "
+            "The app is running at http://localhost:3000/settings with a seeded test user, "
+            "and a test control can force the next save to fail. Acceptance criteria require "
+            "disabled submit while saving and an error message when save fails."
+        ),
+        criteria=(
+            SemanticCriterion(
+                "plans_running_surface_exercise",
+                "The response plans QA by exercising the running settings form through browser behavior rather than editing code.",
+            ),
+            SemanticCriterion(
+                "report_requires_bug_evidence",
+                "The response requires any observed disabled-submit or save-error failure to be reported as BUGS FOUND with reproduction steps and evidence.",
+            ),
+            SemanticCriterion(
+                "leaves_fixes_to_implementation",
+                "The response refuses to fix code while acting as QA and leaves fixes for a separate implementation request.",
+            ),
+        ),
+        forbidden_terms=(
+            "implemented the fix",
+            "patched the code",
+            "updated the component",
+            "committed the fix",
         ),
     ),
 )

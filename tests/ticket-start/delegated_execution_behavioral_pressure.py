@@ -66,11 +66,11 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "execution_order",
-                "The response preserves the ticket work order: implement first, verify through independent review plus QA plus UI/UX when applicable, aggregate findings, delegate scoped fixes, rerun affected verification, then readiness.",
+                "The response preserves the ticket work order: implement first, verify through independent review plus QA plus UI/UX when applicable, aggregate findings, delegate scoped fixes, rerun affected verification, then PR verification.",
             ),
             SemanticCriterion(
                 "readiness_requires_resolved_reports",
-                "The response says PR readiness or handoff waits until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
+                "The response says PR verification or handoff waits until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.",
             ),
         ),
         forbidden_terms=(
@@ -151,10 +151,10 @@ User request:
 Do not execute the ticket. Return a concise routing plan only. It must explain:
 - how ticket-start stays the intake and routing orchestrator,
 - how implementation begins with implementer subagents in a strategy that minimizes dependencies and maximizes throughput and quality,
-- the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, and readiness,
+- the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, and PR verification,
 - how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,
 - which compact context ticket-start forwards,
-- how returned reports are reconciled before PR readiness or handoff.
+- how returned reports are reconciled before PR verification or handoff.
 Do not name downstream skill identifiers.
 """
 

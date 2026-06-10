@@ -35,6 +35,7 @@ def check_dispatch_contract(skill: str) -> None:
         assert_not_contains(skill, term)
 
     assert_contains(skill, "Dispatch one subagent per ticket or unit of work")
+    assert_contains(skill, "Each subagent owns the normal one-ticket workflow for its ticket or unit")
     assert_contains(skill, "Save an uncommitted orchestration note")
     assert_contains(skill, "Re-read it at the start of work, after any context compaction or resume")
     assert_contains(skill, "A ticket or unit is not complete until its subagent has opened a PR")

@@ -33,12 +33,18 @@ def check_skill_contract(skill: str) -> None:
         "## Inventory Scoping",
         "requires an affected-element inventory before normal verification starts",
         "If the caller did not provide an affected-element or matched-element inventory",
-        "a scoping agent must be supplied",
+        "produce or obtain one before normal verification",
+        "Prefer delegated scoping when available",
+        "return `BLOCKED` unless the caller explicitly requests best-effort in-session scoping",
         "ticket description",
         "diff or changed UI files",
         "reference or production comparison basis",
         "must not skip the scoping step or invent an inventory from visual impressions alone",
-        "Starting normal verification without a caller-supplied inventory or a scoped inventory",
+        "Prefer the host's native browser automation",
+        "drive Playwright through the shell",
+        "degraded manual evidence",
+        "CLEAN requires complete DOM evidence",
+        "Starting normal verification without a caller-supplied inventory, delegated scoped inventory, or explicitly requested best-effort in-session scoped inventory",
         "Do not replace DOM evidence with visual impressions",
     )
     for term in required_terms:
@@ -53,7 +59,7 @@ def check_skill_contract(skill: str) -> None:
 
 
 def check_metadata(metadata: str) -> None:
-    for term in ("UI Verification", "$ui-verification", "visual"):
+    for term in ("UI Verification", "$ui-verification", "rendered", "DOM"):
         assert_contains(metadata, term, "ui-verification metadata")
     assert_not_contains(metadata, "frontend" + "-ui-review", "ui-verification metadata")
 

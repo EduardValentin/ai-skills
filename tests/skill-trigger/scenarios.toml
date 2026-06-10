@@ -64,6 +64,28 @@ in parallel, what must be sequenced, dispatch one subagent per ticket or unit,
 and give me the opened PRs with the review order at the end.
 """
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
+
+[[scenario]]
+id = "multi-ticket-work-ticket-set"
+skill = "multi-ticket-work"
+prompt = """
+Work Jira APP-101, APP-102, and APP-103 as one coordinated scope. Map their
+dependencies, delegate each ticket, and return the opened PRs in review order.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
+
+[[scenario]]
+id = "multi-ticket-work-parent-children"
+skill = "multi-ticket-work"
+prompt = """
+Work parent Jira APP-200 and all of its child tickets as one scope. Gather the
+full child set before dispatching, coordinate dependencies, and return PR review
+order.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
 id = "github-interaction-bot-pr-write"
@@ -79,9 +101,13 @@ response_forbidden_terms = ["ticket-start"]
 id = "implement-unit-of-work-approved-code-unit"
 skill = "implement-unit-of-work"
 prompt = """
-Select the implement-unit-of-work skill for this approved standalone code unit.
+You are an implementer subagent. Implement the approved billing retry slice from
+the provided acceptance criteria, implementation plan, codebase scope map,
+affected surfaces, branch state, and expected checks. Stay inside this unit, use
+TDD where feasible, delegate self-review, and return an implementation report.
 """
 forbidden_terms = []
+response_forbidden_terms = ["ticket-start", "qa-verification", "ui-verification", "verify-pr", "codebase-scope-map"]
 
 [[scenario]]
 id = "qa-verification-backend-api"
@@ -176,7 +202,7 @@ response_forbidden_terms = ["ticket-start"]
 [[scenario]]
 id = "ui-verification-production-consistency"
 skill = "ui-verification"
-prompt = "There is no prototype for this frontend change; review whether the new settings panel is visually consistent with the existing production settings and profile panels."
+prompt = "Review implemented frontend UI for visual consistency against production analogs. For the new settings panel, produce a matched-element inventory against existing settings/profile panels with computed-style comparison, bounding-rect comparison, accessibility states, and a structured verdict."
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
@@ -210,13 +236,14 @@ id = "qa-verification-frontend-pr-acceptance"
 skill = "qa-verification"
 prompt = "QA this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes with evidence."
 forbidden_terms = []
-response_forbidden_terms = ["frontend-pr-test"]
+response_forbidden_terms = ["frontend-pr-test", "ticket-start", "Ship", "visual parity", "UI/UX", "verify-pr"]
 
 [[scenario]]
 id = "pr-reviewer-summary-current-branch"
 skill = "pr-reviewer-summary"
 prompt = "Generate a reviewer-friendly PR description for the current branch with Summary of Changes, Manual Testing, and reviewer notes."
 forbidden_terms = []
+response_forbidden_terms = ["verify-pr", "qa-verification"]
 
 [[scenario]]
 id = "design-studio-visual-bug"
@@ -289,7 +316,7 @@ forbidden_terms = []
 [[scenario]]
 id = "uiux-visual-validation-breakpoints"
 skill = "visual-validation"
-prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking overflow, clipping, contrast, focus states, and parity with the reference app."
+prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking overflow, clipping, contrast, focus states, and broad visual quality against the product aesthetic."
 forbidden_terms = []
 
 [[scenario]]

@@ -1,4 +1,4 @@
 interface:
   display_name: "Ticket Start"
-  short_description: "Run one Jira or Linear ticket from intake through delegated execution and readiness handoff"
-  default_prompt: "Use $ticket-start to run one Jira or Linear ticket from intake through plan, delegated execution, verification, and PR readiness handoff."
+  short_description: "Run one ticket through delegated execution"
+  default_prompt: "Use $ticket-start to run one Jira or Linear ticket from intake through plan, delegated execution, verification, and PR verification handoff."

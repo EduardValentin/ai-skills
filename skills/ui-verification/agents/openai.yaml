@@ -1,4 +1,4 @@
 interface:
   display_name: "UI Verification"
-  short_description: "Verify frontend visual parity or consistency"
-  default_prompt: "Use $ui-verification to review this frontend change for parity against a reference or consistency with production analogs."
+  short_description: "Verify rendered UI with inventory and DOM evidence"
+  default_prompt: "Use $ui-verification to verify rendered, user-visible frontend parity or consistency with matched-element inventory, DOM computed-style/bounding-rect evidence, and accessibility state checks."

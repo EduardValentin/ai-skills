@@ -1,4 +1,4 @@
 interface:
   display_name: "Multi-Ticket Work"
   short_description: "Coordinate a full multi-ticket scope through delegated PRs"
-  default_prompt: "Use $multi-ticket-work to orchestrate a multi-ticket scope, delegate units, and return PR review order."
+  default_prompt: "Use $multi-ticket-work to orchestrate a full multi-ticket scope, delegate one subagent per ticket by default, and return dependency-aware PR review order."

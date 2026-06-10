@@ -72,12 +72,12 @@ def check_response(response: str, agent_command: str, judge_command: str) -> Non
         "perform readiness inline",
         "merge now",
     )
-    assert_forbidden_terms(response, forbidden, "PR readiness dispatch")
+    assert_forbidden_terms(response, forbidden, "PR verification dispatch")
     judge_response(
         judge_command=judge_command,
         scenario_id="ticket-start-dispatch-verify-pr",
         scenario_prompt=(
-            "The ticket work is complete and PR/ticket readiness is requested, but checks "
+            "The ticket work is complete and PR verification is requested, but checks "
             "must be re-read and explicit merge approval is missing."
         ),
         response=response,
@@ -96,10 +96,10 @@ def check_response(response: str, agent_command: str, judge_command: str) -> Non
             ),
             SemanticCriterion(
                 "does_not_name_downstream_skill",
-                "The response describes the PR readiness capability without naming a downstream skill identifier.",
+                "The response describes the PR verification capability without naming a downstream skill identifier.",
             ),
         ),
-        context="Loaded parent skill under test: ticket-start. Judge PR readiness dispatch behavior, not exact wording.",
+        context="Loaded parent skill under test: ticket-start. Judge PR verification dispatch behavior, not exact wording.",
     )
     assert_auto_discovers(agent_command, response, "verify-pr")
 

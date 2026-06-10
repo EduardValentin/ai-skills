@@ -35,16 +35,18 @@ def check_skill_contract(skill: str) -> None:
         "approved unit of code",
         "approved requirements/design direction",
         "approved implementation plan",
-        "codebase scope",
+        "approved codebase scope, either as a scope map or explicit affected files/surfaces",
         "Inspect the relevant code ambitiously before editing",
         "nearby callers/callees",
         "Use TDD for required features and bug fixes",
         "write or update a focused failing test first",
+        "Run relevant developer checks, such as tests, type/lint/build, and targeted smoke commands",
         "TDD evidence",
         "Preserve the surrounding application architecture",
         "Keep new or changed methods/functions to three parameters or fewer",
         "Self-review is required and must be delegated to a separate subagent",
         "Performance/maintainability notes",
+        "Treating developer checks as acceptance, visual, or PR-verdict verification",
     )
     for term in required_terms:
         assert_contains(skill, term)
