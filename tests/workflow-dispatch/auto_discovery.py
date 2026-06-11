@@ -40,12 +40,38 @@ def run_agent(agent_command: str, prompt: str) -> str:
 
 def assert_auto_discovers(agent_command: str, delegated_request: str, expected_skill: str) -> str:
     response = run_agent(agent_command, make_selection_prompt(delegated_request))
-    if expected_skill not in response:
+    if not selected_skill_matches(response, expected_skill):
         raise AssertionError(
             f"delegated request did not auto-discover {expected_skill}\n"
             f"Request:\n{delegated_request}\n\nDiscovery response:\n{response}"
         )
     return response
+
+
+def selected_skill_matches(response: str, expected_skill: str) -> bool:
+    selected = selected_skill_names(response)
+    normalized_expected = normalize_skill_name(expected_skill)
+    expected_short = normalized_expected.split(":", 1)[-1]
+    return any(
+        candidate == normalized_expected or candidate == expected_short
+        for candidate in selected
+    )
+
+
+def selected_skill_names(response: str) -> set[str]:
+    for line in response.splitlines():
+        if line.casefold().startswith("selected_skills:"):
+            _, raw_names = line.split(":", 1)
+            return {
+                normalize_skill_name(name)
+                for name in raw_names.split(",")
+                if normalize_skill_name(name)
+            }
+    return {normalize_skill_name(response)}
+
+
+def normalize_skill_name(name: str) -> str:
+    return name.strip().strip("`'\". ").casefold()
 
 
 def make_selection_prompt(delegated_request: str) -> str:

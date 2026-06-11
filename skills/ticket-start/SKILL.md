@@ -34,6 +34,7 @@ Do not use for Epics, parent tickets with children requested as one scope, multi
 - Start work in a fresh worktree based on fetched `origin/main`. Fetch first; do not base ticket work on local `main`, the current branch, or a stale ref.
 - Treat "start working", "coding part only", "code it", branch instructions, branch clarification, and investigation permission as permission to begin this workflow, not permission to code.
 - In pre-approval responses, explicitly state that branch choice, investigation progress, internal status plans, checklists, and working notes are not user approval.
+- Before spec and plan approval, limit code-adjacent work to fact gathering, freshness/setup, and delegated scoping. Do not validate draft changes, run implementation tests, recommend repairs, edit product/test files, or treat an existing draft worktree as approval.
 - Keep the main session focused on orchestration and user decisions. Do not quietly turn it into the implementer, QA verifier, UI/UX verifier, or PR/ticket mutator.
 - Internal checklists, status plans, or working notes never replace user approval of the written spec/design and implementation plan.
 - Keep delegated requests self-contained: ticket facts, acceptance criteria, approved decisions, relevant repo instructions, scope locators, constraints, expected checks, and output expectations.
@@ -47,15 +48,15 @@ Do not use for Epics, parent tickets with children requested as one scope, multi
 4. Read nearby repo instructions and workflow references. For personal projects, check `PRD.md` when the ticket or unit of work adds or changes business rules. Check `designs/` or reference apps only when the ticket adds or modifies UI components that have a corresponding reference surface or component. Read only the relevant slices.
 5. Inspect current git state, branches, existing PRs, and recent commits relevant to the ticket.
 6. Create or verify the ticket worktree from freshly fetched `origin/main`; halt if freshness cannot be established.
-7. Delegate codebase scoping before planning for implementation tickets. If the scope is clearly trivial, record the skip reason before doing local scoping. Include the ticket title, description, acceptance criteria, dependencies, repo instructions, and known constraints in the scoping request.
+7. Delegate codebase scoping after ticket, parent, artifact, and repo intake, before brainstorming or planning. This delegation is mandatory for implementation tickets. Include the ticket title, description, acceptance criteria, dependencies, repo instructions, and known constraints in the scoping request.
 
 ## Step 2 - Align Requirements And Design
 
 Open with a short briefing grounded in the ticket and current repo: what is known, what is ambiguous, likely affected surfaces, relevant designs or product docs, and any conflicts.
 
-Run a user-facing brainstorming session until the agent and user share a concrete understanding of the work, boundaries, and success criteria. Keep the discussion grounded in the ticket, parent context, approved artifacts, PRD/design slices, and current codebase facts. A single question, generic "any concerns?", or a brief summary is not enough; keep an open-questions list, ask targeted follow-ups, and continue until the user confirms the shared understanding.
+Run a user-facing brainstorming session until the agent and user share a concrete understanding of the work, boundaries, and success criteria. This is mandatory and non-negotiable. Keep the discussion grounded in the ticket, parent context, approved artifacts, PRD/design slices, and current codebase facts. A single question, generic "any concerns?", or a brief summary is not enough; keep an open-questions list, ask targeted follow-ups, and continue until the user confirms the shared understanding.
 
-After brainstorming, write a concise spec/design covering scope, non-goals, decisions, acceptance criteria, risks, and open questions. Ask the user to approve it. Do not route plan writing before that approval. Every brainstorming handoff must state that plan writing, execution, and product/test edits are blocked until the spec/design is approved.
+After brainstorming, write a concise spec/design covering scope, non-goals, decisions, acceptance criteria, risks, and open questions. Ask the user to approve it. Do not route plan writing before that approval. Every brainstorming handoff must state that plan writing waits for spec/design approval, and execution, draft validation, product edits, and test edits wait for both spec/design approval and implementation-plan approval.
 
 ## Step 3 - Create And Approve The Spec And Plan
 
@@ -63,11 +64,11 @@ After brainstorming, write a concise spec/design covering scope, non-goals, deci
 2. Present the implementation plan to the user and get explicit approval before coding starts. The plan must be concrete enough to route implementation and verification work.
 
 Branch choice, investigation progress, internal status plans, checklists, and working notes do not count as approval.
-Do not implement, scaffold, mutate product code, edit tests, or route execution before both spec approval and implementation-plan approval.
+Spec approval and implementation-plan approval are mandatory, non-negotiable gates. Do not implement, scaffold, mutate product code, edit tests, validate draft work, recommend implementation repairs, or route execution before both approvals.
 
 ## Step 4 - Execute The Approved Packet
 
-After the user approves the spec and implementation plan, enter the execution phase using the approved execution packet and the execution-phase contract. Before modifying product or test code, select and apply the execution capability from that packet; if it is unavailable, stop and report the blocker. Remain the main orchestrator in the current session. Coordinate implementation, independent review, QA, UI/UX verification when applicable, scoped fixes, reruns, PR preparation, and final reporting through delegated work as needed. Do not hand off main-ticket orchestration to another agent.
+After the user approves the spec and implementation plan, enter the execution phase using the approved execution packet and the execution-phase contract. Restate the packet details in the phase contract; do not merely refer to "the approved packet." Before modifying product or test code, select and apply the execution capability from that packet; if it is unavailable, stop and report the blocker. Remain the main orchestrator in the current session. Coordinate implementation, independent review, QA, UI/UX verification when applicable, scoped fixes, reruns, PR preparation, and final reporting through delegated work as needed. Do not hand off main-ticket orchestration to another agent.
 
 The approved execution packet must include the ticket facts, parent context, acceptance criteria, approved spec/design, approved implementation plan, relevant artifact slices, scope locators, branch/worktree state, constraints, expected checks, PR expectations, and completion-report requirements.
 

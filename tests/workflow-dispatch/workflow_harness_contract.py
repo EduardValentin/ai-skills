@@ -17,6 +17,7 @@ from harness import (  # noqa: E402
     build_workflow_prompt,
     require_action_lines,
 )
+from auto_discovery import selected_skill_matches  # noqa: E402
 from semantic_judge import SemanticCriterion  # noqa: E402
 
 
@@ -73,6 +74,15 @@ def check_workflow_harness_contract() -> None:
         "ACTION: 1 | USER_FACING | requirements-brainstorming | align with the user"
     )
     assert_contains(user_facing_text, "USER_FACING")
+
+    assert selected_skill_matches(
+        "SELECTED_SKILLS: using-superpowers, brainstorming, ticket-start",
+        "superpowers:brainstorming",
+    )
+    assert selected_skill_matches(
+        "SELECTED_SKILLS: superpowers:writing-plans, ticket-start",
+        "superpowers:writing-plans",
+    )
 
     try:
         require_action_lines("No actions here", first_action_contains=("map_scope",))

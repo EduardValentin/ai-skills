@@ -26,6 +26,18 @@ forbidden_terms = []
 response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
 
 [[scenario]]
+id = "ticket-start-jira-start-tackling-existing-draft"
+skill = "ticket-start"
+prompt = """
+Let's start tackling this Jira ticket: https://yesenergy.atlassian.net/browse/SS-2785.
+We only care about the coding part in this repo, use the feature branch for the
+future PR, and there is already a draft worktree with changes. Inspect it and
+keep moving.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
+
+[[scenario]]
 id = "ticket-start-substantial-single-ticket"
 skill = "ticket-start"
 prompt = """

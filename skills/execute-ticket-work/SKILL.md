@@ -1,6 +1,6 @@
 ---
 name: execute-ticket-work
-description: Use when an agent receives an approved execution packet for one ticket or work unit and needs to execute that approved unit. Do not use for intake, brainstorming, spec creation, plan creation, approval gathering, planning-only work, QA-only work, PR-only work, or multi-ticket coordination.
+description: Use when coordinating the execution phase for one ticket or work unit from an approved execution packet, especially when implementation, independent review, QA or UI verification, fixes, PR preparation, and completion evidence must remain phase-separated. Do not use for intake, brainstorming, spec creation, plan creation, approval gathering, planning-only work, QA-only work, PR-only work, or multi-ticket coordination.
 ---
 
 # Execute Ticket Work

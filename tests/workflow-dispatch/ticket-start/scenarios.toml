@@ -2,9 +2,10 @@
 id = "ticket-start-dispatch-scoping"
 user_request = """
 Ticket intake for Linear issue APP-123 is complete: title, description, acceptance
-criteria, parent context, repo instructions, and known constraints are available.
-Implementation planning has not started. What workflow handoff should the main agent
-perform next?
+criteria, parent context, relevant artifact context, repo instructions, branch
+state, and known constraints are available. Codebase scoping has not been
+delegated yet. Implementation planning has not started. What workflow handoff
+should the main agent perform next?
 """
 prompt_instructions = """
 Do not perform the task. Do not call tools. Return only action lines in this shape:
@@ -16,6 +17,7 @@ self-contained and do not name downstream skill identifiers.
 forbidden_terms = ["agents/scoping.md", "`codebase-scope-map`", "$codebase-scope-map"]
 expected_auto_discovery = ["codebase-scope-map"]
 require_action_ledger = true
+first_action_contains = ["dispatch_request", "scop"]
 response_checks = ["scoping_before_local_mapping"]
 
 [[scenario.criteria]]
@@ -70,17 +72,19 @@ key = "blocks_plan_and_execution"
 description = "The response makes clear that plan writing and execution wait until the brainstorming phase produces an approved spec/design."
 
 [[scenario]]
-id = "ticket-start-start-working-dispatches-brainstorming"
+id = "ticket-start-start-tackling-dispatches-brainstorming"
 user_request = """
-The user originally said: "Let's start working on this ticket:
+The user originally said: "Let's start tackling this ticket:
 https://yesenergy.atlassian.net/browse/SS-2785. We are only concerned with the
 coding part in this repository and not the alert creation subticket. We are
 working on a feature branch, so base this worktree and future PR on
-SS-2766-centralized-monitoring-of-submission-services-components." The agent has
-investigated the job ticket, ticket and parent context are known, likely affected
-files are known, and codebase scoping evidence is available. No written
-spec/design has been approved and no implementation plan has been approved. What
-workflow handoff should the main agent perform next?
+SS-2766-centralized-monitoring-of-submission-services-components. There is
+already a draft worktree with changes; inspect it and keep moving." The agent
+has investigated the job ticket, ticket and parent context are known, likely
+affected files are known, a draft branch diff exists, and codebase scoping
+evidence is available. No written spec/design has been approved and no
+implementation plan has been approved. What workflow handoff should the main
+agent perform next?
 """
 prompt_instructions = """
 Do not perform the task. Do not call tools. Return only action lines in this shape:
@@ -88,24 +92,31 @@ ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
 
 Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
 self-contained and do not name downstream skill identifiers. The action text must
-ask for a user-facing brainstorming session with targeted open questions. It must
-also state that "start working", coding-scope narrowing, feature-branch direction,
-and investigation progress are not approval to code, and that plan writing,
-execution, product edits, and test edits are blocked until the written spec/design
-is approved.
+ask for an iterative user-facing brainstorming session with targeted open
+questions and shared-understanding confirmation. It must also state that
+start-tackling language, coding-scope narrowing, feature-branch direction,
+existing draft worktree, draft diff knowledge, and investigation progress are
+not approval to code. Plan writing is blocked until written spec/design approval;
+draft validation, repair recommendations, execution, product edits, and test
+edits are blocked until both written spec/design approval and implementation-plan
+approval.
 """
-forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans", "execute-ticket-work", "$execute-ticket-work", "implement inline", "start coding"]
+forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans", "execute-ticket-work", "$execute-ticket-work", "implement inline", "start coding", "run tests", "repair the draft"]
 expected_auto_discovery = ["superpowers:brainstorming"]
 require_action_ledger = true
 first_action_contains = ["dispatch_request", "brainstorming"]
 
 [[scenario.criteria]]
-key = "routes_start_working_to_brainstorming"
-description = "The response routes a user-facing brainstorming phase even though the user said start working and investigation has already happened."
+key = "routes_start_tackling_to_brainstorming"
+description = "The response routes a user-facing brainstorming phase even though the user said start tackling, provided coding scope and branch direction, and a draft worktree exists."
 
 [[scenario.criteria]]
 key = "blocks_execution_without_approvals"
 description = "The response blocks implementation, execution, product edits, and test edits until the written spec/design and implementation plan are both approved."
+
+[[scenario.criteria]]
+key = "blocks_draft_validation_without_approvals"
+description = "The response blocks draft-worktree validation, implementation-test runs, and repair recommendations before the written spec/design and implementation plan are approved."
 
 [[scenario.criteria]]
 key = "brainstorming_is_not_one_question"
@@ -164,7 +175,8 @@ use DISPATCH_REQUEST for this scenario. Keep the request self-contained and do
 not name downstream skill identifiers. The main agent remains the current-session
 orchestrator. The action text must ask to execute the approved ticket/work unit
 from the approved execution packet and coordinate the full execution phase; it
-must not stop at packet validation.
+must restate the packet fields from the user request rather than merely saying
+"the approved packet". It must not stop at packet validation.
 """
 forbidden_terms = ["execute-ticket-work", "$execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
 expected_auto_discovery = ["execute-ticket-work"]
