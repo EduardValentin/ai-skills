@@ -1,0 +1,74 @@
+[[scenario]]
+id = "large-reference-app-context-digest"
+user_request = """
+A user asks for a dashboard redesign in a React reference app. The project has a large DESIGN.md, brand-voice.md, PRD.md, Tailwind theme files, a router, and 80 components. A context-isolated worker is available. The user says to skim files quickly and start because there is no time.
+"""
+forbidden_terms = ["read everything inline", "skip the digest"]
+
+[[scenario.criteria]]
+key = "delegates_context_digest"
+description = """
+The response delegates or otherwise isolates the project-context digest instead of loading all raw docs, routes, theme files, and component trees into the main session.
+"""
+
+[[scenario.criteria]]
+key = "uses_compact_digest_then_targeted_reads"
+description = """
+The response says the main session proceeds from the compact digest, screenshots/rendered signals, and targeted implementation reads only.
+"""
+
+[[scenario.criteria]]
+key = "does_not_skip_due_to_time_pressure"
+description = """
+The response does not treat time pressure as a reason to skip context discipline or infer from target files only.
+"""
+
+[[scenario]]
+id = "broad-audit-context-isolation"
+user_request = """
+Audit six reference-app pages for clutter, reusable components, semantic-token drift, brand-copy issues, responsive problems, and screenshot-visible flaws. Screenshots and context-isolated workers are available.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "delegates_broad_inventory"
+description = """
+The response delegates broad inventory or critique work because the audit spans three or more pages/components/routes.
+"""
+
+[[scenario.criteria]]
+key = "main_context_receives_ranked_summary"
+description = """
+The response keeps the main context focused on screenshots, ranked findings, compact summaries, and targeted source reads.
+"""
+
+[[scenario.criteria]]
+key = "structured_critique_before_implementation"
+description = """
+The response produces or requests a structured critique and ranked fix summary before implementation.
+"""
+
+[[scenario]]
+id = "prd-generation-from-existing-app"
+user_request = """
+No PRD.md exists. The user approves generating one from the current React reference app, which has many routes, mock entities, forms, modals, and role-specific flows. Code analysis can be delegated.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "delegates_app_analysis"
+description = """
+The response delegates the code-analysis pass when context isolation is available instead of reading the whole app inline.
+"""
+
+[[scenario.criteria]]
+key = "uses_product_report_and_screenshots"
+description = """
+The response writes the PRD from screenshots plus a structured product/business analysis report, not raw app-file transcripts.
+"""
+
+[[scenario.criteria]]
+key = "fallback_only_when_no_isolation"
+description = """
+The response falls back to inline analysis only if no context-isolated mechanism exists and keeps that fallback compact.
+"""

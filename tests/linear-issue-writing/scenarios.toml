@@ -1,0 +1,62 @@
+[[scenario]]
+id = "approved-drafts-publishing-gates"
+user_request = """
+Publish these approved platform-neutral stories to Linear.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "confirms_linear_publishing_context"
+description = """
+The response confirms this is Linear publishing, asks for target project/team and required metadata, and preserves the approved draft scope.
+"""
+
+[[scenario.criteria]]
+key = "requires_exact_field_approval"
+description = """
+The response creates or updates nothing until the user approves exact title, description, parent, project, team, labels, priority, estimate, and other metadata.
+"""
+
+[[scenario.criteria]]
+key = "runs_duplicate_detection_per_issue"
+description = """
+The response runs duplicate detection for each issue before creation and asks whether to skip, update, or create anyway when overlap is found.
+"""
+
+[[scenario]]
+id = "no-approved-draft-blocks-publishing"
+user_request = """
+Create Linear tickets for the new onboarding flow.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "does_not_invent_product_scope"
+description = """
+The response refuses to invent backlog scope inside the Linear publishing skill when approved drafts are missing.
+"""
+
+[[scenario.criteria]]
+key = "routes_to_drafting_first"
+description = """
+The response suggests drafting or refinement first and asks for approved source material before publishing.
+"""
+
+[[scenario]]
+id = "linear-unavailable-formats-only"
+user_request = """
+Linear is not connected, but publish these approved stories.
+"""
+forbidden_terms = ["created LIN-", "published successfully"]
+
+[[scenario.criteria]]
+key = "blocks_creation_without_integration"
+description = """
+The response states Linear creation or update cannot proceed while the Linear integration is unavailable.
+"""
+
+[[scenario.criteria]]
+key = "can_format_draft"
+description = """
+The response may produce a Linear-ready draft format but does not claim any issue was created.
+"""

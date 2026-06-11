@@ -1,0 +1,149 @@
+[[scenario]]
+id = "reference-parity-evidence"
+user_request = """
+Compare the implemented React dashboard against the runnable designs/ reference app before release. I care about every visible element matching the prototype, not just the obvious cards.
+"""
+forbidden_terms = ["checked the important elements", "screenshot comparison only"]
+
+[[scenario.criteria]]
+key = "uses_parity_mode"
+description = """
+The response uses parity mode because a runnable reference app is available.
+"""
+
+[[scenario.criteria]]
+key = "requires_matched_inventory"
+description = """
+The response builds or verifies a matched-element inventory covering all relevant visible elements and states.
+"""
+
+[[scenario.criteria]]
+key = "dom_evidence_primary"
+description = """
+The response uses DOM computed-style and bounding-rect evidence as primary evidence, with screenshots only secondary.
+"""
+
+[[scenario]]
+id = "delegated-uiux-gate"
+user_request = """
+Ticket-start delegated the UI/UX gate to you. You received production and prototype URLs, approved requirements/design, changed UI files, and an affected surface map with prototype/reference rows and production locators.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "uses_received_inventory_inputs"
+description = """
+The response starts from the affected surface map, approved artifacts, changed UI files, URLs, and live DOM inspection.
+"""
+
+[[scenario.criteria]]
+key = "fills_evidence_columns"
+description = """
+The response requires font, color/background, box, layout, size, state/accessibility, and verdict evidence for every in-scope row.
+"""
+
+[[scenario.criteria]]
+key = "records_inventory_gaps"
+description = """
+The response adds observed production or reference elements missing from supplied inventory under inventory provenance gaps.
+"""
+
+[[scenario]]
+id = "no-reference-consistency"
+user_request = """
+There is no prototype for this UI change. Review whether the new settings panel matches the rest of the production app's typography, spacing, borders, shadows, focus states, and accessibility.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "uses_consistency_mode"
+description = """
+The response uses consistency mode because no runnable reference is present.
+"""
+
+[[scenario.criteria]]
+key = "pairs_with_production_analogs"
+description = """
+The response pairs changed visible elements with credible production siblings or analogs for comparison.
+"""
+
+[[scenario.criteria]]
+key = "blocks_or_degrades_without_basis"
+description = """
+The response returns BLOCKED or degraded evidence for rows where no credible analog can be identified instead of inventing a basis.
+"""
+
+[[scenario]]
+id = "missing-inventory-requires-scoping"
+user_request = """
+Verify this frontend change against the ticket description and diff. No affected-element inventory was provided.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "requires_inventory_before_verification"
+description = """
+The response requires an affected-element inventory before normal UI verification starts.
+"""
+
+[[scenario.criteria]]
+key = "uses_scoping_support"
+description = """
+The response obtains or produces the inventory from ticket description, acceptance criteria, diff or changed UI files, routes/states, and comparison basis before live verification.
+"""
+
+[[scenario.criteria]]
+key = "does_not_invent_from_impressions"
+description = """
+The response does not invent the inventory from screenshots or visual impressions alone.
+"""
+
+[[scenario]]
+id = "browser-capability-degradation"
+user_request = """
+Review visual parity, but the native browser automation tool is unavailable in this environment. You can still run shell commands.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "falls_back_to_playwright_shell"
+description = """
+The response falls back to browser automation through shell, such as Playwright, when native browser tooling is unavailable.
+"""
+
+[[scenario.criteria]]
+key = "uses_dom_extraction_script"
+description = """
+The response uses or describes using the bundled extraction script or equivalent DOM computed-style and bounding-rect extraction.
+"""
+
+[[scenario.criteria]]
+key = "does_not_claim_clean_with_degraded_evidence"
+description = """
+If DOM evidence cannot be collected, the response reports degraded manual evidence or BLOCKED instead of claiming normal CLEAN parity.
+"""
+
+[[scenario]]
+id = "scoped-rerun-after-findings"
+user_request = """
+The prior review found V1 major: graph card border and shadow differ from the prototype; V2 major: heading line-height differs; V3 minor: axis label typography differs. The approved plan already says preserve placement and accessibility semantics.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "treats_findings_as_actionable"
+description = """
+The response treats the supplied issues as actionable parity defects rather than asking low-value confirmation.
+"""
+
+[[scenario.criteria]]
+key = "scopes_rerun_to_affected_rows"
+description = """
+The response scopes rerun verification to affected rows and states unless shared layout or global styles changed.
+"""
+
+[[scenario.criteria]]
+key = "requires_dom_evidence_after_fix"
+description = """
+The response does not accept local visual inspection alone after fixes; it requires rerun evidence.
+"""

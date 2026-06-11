@@ -1,0 +1,94 @@
+[[scenario]]
+id = "prototype-copy-boundary"
+user_request = """
+Create a story for the onboarding screen. The React prototype shows button text, helper text, placeholders, and visual layout details.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "references_prototype_without_copying_ui_details"
+description = """
+The response references prototype routes/screens/states without repeating button text, helper text, placeholders, layout, styling, or widget choices unless business-critical or explicitly requested.
+"""
+
+[[scenario.criteria]]
+key = "story_focuses_business_outcome"
+description = """
+The response frames the story around user-observable product behavior rather than prototype implementation details.
+"""
+
+[[scenario]]
+id = "tracker-unavailable-stays-platform-neutral"
+user_request = """
+Turn the PRD dashboard section into user stories. The issue tracker is not connected.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "tracker_not_required"
+description = """
+The response produces platform-neutral drafts and does not treat issue-tracker access as required for planning.
+"""
+
+[[scenario.criteria]]
+key = "no_tracker_metadata_or_creation"
+description = """
+The response does not include tracker-specific metadata, IDs, or creation steps as part of planning.
+"""
+
+[[scenario]]
+id = "prd-update-approval"
+user_request = """
+Clarification: archived plans stay visible to coaches forever but clients cannot see them.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "identifies_business_rule"
+description = """
+The response identifies this clarification as a business rule or permission/lifecycle rule.
+"""
+
+[[scenario.criteria]]
+key = "asks_before_prd_edit"
+description = """
+The response proposes a concise PRD update and asks before editing PRD.md.
+"""
+
+[[scenario]]
+id = "vertical-slice-pressure"
+user_request = """
+Split this feature into tickets: database schema, API, frontend, and notifications.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "pushes_back_on_layer_slices"
+description = """
+The response pushes back on layer-sliced tickets and proposes vertical stories around user outcomes.
+"""
+
+[[scenario.criteria]]
+key = "integration_points_in_first_viable_story"
+description = """
+The response ensures relevant UI, API, data, permissions, external systems, notifications, and analytics are covered by the first viable story when applicable.
+"""
+
+[[scenario]]
+id = "no-prd-or-prototype"
+user_request = """
+Create user stories for a new team invitation feature. There is no PRD or prototype yet.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "runs_requirements_brainstorming_first"
+description = """
+The response does not draft immediately; it runs requirements brainstorming for users, flow, data, permissions, integrations, edge cases, and non-goals.
+"""
+
+[[scenario.criteria]]
+key = "brief_approval_before_drafting"
+description = """
+The response produces a shared-understanding brief and waits for user approval before drafting stories.
+"""

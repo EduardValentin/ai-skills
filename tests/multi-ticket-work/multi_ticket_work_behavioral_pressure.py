@@ -13,134 +13,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "multi-ticket-work" / "SKILL.md"
+SCENARIOS_PATH = Path(__file__).with_name("scenarios.toml")
+
 sys.path.append(str(REPO_ROOT / "tests"))
 
-from behavioral_harness import BehavioralScenario as Scenario  # noqa: E402
-from behavioral_harness import run_loaded_skill_behavioral_suite  # noqa: E402
-from semantic_judge import (  # noqa: E402
-    SemanticCriterion,
-)
-
-
-SCENARIOS = (
-    Scenario(
-        scenario_id="epic-ticket-set-delegates-prs-and-review-order",
-        user_request=(
-            "Use multi-ticket-work for the Billing Revamp Epic. It has tickets for "
-            "pricing API, checkout UI, invoice migration, and analytics events. "
-            "Explain how the main agent should coordinate the full implementation."
-        ),
-        criteria=(
-            SemanticCriterion(
-                "gathers_full_ticket_scope",
-                "The response gathers every ticket in the Epic or multi-ticket scope, including parent/Epic context when relevant.",
-            ),
-            SemanticCriterion(
-                "maps_sequence_and_parallel_work",
-                "The response identifies dependencies, sequencing constraints, and which tickets can run in parallel.",
-            ),
-            SemanticCriterion(
-                "aligns_and_approves_before_dispatch",
-                "The response performs cross-ticket requirements gathering, brainstorming, spec, plan, and user approval before dispatching ticket coordinators.",
-            ),
-            SemanticCriterion(
-                "brainstorms_each_ticket_with_dependencies",
-                "The response conducts the user-facing alignment across each ticket in scope while considering dependencies, shared risks, boundaries, and success criteria between tickets.",
-            ),
-            SemanticCriterion(
-                "preserves_state_across_compaction",
-                "The response maintains a durable uncommitted orchestration note with scope, approved spec/plan, execution packets, assignments, status, PRs, blockers, and decisions, and re-reads it after compaction/resume and before later dispatches or final reporting.",
-            ),
-            SemanticCriterion(
-                "dispatches_one_ticket_coordinator_per_approved_packet",
-                "The response dispatches one ticket coordinator subagent per approved ticket or unit with an approved execution packet and dependency context.",
-            ),
-            SemanticCriterion(
-                "main_agent_coordinates_only",
-                "The response keeps the main agent as multi-ticket coordinator and does not have it implement ticket work inline.",
-            ),
-            SemanticCriterion(
-                "ticket_coordinators_do_not_do_user_alignment",
-                "The response does not ask ticket coordinator subagents to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering.",
-            ),
-            SemanticCriterion(
-                "ticket_coordinators_delegate_deeper_phases",
-                "The response says each ticket coordinator must use another level of focused subagents for implementation, independent review, QA, UI/UX when applicable, scoped fixes, and PR preparation when nested delegation is available, or report the limitation when it is unavailable.",
-            ),
-            SemanticCriterion(
-                "does_not_replace_verifiers_with_parent_or_worker_checks",
-                "The response does not treat parent-side review or implementation-worker self-checks as substitutes for independent per-ticket verifier reports.",
-            ),
-            SemanticCriterion(
-                "requires_pr_and_report_per_unit",
-                "A ticket or unit is complete only after its ticket coordinator returns PR evidence and distinct implementation, review, QA, and UI/UX-or-skip evidence.",
-            ),
-            SemanticCriterion(
-                "final_report_lists_pr_review_order",
-                "The final report lists opened PRs in the order the human should review them and explains dependency or integration rationale.",
-            ),
-            SemanticCriterion(
-                "pr_description_surfaces_review_focus",
-                "The response asks for reviewer-friendly PR body or reviewer-summary wording so each PR makes the human review focus clear.",
-            ),
-        ),
-        forbidden_terms=(
-            "readiness ledger",
-            "implement-unit-of-work",
-            "qa-verification",
-            "ui-verification",
-            "verify-pr",
-            "execute-ticket-work",
-            "ticket orchestrator",
-            "ticket-orchestrator",
-        ),
-    ),
-    Scenario(
-        scenario_id="prevents-worker-collapse-of-ticket-orchestration",
-        user_request=(
-            "The Commerce Epic has five independent tickets. A rushed coordinator proposes: "
-            "'dispatch immediately before approval; each worker should implement, self-review, "
-            "QA, run UI checks, push a PR, and the parent session can run one source-control "
-            "review afterward.' Explain the correct multi-ticket coordination."
-        ),
-        criteria=(
-            SemanticCriterion(
-                "rejects_preapproval_dispatch",
-                "The response rejects dispatching ticket coordinators before cross-ticket requirements, brainstorming, spec, plan, and user approval.",
-            ),
-            SemanticCriterion(
-                "first_level_agents_are_ticket_coordinators",
-                "The response makes the first-level subagent for each approved ticket or unit a ticket coordinator with an approved execution packet and dependency context.",
-            ),
-            SemanticCriterion(
-                "ticket_coordinator_prompts_exclude_user_alignment",
-                "The response says ticket coordinators must not perform user-facing brainstorming, spec creation, plan creation, or approval gathering.",
-            ),
-            SemanticCriterion(
-                "ticket_coordinators_do_not_collapse_into_workers",
-                "The response rejects prompts where each ticket coordinator directly implements, reviews, QA-checks, UI-checks, and prepares the PR without deeper delegated phase separation.",
-            ),
-            SemanticCriterion(
-                "parent_review_is_not_enough",
-                "The response says parent-session or source-control review cannot replace independent per-ticket review reports.",
-            ),
-            SemanticCriterion(
-                "completion_needs_distinct_phase_evidence",
-                "The response requires distinct returned evidence for implementation, independent review, QA, UI/UX-or-not-applicable, fixes/reruns, PR link, and completion report before marking a ticket complete.",
-            ),
-        ),
-        forbidden_terms=(
-            "readiness ledger",
-            "implement-unit-of-work",
-            "qa-verification",
-            "ui-verification",
-            "verify-pr",
-            "execute-ticket-work",
-            "ticket orchestrator",
-            "ticket-orchestrator",
-        ),
-    ),
-)
+from behavioral_harness import load_behavioral_scenarios, run_loaded_skill_behavioral_suite  # noqa: E402
 
 
 def main() -> int:
@@ -148,7 +25,7 @@ def main() -> int:
         suite_name="multi-ticket-work",
         skill_name="multi-ticket-work",
         skill_path=SKILL_PATH,
-        scenarios=SCENARIOS,
+        scenarios=load_behavioral_scenarios(SCENARIOS_PATH),
         agent_env_var="MULTI_TICKET_WORK_AGENT_COMMAND",
         scenario_filter_env_var="MULTI_TICKET_WORK_SCENARIO",
         prompt_instructions=(

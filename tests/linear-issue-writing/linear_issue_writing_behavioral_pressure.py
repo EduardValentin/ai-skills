@@ -9,62 +9,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "skills" / "linear-issue-writing" / "SKILL.md"
+SCENARIOS_PATH = Path(__file__).with_name("scenarios.toml")
+
 sys.path.append(str(REPO_ROOT / "tests"))
 
-from behavioral_harness import BehavioralScenario as Scenario  # noqa: E402
-from behavioral_harness import run_loaded_skill_behavioral_suite  # noqa: E402
-from semantic_judge import SemanticCriterion  # noqa: E402
-
-
-SCENARIOS = (
-    Scenario(
-        scenario_id="approved-drafts-publishing-gates",
-        user_request="Publish these approved platform-neutral stories to Linear.",
-        criteria=(
-            SemanticCriterion(
-                "confirms_linear_publishing_context",
-                "The response confirms this is Linear publishing, asks for target project/team and required metadata, and preserves the approved draft scope.",
-            ),
-            SemanticCriterion(
-                "requires_exact_field_approval",
-                "The response creates or updates nothing until the user approves exact title, description, parent, project, team, labels, priority, estimate, and other metadata.",
-            ),
-            SemanticCriterion(
-                "runs_duplicate_detection_per_issue",
-                "The response runs duplicate detection for each issue before creation and asks whether to skip, update, or create anyway when overlap is found.",
-            ),
-        ),
-    ),
-    Scenario(
-        scenario_id="no-approved-draft-blocks-publishing",
-        user_request="Create Linear tickets for the new onboarding flow.",
-        criteria=(
-            SemanticCriterion(
-                "does_not_invent_product_scope",
-                "The response refuses to invent backlog scope inside the Linear publishing skill when approved drafts are missing.",
-            ),
-            SemanticCriterion(
-                "routes_to_drafting_first",
-                "The response suggests drafting or refinement first and asks for approved source material before publishing.",
-            ),
-        ),
-    ),
-    Scenario(
-        scenario_id="linear-unavailable-formats-only",
-        user_request="Linear is not connected, but publish these approved stories.",
-        criteria=(
-            SemanticCriterion(
-                "blocks_creation_without_integration",
-                "The response states Linear creation or update cannot proceed while the Linear integration is unavailable.",
-            ),
-            SemanticCriterion(
-                "can_format_draft",
-                "The response may produce a Linear-ready draft format but does not claim any issue was created.",
-            ),
-        ),
-        forbidden_terms=("created LIN-", "published successfully"),
-    ),
-)
+from behavioral_harness import load_behavioral_scenarios, run_loaded_skill_behavioral_suite  # noqa: E402
 
 
 def main() -> int:
@@ -72,7 +21,7 @@ def main() -> int:
         suite_name="linear-issue-writing",
         skill_name="linear-issue-writing",
         skill_path=SKILL_PATH,
-        scenarios=SCENARIOS,
+        scenarios=load_behavioral_scenarios(SCENARIOS_PATH),
         agent_env_var="LINEAR_ISSUE_WRITING_AGENT_COMMAND",
         scenario_filter_env_var="LINEAR_ISSUE_WRITING_SCENARIO",
         prompt_instructions=(

@@ -1,0 +1,96 @@
+[[scenario]]
+id = "ticket-start-execution-corectness"
+user_request = """
+A user asks to start one Linear issue APP-812. The issue is a child under an Epic, adds a billing eligibility business rule, modifies a checkout UI component with a matching reference surface, and may require backend, UI, migration, and analytics work. The user has not yet confirmed the requirements/design understanding, approved a spec, or approved an implementation plan. Explain the correct main-agent workflow from intake through final handoff.
+"""
+forbidden_terms = ["Depth budget:", "IMPLEMENTATION_SLICE_RESULT", "BROWSER_VERIFICATION_RESULT", "Root -> child -> grandchild", "orchestration map", "leaf-only", "grandchild", "four Linear tickets", "I would implement inline", "qa-verification", "implement-unit-of-work", "multi-ticket-work", "verify-pr", "ui-verification", "execute-ticket-work", "TodoWrite", "two-stage review", "spec compliance reviewer", "code quality reviewer", "ticket orchestrator", "ticket-orchestrator", "does not define", "does not prescribe"]
+
+[[scenario.criteria]]
+key = "ticket_start_is_single_ticket_router"
+description = """
+The response treats this as one standalone ticket handled by the main agent as user-facing orchestrator, not as multi-ticket work or inline implementation.
+"""
+
+[[scenario.criteria]]
+key = "intake_happens_first"
+description = """
+The response starts by re-reading the ticket through MCP or API, capturing title, description, acceptance criteria, links, status, dependencies, ambiguity, and parent/Epic context before brainstorming or planning.
+"""
+
+[[scenario.criteria]]
+key = "artifact_and_repo_freshness"
+description = """
+The response gathers only relevant PRD/design/reference context, reads repo instructions, inspects git/branch/PR/recent commit state, fetches origin/main, and creates or verifies a fresh ticket worktree before implementation decisions.
+"""
+
+[[scenario.criteria]]
+key = "scoping_before_planning"
+description = """
+The response delegates codebase scoping before implementation planning, or records a concrete skip reason if the scope is clearly trivial.
+"""
+
+[[scenario.criteria]]
+key = "brainstorming_before_plan"
+description = """
+The response runs a user-facing brainstorming session grounded in ticket, parent, artifact, repo, and scoping facts until shared understanding of work, boundaries, and success criteria is reached.
+"""
+
+[[scenario.criteria]]
+key = "spec_approval_before_plan"
+description = """
+The response says the brainstorming phase produces the approved spec/design and plan writing is routed only after that spec/design approval.
+"""
+
+[[scenario.criteria]]
+key = "plan_approval_blocks_execution"
+description = """
+The response requires explicit user approval of the implementation plan and blocks coding, scaffolding, product mutations, or execution delegation before both spec approval and plan approval.
+"""
+
+[[scenario.criteria]]
+key = "enters_execution_phase_after_approval"
+description = """
+After spec and plan approval, the response enters an execution phase using an approved execution packet while the main agent remains the current-session orchestrator.
+"""
+
+[[scenario.criteria]]
+key = "does_not_handoff_main_ticket_orchestration"
+description = """
+The response does not hand off main-ticket orchestration to another agent or describe a separate ticket orchestrator.
+"""
+
+[[scenario.criteria]]
+key = "coordinates_execution_and_verification_loop"
+description = """
+The response coordinates implementation, independent review, QA, UI/UX where applicable, scoped fixes, and reruns through delegated work as needed instead of doing them inline.
+"""
+
+[[scenario.criteria]]
+key = "defines_uiux_verification_by_project_type"
+description = """
+The response explains that personal/Linear UI/UX verification compares changed production UI against the runnable reference app, while job/Jira UI/UX verification checks visual consistency with the rest of the application and similar existing elements.
+"""
+
+[[scenario.criteria]]
+key = "forwards_compact_context"
+description = """
+The response describes compact context included in delegated requests, such as ticket/AC, parent context, approved decisions, approved plan, artifact slices, scope/codebase locators, branch state, constraints, expected checks, and output expectations.
+"""
+
+[[scenario.criteria]]
+key = "execution_order"
+description = """
+The response preserves the ticket work order: implement first, verify through independent review plus QA plus UI/UX when applicable, aggregate findings, delegate scoped fixes, rerun affected verification, then PR verification.
+"""
+
+[[scenario.criteria]]
+key = "verifier_cannot_verify_fallback"
+description = """
+The response says delegated QA and UI/UX verifiers must report CANNOT_VERIFY with the reason and missing capability when required tooling or access is unavailable, and the main agent records or handles the blocker.
+"""
+
+[[scenario.criteria]]
+key = "readiness_requires_resolved_reports"
+description = """
+The response says PR verification or handoff waits until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.
+"""

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -13,6 +14,7 @@ sys.path.append(str(REPO_ROOT / "tests"))
 from behavioral_harness import (  # noqa: E402
     BehavioralScenario,
     build_loaded_skill_prompt,
+    load_behavioral_scenarios,
     select_scenarios,
 )
 from semantic_judge import SemanticCriterion  # noqa: E402
@@ -66,6 +68,32 @@ def check_behavioral_harness_contract() -> None:
         assert_contains(str(error), "missing")
     else:
         raise AssertionError("select_scenarios should reject unknown scenario filters")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scenarios_path = Path(tmpdir) / "scenarios.toml"
+        scenarios_path.write_text(
+            """
+[[scenario]]
+id = "loaded-from-toml"
+user_request = "Use the loaded TOML scenario."
+forbidden_terms = ["nope"]
+
+[[scenario.criteria]]
+key = "does_toml"
+description = "The response follows the TOML scenario."
+""".lstrip(),
+            encoding="utf-8",
+        )
+        loaded = load_behavioral_scenarios(scenarios_path)
+
+    if len(loaded) != 1:
+        raise AssertionError("load_behavioral_scenarios should return one scenario")
+    if loaded[0].scenario_id != "loaded-from-toml":
+        raise AssertionError("loaded TOML scenario id mismatch")
+    if loaded[0].criteria[0].key != "does_toml":
+        raise AssertionError("loaded TOML criterion mismatch")
+    if loaded[0].forbidden_terms != ("nope",):
+        raise AssertionError("loaded TOML forbidden terms mismatch")
 
 
 def assert_contains(haystack: str, needle: str) -> None:

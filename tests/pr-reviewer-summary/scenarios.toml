@@ -1,0 +1,49 @@
+[[scenario]]
+id = "final-state-pr-body"
+user_request = """
+Generate a PR description for a branch that added saved-place filtering. The work had several iterations and a false start, but the final diff changes the filter panel, API query parameter, and badge count behavior.
+"""
+forbidden_terms = ["initially", "after feedback", "then we changed it again"]
+
+[[scenario.criteria]]
+key = "gathers_review_context"
+description = """
+The response requires inspecting branch diff, changed files, recent commits, and available ticket or conversation context before drafting.
+"""
+
+[[scenario.criteria]]
+key = "summarizes_final_state_only"
+description = """
+The PR body describes the final shipped behavior and implementation shape, not iteration history, false starts, or chronological fixes.
+"""
+
+[[scenario.criteria]]
+key = "reviewer_focused_sections"
+description = """
+The response uses Summary of Changes and Manual Testing, adding Technical Details only when warranted by cross-module or non-obvious logic.
+"""
+
+[[scenario.criteria]]
+key = "manual_testing_is_actionable"
+description = """
+Manual testing is written as explicit steps with preconditions, expected results, and changed states or regressions relevant to the diff.
+"""
+
+[[scenario]]
+id = "missing-diff-blocks"
+user_request = """
+Write the PR body, but there is no branch diff, changed-file summary, ticket, or PR URL available.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "blocks_without_reliable_context"
+description = """
+The response stops and asks for PR diff, changed-file summary, PR URL, or other reliable context instead of inventing a PR body.
+"""
+
+[[scenario.criteria]]
+key = "does_not_fabricate_summary"
+description = """
+The response does not produce a fake Summary of Changes or Manual Testing from missing context.
+"""

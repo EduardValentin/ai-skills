@@ -6,9 +6,15 @@ import os
 import shlex
 import subprocess
 import sys
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+try:
+    import tomllib  # type: ignore[attr-defined]
+except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback is not expected here.
+    tomllib = None  # type: ignore[assignment]
 
 from semantic_judge import (  # noqa: E402
     SemanticCriterion,
@@ -30,6 +36,143 @@ class BehavioralScenario:
 
 
 PromptBuilder = Callable[[str, BehavioralScenario], str]
+
+
+def load_behavioral_scenarios(scenarios_path: Path) -> tuple[BehavioralScenario, ...]:
+    payload = load_behavioral_scenario_payload(scenarios_path)
+
+    scenarios = payload.get("scenario", [])
+    if not isinstance(scenarios, list):
+        raise ValueError(f"{scenarios_path} must define [[scenario]] tables")
+
+    return tuple(build_behavioral_scenario(scenarios_path, raw_scenario) for raw_scenario in scenarios)
+
+
+def load_behavioral_scenario_payload(scenarios_path: Path) -> dict[str, object]:
+    if tomllib is not None:
+        with scenarios_path.open("rb") as handle:
+            return tomllib.load(handle)
+    return load_behavioral_scenario_payload_with_fallback(scenarios_path)
+
+
+def load_behavioral_scenario_payload_with_fallback(scenarios_path: Path) -> dict[str, object]:
+    scenarios: list[dict[str, object]] = []
+    current: dict[str, object] | None = None
+    current_scenario: dict[str, object] | None = None
+    multiline_key: str | None = None
+    multiline_target: dict[str, object] | None = None
+    multiline_value: list[str] = []
+
+    for line_number, raw_line in enumerate(
+        scenarios_path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if multiline_key is not None:
+            if line.endswith('"""'):
+                multiline_value.append(raw_line[: raw_line.rfind('"""')])
+                assert multiline_target is not None
+                multiline_target[multiline_key] = "\n".join(multiline_value).strip()
+                multiline_key = None
+                multiline_target = None
+                multiline_value = []
+            else:
+                multiline_value.append(raw_line)
+            continue
+
+        if line == "[[scenario]]":
+            current_scenario = {}
+            scenarios.append(current_scenario)
+            current = current_scenario
+            continue
+
+        if line == "[[scenario.criteria]]":
+            if current_scenario is None:
+                raise ValueError(f"{scenarios_path}:{line_number}: criteria without scenario")
+            criteria = current_scenario.setdefault("criteria", [])
+            if not isinstance(criteria, list):
+                raise ValueError(f"{scenarios_path}:{line_number}: criteria must be a list")
+            criterion: dict[str, object] = {}
+            criteria.append(criterion)
+            current = criterion
+            continue
+
+        if current is None:
+            raise ValueError(f"{scenarios_path}:{line_number}: expected [[scenario]] before field")
+
+        if "=" not in line:
+            raise ValueError(f"{scenarios_path}:{line_number}: expected key = value")
+
+        key, raw_value = [part.strip() for part in line.split("=", 1)]
+        if raw_value.startswith('"""'):
+            content = raw_value[3:]
+            if content.endswith('"""'):
+                current[key] = content[:-3].strip()
+            else:
+                multiline_key = key
+                multiline_target = current
+                multiline_value = [content] if content else []
+            continue
+
+        current[key] = parse_behavioral_toml_scalar(scenarios_path, line_number, raw_value)
+
+    if multiline_key is not None:
+        raise ValueError(f"{scenarios_path}: unterminated multiline string for {multiline_key!r}")
+
+    return {"scenario": scenarios}
+
+
+def parse_behavioral_toml_scalar(path: Path, line_number: int, raw_value: str) -> object:
+    if raw_value == "true":
+        return True
+    if raw_value == "false":
+        return False
+    try:
+        return ast.literal_eval(raw_value)
+    except (SyntaxError, ValueError) as error:
+        raise ValueError(f"{path}:{line_number}: unsupported value {raw_value!r}") from error
+
+
+def build_behavioral_scenario(path: Path, raw_scenario: object) -> BehavioralScenario:
+    if not isinstance(raw_scenario, dict):
+        raise ValueError(f"{path}: scenario entries must be tables")
+
+    criteria = raw_scenario.get("criteria", [])
+    if not isinstance(criteria, list):
+        raise ValueError(f"{path}: scenario criteria must be a list")
+
+    return BehavioralScenario(
+        scenario_id=require_string(path, raw_scenario, "id"),
+        user_request=require_string(path, raw_scenario, "user_request"),
+        criteria=tuple(build_semantic_criterion(path, criterion) for criterion in criteria),
+        forbidden_terms=tuple(require_string_list(path, raw_scenario, "forbidden_terms")),
+    )
+
+
+def build_semantic_criterion(path: Path, raw_criterion: object) -> SemanticCriterion:
+    if not isinstance(raw_criterion, dict):
+        raise ValueError(f"{path}: criteria entries must be tables")
+    return SemanticCriterion(
+        key=require_string(path, raw_criterion, "key"),
+        description=require_string(path, raw_criterion, "description"),
+    )
+
+
+def require_string(path: Path, payload: dict[str, object], key: str) -> str:
+    value = payload.get(key, "")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{path}: missing non-empty string field {key!r}")
+    return value.strip()
+
+
+def require_string_list(path: Path, payload: dict[str, object], key: str) -> list[str]:
+    value = payload.get(key, [])
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{path}: field {key!r} must be a string list")
+    return value
 
 
 def run_loaded_skill_behavioral_suite(
