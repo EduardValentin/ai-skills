@@ -9,7 +9,9 @@ description: Use when an agent receives an approved execution packet for one tic
 
 Use this skill during execution of one already-approved ticket or work unit. You coordinate the execution phase from an approved execution packet and return phase evidence to the caller.
 
-This skill is not for discovering or negotiating scope. Missing requirements go back to the parent or main orchestrator.
+This skill is not for discovering or negotiating scope. Missing requirements go back to the parent or main coordinator.
+
+Core rule: do not personally perform all execution phases as one worker. Use nested delegated subagents for implementation, independent review, QA, UI/UX verification, scoped fixes, and PR preparation when available. If nested delegation is unavailable, state that limitation and preserve phase separation locally.
 
 ## Required Input
 
@@ -27,16 +29,18 @@ If required packet details are missing, stale, contradictory, or unapproved, sto
 
 ## Execution Workflow
 
-1. Validate the approved packet and restate the execution boundary.
+1. Validate the approved packet and restate the execution boundary. If validation finds missing, stale, contradictory, or unapproved facts, return `BLOCKED_NEEDS_PARENT_INPUT` to the parent or main coordinator.
 2. Create a compact execution ledger for delegated work, findings, fixes, reruns, PR state, blockers, and final evidence.
-3. Coordinate implementation through delegated work. Keep implementation separate from independent review and verification.
-4. Obtain independent review against the approved packet, implementation evidence, and diff.
-5. Obtain QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
-6. For UI-facing or mixed work, obtain UI/UX verification. For non-UI work, record the skip reason.
+3. Dispatch focused implementation subagents when nested delegation is available. Keep implementation separate from independent review and verification.
+4. Dispatch independent review against the approved packet, implementation evidence, and diff.
+5. Dispatch QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
+6. For UI-facing or mixed work, dispatch UI/UX verification. For non-UI work, record the skip reason.
 7. Aggregate findings. Delegate scoped fixes for fixable findings, then rerun affected review or verification.
 8. Repeat the finding, fix, and rerun loop until each required phase is clean, explicitly blocked, or explicitly out of scope.
 9. Prepare the PR with reviewer-friendly summary, testing evidence, and review focus.
 10. Return the completion report. Do not mark complete without the required phase evidence and PR link.
+
+If nested delegation is unavailable, perform the coordination locally and make that limitation explicit in the report.
 
 ## Completion Report
 
@@ -54,6 +58,9 @@ Return a compact report:
 
 ## PR
 - <PR link or why unavailable>
+
+## Delegation
+- <nested subagents used, or limitation if unavailable>
 
 ## Phase evidence
 - Implementation: <report summary>

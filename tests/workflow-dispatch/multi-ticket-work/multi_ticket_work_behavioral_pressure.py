@@ -13,16 +13,31 @@ SCENARIOS_PATH = Path(__file__).with_name("scenarios.toml")
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 sys.path.append(str(REPO_ROOT / "tests"))
 
-from harness import load_workflow_scenarios, run_workflow_dispatch_suite  # noqa: E402
+from harness import action_lines, load_workflow_scenarios, run_workflow_dispatch_suite  # noqa: E402
 
 
-def assert_no_ticket_orchestrator_handoff(response: str) -> None:
-    for line in response.splitlines():
+def assert_ticket_coordinator_handoff(response: str) -> None:
+    dispatch_lines = []
+    for line in action_lines(response):
         normalized = line.casefold()
-        if not normalized.lstrip().startswith("action:"):
-            continue
-        if "dispatch_request" in normalized and "ticket orchestrator" in normalized:
-            raise AssertionError("first-level handoff must be an approved execution-packet request")
+        if "dispatch_request" in normalized:
+            dispatch_lines.append(normalized)
+
+    if not dispatch_lines:
+        raise AssertionError("ticket coordinator dispatch request is required")
+
+    first_dispatch = dispatch_lines[0]
+    missing = [
+        term
+        for term in ("ticket coordinator", "approved execution packet")
+        if term not in first_dispatch
+    ]
+    if missing:
+        raise AssertionError(f"ticket coordinator handoff missing terms: {missing}")
+
+    deeper_terms = ("implementation", "review", "qa")
+    if not all(term in first_dispatch for term in deeper_terms):
+        raise AssertionError("ticket coordinator handoff must mention deeper implementation, review, and QA coordination")
 
 
 def main() -> int:
@@ -33,7 +48,7 @@ def main() -> int:
         scenarios=load_workflow_scenarios(
             SCENARIOS_PATH,
             response_checks={
-                "no_ticket_orchestrator_handoff": assert_no_ticket_orchestrator_handoff,
+                "ticket_coordinator_handoff": assert_ticket_coordinator_handoff,
             },
         ),
         scenario_filter_env_var="MULTI_TICKET_WORK_WORKFLOW_DISPATCH_SCENARIO",

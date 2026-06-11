@@ -41,23 +41,31 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "aligns_and_approves_before_dispatch",
-                "The response performs cross-ticket alignment/spec/plan approval before dispatching execution work.",
+                "The response performs cross-ticket requirements gathering, brainstorming, spec, plan, and user approval before dispatching ticket coordinators.",
+            ),
+            SemanticCriterion(
+                "brainstorms_each_ticket_with_dependencies",
+                "The response conducts the user-facing alignment across each ticket in scope while considering dependencies, shared risks, boundaries, and success criteria between tickets.",
             ),
             SemanticCriterion(
                 "preserves_state_across_compaction",
                 "The response maintains a durable uncommitted orchestration note with scope, approved spec/plan, execution packets, assignments, status, PRs, blockers, and decisions, and re-reads it after compaction/resume and before later dispatches or final reporting.",
             ),
             SemanticCriterion(
-                "dispatches_one_execution_subagent_per_approved_packet",
-                "The response dispatches one execution subagent per approved ticket or unit with an approved execution packet, not ticket-start or a ticket orchestrator.",
+                "dispatches_one_ticket_coordinator_per_approved_packet",
+                "The response dispatches one ticket coordinator subagent per approved ticket or unit with an approved execution packet and dependency context.",
             ),
             SemanticCriterion(
-                "main_agent_orchestrates_only",
-                "The response keeps the main agent as orchestrator and does not have it implement ticket work inline.",
+                "main_agent_coordinates_only",
+                "The response keeps the main agent as multi-ticket coordinator and does not have it implement ticket work inline.",
             ),
             SemanticCriterion(
-                "execution_subagents_do_not_do_user_alignment",
-                "The response does not ask execution subagents to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering.",
+                "ticket_coordinators_do_not_do_user_alignment",
+                "The response does not ask ticket coordinator subagents to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering.",
+            ),
+            SemanticCriterion(
+                "ticket_coordinators_delegate_deeper_phases",
+                "The response says each ticket coordinator must use another level of focused subagents for implementation, independent review, QA, UI/UX when applicable, scoped fixes, and PR preparation when nested delegation is available, or report the limitation when it is unavailable.",
             ),
             SemanticCriterion(
                 "does_not_replace_verifiers_with_parent_or_worker_checks",
@@ -65,7 +73,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "requires_pr_and_report_per_unit",
-                "A ticket or unit is complete only after its execution subagent returns PR evidence and distinct implementation, review, QA, and UI/UX-or-skip evidence.",
+                "A ticket or unit is complete only after its ticket coordinator returns PR evidence and distinct implementation, review, QA, and UI/UX-or-skip evidence.",
             ),
             SemanticCriterion(
                 "final_report_lists_pr_review_order",
@@ -98,15 +106,19 @@ SCENARIOS = (
         criteria=(
             SemanticCriterion(
                 "rejects_preapproval_dispatch",
-                "The response rejects dispatching execution before cross-ticket spec and plan approval.",
+                "The response rejects dispatching ticket coordinators before cross-ticket requirements, brainstorming, spec, plan, and user approval.",
             ),
             SemanticCriterion(
-                "first_level_agents_are_execution_subagents",
-                "The response makes the first-level subagent for each approved ticket or unit an execution subagent with an approved execution packet.",
+                "first_level_agents_are_ticket_coordinators",
+                "The response makes the first-level subagent for each approved ticket or unit a ticket coordinator with an approved execution packet and dependency context.",
             ),
             SemanticCriterion(
-                "execution_prompts_exclude_user_alignment",
-                "The response says execution subagents must not perform user-facing brainstorming, spec creation, plan creation, or approval gathering.",
+                "ticket_coordinator_prompts_exclude_user_alignment",
+                "The response says ticket coordinators must not perform user-facing brainstorming, spec creation, plan creation, or approval gathering.",
+            ),
+            SemanticCriterion(
+                "ticket_coordinators_do_not_collapse_into_workers",
+                "The response rejects prompts where each ticket coordinator directly implements, reviews, QA-checks, UI-checks, and prepares the PR without deeper delegated phase separation.",
             ),
             SemanticCriterion(
                 "parent_review_is_not_enough",
@@ -146,7 +158,8 @@ def main() -> int:
             "- how sequencing and parallel work are decided,\n"
             "- how cross-ticket alignment, spec, plan, and user approval happen before dispatch,\n"
             "- how approved execution packets are prepared,\n"
-            "- how first-level execution subagents are assigned and what they must not do,\n"
+            "- how first-level ticket coordinator subagents are assigned and what they must not do,\n"
+            "- how ticket coordinators dispatch deeper implementation, review, QA, UI/UX, fix, and PR-preparation work,\n"
             "- what makes each ticket or unit complete,\n"
             "- what appears in the final PR review report.\n"
             "Do not name downstream skill identifiers or unrelated skills."

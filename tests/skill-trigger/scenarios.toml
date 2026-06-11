@@ -61,7 +61,7 @@ prompt = """
 Work the whole Billing Revamp Epic. It has separate tickets for the invoice
 migration, pricing API, checkout UI, and analytics events. Decide what can run
 in parallel, what must be sequenced, prepare approved execution packets, dispatch
-one execution subagent per ticket or unit, and give me the opened PRs with the
+one ticket coordinator per ticket or unit, and give me the opened PRs with the
 review order at the end.
 """
 forbidden_terms = []
@@ -97,7 +97,8 @@ Run this already-approved ticket execution packet for one checkout eligibility
 unit. The packet includes acceptance criteria, approved spec/design direction,
 approved implementation plan, approval state, code scope locators, branch state,
 expected checks, UI applicability, PR expectations, and completion-report requirements.
-Coordinate the execution phase and report phase evidence.
+Coordinate the execution phase through implementation, review, QA, UI verification
+when applicable, PR preparation, and report phase evidence.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "multi-ticket-work", "ticket orchestrator"]

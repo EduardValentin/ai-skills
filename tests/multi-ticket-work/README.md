@@ -2,7 +2,7 @@
 
 These focused tests cover the simplified `multi-ticket-work` contract: the main
 agent gathers the full multi-ticket scope, sequences dependent work, dispatches
-one subagent per ticket or unit, and returns PRs in review order.
+one ticket coordinator subagent per ticket or unit, and returns PRs in review order.
 
 ## Behavioral Pressure
 

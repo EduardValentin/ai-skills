@@ -35,6 +35,10 @@ SCENARIOS = (
                 "The response coordinates implementation, independent review, QA, UI/UX when applicable, fixes, reruns, and PR preparation as separate phases rather than one combined worker task.",
             ),
             SemanticCriterion(
+                "supports_nested_phase_delegation",
+                "The response uses nested delegated subagents for implementation, independent review, QA, UI/UX verification when applicable, scoped fixes, and PR preparation when the runtime supports it, or reports the limitation when it does not.",
+            ),
+            SemanticCriterion(
                 "does_not_brainstorm_or_change_scope",
                 "The response does not conduct brainstorming, invent requirements, negotiate scope, or change the approved plan during execution.",
             ),
@@ -103,6 +107,7 @@ def main() -> int:
         scenario_filter_env_var="EXECUTE_TICKET_WORK_SCENARIO",
         prompt_instructions=(
             "Do not perform real execution. Return the execution-phase behavior and report expectations only. "
+            "Explicitly describe how nested delegated subagents are used, or how the limitation is reported if unavailable. "
             "Keep it concise and do not name downstream skill identifiers."
         ),
         judge_context="Loaded skill under test: execute-ticket-work. Judge execution-phase boundaries, not exact wording.",
