@@ -50,7 +50,8 @@ ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
 Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
 self-contained and do not name downstream skill identifiers. The action text must
 ask for a user-facing brainstorming session, not only a briefing or requirements
-summary.
+summary. The action text must state that plan writing and execution wait until
+the brainstorming phase produces an approved spec/design.
 """
 forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans"]
 expected_auto_discovery = ["superpowers:brainstorming"]
@@ -67,6 +68,52 @@ description = "The delegated request is grounded in available ticket context, kn
 [[scenario.criteria]]
 key = "blocks_plan_and_execution"
 description = "The response makes clear that plan writing and execution wait until the brainstorming phase produces an approved spec/design."
+
+[[scenario]]
+id = "ticket-start-start-working-dispatches-brainstorming"
+user_request = """
+The user originally said: "Let's start working on this ticket:
+https://yesenergy.atlassian.net/browse/SS-2785. We are only concerned with the
+coding part in this repository and not the alert creation subticket. We are
+working on a feature branch, so base this worktree and future PR on
+SS-2766-centralized-monitoring-of-submission-services-components." The agent has
+investigated the job ticket, ticket and parent context are known, likely affected
+files are known, and codebase scoping evidence is available. No written
+spec/design has been approved and no implementation plan has been approved. What
+workflow handoff should the main agent perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers. The action text must
+ask for a user-facing brainstorming session with targeted open questions. It must
+also state that "start working", coding-scope narrowing, feature-branch direction,
+and investigation progress are not approval to code, and that plan writing,
+execution, product edits, and test edits are blocked until the written spec/design
+is approved.
+"""
+forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans", "execute-ticket-work", "$execute-ticket-work", "implement inline", "start coding"]
+expected_auto_discovery = ["superpowers:brainstorming"]
+require_action_ledger = true
+first_action_contains = ["dispatch_request", "brainstorming"]
+
+[[scenario.criteria]]
+key = "routes_start_working_to_brainstorming"
+description = "The response routes a user-facing brainstorming phase even though the user said start working and investigation has already happened."
+
+[[scenario.criteria]]
+key = "blocks_execution_without_approvals"
+description = "The response blocks implementation, execution, product edits, and test edits until the written spec/design and implementation plan are both approved."
+
+[[scenario.criteria]]
+key = "brainstorming_is_not_one_question"
+description = "The delegated request asks for a real brainstorming loop with targeted open questions and shared-understanding confirmation, not a single generic question."
+
+[[scenario.criteria]]
+key = "does_not_treat_working_notes_as_approval"
+description = "The response states that branch clarification, investigation progress, and internal plans or checklists do not count as approval to code."
 
 [[scenario]]
 id = "ticket-start-dispatch-writing-plans"
