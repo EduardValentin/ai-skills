@@ -61,21 +61,24 @@ The brainstorming phase produces the user-approved spec/design. Do not route pla
 
 Do not implement, scaffold, mutate product code, or route execution before both spec approval and implementation-plan approval.
 
-## Step 4 - Route Execution And Verification
+## Step 4 - Execute The Approved Packet
 
-After both spec approval and plan approval, implementation begins by delegating work to implementer subagents in the most optimal way to minimize dependencies and maximize throughput and quality of work.
+After the user approves the spec and implementation plan, enter the execution phase using the approved execution packet and the execution-phase contract. Remain the main orchestrator in the current session. Coordinate implementation, independent review, QA, UI/UX verification when applicable, scoped fixes, reruns, PR preparation, and final reporting through delegated work as needed. Do not hand off main-ticket orchestration to another agent.
 
-Respect this ticket sequence:
+The approved execution packet must include the ticket facts, parent context, acceptance criteria, approved spec/design, approved implementation plan, relevant artifact slices, scope locators, branch/worktree state, constraints, expected checks, PR expectations, and completion-report requirements.
 
-1. Delegate implementation for the approved plan.
-2. Delegate independent review against the ticket, acceptance criteria, approved plan, implementation evidence, and diff.
-3. Delegate QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
-4. For UI-facing or mixed work, delegate UI/UX verification. For backend-only/non-UI work, record the skip reason.
-5. Aggregate findings from independent review, QA, and UI/UX verification.
-6. Delegate scoped fixes for fixable findings.
-7. Rerun the affected verification after fixes.
-8. Repeat the finding, fix, and rerun loop until all required reports are clean, explicitly blocked, or explicitly out of scope.
-9. Close execution with a gate note that states whether PR verification is allowed, blocked, or still waiting, and why.
+Respect this execution order:
+
+1. Validate the approved execution packet.
+2. Coordinate implementation for the approved plan.
+3. Coordinate independent review against the ticket, acceptance criteria, approved plan, implementation evidence, and diff.
+4. Coordinate QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
+5. For UI-facing or mixed work, coordinate UI/UX verification. For backend-only/non-UI work, record the skip reason.
+6. Aggregate findings from independent review, QA, and UI/UX verification.
+7. Coordinate scoped fixes for fixable findings.
+8. Rerun the affected verification after fixes.
+9. Repeat the finding, fix, and rerun loop until all required reports are clean, explicitly blocked, or explicitly out of scope.
+10. Close execution with a gate note that states whether PR verification is allowed, blocked, or still waiting, and why.
 
 When routing verifier work, include this fallback instruction: if a verifier lacks required tooling or access, it must immediately report `CANNOT_VERIFY` with the reason and missing capability. Record that result, then perform the needed verification in the main session when the main session has the required tooling; otherwise report the blocker.
 

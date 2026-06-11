@@ -35,15 +35,22 @@ id = "ticket-start-dispatch-brainstorming"
 user_request = """
 Ticket intake and codebase scoping for one Linear issue are complete. Parent context,
 relevant artifact slices, repo state, worktree freshness, and a compact scope report
-are available. The user and agent have not yet reached shared requirements/design
-understanding. What workflow handoff should the main agent perform next?
+are available. Known ambiguity: whether tax-exempt customers should bypass the new
+eligibility rule. Affected surfaces: billing API, checkout eligibility banner, and
+analytics event naming. Constraint: do not change legacy invoice migration behavior.
+Success criteria: eligible users can check out, ineligible users see the approved
+message, and analytics events are stable. The user and agent have not yet reached
+shared requirements/design understanding. What workflow handoff should the main
+agent perform next?
 """
 prompt_instructions = """
 Do not perform the task. Do not call tools. Return only action lines in this shape:
 ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
 
 Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
-self-contained and do not name downstream skill identifiers.
+self-contained and do not name downstream skill identifiers. The action text must
+ask for a user-facing brainstorming session, not only a briefing or requirements
+summary.
 """
 forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans"]
 expected_auto_discovery = ["superpowers:brainstorming"]
@@ -60,10 +67,6 @@ description = "The delegated request is grounded in available ticket context, kn
 [[scenario.criteria]]
 key = "blocks_plan_and_execution"
 description = "The response makes clear that plan writing and execution wait until the brainstorming phase produces an approved spec/design."
-
-[[scenario.criteria]]
-key = "does_not_name_downstream_skill"
-description = "The response avoids exact downstream skill identifiers such as plugin-prefixed names while allowing generic capability labels."
 
 [[scenario]]
 id = "ticket-start-dispatch-writing-plans"
@@ -96,9 +99,43 @@ description = "The delegated request includes the approved spec/design and ticke
 key = "blocks_execution_until_plan_approval"
 description = "The response keeps execution out of scope and indicates the plan is for user approval before coding."
 
+[[scenario]]
+id = "ticket-start-enter-execution-phase"
+user_request = """
+The user approved the spec/design and implementation plan for one Linear issue.
+The approved execution packet is ready with ticket facts, parent context,
+acceptance criteria, approved spec/design, approved plan, scope locators,
+branch/worktree state, constraints, expected checks, PR expectations, and report
+requirements. What should the main agent do next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained request>
+
+Use kind PHASE_CONTRACT for current-session execution-phase contracts. Do not
+use DISPATCH_REQUEST for this scenario. Keep the request self-contained and do
+not name downstream skill identifiers. The main agent remains the current-session
+orchestrator. The action text must ask to execute the approved ticket/work unit
+from the approved execution packet and coordinate the full execution phase; it
+must not stop at packet validation.
+"""
+forbidden_terms = ["execute-ticket-work", "$execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+expected_auto_discovery = ["execute-ticket-work"]
+require_action_ledger = true
+first_action_contains = ["phase_contract", "execution"]
+response_checks = ["no_dispatch_request"]
+
 [[scenario.criteria]]
-key = "does_not_name_downstream_skill"
-description = "The response avoids exact downstream skill identifiers such as plugin-prefixed names while allowing generic capability labels."
+key = "enters_execution_phase"
+description = "The response enters a current-session execution phase from the approved packet rather than dispatching a separate ticket orchestrator."
+
+[[scenario.criteria]]
+key = "execution_request_is_self_contained"
+description = "The execution-phase request includes the approved execution packet details needed to coordinate implementation, review, QA, UI/UX when applicable, fixes, reruns, PR preparation, and reporting."
+
+[[scenario.criteria]]
+key = "main_agent_remains_orchestrator"
+description = "The response keeps the main agent as the current-session orchestrator and does not hand off main-ticket orchestration."
 
 [[scenario]]
 id = "ticket-start-dispatch-verify-pr"
@@ -136,7 +173,3 @@ description = "The delegated request includes PR or branch, current tracker stat
 [[scenario.criteria]]
 key = "does_not_mutate_inline"
 description = "The response does not merge, mark the PR ready, update tickets, dismiss comments, or perform source-control writes inline."
-
-[[scenario.criteria]]
-key = "does_not_name_downstream_skill"
-description = "The response avoids exact downstream skill identifiers such as plugin-prefixed names while allowing generic capability labels."

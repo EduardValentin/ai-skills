@@ -40,20 +40,24 @@ SCENARIOS = (
                 "The response identifies dependencies, sequencing constraints, and which tickets can run in parallel.",
             ),
             SemanticCriterion(
-                "preserves_state_across_compaction",
-                "The response maintains a durable uncommitted orchestration note with scope, assignments, status, PRs, blockers, and decisions, and re-reads it after compaction/resume and before later dispatches or final reporting.",
+                "aligns_and_approves_before_dispatch",
+                "The response performs cross-ticket alignment/spec/plan approval before dispatching execution work.",
             ),
             SemanticCriterion(
-                "dispatches_one_ticket_orchestrator_per_ticket_or_unit",
-                "The response dispatches one ticket orchestrator per ticket or per explicitly split unit of work, not implementation workers.",
+                "preserves_state_across_compaction",
+                "The response maintains a durable uncommitted orchestration note with scope, approved spec/plan, execution packets, assignments, status, PRs, blockers, and decisions, and re-reads it after compaction/resume and before later dispatches or final reporting.",
+            ),
+            SemanticCriterion(
+                "dispatches_one_execution_subagent_per_approved_packet",
+                "The response dispatches one execution subagent per approved ticket or unit with an approved execution packet, not ticket-start or a ticket orchestrator.",
             ),
             SemanticCriterion(
                 "main_agent_orchestrates_only",
                 "The response keeps the main agent as orchestrator and does not have it implement ticket work inline.",
             ),
             SemanticCriterion(
-                "ticket_orchestrators_delegate_internal_phases",
-                "Each first-level ticket orchestrator is responsible for dispatching internal subagents or delegated requests for scoping, implementation, independent review, QA, UI/UX checks when applicable, scoped fixes, reruns, PR creation, and PR verification or handoff.",
+                "execution_subagents_do_not_do_user_alignment",
+                "The response does not ask execution subagents to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering.",
             ),
             SemanticCriterion(
                 "does_not_replace_verifiers_with_parent_or_worker_checks",
@@ -61,7 +65,7 @@ SCENARIOS = (
             ),
             SemanticCriterion(
                 "requires_pr_and_report_per_unit",
-                "A ticket or unit is complete only after its ticket orchestrator opens a PR and returns a report with distinct implementation, review, QA, and UI/UX-or-skip evidence.",
+                "A ticket or unit is complete only after its execution subagent returns PR evidence and distinct implementation, review, QA, and UI/UX-or-skip evidence.",
             ),
             SemanticCriterion(
                 "final_report_lists_pr_review_order",
@@ -78,28 +82,31 @@ SCENARIOS = (
             "qa-verification",
             "ui-verification",
             "verify-pr",
+            "execute-ticket-work",
+            "ticket orchestrator",
+            "ticket-orchestrator",
         ),
     ),
     Scenario(
         scenario_id="prevents-worker-collapse-of-ticket-orchestration",
         user_request=(
             "The Commerce Epic has five independent tickets. A rushed coordinator proposes: "
-            "'dispatch one implementation worker per ticket; each worker should implement, "
-            "self-review, QA, run UI checks, push a PR, and the parent session can run one "
-            "source-control review afterward.' Explain the correct multi-ticket coordination."
+            "'dispatch immediately before approval; each worker should implement, self-review, "
+            "QA, run UI checks, push a PR, and the parent session can run one source-control "
+            "review afterward.' Explain the correct multi-ticket coordination."
         ),
         criteria=(
             SemanticCriterion(
-                "rejects_worker_collapse",
-                "The response rejects the proposal to make first-level subagents implementation workers that combine implementation and verification.",
+                "rejects_preapproval_dispatch",
+                "The response rejects dispatching execution before cross-ticket spec and plan approval.",
             ),
             SemanticCriterion(
-                "first_level_agents_are_ticket_orchestrators",
-                "The response makes the first-level subagent for each ticket a ticket orchestrator.",
+                "first_level_agents_are_execution_subagents",
+                "The response makes the first-level subagent for each approved ticket or unit an execution subagent with an approved execution packet.",
             ),
             SemanticCriterion(
-                "orchestrator_prompts_require_internal_delegation",
-                "The response says each ticket orchestrator must dispatch internal subagents or delegated requests for implementation, independent review, QA, and UI/UX checks when applicable rather than performing them directly.",
+                "execution_prompts_exclude_user_alignment",
+                "The response says execution subagents must not perform user-facing brainstorming, spec creation, plan creation, or approval gathering.",
             ),
             SemanticCriterion(
                 "parent_review_is_not_enough",
@@ -116,6 +123,9 @@ SCENARIOS = (
             "qa-verification",
             "ui-verification",
             "verify-pr",
+            "execute-ticket-work",
+            "ticket orchestrator",
+            "ticket-orchestrator",
         ),
     ),
 )
@@ -134,8 +144,9 @@ def main() -> int:
             "- how the full ticket scope is gathered,\n"
             "- where durable orchestration notes are saved and when they are re-read,\n"
             "- how sequencing and parallel work are decided,\n"
-            "- how first-level subagents are assigned and what role they have,\n"
-            "- how each ticket orchestrator dispatches internal subagents or delegated requests for implementation and verification phases,\n"
+            "- how cross-ticket alignment, spec, plan, and user approval happen before dispatch,\n"
+            "- how approved execution packets are prepared,\n"
+            "- how first-level execution subagents are assigned and what they must not do,\n"
             "- what makes each ticket or unit complete,\n"
             "- what appears in the final PR review report.\n"
             "Do not name downstream skill identifiers or unrelated skills."

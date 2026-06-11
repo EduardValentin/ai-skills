@@ -63,8 +63,16 @@ SCENARIOS = (
                 "The response requires explicit user approval of the implementation plan and blocks coding, scaffolding, product mutations, or execution delegation before both spec approval and plan approval.",
             ),
             SemanticCriterion(
-                "delegates_execution_and_verification_loop",
-                "The response routes implementation to implementer subagents, then routes independent review, QA, UI/UX where applicable, scoped fixes, and reruns instead of doing them inline.",
+                "enters_execution_phase_after_approval",
+                "After spec and plan approval, the response enters an execution phase using an approved execution packet while the main agent remains the current-session orchestrator.",
+            ),
+            SemanticCriterion(
+                "does_not_handoff_main_ticket_orchestration",
+                "The response does not hand off main-ticket orchestration to another agent or describe a separate ticket orchestrator.",
+            ),
+            SemanticCriterion(
+                "coordinates_execution_and_verification_loop",
+                "The response coordinates implementation, independent review, QA, UI/UX where applicable, scoped fixes, and reruns through delegated work as needed instead of doing them inline.",
             ),
             SemanticCriterion(
                 "defines_uiux_verification_by_project_type",
@@ -102,10 +110,13 @@ SCENARIOS = (
             "multi-ticket-work",
             "verify-pr",
             "ui-verification",
+            "execute-ticket-work",
             "TodoWrite",
             "two-stage review",
             "spec compliance reviewer",
             "code quality reviewer",
+            "ticket orchestrator",
+            "ticket-orchestrator",
             "does not define",
             "does not prescribe",
         ),
@@ -124,12 +135,13 @@ def main() -> int:
         prompt_instructions=(
             "Do not execute the ticket. Return a concise ordered workflow only. It must explain:\n"
             "- how the main agent stays the intake and routing orchestrator for one ticket,\n"
-            "- the ticket intake, parent-context, artifact, repo-state, freshness, worktree, and scoping steps before planning,\n"
+            "- the ticket intake through MCP or API, including title, description, acceptance criteria, links, status, dependencies, ambiguity, and parent context before brainstorming or planning,\n"
+            "- the artifact, repo-state, freshness, worktree, and scoping steps before planning,\n"
             "- how the brainstorming phase reaches shared understanding and produces the approved spec/design,\n"
             "- how plan writing is routed after spec/design approval and then gets plan approval,\n"
-            "- how explicit user plan approval blocks coding, scaffolding, product mutations, and execution delegation until both spec and plan are approved,\n"
-            "- how implementation later begins with implementer subagents in a strategy that minimizes dependencies and maximizes throughput and quality,\n"
-            "- the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, and PR verification or handoff,\n"
+            "- how explicit user plan approval blocks coding, scaffolding, product mutations, and execution until both spec and plan are approved,\n"
+            "- how the main agent enters execution with an approved execution packet while remaining the current-session orchestrator,\n"
+            "- the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, PR preparation, and PR verification or handoff,\n"
             "- how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,\n"
             "- which compact context ticket-start forwards,\n"
             "- how CANNOT_VERIFY is handled when verifier tooling or access is missing,\n"

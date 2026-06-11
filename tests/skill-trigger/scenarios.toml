@@ -60,22 +60,23 @@ skill = "multi-ticket-work"
 prompt = """
 Work the whole Billing Revamp Epic. It has separate tickets for the invoice
 migration, pricing API, checkout UI, and analytics events. Decide what can run
-in parallel, what must be sequenced, dispatch one ticket orchestrator per
-ticket or unit, and give me the opened PRs with the review order at the end.
+in parallel, what must be sequenced, prepare approved execution packets, dispatch
+one execution subagent per ticket or unit, and give me the opened PRs with the
+review order at the end.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = ["ticket-start", "ticket orchestrator"]
 
 [[scenario]]
 id = "multi-ticket-work-ticket-set"
 skill = "multi-ticket-work"
 prompt = """
 Work Jira APP-101, APP-102, and APP-103 as one coordinated scope. Map their
-dependencies, delegate each ticket to a ticket orchestrator, and return the
-opened PRs in review order.
+dependencies, get the coordinated plan approved, dispatch each approved ticket
+execution packet, and return the opened PRs in review order.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = ["ticket-start", "ticket orchestrator"]
 
 [[scenario]]
 id = "multi-ticket-work-parent-children"
@@ -87,6 +88,19 @@ order.
 """
 forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
+
+[[scenario]]
+id = "execute-ticket-work-approved-packet"
+skill = "execute-ticket-work"
+prompt = """
+Run this already-approved ticket execution packet for one checkout eligibility
+unit. The packet includes acceptance criteria, approved spec/design direction,
+approved implementation plan, approval state, code scope locators, branch state,
+expected checks, UI applicability, PR expectations, and completion-report requirements.
+Coordinate the execution phase and report phase evidence.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["ticket-start", "multi-ticket-work", "ticket orchestrator"]
 
 [[scenario]]
 id = "github-interaction-bot-pr-write"

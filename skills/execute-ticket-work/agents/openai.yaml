@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execute Ticket Work"
+  short_description: "Run approved ticket execution packets with phase evidence"
+  default_prompt: "Use $execute-ticket-work when an approved ticket or work-unit execution packet is ready and execution must coordinate implementation, review, QA, UI/UX when applicable, fixes, PR preparation, and reporting."

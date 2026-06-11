@@ -31,6 +31,8 @@ def check_contract(skill: str) -> None:
         "$brainstorming",
         "superpowers:writing-plans",
         "$writing-plans",
+        "execute-ticket-work",
+        "$execute-ticket-work",
         "verify-pr",
         "$verify-pr",
         "agents/scoping.md",

@@ -16,6 +16,13 @@ sys.path.append(str(REPO_ROOT / "tests"))
 from harness import load_workflow_scenarios, run_workflow_dispatch_suite  # noqa: E402
 
 
+def assert_no_dispatch_request(response: str) -> None:
+    for line in response.splitlines():
+        normalized = line.casefold()
+        if normalized.lstrip().startswith("action:") and "dispatch_request" in normalized:
+            raise AssertionError("execution-phase handoff must use PHASE_CONTRACT, not DISPATCH_REQUEST")
+
+
 def assert_scoping_before_local_mapping(response: str) -> None:
     scoping_index = first_index(response, "dispatch_request", "scoping")
     if scoping_index < 0:
@@ -53,7 +60,10 @@ def main() -> int:
         skill_path=SKILL_PATH,
         scenarios=load_workflow_scenarios(
             SCENARIOS_PATH,
-            response_checks={"scoping_before_local_mapping": assert_scoping_before_local_mapping},
+            response_checks={
+                "scoping_before_local_mapping": assert_scoping_before_local_mapping,
+                "no_dispatch_request": assert_no_dispatch_request,
+            },
         ),
         scenario_filter_env_var="TICKET_START_WORKFLOW_DISPATCH_SCENARIO",
     )

@@ -1,11 +1,11 @@
 [[scenario]]
-id = "multi-ticket-work-dispatch-ticket-orchestrator"
+id = "multi-ticket-work-dispatch-approved-execution-packet"
 user_request = """
-The Billing Revamp Epic scope and dependency map are ready. Tickets are APP-10
-invoice migration, APP-11 pricing API after APP-10, APP-12 checkout UI after
-APP-11, and APP-13 analytics events independent of the stack. Repository
-instructions are: follow AGENTS.md, keep orchestration notes uncommitted, and
-include downstream dependency notes in every ticket report. What workflow handoff
+The Billing Revamp Epic scope, dependency map, cross-ticket spec, and implementation
+plan are user-approved. APP-10 invoice migration has an approved execution packet
+with ticket context, parent Epic context, approved spec/design, approved plan,
+dependency constraints, repository instructions, PR expectations, reviewer-friendly
+PR body expectation, and completion-report requirements. What workflow handoff
 should the main agent emit for APP-10?
 """
 prompt_instructions = """
@@ -14,31 +14,27 @@ ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
 
 Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the
 request self-contained and do not name downstream skill identifiers. The first-level
-handoff must be the per-ticket orchestrator handoff, not an implementation-worker
-handoff.
+handoff must be for an approved execution packet, not ticket intake or user-facing
+brainstorming.
 """
-forbidden_terms = ["ticket-start", "$ticket-start", "`ticket-start`"]
-expected_auto_discovery = ["ticket-start"]
+forbidden_terms = ["ticket-start", "$ticket-start", "`ticket-start`", "execute-ticket-work", "$execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+expected_auto_discovery = ["execute-ticket-work"]
 require_action_ledger = true
-first_action_contains = ["dispatch_request", "ticket orchestrator"]
-response_checks = ["no_implementation_worker_handoff"]
+first_action_contains = ["dispatch_request", "execution"]
+response_checks = ["no_ticket_orchestrator_handoff"]
 
 [[scenario.criteria]]
-key = "dispatches_ticket_orchestrator"
-description = "The response emits a first-level handoff for APP-10 to a ticket orchestrator, not an implementation worker."
+key = "dispatches_execution_subagent"
+description = "The response emits a first-level handoff for APP-10 to an execution subagent with an approved execution packet."
 
 [[scenario.criteria]]
 key = "handoff_is_self_contained"
-description = "The delegated request includes APP-10 ticket context, Epic or parent context, dependency constraints, repository instructions, PR expectations, completion-report expectations, and downstream dependency notes."
+description = "The delegated request includes APP-10 ticket context, Epic or parent context, approved spec/design, approved plan, dependency constraints, repository instructions, PR expectations, completion-report expectations, and downstream dependency notes."
 
 [[scenario.criteria]]
-key = "orchestrator_owns_complete_one_ticket_coordination"
-description = "The delegated request tells the ticket orchestrator to coordinate the complete one-ticket workflow by dispatching internal agents or delegated requests for scoping, implementation, independent review, QA, UI/UX checks when applicable, scoped fixes, reruns, PR creation, and PR verification or handoff."
+key = "execution_request_uses_approved_packet"
+description = "The delegated request starts from the approved execution packet and does not ask the subagent to gather approval, run user-facing brainstorming, create a spec, or create a plan."
 
 [[scenario.criteria]]
 key = "does_not_collapse_into_worker_prompt"
-description = "The delegated request does not assign implementation, review, QA, UI/UX checks, PR creation, and completion reporting to one worker."
-
-[[scenario.criteria]]
-key = "does_not_name_downstream_skill"
-description = "The response avoids exact downstream skill identifiers while allowing generic capability labels."
+description = "The delegated request does not assign implementation, review, QA, UI/UX checks, PR preparation, and completion reporting to one undifferentiated worker."

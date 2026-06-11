@@ -16,31 +16,13 @@ sys.path.append(str(REPO_ROOT / "tests"))
 from harness import load_workflow_scenarios, run_workflow_dispatch_suite  # noqa: E402
 
 
-def assert_no_implementation_worker_handoff(response: str) -> None:
+def assert_no_ticket_orchestrator_handoff(response: str) -> None:
     for line in response.splitlines():
         normalized = line.casefold()
         if not normalized.lstrip().startswith("action:"):
             continue
-        if (
-            "dispatch_request" in normalized
-            and "implementation worker" in normalized
-            and not is_negated_worker_reference(normalized)
-        ):
-            raise AssertionError("first-level handoff must not be an implementation-worker prompt")
-
-
-def is_negated_worker_reference(line: str) -> bool:
-    return any(
-        phrase in line
-        for phrase in (
-            "not an implementation worker",
-            "not implementation worker",
-            "not an implementation-worker",
-            "not implementation-worker",
-            "rather than an implementation worker",
-            "instead of an implementation worker",
-        )
-    )
+        if "dispatch_request" in normalized and "ticket orchestrator" in normalized:
+            raise AssertionError("first-level handoff must be an approved execution-packet request")
 
 
 def main() -> int:
@@ -51,7 +33,7 @@ def main() -> int:
         scenarios=load_workflow_scenarios(
             SCENARIOS_PATH,
             response_checks={
-                "no_implementation_worker_handoff": assert_no_implementation_worker_handoff,
+                "no_ticket_orchestrator_handoff": assert_no_ticket_orchestrator_handoff,
             },
         ),
         scenario_filter_env_var="MULTI_TICKET_WORK_WORKFLOW_DISPATCH_SCENARIO",

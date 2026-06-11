@@ -24,11 +24,12 @@ def main() -> int:
 
 
 def check_contract(skill: str) -> None:
-    assert_line_count_at_most(skill, 95)
+    assert_line_count_at_most(skill, 105)
 
     forbidden_terms = (
         "readiness ledger",
         "Ship readiness",
+        "execute-ticket-work",
         "implement-unit-of-work",
         "qa-verification",
         "ui-verification",
@@ -36,6 +37,8 @@ def check_contract(skill: str) -> None:
         "codebase-scope-map",
         "pr-reviewer-summary",
         "ticket-start",
+        "ticket orchestrator",
+        "ticket-orchestrator",
     )
     for term in forbidden_terms:
         assert_not_contains(skill, term)

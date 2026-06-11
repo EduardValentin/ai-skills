@@ -12,6 +12,7 @@ SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
 SKILL_DIR = SKILL_PATH.parent
 DOWNSTREAM_SKILL_IDS = (
     "multi-ticket-work",
+    "execute-ticket-work",
     "implement-unit-of-work",
     "qa-verification",
     "verify-pr",
