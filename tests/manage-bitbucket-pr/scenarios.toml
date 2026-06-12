@@ -1,3 +1,15 @@
+[suite]
+name = "manage-bitbucket-pr"
+skill = "manage-bitbucket-pr"
+skill_path = "skills/manage-bitbucket-pr/SKILL.md"
+agent_env = "MANAGE_BITBUCKET_PR_AGENT_COMMAND"
+scenario_env = "MANAGE_BITBUCKET_PR_SCENARIO"
+prompt_instructions = """
+Do not call Bitbucket. Return only the workflow, safety gates, commands or API path choices, and report behavior the Bitbucket PR agent should use.
+"""
+judge_context = """
+Loaded skill under test: manage-bitbucket-pr. Judge host detection, read-before-write, auth fallback, mutation safety, and PR metadata behavior.
+"""
 [[scenario]]
 id = "read-only-cloud-pr-summary"
 user_request = """

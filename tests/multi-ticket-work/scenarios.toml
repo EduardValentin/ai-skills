@@ -1,3 +1,25 @@
+[suite]
+name = "multi-ticket-work"
+skill = "multi-ticket-work"
+skill_path = "skills/multi-ticket-work/SKILL.md"
+agent_env = "MULTI_TICKET_WORK_AGENT_COMMAND"
+scenario_env = "MULTI_TICKET_WORK_SCENARIO"
+prompt_instructions = """
+Do not execute the work. Return a concise orchestration plan only. It must explain:
+- how the full ticket scope is gathered,
+- where durable orchestration notes are saved and when they are re-read,
+- how sequencing and parallel work are decided,
+- how cross-ticket alignment, spec, plan, and user approval happen before dispatch,
+- how approved execution packets are prepared,
+- how first-level ticket coordinator subagents are assigned and what they must not do,
+- how ticket coordinators dispatch deeper implementation, review, QA, UI/UX, fix, and PR-preparation work,
+- what makes each ticket or unit complete,
+- what appears in the final PR review report.
+Do not name downstream skill identifiers or unrelated skills.
+"""
+judge_context = """
+Loaded skill under test: multi-ticket-work. Judge orchestration behavior, not exact wording.
+"""
 [[scenario]]
 id = "epic-ticket-set-delegates-prs-and-review-order"
 user_request = """

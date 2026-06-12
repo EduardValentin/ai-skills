@@ -1,13 +1,13 @@
 ---
 name: verify-pr
-description: Use when checking PR readiness, merge preconditions, or post-merge CI verdicts. Verifies source-control PR metadata, CI status, implemented-surface test evidence, review/comment state, and linked Jira or Linear ticket review status through available tooling. Do not use for QA, diff review, PR descriptions, reviewer notes, or testing instructions.
+description: Use when checking PR readiness, immediately after a PR is created or opened for review, before merge, or for post-merge CI verdicts. Verifies source-control PR metadata, CI status, implemented-surface test evidence, review/comment state, and linked Jira or Linear ticket review status through available tooling. Do not use for QA, diff review, PR descriptions, reviewer notes, or testing instructions.
 ---
 
 # Verify PR
 
 ## Purpose
 
-Verify PR validates whether a pull request is ready for the requested next step: review handoff, final approval, merge, or post-merge CI monitoring.
+Verify PR validates whether a pull request is ready for the requested next step: review handoff after PR creation, final approval, merge, or post-merge CI monitoring.
 
 Read PR and ticket metadata directly through available tooling such as MCP connectors, REST APIs, CLIs, or authenticated local metadata. Treat user-provided state as a hint unless direct source-of-truth access is unavailable.
 

@@ -14,54 +14,85 @@ TESTS_DIR = REPO_ROOT / "tests"
 
 def main() -> int:
     try:
-        check_canonical_skills_have_behavioral_pressure()
-        check_behavioral_pressure_uses_toml_scenarios()
+        check_canonical_skills_have_behavioral_scenarios()
+        check_behavioral_scenarios_have_suite_metadata()
+        check_canonical_skill_dirs_do_not_have_behavioral_wrappers()
         check_manual_behavior_docs_were_migrated()
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("PASS: canonical skills use repo-level behavioral pressure tests")
+    print("PASS: canonical skills use TOML-backed behavioral pressure tests")
     return 0
 
 
-def check_canonical_skills_have_behavioral_pressure() -> None:
+def check_canonical_skills_have_behavioral_scenarios() -> None:
     missing: list[str] = []
     for skill_file in sorted(SKILLS_DIR.glob("*/SKILL.md")):
         skill_name = skill_file.parent.name
-        behavioral_tests = sorted((TESTS_DIR / skill_name).glob("*behavioral_pressure.py"))
-        if not behavioral_tests:
+        scenarios_path = TESTS_DIR / skill_name / "scenarios.toml"
+        if not scenarios_path.exists():
             missing.append(f"{skill_name} ({skill_file.relative_to(REPO_ROOT)})")
 
     if missing:
         raise AssertionError(
-            "canonical skills missing repo-level behavioral pressure tests: "
+            "canonical skills missing repo-level behavioral scenarios: "
             + ", ".join(missing)
         )
 
 
-def check_behavioral_pressure_uses_toml_scenarios() -> None:
-    missing_toml: list[str] = []
-    embedded_scenarios: list[str] = []
+def check_behavioral_scenarios_have_suite_metadata() -> None:
+    missing_suite: list[str] = []
+    stale_metadata: list[str] = []
 
     for skill_file in sorted(SKILLS_DIR.glob("*/SKILL.md")):
         skill_name = skill_file.parent.name
-        for behavioral_test in sorted((TESTS_DIR / skill_name).glob("*behavioral_pressure.py")):
-            if not (behavioral_test.parent / "scenarios.toml").exists():
-                missing_toml.append(str(behavioral_test.relative_to(REPO_ROOT)))
-            source = behavioral_test.read_text(encoding="utf-8")
-            if "SCENARIOS =" in source or "SemanticCriterion(" in source:
-                embedded_scenarios.append(str(behavioral_test.relative_to(REPO_ROOT)))
-
-    if missing_toml:
-        raise AssertionError(
-            "canonical behavioral pressure tests must load sibling scenarios.toml: "
-            + ", ".join(missing_toml)
+        scenarios_path = TESTS_DIR / skill_name / "scenarios.toml"
+        source = scenarios_path.read_text(encoding="utf-8")
+        if not source.lstrip().startswith("[suite]"):
+            missing_suite.append(str(scenarios_path.relative_to(REPO_ROOT)))
+            continue
+        expected = (
+            f'skill = "{skill_name}"',
+            f'skill_path = "skills/{skill_name}/SKILL.md"',
+            "agent_env = ",
+            "scenario_env = ",
+            "prompt_instructions = ",
+            "judge_context = ",
         )
-    if embedded_scenarios:
+        missing = [item for item in expected if item not in source]
+        if missing:
+            stale_metadata.append(
+                f"{scenarios_path.relative_to(REPO_ROOT)} missing {missing}"
+            )
+
+    if missing_suite:
         raise AssertionError(
-            "canonical behavioral pressure scenarios belong in scenarios.toml, not Python: "
-            + ", ".join(embedded_scenarios)
+            "canonical behavioral scenarios must start with [suite] metadata: "
+            + ", ".join(missing_suite)
+        )
+    if stale_metadata:
+        raise AssertionError(
+            "canonical behavioral scenario suite metadata is incomplete: "
+            + ", ".join(stale_metadata)
+        )
+
+
+def check_canonical_skill_dirs_do_not_have_behavioral_wrappers() -> None:
+    wrappers: list[str] = []
+
+    for skill_file in sorted(SKILLS_DIR.glob("*/SKILL.md")):
+        skill_name = skill_file.parent.name
+        wrappers.extend(
+            str(path.relative_to(REPO_ROOT))
+            for path in sorted((TESTS_DIR / skill_name).glob("*behavioral_pressure.py"))
+        )
+
+    if wrappers:
+        raise AssertionError(
+            "canonical skill behavioral suites must be TOML-only; use "
+            "tests/behavioral_pressure.py instead of per-skill wrappers: "
+            + ", ".join(wrappers)
         )
 
 

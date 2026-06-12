@@ -15,6 +15,7 @@ from behavioral_harness import (  # noqa: E402
     BehavioralScenario,
     build_loaded_skill_prompt,
     load_behavioral_scenarios,
+    load_behavioral_suite_config,
     select_scenarios,
 )
 from semantic_judge import SemanticCriterion  # noqa: E402
@@ -73,6 +74,15 @@ def check_behavioral_harness_contract() -> None:
         scenarios_path = Path(tmpdir) / "scenarios.toml"
         scenarios_path.write_text(
             """
+[suite]
+name = "demo-suite"
+skill = "demo"
+skill_path = "skills/demo/SKILL.md"
+agent_env = "DEMO_AGENT_COMMAND"
+scenario_env = "DEMO_SCENARIO"
+prompt_instructions = "Return the demo response shape."
+judge_context = "Judge demo behavior."
+
 [[scenario]]
 id = "loaded-from-toml"
 user_request = "Use the loaded TOML scenario."
@@ -84,8 +94,17 @@ description = "The response follows the TOML scenario."
 """.lstrip(),
             encoding="utf-8",
         )
+        suite = load_behavioral_suite_config(scenarios_path)
         loaded = load_behavioral_scenarios(scenarios_path)
 
+    if suite.suite_name != "demo-suite":
+        raise AssertionError("loaded TOML suite name mismatch")
+    if suite.skill_name != "demo":
+        raise AssertionError("loaded TOML suite skill mismatch")
+    if suite.agent_env_var != "DEMO_AGENT_COMMAND":
+        raise AssertionError("loaded TOML suite agent env mismatch")
+    if suite.scenario_filter_env_var != "DEMO_SCENARIO":
+        raise AssertionError("loaded TOML suite scenario env mismatch")
     if len(loaded) != 1:
         raise AssertionError("load_behavioral_scenarios should return one scenario")
     if loaded[0].scenario_id != "loaded-from-toml":

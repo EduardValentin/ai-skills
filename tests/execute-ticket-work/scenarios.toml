@@ -1,3 +1,15 @@
+[suite]
+name = "execute-ticket-work"
+skill = "execute-ticket-work"
+skill_path = "skills/execute-ticket-work/SKILL.md"
+agent_env = "EXECUTE_TICKET_WORK_AGENT_COMMAND"
+scenario_env = "EXECUTE_TICKET_WORK_SCENARIO"
+prompt_instructions = """
+Do not perform real execution. Return the execution-phase behavior and report expectations only. Explicitly describe how nested delegated subagents are used, or how the limitation is reported if unavailable. Keep it concise and do not name downstream skill identifiers.
+"""
+judge_context = """
+Loaded skill under test: execute-ticket-work. Judge execution-phase boundaries, not exact wording.
+"""
 [[scenario]]
 id = "approved-packet-execution-phase"
 user_request = """

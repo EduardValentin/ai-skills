@@ -1,3 +1,15 @@
+[suite]
+name = "ui-verification"
+skill = "ui-verification"
+skill_path = "skills/ui-verification/SKILL.md"
+agent_env = "UI_VERIFICATION_AGENT_COMMAND"
+scenario_env = "UI_VERIFICATION_SCENARIO"
+prompt_instructions = """
+Do not launch a browser or inspect a real app. Return only the UI verification approach, evidence requirements, fallback behavior, and report verdict shape.
+"""
+judge_context = """
+Loaded skill under test: ui-verification. Judge parity/consistency mode selection, inventory scoping, DOM evidence, fallback handling, and rerun behavior.
+"""
 [[scenario]]
 id = "reference-parity-evidence"
 user_request = """

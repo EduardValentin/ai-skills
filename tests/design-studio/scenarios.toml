@@ -1,3 +1,15 @@
+[suite]
+name = "design-studio"
+skill = "design-studio"
+skill_path = "skills/design-studio/SKILL.md"
+agent_env = "DESIGN_STUDIO_AGENT_COMMAND"
+scenario_env = "DESIGN_STUDIO_SCENARIO"
+prompt_instructions = """
+Do not inspect files or implement UI. Return only the next workflow action and context-discipline behavior the design-studio agent should follow.
+"""
+judge_context = """
+Loaded skill under test: design-studio. Judge context isolation, reference-app workflow discipline, and PRD/design audit behavior.
+"""
 [[scenario]]
 id = "large-reference-app-context-digest"
 user_request = """

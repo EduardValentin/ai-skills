@@ -38,6 +38,29 @@ forbidden_terms = []
 response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
 
 [[scenario]]
+id = "ticket-start-jira-brainstorm-unknowns-before-plan"
+skill = "ticket-start"
+prompt = """
+Start Jira SS-2785 and keep brainstorming before the implementation plan. The
+branch decision is settled, but we still need to discuss schema fields, emitted
+event conditions, certificate fallback behavior, and scheduling assumptions
+before any spec or plan is written.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
+
+[[scenario]]
+id = "ticket-start-jira-code-scope-before-brainstorm"
+skill = "ticket-start"
+prompt = """
+Start Jira SS-2785, but before brainstorming or asking me schema and scheduler
+questions, dispatch a comprehensive codebase scoping pass to answer whatever the
+repo can answer first.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
+
+[[scenario]]
 id = "ticket-start-substantial-single-ticket"
 skill = "ticket-start"
 prompt = """
@@ -216,6 +239,17 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
+id = "verify-pr-after-pr-created-for-review"
+skill = "verify-pr"
+prompt = """
+Create the PR for this completed Jira ticket so I can review it. Implementation,
+QA, and review reports are clean; after opening the PR, confirm whether anything
+blocks it from being ready for review.
+"""
+forbidden_terms = []
+response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
+
+[[scenario]]
 id = "codebase-scope-map-implementation-handoff"
 skill = "codebase-scope-map"
 prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, affected surfaces, tests, patterns, dependencies, conflicts, and keep it token-efficient."
@@ -296,6 +330,16 @@ forbidden_terms = []
 id = "ticket-planner-prd-to-stories"
 skill = "ticket-planner"
 prompt = "Turn this PRD and prototype into implementation-ready epics, vertical-slice user stories, and acceptance criteria."
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-planner-clean-draft-quality"
+skill = "ticket-planner"
+prompt = """
+Clean up these draft epics and stories before publishing: make titles plain,
+separate business overview from technical details, add real acceptance criteria,
+remove parent/child duplication, and make event/API output contracts explicit.
+"""
 forbidden_terms = []
 
 [[scenario]]

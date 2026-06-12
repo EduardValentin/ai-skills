@@ -9,7 +9,7 @@ description: Use when manually verifying acceptance criteria and user-observable
 
 Manually verify that an implementation satisfies its acceptance criteria by exercising the implemented surface the way a user, client, job runner, or integration would.
 
-Do not edit the system under test. If required access, tooling, credentials, data, or an executable surface is unavailable, return `QA cannot proceed` and name the blocker. When a caller explicitly requires `CANNOT_VERIFY`, use that blocker token with the same reason and required next input.
+Do not edit the system under test. Prefer real third-party dependencies whenever acceptance criteria depend on them. If required access, tooling, credentials, data, real dependencies, or an executable surface is unavailable, return `QA cannot proceed` and name the blocker plus required next input. This still applies when tests pass or the intended probes are obvious; explicitly state that mocks, tests, and source inspection cannot replace the missing runtime evidence. If the request says the runtime or dependency is unavailable, report the blocker as the verdict instead of a hypothetical plan. When a caller explicitly requires `CANNOT_VERIFY`, use that blocker token with the same reason and required next input.
 
 ## Inputs
 
@@ -25,6 +25,8 @@ For ticket/PR-linked QA, use this mandatory order before verification: first acc
 
 Use PR/ticket metadata only to derive QA scope, setup, acceptance criteria, and regression risks. Do not assess CI, approvals, unresolved comments, mergeability, or tracker-state gates.
 
+When caller-supplied PR/ticket notes are available and the local diff is available, use the notes as QA scope and the diff to identify affected routes, setup, implemented surfaces, and regression risks.
+
 When metadata is available but testing instructions are absent or vague, scope before verification from the PR/ticket details, acceptance criteria, diff/changed files, entry points, setup/data needs, implemented surface, and regression risks. The report must explicitly name those scope inputs, using `missing` or `not applicable` rather than omitting them.
 
 ## Verification Modes
@@ -34,7 +36,7 @@ When metadata is available but testing instructions are absent or vague, scope b
 - `mixed`: prefer running the GUI and backend/service together and verifying the flow end to end. If that is not possible, verify each surface separately, state the limitation, and still validate the integration contract and propagated state.
 - `other`: exercise scripts, scheduled tasks, data jobs, migrations, or integrations through their real command/trigger path. Check inputs, outputs, logs, external calls, exit codes, reruns, failure modes, cleanup, and state changes.
 
-Unit tests, type checks, source inspection, and static review can support QA context, but they do not count as QA verification by themselves.
+Mocks, fake imports, unit tests, type checks, source inspection, and static review can support QA context, but they do not count as QA verification by themselves.
 
 ## Evidence Standard
 
@@ -96,7 +98,8 @@ Any observed bug changes the verdict to `BUGS FOUND`.
 ## Forbidden Behaviors
 
 - Declaring `CLEAN` without manually exercising every acceptance criterion against the running surface.
-- Treating unit tests, type checks, static review, screenshots without interaction, or source inspection as QA verification by themselves.
+- Treating mocks, fake imports, stubs, simulations, unit tests, type checks, static review, screenshots without interaction, or source inspection as QA verification by themselves.
+- Providing a hypothetical QA plan instead of a `QA cannot proceed` verdict when required runtime, credentials, seeded data, or real third-party dependencies are unavailable.
 - Starting the app, scoping from the diff, or inferring testing instructions before attempting available PR/ticket tooling and asking for missing details.
 - Falling back to diff-scoped QA before the caller has had a chance to provide missing ticket/PR details, acceptance criteria, implemented surface area, and testing instructions.
 - Treating inferred diff scope as authoritative when ticket/PR details, acceptance criteria, or testing instructions are available.

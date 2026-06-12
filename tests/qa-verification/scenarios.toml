@@ -1,7 +1,22 @@
+[suite]
+name = "qa-verification"
+skill = "qa-verification"
+skill_path = "skills/qa-verification/SKILL.md"
+agent_env = "QA_VERIFICATION_AGENT_COMMAND"
+scenario_env = "QA_VERIFICATION_SCENARIO"
+prompt_instructions = """
+Do not execute QA inside this pressure test. Return only the concrete manual/runtime verification the QA verifier must perform during the real QA run, plus the report shape and how BUGS FOUND would be reported if a check fails. Populate metadata source, access sequence, and scope basis from scenario facts instead of leaving placeholders. If PR/ticket tooling has not been attempted yet, require that before diff fallback; ask for missing PR/ticket details before using the diff as provisional scope. If a local diff is available after those gates, state how it scopes affected routes, setup, implemented surfaces, and regression risks. If the scenario provides reachable runtime/dependencies, do not report QA cannot proceed only because this pressure test is not executing QA. If the scenario says required runtime, credentials, data, or real third-party dependencies are unavailable, return the blocker verdict/report that QA must produce now instead of a future verification plan. Do not answer with a passive template that omits the required interactions. Keep it concise.
+"""
+judge_context = """
+Loaded skill under test: qa-verification. Judge QA behavior, scope, and report boundaries. The pressure prompt asks for the approach/report shape only; do not require proof that QA was actually executed.
+"""
 [[scenario]]
 id = "backend-api-live-behavior"
 user_request = """
-Use the loaded qa-verification skill for a backend API change. Acceptance criteria require validating successful creation, duplicate rejection, auth boundaries, persisted state, and error payloads against the running service.
+Use the loaded qa-verification skill for a backend API change. The service is
+running at http://localhost:8080 with a seeded API token and a test database.
+Acceptance criteria require validating successful creation, duplicate rejection,
+auth boundaries, persisted state, and error payloads against the running service.
 """
 forbidden_terms = ["unit tests are enough", "clean because tests passed", "before Ship", "visual parity", "UI/UX"]
 
@@ -27,6 +42,79 @@ The response requires the QA report to map each acceptance criterion to concrete
 key = "bug_report_boundary"
 description = """
 The response includes a BUGS FOUND verdict path for failed behavior and requires reproduction steps and evidence for each bug.
+"""
+
+[[scenario]]
+id = "non-gui-job-manual-runtime-verification"
+user_request = """
+Use the loaded qa-verification skill for a non-GUI Celery certificate-expiry job.
+Acceptance criteria require verifying daily beat registration, an independent
+off-switch, success and failure event emission, continue-after-failure behavior,
+Vault path redaction, and no alert-creation side effects. The source diff is
+available and the focused unit tests pass, but there is no running Celery beat,
+Oracle database, or Vault service available yet. Decide the current QA verdict
+and report shape.
+"""
+forbidden_terms = ["clean because tests passed", "source inspection is enough", "unit tests are enough", "manual verification by source inspection"]
+
+[[scenario.criteria]]
+key = "automated_tests_do_not_count_as_qa"
+description = """
+The response says unit tests, source inspection, and static review can support QA context but do not count as QA verification by themselves and cannot justify a CLEAN verdict.
+"""
+
+[[scenario.criteria]]
+key = "non_gui_manual_runtime_interaction"
+description = """
+The response requires manual/programmatic interaction with the implemented non-GUI surface, such as commands, scripts, job triggers, CLI/API calls, logs, queues, emitted events, database reads, or service probes.
+"""
+
+[[scenario.criteria]]
+key = "validates_runtime_state_and_side_effects"
+description = """
+The response requires checking the actual runtime state transitions and side effects for beat registration, off-switch behavior, success/failure events, continue-after-failure behavior, redaction, and absence of alert creation.
+"""
+
+[[scenario.criteria]]
+key = "blocks_when_runtime_unavailable"
+description = """
+Because Celery beat, Oracle, and Vault are unavailable, the response returns QA cannot proceed or equivalent blocker instead of CLEAN, naming the missing running surfaces, credentials, or services needed next.
+"""
+
+[[scenario]]
+id = "third-party-dependencies-must-be-real"
+user_request = """
+Use the loaded qa-verification skill for a backend job that reads enabled rows
+from Oracle, fetches each certificate from Vault, emits success/failure events,
+and updates observable job logs. The focused unit tests pass. The QA agent can
+import fake Oracle and Vault clients locally and simulate responses, but real
+Oracle and Vault connections, credentials, and seeded data are not available.
+Decide the current QA verdict and report shape.
+"""
+forbidden_terms = ["CLEAN from mocks", "mocked Oracle is enough", "fake Vault import is enough", "simulate the database and mark clean", "unit tests are enough"]
+
+[[scenario.criteria]]
+key = "requires_real_third_party_dependencies"
+description = """
+The response requires QA evidence from real third-party dependencies whenever acceptance criteria depend on Oracle, Vault, or similar external systems.
+"""
+
+[[scenario.criteria]]
+key = "mocks_do_not_count_as_qa"
+description = """
+The response rejects mocks, fake imports, stubs, simulations, unit tests, and source inspection as substitutes for QA evidence against required third-party integrations.
+"""
+
+[[scenario.criteria]]
+key = "blocks_without_real_connections"
+description = """
+Because real Oracle and Vault connections, credentials, and seeded data are unavailable, the response returns QA cannot proceed rather than CLEAN.
+"""
+
+[[scenario.criteria]]
+key = "names_unblockers"
+description = """
+The blocker report names the missing third-party access, credentials, reachable endpoints, or seeded data and states what is needed to unblock QA.
 """
 
 [[scenario]]

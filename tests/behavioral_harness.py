@@ -35,7 +35,20 @@ class BehavioralScenario:
     forbidden_terms: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class BehavioralSuiteConfig:
+    suite_name: str
+    skill_name: str
+    skill_path: Path
+    agent_env_var: str
+    scenario_filter_env_var: str
+    prompt_instructions: str
+    judge_context: str
+
+
 PromptBuilder = Callable[[str, BehavioralScenario], str]
+GLOBAL_AGENT_ENV_VAR = "BEHAVIORAL_AGENT_COMMAND"
+GLOBAL_SCENARIO_FILTER_ENV_VAR = "BEHAVIORAL_SCENARIO"
 
 
 def load_behavioral_scenarios(scenarios_path: Path) -> tuple[BehavioralScenario, ...]:
@@ -48,6 +61,47 @@ def load_behavioral_scenarios(scenarios_path: Path) -> tuple[BehavioralScenario,
     return tuple(build_behavioral_scenario(scenarios_path, raw_scenario) for raw_scenario in scenarios)
 
 
+def load_behavioral_suite_config(scenarios_path: Path) -> BehavioralSuiteConfig:
+    payload = load_behavioral_scenario_payload(scenarios_path)
+    suite = payload.get("suite")
+    if not isinstance(suite, dict):
+        raise ValueError(f"{scenarios_path} must define a [suite] table")
+
+    skill_name = require_string(scenarios_path, suite, "skill")
+    skill_path = Path(str(suite.get("skill_path", f"skills/{skill_name}/SKILL.md")))
+    if not skill_path.is_absolute():
+        skill_path = REPO_ROOT / skill_path
+
+    return BehavioralSuiteConfig(
+        suite_name=require_string(scenarios_path, suite, "name"),
+        skill_name=skill_name,
+        skill_path=skill_path,
+        agent_env_var=require_string(scenarios_path, suite, "agent_env"),
+        scenario_filter_env_var=require_string(scenarios_path, suite, "scenario_env"),
+        prompt_instructions=require_string(scenarios_path, suite, "prompt_instructions"),
+        judge_context=require_string(scenarios_path, suite, "judge_context"),
+    )
+
+
+def run_behavioral_suite_from_path(
+    scenarios_path: Path,
+    *,
+    scenario_filter: str | None = None,
+) -> int:
+    config = load_behavioral_suite_config(scenarios_path)
+    return run_loaded_skill_behavioral_suite(
+        suite_name=config.suite_name,
+        skill_name=config.skill_name,
+        skill_path=config.skill_path,
+        scenarios=load_behavioral_scenarios(scenarios_path),
+        agent_env_var=config.agent_env_var,
+        scenario_filter_env_var=config.scenario_filter_env_var,
+        prompt_instructions=config.prompt_instructions,
+        judge_context=config.judge_context,
+        scenario_filter=scenario_filter,
+    )
+
+
 def load_behavioral_scenario_payload(scenarios_path: Path) -> dict[str, object]:
     if tomllib is not None:
         with scenarios_path.open("rb") as handle:
@@ -56,6 +110,7 @@ def load_behavioral_scenario_payload(scenarios_path: Path) -> dict[str, object]:
 
 
 def load_behavioral_scenario_payload_with_fallback(scenarios_path: Path) -> dict[str, object]:
+    suite: dict[str, object] = {}
     scenarios: list[dict[str, object]] = []
     current: dict[str, object] | None = None
     current_scenario: dict[str, object] | None = None
@@ -81,6 +136,10 @@ def load_behavioral_scenario_payload_with_fallback(scenarios_path: Path) -> dict
                 multiline_value = []
             else:
                 multiline_value.append(raw_line)
+            continue
+
+        if line == "[suite]":
+            current = suite
             continue
 
         if line == "[[scenario]]":
@@ -122,7 +181,7 @@ def load_behavioral_scenario_payload_with_fallback(scenarios_path: Path) -> dict
     if multiline_key is not None:
         raise ValueError(f"{scenarios_path}: unterminated multiline string for {multiline_key!r}")
 
-    return {"scenario": scenarios}
+    return {"suite": suite, "scenario": scenarios}
 
 
 def parse_behavioral_toml_scalar(path: Path, line_number: int, raw_value: str) -> object:
@@ -186,20 +245,29 @@ def run_loaded_skill_behavioral_suite(
     prompt_instructions: str,
     judge_context: str,
     prompt_builder: PromptBuilder | None = None,
+    scenario_filter: str | None = None,
 ) -> int:
     if "--help" in sys.argv:
         print_usage(agent_env_var, scenario_filter_env_var, sys.argv[0])
         return 0
 
-    agent_command = os.environ.get(agent_env_var, "").strip()
+    agent_command = resolve_behavioral_agent_command(agent_env_var)
     if not agent_command:
         print_usage(agent_env_var, scenario_filter_env_var, sys.argv[0])
-        print(f"FAIL: {agent_env_var} is required", file=sys.stderr)
+        print(
+            f"FAIL: {agent_env_var} or {GLOBAL_AGENT_ENV_VAR} is required",
+            file=sys.stderr,
+        )
         return 1
 
-    scenario_filter = os.environ.get(scenario_filter_env_var, "").strip()
+    selected_filter = (
+        scenario_filter
+        if scenario_filter is not None
+        else os.environ.get(scenario_filter_env_var, "").strip()
+        or os.environ.get(GLOBAL_SCENARIO_FILTER_ENV_VAR, "").strip()
+    )
     try:
-        selected = select_scenarios(scenarios, scenario_filter)
+        selected = select_scenarios(scenarios, selected_filter)
         skill_text = skill_path.read_text(encoding="utf-8")
         judge_command = resolve_judge_command(agent_command)
         builder = prompt_builder or (
@@ -226,6 +294,13 @@ def run_loaded_skill_behavioral_suite(
 
     print(f"PASS: {len(selected)} {suite_name} behavioral scenarios")
     return 0
+
+
+def resolve_behavioral_agent_command(agent_env_var: str) -> str:
+    return (
+        os.environ.get(agent_env_var, "").strip()
+        or os.environ.get(GLOBAL_AGENT_ENV_VAR, "").strip()
+    )
 
 
 def build_loaded_skill_prompt(
@@ -307,7 +382,11 @@ def print_usage(agent_env_var: str, scenario_filter_env_var: str, script_path: s
         f"""Usage:
   {agent_env_var}='<command reading stdin>' python3 {script_path}
 
+Fallback:
+  {GLOBAL_AGENT_ENV_VAR}='<command reading stdin>' python3 {script_path}
+
 Optional:
   {scenario_filter_env_var}='<scenario-id>' to run one scenario.
+  {GLOBAL_SCENARIO_FILTER_ENV_VAR}='<scenario-id>' to run one scenario.
 """
     )

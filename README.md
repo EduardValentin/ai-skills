@@ -23,6 +23,10 @@ python3 tests/workflow-dispatch/static_contract.py
 Behavioral/model-backed tests are opt-in because they require an agent command:
 
 ```bash
+BEHAVIORAL_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
+SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+  python3 tests/behavioral_pressure.py
+
 SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
 SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
   python3 tests/skill-trigger/behavioral_pressure.py
@@ -31,6 +35,10 @@ WORKFLOW_DISPATCH_AGENT_COMMAND='python3 tests/codex_agent_command.py --role act
 SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
   python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```
+
+`tests/behavioral_pressure.py` discovers `tests/<skill>/scenarios.toml` for every
+canonical skill and runs each suite through the shared loaded-skill harness. Use
+`--skill <skill-name>` or `--scenario <scenario-id>` for focused runs.
 
 `skill-trigger` behavioral tests are black-box installed-harness tests: they do
 not inject skill bodies or available-skill indexes, and they fail when the target
