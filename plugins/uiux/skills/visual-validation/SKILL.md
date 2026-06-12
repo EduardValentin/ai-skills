@@ -1,6 +1,6 @@
 ---
 name: visual-validation
-description: Use when validating frontend UI changes, screenshots, responsive layouts, visual regressions, accessibility states, browser-rendered pages, canvas/3D output, breakpoint behavior, overflow, clipping, contrast, focus states, or visual parity with a prototype/reference app.
+description: Use when validating frontend UI changes, screenshots, responsive layouts, visual regressions, accessibility states, browser-rendered pages, canvas/3D output, breakpoint behavior, overflow, clipping, contrast, focus states, or broad visual quality against screenshots, design notes, tokens, or surrounding product aesthetics.
 ---
 
 # Visual Validation
@@ -39,7 +39,7 @@ For stateful UI, capture the relevant states: default, loading, empty, error, di
 - Color contrast works for key text and controls.
 - Keyboard order matches visual order.
 - Motion does not block use and respects reduced-motion preferences.
-- The UI matches the intended reference, token system, or surrounding product aesthetic.
+- The UI matches the intended screenshots, design notes, token system, or surrounding product aesthetic.
 
 ## Report Format
 

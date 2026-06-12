@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ticket Ship Gate"
-  short_description: "Gate PR readiness, checks, ticket transitions, and merge"
-  default_prompt: "Use $ticket-ship-gate to evaluate readiness ledgers, required PR checks, ticket transitions, bot identity, and merge approval before Ship mutations."

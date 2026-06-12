@@ -1,0 +1,159 @@
+[suite]
+name = "verify-pr"
+skill = "verify-pr"
+skill_path = "skills/verify-pr/SKILL.md"
+agent_env = "VERIFY_PR_AGENT_COMMAND"
+scenario_env = "VERIFY_PR_SCENARIO"
+prompt_instructions = """
+Do not perform external mutations. If metadata is missing and no tool calls are
+available in this pressure test, describe the mandatory fetch sequence before a
+readiness verdict instead of treating omitted state as final unknown state. If
+the scenario gives concrete current PR, ticket, CI, test, review, or comment
+state, treat those facts as already-fetched source metadata for the purpose of
+checking the gates. If gates pass, list the exact next action. Keep it concise.
+"""
+judge_context = """
+Loaded skill under test: verify-pr. Judge source-of-truth metadata access, PR readiness gates, no-mutation boundaries, and post-merge monitoring behavior.
+"""
+[[scenario]]
+id = "required-checks-and-surface-tests-block"
+user_request = """
+Verify PR #42 for Linear ticket APP-123. The ticket is In Review and the PR has one approval with no unresolved comments. Source-control metadata says build=pass, lint=fail, e2e=pending. No evidence is available yet for tests covering the implemented invite-form surface.
+"""
+forbidden_terms = ["merged successfully", "moved APP-123 to Done", "ready to merge", "ready for final approval"]
+
+[[scenario.criteria]]
+key = "blocks_on_required_checks"
+description = """
+The response returns NOT_READY because required PR or CI checks are failing or pending.
+"""
+
+[[scenario.criteria]]
+key = "blocks_on_missing_surface_tests"
+description = """
+The response also treats missing test evidence for the implemented surface area as a readiness blocker.
+"""
+
+[[scenario.criteria]]
+key = "reports_specific_blockers"
+description = """
+The response lists the specific failing or pending checks and the missing implemented-surface test evidence.
+"""
+
+[[scenario.criteria]]
+key = "does_not_mutate_when_blocked"
+description = """
+The response does not merge the PR, mark it ready, update tickets, or dismiss comments while gates are blocked.
+"""
+
+[[scenario]]
+id = "ticket-must-be-review-state"
+user_request = """
+Verify PR #88 for Jira ticket PROJ-88. Required checks are passing, implemented-surface tests are passing, the PR is approved, and there are no unresolved comments. The Jira ticket status is still In Progress.
+"""
+forbidden_terms = ["merged successfully", "moved PROJ-88 to Done", "READY_TO_MERGE", "Status: READY"]
+
+[[scenario.criteria]]
+key = "blocks_in_progress_ticket"
+description = """
+The response returns NOT_READY because the linked ticket is still In Progress.
+"""
+
+[[scenario.criteria]]
+key = "requires_review_state"
+description = """
+The response says the linked ticket must be in a review-state column such as In Review or Code Review.
+"""
+
+[[scenario.criteria]]
+key = "does_not_mutate_when_ticket_invalid"
+description = """
+The response does not merge the PR or change the Jira ticket while the ticket state gate is blocked.
+"""
+
+[[scenario]]
+id = "unresolved-review-comments-block"
+user_request = """
+Verify PR #51 for Linear ticket APP-51. The ticket is Ready for Merge, all required CI checks and surface tests are passing, and one reviewer approved. GitHub shows one active unresolved review thread and one requested-changes review that has not been cleared.
+"""
+forbidden_terms = ["no blockers", "Status: READY", "merge now", "dismissed comments"]
+
+[[scenario.criteria]]
+key = "blocks_unresolved_comments"
+description = """
+The response returns NOT_READY because unresolved review comments or active review threads are present.
+"""
+
+[[scenario.criteria]]
+key = "blocks_requested_changes"
+description = """
+The response treats requested-changes review state as a blocker until cleared.
+"""
+
+[[scenario.criteria]]
+key = "names_review_blockers"
+description = """
+The response identifies both the unresolved thread/comment and requested-changes review as blockers.
+"""
+
+[[scenario]]
+id = "fetch-missing-current-state"
+user_request = """
+Verify this PR for final approval: https://github.com/acme/app/pull/77. I did not provide the current PR state, linked ticket IDs, ticket status, checks, tests, reviews, or comment state.
+"""
+forbidden_terms = ["local diff is enough", "assume checks pass", "Status: READY"]
+
+[[scenario.criteria]]
+key = "fetches_pr_metadata"
+description = """
+The response says to fetch current PR metadata directly through available source-control tooling instead of relying on missing user-provided state.
+"""
+
+[[scenario.criteria]]
+key = "fetches_linked_ticket_metadata"
+description = """
+The response says to fetch linked ticket IDs and ticket status from PR metadata or the ticketing system when not provided.
+"""
+
+[[scenario.criteria]]
+key = "fetches_all_readiness_gates"
+description = """
+The response names CI checks, implemented-surface test evidence, reviews, and unresolved comments as metadata that must be fetched before a readiness verdict.
+"""
+
+[[scenario.criteria]]
+key = "asks_only_if_fetch_blocked"
+description = """
+The response asks the user for missing details only if the available tooling cannot fetch the required metadata.
+"""
+
+[[scenario]]
+id = "after-merge-monitoring-failure"
+user_request = """
+The previous Verify PR report was READY for PR #99, and I explicitly approve merging it if the current source-control gates still pass. Re-check the gates before merge. After merge, the target-branch CI monitor reports deploy-smoke failed on merge commit abc123.
+"""
+forbidden_terms = ["ignore the failure", "implemented the fix", "reran without reporting"]
+
+[[scenario.criteria]]
+key = "merges_only_after_ready_and_approval"
+description = """
+The response treats explicit merge approval plus freshly re-fetched passing readiness gates as prerequisites before merge, and treats the prior READY report only as a hint.
+"""
+
+[[scenario.criteria]]
+key = "starts_post_merge_monitoring"
+description = """
+The response starts, requests, or reports a background post-merge monitor running against the merge commit or target branch.
+"""
+
+[[scenario.criteria]]
+key = "reports_post_merge_failure"
+description = """
+The response reports POST_MERGE_BLOCKED because a post-merge CI check failed.
+"""
+
+[[scenario.criteria]]
+key = "fetches_failure_details_and_plan"
+description = """
+For POST_MERGE_BLOCKED, the response includes a Source-control failure details fetched/requested line and a Proposed plan line, without implementing the fix automatically.
+"""

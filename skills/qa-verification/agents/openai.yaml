@@ -1,0 +1,4 @@
+interface:
+  display_name: "QA Verification"
+  short_description: "Manually verify running behavior"
+  default_prompt: "Use $qa-verification to manually verify acceptance criteria through browser click-through, backend/API probes, CLI checks, or mixed end-to-end QA."

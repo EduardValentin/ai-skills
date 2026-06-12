@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement Unit Of Work"
+  short_description: "Implement approved code with TDD and delegated self-review"
+  default_prompt: "Use $implement-unit-of-work when you are the implementer for an approved code unit or delegated implementation slice; use TDD where feasible, delegate self-review, and return an implementation report."

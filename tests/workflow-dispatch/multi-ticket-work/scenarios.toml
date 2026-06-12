@@ -1,0 +1,81 @@
+[[scenario]]
+id = "multi-ticket-work-dispatch-cross-ticket-brainstorming"
+user_request = """
+The Billing Revamp Epic has three tickets: APP-10 invoice migration, APP-11
+checkout UI, and APP-12 analytics events. The ticket inventory and dependency
+map are available, but the user and agent have not yet reached shared
+requirements, success criteria, boundaries, or implementation-plan approval.
+APP-11 depends on APP-10 field names, and APP-12 depends on both UI and API event
+semantics. What workflow action should the main agent take next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained request>
+
+Use kind USER_FACING for main-session user-facing alignment or brainstorming
+actions. Do not dispatch ticket coordinators yet. Keep the request self-contained
+and do not name downstream skill identifiers. The capability field must include
+the word brainstorming. The action text must name each ticket and material
+dependency from the user request.
+"""
+forbidden_terms = ["ticket-start", "$ticket-start", "`ticket-start`", "execute-ticket-work", "$execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+expected_auto_discovery = ["superpowers:brainstorming"]
+require_action_ledger = true
+first_action_contains = ["user_facing", "brainstorming"]
+
+[[scenario.criteria]]
+key = "starts_cross_ticket_brainstorming"
+description = "The response starts a user-facing requirements and brainstorming session for the multi-ticket scope rather than dispatching ticket coordinators or execution work."
+
+[[scenario.criteria]]
+key = "covers_each_ticket_and_dependencies"
+description = "The brainstorming request covers each ticket, shared success criteria, boundaries, risks, and dependencies between tickets."
+
+[[scenario.criteria]]
+key = "blocks_execution_until_approval"
+description = "The response makes clear that ticket coordinator dispatch waits for approved spec and implementation plan."
+
+[[scenario]]
+id = "multi-ticket-work-dispatch-ticket-coordinator"
+user_request = """
+The Billing Revamp Epic scope, dependency map, cross-ticket spec, and implementation
+plan are user-approved. APP-10 invoice migration has an approved execution packet
+with ticket context, parent Epic context, approved spec/design, approved plan,
+dependency constraints, repository instructions, PR expectations, reviewer-friendly
+PR body expectation, and completion-report requirements. What workflow handoff
+should the main agent emit for APP-10?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the
+request self-contained and do not name downstream skill identifiers. The first-level
+handoff must be for a ticket coordinator subagent with an approved execution packet,
+not ticket intake, direct implementation, or user-facing brainstorming.
+"""
+forbidden_terms = ["ticket-start", "$ticket-start", "`ticket-start`", "execute-ticket-work", "$execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+expected_auto_discovery = ["execute-ticket-work"]
+require_action_ledger = true
+first_action_contains = ["dispatch_request", "ticket coordinator"]
+response_checks = ["ticket_coordinator_handoff"]
+
+[[scenario.criteria]]
+key = "dispatches_ticket_coordinator"
+description = "The response emits a first-level handoff for APP-10 to a ticket coordinator subagent with an approved execution packet."
+
+[[scenario.criteria]]
+key = "handoff_is_self_contained"
+description = "The delegated request includes APP-10 ticket context, Epic or parent context, approved spec/design, approved plan, dependency constraints, repository instructions, PR expectations, completion-report expectations, and downstream dependency notes."
+
+[[scenario.criteria]]
+key = "ticket_coordinator_uses_approved_packet"
+description = "The delegated request starts from the approved execution packet and does not ask the ticket coordinator to gather approval, run user-facing brainstorming, create a spec, or create a plan."
+
+[[scenario.criteria]]
+key = "ticket_coordinator_can_delegate_deeper"
+description = "The delegated request tells the ticket coordinator to use deeper subagents for implementation, independent review, QA, UI/UX when applicable, fixes, PR preparation, and reporting when nested delegation is available, or report the limitation when it is unavailable."
+
+[[scenario.criteria]]
+key = "does_not_collapse_into_worker_prompt"
+description = "The delegated request does not assign implementation, review, QA, UI/UX checks, PR preparation, and completion reporting to one undifferentiated worker."

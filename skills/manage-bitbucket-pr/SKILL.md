@@ -73,6 +73,7 @@ For writes, report:
 | Posting a guessed comment or merging by implication | Mutate only after the user requested the exact side effect. |
 | Applying Cloud routes to self-hosted Bitbucket | Detect host type first; ask before expanding beyond the Cloud mini-reference. |
 
-## Test Prompts
+## Test Coverage
 
-Use `tests/pressure-scenarios.md` and `tests/test-bitbucket-cloud-pr.sh` when changing this skill.
+Use the repo-level `tests/manage-bitbucket-pr/manage_bitbucket_pr_behavioral_pressure.py`
+for behavioral pressure coverage and `tests/test-bitbucket-cloud-pr.sh` for helper-script contracts.

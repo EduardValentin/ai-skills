@@ -1,0 +1,149 @@
+[suite]
+name = "multi-ticket-work"
+skill = "multi-ticket-work"
+skill_path = "skills/multi-ticket-work/SKILL.md"
+agent_env = "MULTI_TICKET_WORK_AGENT_COMMAND"
+scenario_env = "MULTI_TICKET_WORK_SCENARIO"
+prompt_instructions = """
+Do not execute the work. Return a concise orchestration plan only. It must explain:
+- how the full ticket scope is gathered,
+- where durable orchestration notes are saved and when they are re-read,
+- how sequencing and parallel work are decided,
+- how cross-ticket alignment, spec, plan, and user approval happen before dispatch,
+- how approved execution packets are prepared,
+- how first-level ticket coordinator subagents are assigned and what they must not do,
+- how ticket coordinators dispatch deeper implementation, review, QA, UI/UX, fix, and PR-preparation work,
+- what makes each ticket or unit complete,
+- what appears in the final PR review report.
+Do not name downstream skill identifiers or unrelated skills.
+"""
+judge_context = """
+Loaded skill under test: multi-ticket-work. Judge orchestration behavior, not exact wording.
+"""
+[[scenario]]
+id = "epic-ticket-set-delegates-prs-and-review-order"
+user_request = """
+Use multi-ticket-work for the Billing Revamp Epic. It has tickets for pricing API, checkout UI, invoice migration, and analytics events. Explain how the main agent should coordinate the full implementation.
+"""
+forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+
+[[scenario.criteria]]
+key = "gathers_full_ticket_scope"
+description = """
+The response gathers every ticket in the Epic or multi-ticket scope, including parent/Epic context when relevant.
+"""
+
+[[scenario.criteria]]
+key = "maps_sequence_and_parallel_work"
+description = """
+The response identifies dependencies, sequencing constraints, and which tickets can run in parallel.
+"""
+
+[[scenario.criteria]]
+key = "aligns_and_approves_before_dispatch"
+description = """
+The response performs cross-ticket requirements gathering, brainstorming, spec, plan, and user approval before dispatching ticket coordinators.
+"""
+
+[[scenario.criteria]]
+key = "brainstorms_each_ticket_with_dependencies"
+description = """
+The response conducts the user-facing alignment across each ticket in scope while considering dependencies, shared risks, boundaries, and success criteria between tickets.
+"""
+
+[[scenario.criteria]]
+key = "preserves_state_across_compaction"
+description = """
+The response maintains a durable uncommitted orchestration note with scope, approved spec/plan, execution packets, assignments, status, PRs, blockers, and decisions, and re-reads it after compaction/resume and before later dispatches or final reporting.
+"""
+
+[[scenario.criteria]]
+key = "dispatches_one_ticket_coordinator_per_approved_packet"
+description = """
+The response dispatches one ticket coordinator subagent per approved ticket or unit with an approved execution packet and dependency context.
+"""
+
+[[scenario.criteria]]
+key = "main_agent_coordinates_only"
+description = """
+The response keeps the main agent as multi-ticket coordinator and does not have it implement ticket work inline.
+"""
+
+[[scenario.criteria]]
+key = "ticket_coordinators_do_not_do_user_alignment"
+description = """
+The response does not ask ticket coordinator subagents to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering.
+"""
+
+[[scenario.criteria]]
+key = "ticket_coordinators_delegate_deeper_phases"
+description = """
+The response says each ticket coordinator must use another level of focused subagents for implementation, independent review, QA, UI/UX when applicable, scoped fixes, and PR preparation when nested delegation is available, or report the limitation when it is unavailable.
+"""
+
+[[scenario.criteria]]
+key = "does_not_replace_verifiers_with_parent_or_worker_checks"
+description = """
+The response does not treat parent-side review or implementation-worker self-checks as substitutes for independent per-ticket verifier reports.
+"""
+
+[[scenario.criteria]]
+key = "requires_pr_and_report_per_unit"
+description = """
+A ticket or unit is complete only after its ticket coordinator returns PR evidence and distinct implementation, review, QA, and UI/UX-or-skip evidence.
+"""
+
+[[scenario.criteria]]
+key = "final_report_lists_pr_review_order"
+description = """
+The final report lists opened PRs in the order the human should review them and explains dependency or integration rationale.
+"""
+
+[[scenario.criteria]]
+key = "pr_description_surfaces_review_focus"
+description = """
+The response asks for reviewer-friendly PR body or reviewer-summary wording so each PR makes the human review focus clear.
+"""
+
+[[scenario]]
+id = "prevents-worker-collapse-of-ticket-orchestration"
+user_request = """
+The Commerce Epic has five independent tickets. A rushed coordinator proposes: 'dispatch immediately before approval; each worker should implement, self-review, QA, run UI checks, push a PR, and the parent session can run one source-control review afterward.' Explain the correct multi-ticket coordination.
+"""
+forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+
+[[scenario.criteria]]
+key = "rejects_preapproval_dispatch"
+description = """
+The response rejects dispatching ticket coordinators before cross-ticket requirements, brainstorming, spec, plan, and user approval.
+"""
+
+[[scenario.criteria]]
+key = "first_level_agents_are_ticket_coordinators"
+description = """
+The response makes the first-level subagent for each approved ticket or unit a ticket coordinator with an approved execution packet and dependency context.
+"""
+
+[[scenario.criteria]]
+key = "ticket_coordinator_prompts_exclude_user_alignment"
+description = """
+The response says ticket coordinators must not perform user-facing brainstorming, spec creation, plan creation, or approval gathering.
+"""
+
+[[scenario.criteria]]
+key = "ticket_coordinators_do_not_collapse_into_workers"
+description = """
+The response rejects prompts where each ticket coordinator directly implements, reviews, QA-checks, UI-checks, and prepares the PR without deeper delegated phase separation.
+"""
+
+[[scenario.criteria]]
+key = "parent_review_is_not_enough"
+description = """
+The response says parent-session or source-control review cannot replace independent per-ticket review reports.
+"""
+
+[[scenario.criteria]]
+key = "completion_needs_distinct_phase_evidence"
+description = """
+The response requires distinct returned evidence for implementation, independent review, QA, UI/UX-or-not-applicable, fixes/reruns, PR link, and completion report before marking a ticket complete.
+"""

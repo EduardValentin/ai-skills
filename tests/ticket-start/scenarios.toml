@@ -1,0 +1,333 @@
+[suite]
+name = "ticket-start delegated execution"
+skill = "ticket-start"
+skill_path = "skills/ticket-start/SKILL.md"
+agent_env = "TICKET_START_BEHAVIOR_AGENT_COMMAND"
+scenario_env = "TICKET_START_BEHAVIOR_SCENARIO"
+prompt_instructions = """
+Do not execute the ticket. Return a concise ordered workflow only. It must explain:
+- how the main agent stays the intake and routing orchestrator for one ticket,
+- the ticket intake through MCP or API, including title, description, acceptance criteria, links, status, dependencies, ambiguity, and parent context before brainstorming or planning,
+- the artifact, repo-state, freshness, worktree, and scoping steps before planning,
+- how the brainstorming phase maintains a complete open-questions ledger, surfaces all material unknowns, reaches shared understanding, and produces the approved spec/design,
+- how plan writing is routed after spec/design approval and then gets plan approval,
+- how explicit user plan approval blocks coding, scaffolding, product mutations, and execution until both spec and plan are approved,
+- how branch choice, worktree setup, draft diff knowledge, investigation progress, internal plans/checklists, and working notes do not count as user approval,
+- how the main agent enters execution with an approved execution packet while remaining the current-session orchestrator,
+- the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, PR preparation, and PR verification or handoff,
+- how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,
+- which compact context ticket-start forwards,
+- how CANNOT_VERIFY is handled when verifier tooling or access is missing,
+- how returned reports are reconciled before PR verification or handoff.
+Do not name downstream skill identifiers.
+"""
+judge_context = """
+Loaded skill under test: ticket-start. Judge the routing plan, not exact wording.
+"""
+[[scenario]]
+id = "ticket-start-execution-corectness"
+user_request = """
+A user asks to start one Linear issue APP-812. The issue is a child under an Epic, adds a billing eligibility business rule, modifies a checkout UI component with a matching reference surface, and may require backend, UI, migration, and analytics work. The user has not yet confirmed the requirements/design understanding, approved a spec, or approved an implementation plan. Explain the correct main-agent workflow from intake through final handoff.
+"""
+forbidden_terms = ["Depth budget:", "IMPLEMENTATION_SLICE_RESULT", "BROWSER_VERIFICATION_RESULT", "Root -> child -> grandchild", "orchestration map", "leaf-only", "grandchild", "four Linear tickets", "I would implement inline", "qa-verification", "implement-unit-of-work", "multi-ticket-work", "verify-pr", "ui-verification", "execute-ticket-work", "TodoWrite", "two-stage review", "spec compliance reviewer", "code quality reviewer", "ticket orchestrator", "ticket-orchestrator", "does not define", "does not prescribe"]
+
+[[scenario.criteria]]
+key = "ticket_start_is_single_ticket_router"
+description = """
+The response treats this as one standalone ticket handled by the main agent as user-facing orchestrator, not as multi-ticket work or inline implementation.
+"""
+
+[[scenario.criteria]]
+key = "intake_happens_first"
+description = """
+The response starts by re-reading the ticket through MCP or API, capturing title, description, acceptance criteria, links, status, dependencies, ambiguity, and parent/Epic context before brainstorming or planning.
+"""
+
+[[scenario.criteria]]
+key = "artifact_and_repo_freshness"
+description = """
+The response gathers only relevant PRD/design/reference context, reads repo instructions, inspects git/branch/PR/recent commit state, fetches origin/main, and creates or verifies a fresh ticket worktree before implementation decisions.
+"""
+
+[[scenario.criteria]]
+key = "scoping_before_planning"
+description = """
+The response delegates codebase scoping before implementation planning.
+"""
+
+[[scenario.criteria]]
+key = "brainstorming_before_plan"
+description = """
+The response runs a user-facing brainstorming session grounded in ticket, parent, artifact, repo, and scoping facts until shared understanding of work, boundaries, and success criteria is reached.
+"""
+
+[[scenario.criteria]]
+key = "spec_approval_before_plan"
+description = """
+The response says the brainstorming phase produces the approved spec/design and plan writing is routed only after that spec/design approval.
+"""
+
+[[scenario.criteria]]
+key = "plan_approval_blocks_execution"
+description = """
+The response requires explicit user approval of the implementation plan and blocks coding, scaffolding, product mutations, or execution delegation before both spec approval and plan approval.
+"""
+
+[[scenario.criteria]]
+key = "enters_execution_phase_after_approval"
+description = """
+After spec and plan approval, the response enters an execution phase using an approved execution packet while the main agent remains the current-session orchestrator.
+"""
+
+[[scenario.criteria]]
+key = "does_not_handoff_main_ticket_orchestration"
+description = """
+The response does not hand off main-ticket orchestration to another agent or describe a separate ticket orchestrator.
+"""
+
+[[scenario.criteria]]
+key = "coordinates_execution_and_verification_loop"
+description = """
+The response coordinates implementation, independent review, QA, UI/UX where applicable, scoped fixes, and reruns through delegated work as needed instead of doing them inline.
+"""
+
+[[scenario.criteria]]
+key = "defines_uiux_verification_by_project_type"
+description = """
+The response explains that personal/Linear UI/UX verification compares changed production UI against the runnable reference app, while job/Jira UI/UX verification checks visual consistency with the rest of the application and similar existing elements.
+"""
+
+[[scenario.criteria]]
+key = "forwards_compact_context"
+description = """
+The response describes compact context included in delegated requests, such as ticket/AC, parent context, approved decisions, approved plan, artifact slices, scope/codebase locators, branch state, constraints, expected checks, and output expectations.
+"""
+
+[[scenario.criteria]]
+key = "execution_order"
+description = """
+The response preserves the ticket work order: implement first, verify through independent review plus QA plus UI/UX when applicable, aggregate findings, delegate scoped fixes, rerun affected verification, then PR verification.
+"""
+
+[[scenario.criteria]]
+key = "verifier_cannot_verify_fallback"
+description = """
+The response says delegated QA and UI/UX verifiers must report CANNOT_VERIFY with the reason and missing capability when required tooling or access is unavailable, and the main agent records or handles the blocker.
+"""
+
+[[scenario.criteria]]
+key = "readiness_requires_resolved_reports"
+description = """
+The response says PR verification or handoff waits until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.
+"""
+
+[[scenario]]
+id = "ticket-start-start-working-does-not-code"
+user_request = """
+The user says: "Let's start working on this ticket: https://yesenergy.atlassian.net/browse/SS-2785. We are only concerned with the coding part in this repository and not the alert creation subticket. We are working on a feature branch, so base this worktree and future PR on SS-2766-centralized-monitoring-of-submission-services-components." The agent has read enough ticket and repo context to know likely affected files, but the user has not approved a written spec/design or an implementation plan. Describe the correct immediate behavior.
+"""
+forbidden_terms = ["Implemented the coding slice", "I implemented it myself", "start coding now", "edit files now", "update_plan is approval"]
+
+[[scenario.criteria]]
+key = "start_working_is_not_coding_approval"
+description = """
+The response treats "start working", "coding part only", feature-branch direction, and investigation progress as permission to continue ticket-start intake/alignment, not as approval to implement.
+"""
+
+[[scenario.criteria]]
+key = "no_main_session_implementation"
+description = """
+The response explicitly blocks product-code and test edits in the main session before user-approved spec/design and implementation plan exist.
+"""
+
+[[scenario.criteria]]
+key = "brainstorming_is_iterative"
+description = """
+The response requires a real user-facing brainstorming loop with targeted follow-up questions and confirmation of shared understanding, not one perfunctory question or a generic "any concerns?".
+"""
+
+[[scenario.criteria]]
+key = "writes_spec_for_approval"
+description = """
+The response says the agent must write a concise spec/design from the brainstorming result and ask the user to approve it before plan writing.
+"""
+
+[[scenario.criteria]]
+key = "writes_plan_for_approval"
+description = """
+The response says an implementation plan must be produced after spec approval and explicitly approved by the user before execution or coding.
+"""
+
+[[scenario.criteria]]
+key = "internal_plan_is_not_user_approval"
+description = """
+The response says internal checklists, update plans, working notes, or branch selection do not count as user approval of the spec/design or implementation plan.
+"""
+
+[[scenario]]
+id = "ticket-start-brainstorming-surfaces-all-unknowns"
+user_request = """
+The user is working one Jira ticket. During brainstorming, the agent asked one
+blocking design question about whether to stack on a dependency branch. The user
+answered that the dependency was merged into the feature branch and future work
+should stack there. The agent also already knows there are other material
+unknowns: the exact posman_credentials Vault-path column, whether Vault secrets
+always contain PEM certs or may contain PKCS12, what to emit when a certificate
+has no subject CN, and the preferred daily beat timing. No spec/design or
+implementation plan has been approved. Describe the correct next user-facing
+behavior, including the concrete follow-up questions to ask before spec/design
+or plan writing.
+"""
+forbidden_terms = ["write the implementation plan now", "I will assume vault_path", "proceed with assumptions", "draft the spec now"]
+
+[[scenario.criteria]]
+key = "answers_one_question_do_not_end_brainstorming"
+description = """
+The response says resolving the dependency-branch question does not end brainstorming or authorize spec/design or implementation-plan writing.
+"""
+
+[[scenario.criteria]]
+key = "surfaces_complete_open_questions"
+description = """
+The response surfaces the complete known open-questions ledger, including schema column, secret shape, missing-CN behavior, and beat timing, rather than asking only one question or hiding the rest as assumptions.
+"""
+
+[[scenario.criteria]]
+key = "classifies_blockers_and_assumptions"
+description = """
+The response groups remaining items into blocking decisions, risky assumptions, and non-blocking assumptions or equivalent categories.
+"""
+
+[[scenario.criteria]]
+key = "blocks_spec_and_plan_until_resolution"
+description = """
+The response blocks spec/design writing, implementation-plan writing, execution, and edits until material unknowns are resolved or the user explicitly approves remaining assumptions.
+"""
+
+[[scenario.criteria]]
+key = "asks_targeted_followups"
+description = """
+The response asks targeted follow-up questions for each material unknown and asks the user to confirm shared understanding before any spec/design is written.
+"""
+
+[[scenario]]
+id = "ticket-start-dispatches-code-scope-before-brainstorming"
+user_request = """
+The user starts one Jira ticket and asks to work only on the coding part. The
+agent has read the ticket, parent context, repo instructions, branch state, and
+artifact context. It has not dispatched a codebase scoping subagent yet. Several
+unknowns may be answerable from the codebase: source table schema, existing
+Vault secret conventions, event model mixins, scheduler configuration, related
+tests, and prior implementation history. The agent is tempted to do local
+scoping and ask the user those questions before dispatching because it thinks
+subagents need a separate explicit ask. Describe the correct next behavior.
+"""
+forbidden_terms = ["local scoping is enough", "ask the user first", "separate explicit ask", "skip scoping dispatch"]
+
+[[scenario.criteria]]
+key = "dispatch_before_brainstorming"
+description = """
+The response says the next step is to dispatch a codebase scoping subagent before brainstorming, spec/design writing, implementation-plan writing, execution, product edits, or test edits.
+"""
+
+[[scenario.criteria]]
+key = "local_scoping_not_substitute"
+description = """
+The response says local scoping by the main agent does not satisfy ticket-start scoping and must not replace the delegated scoping phase.
+"""
+
+[[scenario.criteria]]
+key = "ticket_request_authorizes_scoping"
+description = """
+The response says the user's ticket-start request is sufficient authorization to dispatch the scoping subagent; the agent should not wait for a separate explicit user ask.
+"""
+
+[[scenario.criteria]]
+key = "scope_sweep_is_comprehensive"
+description = """
+The response requires an ambitious, comprehensive code scope sweep that tries to answer code-resolvable unknowns before user brainstorming, including schema, secret conventions, event model, scheduler configuration, related tests, prior history, affected files, risks, and verification surfaces.
+"""
+
+[[scenario.criteria]]
+key = "brainstorm_from_scoping_evidence"
+description = """
+The response says brainstorming questions should be based on the returned scoping evidence, so the user is only asked about unknowns the codebase sweep could not resolve.
+"""
+
+[[scenario]]
+id = "ticket-start-implementation-language-keeps-approval-gates"
+user_request = """
+The user says: "Let's start tackling this Jira ticket. We are only concerned with
+the coding part in this repo, use the feature branch for the future PR, and there
+is already a draft worktree with changes. Inspect it and keep moving." The agent
+has ticket facts, parent context, likely affected files, and a draft branch diff.
+It has not completed codebase scoping delegation, user-facing brainstorming, a
+written spec/design approval, or implementation-plan approval. Describe the
+correct immediate behavior.
+"""
+forbidden_terms = ["I will run the draft tests", "I will repair the draft branch", "I will continue implementation"]
+
+[[scenario.criteria]]
+key = "implementation_language_is_not_approval"
+description = """
+The response treats start-tackling language, coding-scope language, feature-branch direction, existing draft worktree, likely affected files, and draft diff knowledge as workflow-start context, not approval to validate or continue implementation.
+"""
+
+[[scenario.criteria]]
+key = "scoping_delegation_is_mandatory_after_intake"
+description = """
+The response requires delegated codebase scoping after ticket, parent, artifact, and repo intake before brainstorming or implementation planning, with no trivial-scope skip or local replacement.
+"""
+
+[[scenario.criteria]]
+key = "blocks_preapproval_draft_validation"
+description = """
+The response blocks validating draft changes, running implementation tests, recommending code repairs, editing product code, editing tests, or treating an existing draft worktree as approved work before spec and plan approval.
+"""
+
+[[scenario.criteria]]
+key = "mandatory_brainstorm_to_spec_to_plan_order"
+description = """
+The response preserves the required order: delegated scoping, iterative brainstorming to shared understanding, written spec/design, explicit user spec approval, implementation-plan writing, explicit user plan approval, then execution.
+"""
+
+[[scenario.criteria]]
+key = "approval_requests_are_explicit"
+description = """
+The response requires explicit user approval for both the written spec/design and the implementation plan; investigation progress, branch choice, internal checklist, or working notes cannot satisfy either approval gate.
+"""
+
+[[scenario]]
+id = "ticket-start-final-requires-reviewable-pr"
+user_request = """
+One Jira ticket has completed implementation, independent review, QA verification,
+UI/UX verification was skipped with a valid backend-only reason, scoped fixes
+were applied, and the affected verification reruns are clean. The branch exists
+with commits, but no PR has been opened yet. The agent is preparing the final
+ticket report for the user. Describe the correct closing behavior.
+"""
+forbidden_terms = ["done without PR", "final report only", "skip PR creation", "no PR needed"]
+
+[[scenario.criteria]]
+key = "ticket_not_complete_without_pr_or_blocker"
+description = """
+The response says ticket-start should not present the ticket as complete/final for user review unless a reviewable PR exists or a concrete PR-creation blocker is reported.
+"""
+
+[[scenario.criteria]]
+key = "creates_reviewable_pr_before_final_report"
+description = """
+The response coordinates PR preparation/opening from the completed branch before the final ticket report, carrying the ticket context, execution summary, verification evidence, and reviewer-facing description needs.
+"""
+
+[[scenario.criteria]]
+key = "runs_pr_readiness_after_pr_exists"
+description = """
+After the PR is opened or identified, the response routes PR readiness verification before final handoff so PR creation alone is not treated as completion.
+"""
+
+[[scenario.criteria]]
+key = "final_report_includes_pr_state"
+description = """
+The final report includes the PR link or blocker, PR readiness result, ticket state, checks or remote status, and recommended next step for the user.
+"""

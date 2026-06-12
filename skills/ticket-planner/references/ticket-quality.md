@@ -5,6 +5,8 @@
 Every user story should use this structure:
 
 ```markdown
+Title: [Plain outcome the work accomplishes, not how it is built]
+
 ## Overview
 
 [1-3 sentences: persona or role, user need, business value, and feature context. Make clear what user-observable outcome this story delivers.]
@@ -24,6 +26,19 @@ Every user story should use this structure:
 - **Source context:** PRD sections, prototype routes/states, feature brief, plan, or approved shared-understanding brief
 - **Out of scope:** Explicit exclusions, if useful
 ```
+
+## Ticket Writing Rules
+
+- Title the work by the outcome, not by mechanism, parameters, files, or implementation steps.
+- Keep the business case and technical details separate: `Overview` explains why/what in plain language; `Product And Delivery Notes` explains how, constraints, interfaces, paths, and edge cases.
+- Put concrete pass/fail checks in the dedicated `Acceptance Criteria` section. Do not bury acceptance criteria in prose.
+- Make every ticket self-contained. Replace opaque plan/spec section references or roadmap codes with a plain descriptor plus the linked ticket ID.
+- Trim noise, not substance. Preserve real technical details such as interfaces, paths, behaviors, edge cases, contracts, and dependencies.
+- If a ticket feels too large to hold in your head, tighten verbose context and split by user outcome or delivery risk until the scope is clear.
+- For parent/child work, keep parents high-level. Children are the authoritative implementation spec; do not duplicate child implementation details on the parent.
+- When a ticket defines outputs or contracts, state exactly what is produced and under which conditions: events, fields, API responses, files, schemas, messages, or state transitions.
+- Reformat dense identifier paragraphs into one lead-in sentence plus a formatted block. In aligned identifier/value blocks, prefix human-readable explanations with comment markers; leave pure value lists and identifier-to-identifier mappings unmarked.
+- Keep related tickets consistent with the latest agreed decisions. When a decision changes, fix stale names, omitted items, and contradictions across the full related set.
 
 ## Vertical Slice Standard
 
@@ -65,6 +80,8 @@ Do not invent integration points that the source context does not imply. Ask whe
 Epics should use:
 
 ```markdown
+Title: [Plain feature capability or business outcome]
+
 ## Overview
 
 [Feature area, user/business goal, and why this work matters.]

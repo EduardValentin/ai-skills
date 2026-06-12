@@ -1,0 +1,4 @@
+interface:
+  display_name: "Multi-Ticket Work"
+  short_description: "Coordinate a full multi-ticket scope through delegated PRs"
+  default_prompt: "Use $multi-ticket-work to coordinate a full multi-ticket scope, dispatch one ticket coordinator per approved ticket or unit, and return dependency-aware PR review order."

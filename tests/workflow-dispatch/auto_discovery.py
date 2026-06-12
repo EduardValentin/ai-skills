@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Helpers for workflow-dispatch behavioral auto-discovery checks."""
+"""Helpers for workflow-dispatch installed-harness discovery checks."""
 
 from __future__ import annotations
 
@@ -11,9 +11,14 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-sys.path.append(str(REPO_ROOT / "tests" / "skill-trigger"))
+sys.path.append(str(REPO_ROOT / "tests"))
 
-from trigger_scenarios import discover_skill_files, parse_frontmatter  # noqa: E402
+from semantic_judge import (  # noqa: E402
+    SemanticCriterion,
+    assert_forbidden_terms,
+    judge_response,
+    resolve_judge_command,
+)
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
@@ -33,17 +38,9 @@ def run_agent(agent_command: str, prompt: str) -> str:
     return completed.stdout
 
 
-def skill_index() -> str:
-    rows: list[str] = []
-    for skill_name, skill_file in sorted(discover_skill_files(REPO_ROOT).items()):
-        frontmatter = parse_frontmatter(skill_file.read_text(encoding="utf-8"))
-        rows.append(f"- {frontmatter.get('name', skill_name)}: {frontmatter.get('description', '')}")
-    return "\n".join(rows)
-
-
 def assert_auto_discovers(agent_command: str, delegated_request: str, expected_skill: str) -> str:
-    response = run_agent(agent_command, make_selection_prompt(delegated_request, expected_skill))
-    if expected_skill not in response:
+    response = run_agent(agent_command, make_selection_prompt(delegated_request))
+    if not selected_skill_matches(response, expected_skill):
         raise AssertionError(
             f"delegated request did not auto-discover {expected_skill}\n"
             f"Request:\n{delegated_request}\n\nDiscovery response:\n{response}"
@@ -51,11 +48,34 @@ def assert_auto_discovers(agent_command: str, delegated_request: str, expected_s
     return response
 
 
-def make_selection_prompt(delegated_request: str, expected_skill: str) -> str:
-    return f"""You are testing skill auto-discovery for a delegated work request.
+def selected_skill_matches(response: str, expected_skill: str) -> bool:
+    selected = selected_skill_names(response)
+    normalized_expected = normalize_skill_name(expected_skill)
+    expected_short = normalized_expected.split(":", 1)[-1]
+    return any(
+        candidate == normalized_expected or candidate == expected_short
+        for candidate in selected
+    )
 
-Available skills:
-{skill_index()}
+
+def selected_skill_names(response: str) -> set[str]:
+    for line in response.splitlines():
+        if line.casefold().startswith("selected_skills:"):
+            _, raw_names = line.split(":", 1)
+            return {
+                normalize_skill_name(name)
+                for name in raw_names.split(",")
+                if normalize_skill_name(name)
+            }
+    return {normalize_skill_name(response)}
+
+
+def normalize_skill_name(name: str) -> str:
+    return name.strip().strip("`'\". ").casefold()
+
+
+def make_selection_prompt(delegated_request: str) -> str:
+    return f"""You are testing installed black-box skill discovery for a delegated work request.
 
 Delegated request:
 {delegated_request}
@@ -66,20 +86,6 @@ RATIONALE: one short sentence
 
 Select every skill that should be loaded before acting on the delegated request.
 """
-
-
-def assert_concept_groups(text: str, groups: tuple[tuple[str, ...], ...], context: str) -> None:
-    normalized = text.casefold()
-    missing = [group for group in groups if not any(term.casefold() in normalized for term in group)]
-    if missing:
-        raise AssertionError(f"{context} missing concept groups: {missing}")
-
-
-def assert_forbidden_terms(text: str, terms: tuple[str, ...], context: str) -> None:
-    normalized = text.casefold()
-    present = [term for term in terms if term.casefold() in normalized]
-    if present:
-        raise AssertionError(f"{context} included forbidden terms: {present}")
 
 
 def action_lines(text: str) -> list[str]:

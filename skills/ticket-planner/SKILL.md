@@ -19,6 +19,8 @@ PRD owns business rules; prototype owns UI, interaction details, and visible cop
 - Draft no stories from guesses; first get user approval on a shared-understanding brief.
 - Slice stories by user outcome and integration path, not by UI component, layer, or technical task.
 - Cover relevant integration points in the first viable story for a feature: UI/API/data/permissions/external systems/notifications/analytics.
+- Every story draft must include a dedicated Acceptance Criteria section with concrete, verifiable checks.
+- Apply the ticket draft quality rules below before presenting drafts for approval.
 - Edit no `PRD.md` content until the user approves the proposed business-rule additions.
 - Reference prototype routes/screens/states instead of repeating prototype copy, layout, or styling.
 - Include exact UI copy only when business-critical, absent from prototype, or explicitly requested.
@@ -30,6 +32,7 @@ PRD owns business rules; prototype owns UI, interaction details, and visible cop
 - [ ] Get approval on the shared-understanding brief before drafting.
 - [ ] Select workflow and identify vertical slices.
 - [ ] Draft, refine, and get approval for platform-neutral stories.
+- [ ] Check each draft against [references/ticket-quality.md](references/ticket-quality.md) before approval.
 - [ ] Propose user-approved PRD updates for newly clarified business rules.
 - [ ] If publishing is requested, infer the issue tracker from project docs or ask the user.
 
@@ -38,6 +41,14 @@ PRD owns business rules; prototype owns UI, interaction details, and visible cop
 Read all available product context before drafting. For discovery, including issue-tracker convention discovery from project docs, read [references/context-gathering.md](references/context-gathering.md).
 
 If PRD and prototype conflict, ask which source wins before drafting.
+
+## Ticket Draft Quality
+
+- Use plain outcome titles; keep mechanisms, parameters, files, and implementation steps out of titles.
+- Separate the business overview from technical notes. Put concrete pass/fail checks in the dedicated acceptance-criteria section.
+- Make each ticket self-contained. Preserve interfaces, paths, behaviors, edge cases, contracts, dependencies, and output conditions while trimming noise.
+- Keep parent tickets high-level; child tickets own implementation specifics. Fix stale names, omitted items, and contradictions across related tickets.
+- Reformat dense identifier prose into a lead-in plus formatted block. In aligned blocks, mark human-readable explanations with comment markers; leave pure value lists or identifier mappings unmarked.
 
 ## Reference Files
 
@@ -48,7 +59,7 @@ Read only what the selected path needs:
 - Prototype boundaries: [references/prototype-boundaries.md](references/prototype-boundaries.md)
 - Quality bar: [references/ticket-quality.md](references/ticket-quality.md)
 - Workflows: [workflows/single-epic.md](workflows/single-epic.md), [workflows/bulk-planning.md](workflows/bulk-planning.md), [workflows/user-story.md](workflows/user-story.md), [workflows/epic-with-stories.md](workflows/epic-with-stories.md)
-- Regression evals: [tests/evals.md](tests/evals.md)
+- Regression evals: repo-level `tests/ticket-planner/ticket_planner_behavioral_pressure.py`
 
 ## Scenario Selection
 

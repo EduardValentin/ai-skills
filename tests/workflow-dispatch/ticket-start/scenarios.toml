@@ -1,0 +1,311 @@
+[[scenario]]
+id = "ticket-start-dispatch-scoping"
+user_request = """
+Ticket intake for Linear issue APP-123 is complete.
+Title: Apply billing eligibility during checkout.
+Description: prevent checkout when an account is not eligible for billing and
+show the approved ineligible-state message.
+Acceptance criteria: eligible accounts can check out; ineligible accounts are
+blocked before payment; analytics records stable eligibility outcome names.
+Parent context: Billing Controls Epic requires consistent eligibility enforcement.
+Relevant artifact context: PRD billing rules and checkout reference screen exist.
+Repo instructions, branch state, and known constraints are available: do not
+change legacy invoice migration behavior. Codebase scoping has not been
+delegated yet. Implementation planning has not started. What workflow handoff
+should the main agent perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers. The action text must
+state that the user's ticket-start request is sufficient authorization to dispatch
+scoping, local scoping by the main agent is not a substitute, and brainstorming
+waits for returned scoping evidence. The delegated request must ask for an
+ambitious codebase sweep that tries to answer code-resolvable unknowns before
+user brainstorming.
+"""
+forbidden_terms = ["agents/scoping.md", "`codebase-scope-map`", "$codebase-scope-map"]
+expected_auto_discovery = ["codebase-scope-map"]
+require_action_ledger = true
+first_action_contains = ["dispatch_request", "scop"]
+response_checks = ["scoping_before_local_mapping"]
+
+[[scenario.criteria]]
+key = "scoping_dispatch_before_local_mapping"
+description = "The response delegates scoping/codebase mapping before performing local code mapping; setup, source-control, workflow-selection, and intake actions may appear first."
+
+[[scenario.criteria]]
+key = "scoping_request_is_self_contained"
+description = "The delegated request includes enough ticket, acceptance criteria, repository, workflow, and compact input context for a separate agent to map scope."
+
+[[scenario.criteria]]
+key = "asks_for_scope_evidence"
+description = "The delegated request asks the scoping agent to return compact scope evidence such as affected files or surfaces, relevant locators, risks, constraints, tests, or downstream implementation slices."
+
+[[scenario.criteria]]
+key = "ticket_request_authorizes_scoping"
+description = "The response says the ticket-start request is sufficient authorization to dispatch scoping and does not wait for a separate explicit user ask."
+
+[[scenario.criteria]]
+key = "local_scoping_not_substitute"
+description = "The response says local scoping by the main agent does not replace the mandatory delegated scoping phase."
+
+[[scenario.criteria]]
+key = "ambitious_scope_sweep"
+description = "The delegated request asks for an ambitious codebase sweep that tries to answer code-resolvable unknowns before brainstorming, including schemas, conventions, existing models, configs, tests, history, risks, and verification surfaces when relevant."
+
+[[scenario.criteria]]
+key = "brainstorming_waits_for_scoping"
+description = "The response states that user brainstorming waits for returned scoping evidence so questions are based on what the codebase sweep could not resolve."
+
+[[scenario]]
+id = "ticket-start-dispatch-brainstorming"
+user_request = """
+Ticket intake and codebase scoping for one Linear issue are complete. Parent context,
+relevant artifact slices, repo state, worktree freshness, and a compact scope report
+are available. Known ambiguity: whether tax-exempt customers should bypass the new
+eligibility rule. Affected surfaces: billing API, checkout eligibility banner, and
+analytics event naming. Constraint: do not change legacy invoice migration behavior.
+Success criteria: eligible users can check out, ineligible users see the approved
+message, and analytics events are stable. The user and agent have not yet reached
+shared requirements/design understanding. What workflow handoff should the main
+agent perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers. The action text must
+ask for a user-facing brainstorming session, not only a briefing or requirements
+summary. The action text must state that plan writing and execution wait until
+the brainstorming phase produces an approved spec/design. The action text must
+ask for a complete open-questions ledger, not only the loudest ambiguity, and
+must state that spec/design writing waits until material unknowns are resolved
+or explicitly approved as assumptions.
+"""
+forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans"]
+expected_auto_discovery = ["superpowers:brainstorming"]
+require_action_ledger = true
+
+[[scenario.criteria]]
+key = "delegates_brainstorming_phase"
+description = "The response routes a user-facing brainstorming phase rather than writing a spec, writing a plan, or starting implementation."
+
+[[scenario.criteria]]
+key = "brainstorming_request_is_grounded"
+description = "The delegated request is grounded in available ticket context, known ambiguities, affected surfaces, constraints, and success criteria so brainstorming can produce the approved spec/design."
+
+[[scenario.criteria]]
+key = "blocks_plan_and_execution"
+description = "The response makes clear that plan writing and execution wait until the brainstorming phase produces an approved spec/design."
+
+[[scenario.criteria]]
+key = "requests_complete_open_questions"
+description = "The response asks for a complete open-questions ledger and blocks spec/design writing until material unknowns are resolved or explicitly approved as assumptions."
+
+[[scenario]]
+id = "ticket-start-start-tackling-dispatches-brainstorming"
+user_request = """
+The user originally said: "Let's start tackling this ticket:
+https://yesenergy.atlassian.net/browse/SS-2785. We are only concerned with the
+coding part in this repository and not the alert creation subticket. We are
+working on a feature branch, so base this worktree and future PR on
+SS-2766-centralized-monitoring-of-submission-services-components. There is
+already a draft worktree with changes; inspect it and keep moving." The agent
+has investigated the job ticket, ticket and parent context are known, likely
+affected files are known, a draft branch diff exists, and codebase scoping
+evidence is available. No written spec/design has been approved and no
+implementation plan has been approved. What workflow handoff should the main
+agent perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers. The action text must
+ask for an iterative user-facing brainstorming session with targeted open
+questions and shared-understanding confirmation. It must also state that
+start-tackling language, coding-scope narrowing, feature-branch direction,
+existing draft worktree, draft diff knowledge, and investigation progress are
+not approval to code. Plan writing is blocked until written spec/design approval;
+draft validation, repair recommendations, execution, product edits, and test
+edits are blocked until both written spec/design approval and implementation-plan
+approval.
+"""
+forbidden_terms = ["superpowers:brainstorming", "$brainstorming", "superpowers:writing-plans", "execute-ticket-work", "$execute-ticket-work", "implement inline", "start coding", "run tests", "repair the draft"]
+expected_auto_discovery = ["superpowers:brainstorming"]
+require_action_ledger = true
+first_action_contains = ["dispatch_request", "brainstorming"]
+
+[[scenario.criteria]]
+key = "routes_start_tackling_to_brainstorming"
+description = "The response routes a user-facing brainstorming phase even though the user said start tackling, provided coding scope and branch direction, and a draft worktree exists."
+
+[[scenario.criteria]]
+key = "blocks_execution_without_approvals"
+description = "The response blocks implementation, execution, product edits, and test edits until the written spec/design and implementation plan are both approved."
+
+[[scenario.criteria]]
+key = "blocks_draft_validation_without_approvals"
+description = "The response blocks draft-worktree validation, implementation-test runs, and repair recommendations before the written spec/design and implementation plan are approved."
+
+[[scenario.criteria]]
+key = "brainstorming_is_not_one_question"
+description = "The delegated request asks for a real brainstorming loop with targeted open questions and shared-understanding confirmation, not a single generic question."
+
+[[scenario.criteria]]
+key = "does_not_treat_working_notes_as_approval"
+description = "The response states that branch clarification, investigation progress, and internal plans or checklists do not count as approval to code."
+
+[[scenario]]
+id = "ticket-start-dispatch-writing-plans"
+user_request = """
+The brainstorming phase for one Linear issue has produced a user-approved spec/design.
+Ticket context, parent context, artifact slices, codebase scope, and repo constraints are
+available. No implementation plan has been written or approved yet. What workflow handoff
+should the main agent perform next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Keep the request
+self-contained and do not name downstream skill identifiers.
+"""
+forbidden_terms = ["superpowers:writing-plans", "$writing-plans", "start coding", "execute now"]
+expected_auto_discovery = ["superpowers:writing-plans"]
+require_action_ledger = true
+
+[[scenario.criteria]]
+key = "delegates_plan_writing"
+description = "The response routes implementation-plan writing from the approved spec/design and ticket context instead of writing code or dispatching implementation."
+
+[[scenario.criteria]]
+key = "plan_request_is_self_contained"
+description = "The delegated request includes the approved spec/design and ticket context needed to write an implementation plan for later user approval."
+
+[[scenario.criteria]]
+key = "blocks_execution_until_plan_approval"
+description = "The response keeps execution out of scope and indicates the plan is for user approval before coding."
+
+[[scenario]]
+id = "ticket-start-enter-execution-phase"
+user_request = """
+The user approved the spec/design and implementation plan for one Linear issue.
+The approved execution packet is ready with ticket facts, parent context,
+acceptance criteria, approved spec/design, approved plan, scope locators,
+branch/worktree state, constraints, expected checks, PR expectations, and report
+requirements. What should the main agent do next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained request>
+
+Use kind PHASE_CONTRACT for current-session execution-phase contracts. Do not
+use DISPATCH_REQUEST for this scenario. Keep the request self-contained and do
+not name downstream skill identifiers. The main agent remains the current-session
+orchestrator. The action text must ask to execute the approved ticket/work unit
+from the approved execution packet and coordinate the full execution phase; it
+must restate the packet fields from the user request rather than merely saying
+"the approved packet". It must not stop at packet validation.
+"""
+forbidden_terms = ["execute-ticket-work", "$execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+expected_auto_discovery = ["execute-ticket-work"]
+require_action_ledger = true
+first_action_contains = ["phase_contract", "execution"]
+response_checks = ["no_dispatch_request"]
+
+[[scenario.criteria]]
+key = "enters_execution_phase"
+description = "The response enters a current-session execution phase from the approved packet rather than dispatching a separate ticket orchestrator."
+
+[[scenario.criteria]]
+key = "execution_request_is_self_contained"
+description = "The execution-phase request includes the approved execution packet details needed to coordinate implementation, review, QA, UI/UX when applicable, fixes, reruns, PR preparation, and reporting."
+
+[[scenario.criteria]]
+key = "main_agent_remains_orchestrator"
+description = "The response keeps the main agent as the current-session orchestrator and does not hand off main-ticket orchestration."
+
+[[scenario]]
+id = "ticket-start-dispatch-verify-pr"
+user_request = """
+Personal workflow: Linear ticket APP-123 is In Review, PR #12 exists as a draft
+on branch feature/app-123, implementation and verification reports are clean,
+the intended action is final PR verification before merge approval, merge has
+not been explicitly approved yet, and PR metadata/checks/reviews/comments have
+not been re-read.
+What should the main agent do next?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Do not
+name downstream skill identifiers; describe the capability and self-contained
+request so auto-discovery can select the right skill. Carry forward all concrete
+current-state facts provided in the user request, including tracker status, PR
+draft/readiness state, branch, clean report state, stale metadata, and merge
+approval state.
+"""
+forbidden_terms = ["verify-pr", "multi-ticket-work", "implement inline", "perform readiness inline", "merge now"]
+expected_auto_discovery = ["verify-pr"]
+require_action_ledger = true
+
+[[scenario.criteria]]
+key = "delegates_pr_readiness"
+description = "The response delegates PR verification instead of evaluating readiness, merging, or mutating source-control state inline."
+
+[[scenario.criteria]]
+key = "readiness_request_is_self_contained"
+description = "The delegated request includes PR or branch, current tracker state, intended PR action, required checks expectation, review/comment status expectation, and explicit merge approval state."
+
+[[scenario.criteria]]
+key = "does_not_mutate_inline"
+description = "The response does not merge, mark the PR ready, update tickets, dismiss comments, or perform source-control writes inline."
+
+[[scenario]]
+id = "ticket-start-dispatch-verify-pr-after-creation"
+user_request = """
+Job workflow: Jira ticket PROJ-812 is in Code Review. Implementation,
+independent review, QA, and UI/UX skip reports are resolved. The user asked the
+main agent to create the PR for review. The PR has now been opened from branch
+feature/proj-812 with a reviewer-facing description, but PR metadata, CI checks,
+implemented-surface test evidence, review state, unresolved comments, and the
+linked ticket status have not been freshly fetched after creation. What should
+the main agent do next before the ticket-start final report?
+"""
+prompt_instructions = """
+Do not perform the task. Do not call tools. Return only action lines in this shape:
+ACTION: <number> | <kind> | <capability> | <self-contained delegated request>
+
+Use kind DISPATCH_REQUEST for mandatory delegated capability requests. Do not
+name downstream skill identifiers; describe the capability and self-contained
+request so auto-discovery can select the right skill. The action must treat PR
+creation as insufficient by itself and must ask for readiness verification
+before the final ticket report. Carry forward the PR, branch, tracker status,
+execution/verification summary, missing fresh metadata, and merge approval state.
+"""
+forbidden_terms = ["verify-pr", "perform readiness inline", "merge now", "final report now"]
+expected_auto_discovery = ["verify-pr"]
+require_action_ledger = true
+
+[[scenario.criteria]]
+key = "pr_creation_is_not_completion"
+description = "The response says opening the PR is not the end of ticket-start and final reporting waits for PR readiness verification or a concrete blocker."
+
+[[scenario.criteria]]
+key = "delegates_pr_readiness_after_creation"
+description = "The response delegates PR readiness verification after PR creation instead of relying on PR creation, prior local tests, or prior verification reports."
+
+[[scenario.criteria]]
+key = "after_creation_request_is_self_contained"
+description = "The delegated readiness request includes the PR or branch, ticket state, execution and verification summary, stale or missing PR metadata/checks/reviews/comments, intended handoff, and lack of merge approval."
+
+[[scenario.criteria]]
+key = "does_not_mutate_or_merge"
+description = "The response does not merge, update tickets, mark ready, or mutate source-control state inline while readiness has not been verified."

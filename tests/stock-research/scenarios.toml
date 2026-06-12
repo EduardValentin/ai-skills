@@ -1,0 +1,67 @@
+[suite]
+name = "stock-research"
+skill = "stock-research"
+skill_path = "skills/stock-research/SKILL.md"
+agent_env = "STOCK_RESEARCH_AGENT_COMMAND"
+scenario_env = "STOCK_RESEARCH_SCENARIO"
+prompt_instructions = """
+Do not fetch data or write research files. Return only the research workflow, gates, phases, checkpoint behavior, artifact expectations, and out-of-scope handling.
+"""
+judge_context = """
+Loaded skill under test: stock-research. Judge fundamentals workflow, setup gates, structured user decisions, artifacts, and scope boundaries.
+"""
+[[scenario]]
+id = "initial-us-listed-thesis-workflow"
+user_request = """
+Research AAPL from scratch and tell me whether it belongs in a long-term portfolio. I want a durable thesis, not short-term trading advice.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "checks_setup_and_identity"
+description = """
+The response resolves ticker identity, checks SEC user-agent, script environment, research repo, and existing ticker folder before starting.
+"""
+
+[[scenario.criteria]]
+key = "uses_gvd_lens_and_session_context"
+description = """
+The response asks for the GVD lens through structured choice when available and captures free-form session context.
+"""
+
+[[scenario.criteria]]
+key = "follows_phase_checkpoints"
+description = """
+The response follows the phase structure with business/moat, financials, parallel competitors/earnings/valuation/expectations, projections, verdict, and checkpoints.
+"""
+
+[[scenario.criteria]]
+key = "produces_durable_artifacts"
+description = """
+The response writes or plans durable Markdown/JSON research artifacts and uses clear Markdown checkpoint outputs.
+"""
+
+[[scenario.criteria]]
+key = "avoids_trading_scope"
+description = """
+The response stays in long-horizon fundamentals research and avoids technical analysis, options, and day-trading advice.
+"""
+
+[[scenario]]
+id = "non-us-or-trading-request-blocks"
+user_request = """
+Do a quick technical analysis on a non-US stock and suggest options trades for next week.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "rejects_out_of_scope_request"
+description = """
+The response blocks or redirects because non-US listings, technical analysis, options, and short-term trading are outside stock-research scope.
+"""
+
+[[scenario.criteria]]
+key = "does_not_force_fundamental_workflow"
+description = """
+The response does not pretend the stock-research workflow can satisfy an out-of-scope trading request.
+"""

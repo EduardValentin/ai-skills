@@ -1,0 +1,105 @@
+[suite]
+name = "codebase-scope-map"
+skill = "codebase-scope-map"
+skill_path = "skills/codebase-scope-map/SKILL.md"
+agent_env = "CODEBASE_SCOPE_MAP_AGENT_COMMAND"
+scenario_env = "CODEBASE_SCOPE_MAP_SCENARIO"
+prompt_instructions = """
+Do not inspect a real repository. Return only the scoping behavior, output shape, and boundaries the scoping agent should follow. Include the read-only boundary explicitly. For UI/reference scenarios, call out prototype/reference and affected-surface-map expectations explicitly.
+"""
+judge_context = """
+Loaded skill under test: codebase-scope-map. Judge scope-map behavior, read-only boundaries, locator discipline, and compactness. These scenarios ask for the behavior and report contract only; do not require actual repository file paths when the prompt says not to inspect a real repo.
+"""
+[[scenario]]
+id = "ticket-scoping-read-only-locators"
+user_request = """
+Before we implement this ticket, map the relevant code surface so the caller and implementers know exactly which files, tests, patterns, and risks matter without loading the whole repo into context.
+"""
+forbidden_terms = ["I will edit", "I'll patch"]
+
+[[scenario.criteria]]
+key = "structured_locator_map"
+description = """
+Because this pressure prompt forbids real repo inspection, the response should state that an actual scope map must use compact file:line locators and include entry points, target modules, analogous implementations, tests, contracts, dependencies, affected surfaces, and conflict points.
+"""
+
+[[scenario.criteria]]
+key = "read_only_boundary"
+description = """
+The response keeps the scoping task read-only and forbids edits, generated writes, formatting rewrites, staging, commits, cleanup, solution selection, or implementation.
+"""
+
+[[scenario.criteria]]
+key = "downstream_index_not_transcript"
+description = """
+Because this pressure prompt forbids real repo inspection, the response should describe the deliverable as a navigable downstream index, not a broad source dump, transcript, or vague prose-only summary.
+"""
+
+[[scenario]]
+id = "token-pressure-compact-map"
+user_request = """
+The codebase is huge and context is tight. Scope this bug fix for downstream readers, but keep the result compact enough that the caller can carry it.
+"""
+forbidden_terms = ["paste full functions", "dump the source"]
+
+[[scenario.criteria]]
+key = "compact_grouped_entries"
+description = """
+Because this pressure prompt forbids real repo inspection, the response should require one-line representative entries and grouping for large sections rather than listing every search hit.
+"""
+
+[[scenario.criteria]]
+key = "risks_not_omitted"
+description = """
+Because this pressure prompt forbids real repo inspection, the response should say high-risk omitted or uncertain areas belong under conflict points or clarification needs instead of being silently dropped.
+"""
+
+[[scenario]]
+id = "reference-backed-ui-scope"
+user_request = """
+Scope this UI ticket in a repo with a runnable designs/ React reference app. The later visual reviewer will need prototype element locators for parity against production.
+"""
+forbidden_terms = ["visual review can discover everything later"]
+
+[[scenario.criteria]]
+key = "prototype_elements_required"
+description = """
+The response treats prototype/reference elements as mandatory for a reference-backed UI task and requires visible relevant declarations with locators.
+"""
+
+[[scenario.criteria]]
+key = "affected_surface_map_for_visual_review"
+description = """
+The response requires an affected surface map pairing production locators, routes/states/selectors, and prototype counterparts where relevant.
+"""
+
+[[scenario.criteria]]
+key = "surfaces_inventory_gap"
+description = """
+If prototype enumeration cannot be completed, the response reports a conflict or input gap instead of returning none or deferring everything to visual review.
+"""
+
+[[scenario]]
+id = "vague-context-maps-and-asks"
+user_request = """
+Map the scope for this ticket, but the acceptance criteria are vague and I am not sure which route owns the feature.
+"""
+forbidden_terms = ["scope is complete", "just implement in"]
+
+[[scenario.criteria]]
+key = "maps_available_evidence"
+description = """
+Because this pressure prompt provides no repository to inspect, the response should map what can be known from the prompt and clearly mark incomplete areas.
+"""
+
+[[scenario.criteria]]
+key = "needs_clarification_section"
+description = """
+The response uses the Needs clarification or input section for missing acceptance criteria, route ownership, and why each input matters.
+"""
+
+[[scenario.criteria]]
+key = "does_not_invent_ownership"
+description = """
+The response does not invent feature ownership or choose an implementation direction to compensate for missing requirements.
+"""
