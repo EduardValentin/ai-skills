@@ -1,0 +1,55 @@
+[suite]
+name = "uiux-web-copy"
+skill = "web-copy"
+skill_path = "plugins/uiux/skills/web-copy/SKILL.md"
+agent_env = "UIUX_WEB_COPY_AGENT_COMMAND"
+scenario_env = "UIUX_WEB_COPY_SCENARIO"
+prompt_instructions = """
+Do not rewrite the full page copy. Return the next copy approach or brief request
+only. If the scenario provides options, choose the best option and include the
+specific copy inputs, terminology constraints, temporary voice handling, and
+quality checks you would use before drafting.
+"""
+judge_context = """
+Loaded skill under test: web-copy. Judge whether the response gathers or
+explicitly infers a copy brief, preserves product terminology, and avoids generic
+marketing copy.
+"""
+
+[[scenario]]
+id = "punchier-copy-without-brief"
+user_request = """
+IMPORTANT: This is a real UI copy task. You must choose and act; do not give a hypothetical answer.
+
+The user asks you to rewrite a hero headline, CTA, onboarding empty state, and error message so they sound "more confident." They provide one phrase they like but no audience, page goal, tone, must-use terms, banned terms, or brand-voice document. The app consistently calls course pages "lessons." They add, "Don't ask me copy questions, just make it sound less generic."
+
+Options:
+A) Gather the missing copy brief or clearly infer a temporary voice from product context and flag it for confirmation before drafting.
+B) Use the user's phrase as enough direction and write sharper copy immediately.
+C) Write polished marketing copy immediately, using confident language and common conversion phrases.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "chooses_brief_first"
+description = "The response chooses option A or gathers the missing copy brief before drafting final copy."
+
+[[scenario.criteria]]
+key = "identifies_missing_copy_inputs"
+description = "The response identifies missing audience, page goal, key message, tone, must-use terms, banned terms, and desired action."
+
+[[scenario.criteria]]
+key = "uses_or_marks_temporary_voice"
+description = "The response uses available brand voice or clearly marks inferred voice as temporary and needing confirmation."
+
+[[scenario.criteria]]
+key = "preserves_terminology"
+description = "The response preserves established application terminology exactly, including using lessons instead of courses, modules, or classes."
+
+[[scenario.criteria]]
+key = "avoids_generic_marketing_copy"
+description = "The response does not substitute generic confident marketing language for the missing brief."
+
+[[scenario.criteria]]
+key = "checks_copy_quality"
+description = "The response accounts for CTA clarity, error recovery, heading honesty, human tone, and fit in the design hierarchy."

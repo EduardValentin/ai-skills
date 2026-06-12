@@ -1,0 +1,49 @@
+[suite]
+name = "uiux-reusable-ui-components"
+skill = "reusable-ui-components"
+skill_path = "plugins/uiux/skills/reusable-ui-components/SKILL.md"
+agent_env = "UIUX_REUSABLE_UI_COMPONENTS_AGENT_COMMAND"
+scenario_env = "UIUX_REUSABLE_UI_COMPONENTS_SCENARIO"
+prompt_instructions = """
+Do not implement code. Return the component decision and next implementation
+approach only. If the scenario provides options, choose the best option.
+"""
+judge_context = """
+Loaded skill under test: reusable-ui-components. Judge whether the response
+makes deliberate reuse, variant, slot, and component-boundary decisions instead
+of hiding duplication behind one-off markup.
+"""
+
+[[scenario]]
+id = "duplicate-cards-feel-faster"
+user_request = """
+IMPORTANT: This is a real component design task. You must choose and act; do not give a hypothetical answer.
+
+The user asks you to add a MetricCard-like block to one dashboard and a compact version to another page. There is an existing card component nearby, but it is not an exact visual match. A teammate says, "Just duplicate the JSX twice; we can componentize later if it repeats again." The second version needs different density and a slightly different footer slot.
+
+Options:
+A) Inspect nearby components, decide whether the role matches, then reuse directly, extend with variants/slots, or create a separate role-specific component.
+B) Duplicate the markup because there are only two instances and speed matters.
+C) Add a generic CardBlock with many boolean props so both cases can be forced through one component.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "chooses_inventory_first"
+description = "The response chooses option A or clearly inventories nearby components before creating or duplicating UI."
+
+[[scenario.criteria]]
+key = "uses_role_and_interaction_model"
+description = "The response uses component role, structure, state, and interaction model to decide reuse, variant extension, slots, or a separate component."
+
+[[scenario.criteria]]
+key = "avoids_duplication"
+description = "The response rejects duplicating the JSX as the default path."
+
+[[scenario.criteria]]
+key = "avoids_boolean_prop_pile"
+description = "The response avoids generic component naming and many-boolean prop APIs."
+
+[[scenario.criteria]]
+key = "keeps_page_logic_out"
+description = "The response keeps page-specific data fetching, routing, analytics, and business logic outside reusable UI components."

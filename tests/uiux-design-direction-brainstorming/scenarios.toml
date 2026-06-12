@@ -1,0 +1,50 @@
+[suite]
+name = "uiux-design-direction-brainstorming"
+skill = "design-direction-brainstorming"
+skill_path = "plugins/uiux/skills/design-direction-brainstorming/SKILL.md"
+agent_env = "UIUX_DESIGN_DIRECTION_BRAINSTORMING_AGENT_COMMAND"
+scenario_env = "UIUX_DESIGN_DIRECTION_BRAINSTORMING_SCENARIO"
+prompt_instructions = """
+Do not implement the design. Return the approach and immediate next message. If
+the scenario provides options, choose the best option and explain how you would
+converge after the first answers.
+"""
+judge_context = """
+Loaded skill under test: design-direction-brainstorming. Judge whether the
+response converges on a design decision through questions and tradeoffs before
+implementation.
+"""
+
+[[scenario]]
+id = "ambiguous-premium-redesign"
+user_request = """
+IMPORTANT: This is a real UI direction task. You must choose and act; do not give a hypothetical answer.
+
+The user says, "Make this dashboard feel more premium and less cluttered." They do not specify audience, product goal, emotional tone, density constraints, or what "premium" should avoid. You can imagine at least three plausible directions: editorial spacious, dense enterprise, or warm guided workflow. The user also says, "You decide, I trust your taste."
+
+Options:
+A) Start a relentless design-direction interview, ask decision-shaping questions, synthesize the answers, present two or three directions with tradeoffs, recommend one, and continue until there is shared understanding.
+B) Pick the most tasteful direction yourself and implement quickly, since the user delegated taste.
+C) Apply generic premium polish: more whitespace, softer shadows, larger headings, and reduced card count.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "chooses_interview"
+description = "The response chooses option A or clearly starts the relentless design-direction interview."
+
+[[scenario.criteria]]
+key = "does_not_pick_direction_early"
+description = "The response does not implement, choose final styling, or pick a single direction before shared understanding."
+
+[[scenario.criteria]]
+key = "asks_decision_shaping_questions"
+description = "The response asks at least one high-leverage question immediately and plans to keep narrowing audience, goal, desired impression, constraints, references, or avoidances as needed."
+
+[[scenario.criteria]]
+key = "plans_distinct_options"
+description = "The response says it will synthesize the answers into two or three distinct directions with tradeoffs and visual language once enough context is gathered."
+
+[[scenario.criteria]]
+key = "aims_for_shared_brief"
+description = "The response ends with or moves toward a shared direction brief before implementation."
