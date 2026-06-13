@@ -140,7 +140,7 @@ Optional:
   BEHAVIORAL_SKILL='<skill-name>' or --skill <skill-name>
   {GLOBAL_SCENARIO_FILTER_ENV_VAR}='<scenario-id>' or --scenario <scenario-id>
 
-Per-suite agent env vars are still supported for compatibility.
+Per-suite agent env vars are supported for focused harness configuration.
 """,
         file=sys.stderr,
     )

@@ -30,3 +30,7 @@ glob = "tests/workflow-dispatch/*/*_behavioral_pressure.py"
 [[assertion]]
 type = "absent_glob"
 glob = "tests/workflow-dispatch/*/*_contract.py"
+
+[[assertion]]
+type = "absent"
+path = "tests/workflow-dispatch/static_contract.py"

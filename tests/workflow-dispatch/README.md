@@ -23,7 +23,8 @@ The reusable runner and black-box discovery helper stay in this directory.
 Run in CI:
 
 ```bash
-python3 tests/workflow-dispatch/static_contract.py
+python3 tests/contract.py --suite workflow-dispatch
+python3 tests/workflow-dispatch/workflow_harness_contract.py
 ```
 
 The static contract is TOML-backed. It verifies that colocated workflow dispatch

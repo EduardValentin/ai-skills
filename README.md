@@ -17,8 +17,9 @@ Run deterministic skill-trigger contracts with:
 
 ```bash
 python3 tests/contract.py
+python3 tests/contract_harness_contract.py
 python3 tests/skill-trigger/static_contract.py
-python3 tests/workflow-dispatch/static_contract.py
+python3 tests/workflow-dispatch/workflow_harness_contract.py
 ```
 
 Behavioral/model-backed tests are opt-in because they require an agent command:
