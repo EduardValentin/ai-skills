@@ -33,13 +33,9 @@ Run manually, nightly, or in a model-enabled CI job when colocated
 `workflow-dispatch.toml` suites exist:
 
 ```bash
-WORKFLOW_DISPATCH_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
-SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
   python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```
-
-If `WORKFLOW_DISPATCH_AGENT_COMMAND` is unset, the harness falls back to
-`SKILL_TRIGGER_AGENT_COMMAND`.
 
 The behavioral harness discovers colocated `workflow-dispatch.toml` files. Each
 scenario gives the agent the loaded parent skill body and asks for a workflow
@@ -63,11 +59,10 @@ Behavioral checks use a hybrid model:
 - semantic judge rubrics for workflow quality, such as whether the parent stayed
   an orchestrator and whether delegated requests are self-contained.
 
-Set `SEMANTIC_JUDGE_AGENT_COMMAND` to use a separate judge command. If unset,
-the workflow agent command is reused as the judge.
+The workflow agent command is reused as the judge by default.
 
 Use the repo's `tests/codex_agent_command.py` shim for Codex-backed runs. It
-defaults both actor and judge invocations to `gpt-5.4-mini` with `low` reasoning,
-while still allowing `CODEX_ACTOR_MODEL`, `CODEX_JUDGE_MODEL`,
-`CODEX_ACTOR_REASONING_EFFORT`, and `CODEX_JUDGE_REASONING_EFFORT` overrides for
-the rare scenario that needs more depth.
+defaults Codex invocations to `gpt-5.4-mini` with `low` reasoning, while still
+allowing `CODEX_ACTOR_MODEL`, `CODEX_ACTOR_REASONING_EFFORT`,
+`CODEX_TEST_MODEL`, and `CODEX_TEST_REASONING_EFFORT` overrides for the rare
+scenario that needs more depth.

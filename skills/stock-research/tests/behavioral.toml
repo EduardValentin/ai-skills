@@ -2,7 +2,6 @@
 name = "stock-research"
 skill = "stock-research"
 skill_path = "skills/stock-research/SKILL.md"
-agent_env = "STOCK_RESEARCH_AGENT_COMMAND"
 scenario_env = "STOCK_RESEARCH_SCENARIO"
 prompt_instructions = """
 Do not fetch data or write research files. Return only the research workflow, gates, phases, checkpoint behavior, artifact expectations, and out-of-scope handling.

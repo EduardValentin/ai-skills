@@ -2,7 +2,6 @@
 name = "github-interaction"
 skill = "github-interaction"
 skill_path = "skills/github-interaction/SKILL.md"
-agent_env = "GITHUB_INTERACTION_AGENT_COMMAND"
 scenario_env = "GITHUB_INTERACTION_SCENARIO"
 prompt_instructions = """
 Do not call GitHub. Return only the write-safety workflow, identity/token requirements, blocker behavior, and exact next action.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,11 +59,8 @@ def judge_response(
 
 
 def resolve_judge_command(*fallback_commands: str) -> str:
-    """Return the configured semantic judge command, falling back to agent commands."""
+    """Return the first available agent command for semantic judging."""
 
-    configured = os.environ.get("SEMANTIC_JUDGE_AGENT_COMMAND", "").strip()
-    if configured:
-        return configured
     for command in fallback_commands:
         if command.strip():
             return command.strip()

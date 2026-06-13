@@ -24,8 +24,7 @@ The static contract is deterministic. It verifies:
 Run manually, nightly, or in a model-enabled CI job:
 
 ```bash
-SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
-SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
   python3 tests/skill-trigger/behavioral_pressure.py
 ```
 
@@ -40,21 +39,19 @@ phrase listed in `response_forbidden_terms`.
 
 The expected skill check is deterministic. The response is also evaluated by the
 shared semantic judge to confirm the selected skill is relevant to the prompt,
-the rationale comes from the prompt, and the agent did not perform the task. Set
-`SEMANTIC_JUDGE_AGENT_COMMAND` to use a separate judge command; otherwise the
-test falls back to `SKILL_TRIGGER_AGENT_COMMAND`.
+the rationale comes from the prompt, and the agent did not perform the task. The
+same `SKILL_TRIGGER_AGENT_COMMAND` is used for that judge call.
 
-The recommended Codex command shim defaults actor and judge calls to
-`gpt-5.4-mini` with `low` reasoning so these simple selection checks do not
-inherit a heavyweight local Codex profile. Use `CODEX_ACTOR_MODEL` or
-`CODEX_JUDGE_MODEL` to opt into a stronger model for a specific run.
+The recommended Codex command shim defaults calls to `gpt-5.4-mini` with `low`
+reasoning so these simple selection checks do not inherit a heavyweight local
+Codex profile. Use `CODEX_ACTOR_MODEL` or
+`CODEX_TEST_MODEL` to opt into a stronger model for a specific run.
 
 Run one scenario:
 
 ```bash
 SKILL_TRIGGER_SCENARIO=bitbucket-pr-ui-test \
-SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
-SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
   python3 tests/skill-trigger/behavioral_pressure.py
 ```
 

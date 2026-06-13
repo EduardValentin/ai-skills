@@ -7,6 +7,6 @@ one ticket coordinator subagent per ticket or unit, and returns PRs in review or
 ## Behavioral Pressure
 
 ```bash
-BEHAVIORAL_AGENT_COMMAND='<command reading stdin>' \
+SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
   python3 tests/behavioral_pressure.py --skill multi-ticket-work
 ```

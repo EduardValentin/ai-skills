@@ -2,7 +2,6 @@
 name = "uiux-prototype-work"
 skill = "prototype-work"
 skill_path = "plugins/uiux/skills/prototype-work/SKILL.md"
-agent_env = "UIUX_PROTOTYPE_WORK_AGENT_COMMAND"
 scenario_env = "UIUX_PROTOTYPE_WORK_SCENARIO"
 prompt_instructions = """
 Do not edit files. Return the next action and, when blocked on missing input,

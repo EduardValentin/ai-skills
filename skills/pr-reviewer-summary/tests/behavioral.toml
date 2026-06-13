@@ -2,7 +2,6 @@
 name = "pr-reviewer-summary"
 skill = "pr-reviewer-summary"
 skill_path = "skills/pr-reviewer-summary/SKILL.md"
-agent_env = "PR_REVIEWER_SUMMARY_AGENT_COMMAND"
 scenario_env = "PR_REVIEWER_SUMMARY_SCENARIO"
 prompt_instructions = """
 Do not inspect a real diff. Return only the PR-body drafting workflow, required context, output sections, and blocker behavior.

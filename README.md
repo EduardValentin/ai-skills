@@ -72,21 +72,19 @@ Codex and Claude Code install shapes without hand-maintained harness copies.
 Behavioral tests are opt-in because they run an installed agent harness. Set one generic command that reads the prompt from stdin and prints the response:
 
 ```bash
-SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
-SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
   python3 tests/behavioral_pressure.py
 
-SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
-SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
   python3 tests/skill-trigger/behavioral_pressure.py
 
 # Run this only when a skill has a colocated tests/workflow-dispatch.toml suite.
-SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
-SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
   python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```
 
-Suite-specific command variables such as `BEHAVIORAL_AGENT_COMMAND`, `TICKET_START_BEHAVIOR_AGENT_COMMAND`, or `WORKFLOW_DISPATCH_AGENT_COMMAND` are optional overrides for focused debugging. The normal path is one generic `SKILL_TRIGGER_AGENT_COMMAND`.
+All agent-driven behavioral suites use `SKILL_TRIGGER_AGENT_COMMAND`; suite
+TOML files do not define separate command variables.
 
 `tests/contract.py` discovers TOML contract suites colocated under
 `skills/*/tests/contracts.toml`, `plugins/*/tests/contracts.toml`, and
@@ -108,12 +106,13 @@ behavior. Add workflow-dispatch suites only when a skill still depends on
 downstream skill auto-discovery as the thing being tested.
 
 Behavioral pressure tests use deterministic hard gates for protocol and
-forbidden terms, then use a semantic judge for rubric-based behavior checks. Set
-`SEMANTIC_JUDGE_AGENT_COMMAND` to use a separate judge; otherwise tests fall back
-to the scenario's agent command.
+forbidden terms, then use a semantic judge for rubric-based behavior checks. The
+same `SKILL_TRIGGER_AGENT_COMMAND` is used for the scenario response and judge
+unless a developer intentionally runs a separate judge override during local
+debugging.
 
 The bundled `tests/codex_agent_command.py` shim runs `codex exec` with efficient
 defaults: `gpt-5.4-mini` and `low` reasoning. Override `CODEX_ACTOR_MODEL`,
-`CODEX_JUDGE_MODEL`, `CODEX_ACTOR_REASONING_EFFORT`, or
-`CODEX_JUDGE_REASONING_EFFORT` only when a scenario genuinely needs a heavier
+`CODEX_ACTOR_REASONING_EFFORT`, `CODEX_TEST_MODEL`, or
+`CODEX_TEST_REASONING_EFFORT` only when a scenario genuinely needs a heavier
 model.

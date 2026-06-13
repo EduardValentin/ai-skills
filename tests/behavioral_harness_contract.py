@@ -80,7 +80,6 @@ def check_behavioral_harness_contract() -> None:
 name = "demo-suite"
 skill = "demo"
 skill_path = "skills/demo/SKILL.md"
-agent_env = "DEMO_AGENT_COMMAND"
 scenario_env = "DEMO_SCENARIO"
 prompt_instructions = "Return the demo response shape."
 judge_context = "Judge demo behavior."
@@ -103,8 +102,6 @@ description = "The response follows the TOML scenario."
         raise AssertionError("loaded TOML suite name mismatch")
     if suite.skill_name != "demo":
         raise AssertionError("loaded TOML suite skill mismatch")
-    if suite.agent_env_var != "DEMO_AGENT_COMMAND":
-        raise AssertionError("loaded TOML suite agent env mismatch")
     if suite.scenario_filter_env_var != "DEMO_SCENARIO":
         raise AssertionError("loaded TOML suite scenario env mismatch")
     if len(loaded) != 1:
@@ -118,23 +115,14 @@ description = "The response follows the TOML scenario."
 
     original_env = os.environ.copy()
     try:
-        for key in ("DEMO_AGENT_COMMAND", "BEHAVIORAL_AGENT_COMMAND", "SKILL_TRIGGER_AGENT_COMMAND"):
-            os.environ.pop(key, None)
+        os.environ.pop("SKILL_TRIGGER_AGENT_COMMAND", None)
 
-        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "":
+        if resolve_behavioral_agent_command() != "":
             raise AssertionError("agent command should be empty when no env vars are set")
 
         os.environ["SKILL_TRIGGER_AGENT_COMMAND"] = "generic-cmd"
-        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "generic-cmd":
-            raise AssertionError("generic harness command should be used as fallback")
-
-        os.environ["BEHAVIORAL_AGENT_COMMAND"] = "behavioral-cmd"
-        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "behavioral-cmd":
-            raise AssertionError("global behavioral command should override generic fallback")
-
-        os.environ["DEMO_AGENT_COMMAND"] = "suite-cmd"
-        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "suite-cmd":
-            raise AssertionError("suite command should override global fallbacks")
+        if resolve_behavioral_agent_command() != "generic-cmd":
+            raise AssertionError("generic harness command should be used")
     finally:
         os.environ.clear()
         os.environ.update(original_env)

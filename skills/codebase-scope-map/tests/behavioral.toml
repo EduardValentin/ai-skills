@@ -2,7 +2,6 @@
 name = "codebase-scope-map"
 skill = "codebase-scope-map"
 skill_path = "skills/codebase-scope-map/SKILL.md"
-agent_env = "CODEBASE_SCOPE_MAP_AGENT_COMMAND"
 scenario_env = "CODEBASE_SCOPE_MAP_SCENARIO"
 prompt_instructions = """
 Do not inspect a real repository. Return only the scoping behavior, output shape, and boundaries the scoping agent should follow. Include the read-only boundary explicitly. For UI/reference scenarios, call out prototype/reference and affected-surface-map expectations explicitly.

@@ -39,15 +39,13 @@ class BehavioralSuiteConfig:
     suite_name: str
     skill_name: str
     skill_path: Path
-    agent_env_var: str
     scenario_filter_env_var: str
     prompt_instructions: str
     judge_context: str
 
 
 PromptBuilder = Callable[[str, BehavioralScenario], str]
-GLOBAL_AGENT_ENV_VAR = "BEHAVIORAL_AGENT_COMMAND"
-GENERIC_AGENT_ENV_VAR = "SKILL_TRIGGER_AGENT_COMMAND"
+AGENT_COMMAND_ENV_VAR = "SKILL_TRIGGER_AGENT_COMMAND"
 GLOBAL_SCENARIO_FILTER_ENV_VAR = "BEHAVIORAL_SCENARIO"
 
 
@@ -84,7 +82,6 @@ def load_behavioral_suite_config(scenarios_path: Path) -> BehavioralSuiteConfig:
         suite_name=optional_string(suite, "name") or skill_name,
         skill_name=skill_name,
         skill_path=skill_path,
-        agent_env_var=optional_string(suite, "agent_env") or default_agent_env(skill_name),
         scenario_filter_env_var=optional_string(suite, "scenario_env") or default_scenario_env(skill_name),
         prompt_instructions=require_string(scenarios_path, suite, "prompt_instructions"),
         judge_context=require_string(scenarios_path, suite, "judge_context"),
@@ -102,7 +99,6 @@ def run_behavioral_suite_from_path(
         skill_name=config.skill_name,
         skill_path=config.skill_path,
         scenarios=load_behavioral_scenarios(scenarios_path),
-        agent_env_var=config.agent_env_var,
         scenario_filter_env_var=config.scenario_filter_env_var,
         prompt_instructions=config.prompt_instructions,
         judge_context=config.judge_context,
@@ -273,10 +269,6 @@ def frontmatter_name(skill_path: Path) -> str:
     raise ValueError(f"{skill_path.relative_to(REPO_ROOT)} is missing name frontmatter")
 
 
-def default_agent_env(skill_name: str) -> str:
-    return f"{skill_name.upper().replace('-', '_')}_AGENT_COMMAND"
-
-
 def default_scenario_env(skill_name: str) -> str:
     return f"{skill_name.upper().replace('-', '_')}_SCENARIO"
 
@@ -287,7 +279,6 @@ def run_loaded_skill_behavioral_suite(
     skill_name: str,
     skill_path: Path,
     scenarios: tuple[BehavioralScenario, ...],
-    agent_env_var: str,
     scenario_filter_env_var: str,
     prompt_instructions: str,
     judge_context: str,
@@ -295,14 +286,14 @@ def run_loaded_skill_behavioral_suite(
     scenario_filter: str | None = None,
 ) -> int:
     if "--help" in sys.argv:
-        print_usage(agent_env_var, scenario_filter_env_var, sys.argv[0])
+        print_usage(scenario_filter_env_var, sys.argv[0])
         return 0
 
-    agent_command = resolve_behavioral_agent_command(agent_env_var)
+    agent_command = resolve_behavioral_agent_command()
     if not agent_command:
-        print_usage(agent_env_var, scenario_filter_env_var, sys.argv[0])
+        print_usage(scenario_filter_env_var, sys.argv[0])
         print(
-            f"FAIL: {agent_env_var}, {GLOBAL_AGENT_ENV_VAR}, or {GENERIC_AGENT_ENV_VAR} is required",
+            f"FAIL: {AGENT_COMMAND_ENV_VAR} is required",
             file=sys.stderr,
         )
         return 1
@@ -343,12 +334,8 @@ def run_loaded_skill_behavioral_suite(
     return 0
 
 
-def resolve_behavioral_agent_command(agent_env_var: str) -> str:
-    return (
-        os.environ.get(agent_env_var, "").strip()
-        or os.environ.get(GLOBAL_AGENT_ENV_VAR, "").strip()
-        or os.environ.get(GENERIC_AGENT_ENV_VAR, "").strip()
-    )
+def resolve_behavioral_agent_command() -> str:
+    return os.environ.get(AGENT_COMMAND_ENV_VAR, "").strip()
 
 
 def build_loaded_skill_prompt(
@@ -412,14 +399,10 @@ def check_semantic_response(
         raise
 
 
-def print_usage(agent_env_var: str, scenario_filter_env_var: str, script_path: str) -> None:
+def print_usage(scenario_filter_env_var: str, script_path: str) -> None:
     print(
         f"""Usage:
-  {agent_env_var}='<command reading stdin>' python3 {script_path}
-
-Fallback:
-  {GLOBAL_AGENT_ENV_VAR}='<command reading stdin>' python3 {script_path}
-  {GENERIC_AGENT_ENV_VAR}='<command reading stdin>' python3 {script_path}
+  {AGENT_COMMAND_ENV_VAR}='<command reading stdin>' python3 {script_path}
 
 Optional:
   {scenario_filter_env_var}='<scenario-id>' to run one scenario.

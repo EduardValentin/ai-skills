@@ -2,7 +2,6 @@
 name = "uiux-reusable-ui-components"
 skill = "reusable-ui-components"
 skill_path = "plugins/uiux/skills/reusable-ui-components/SKILL.md"
-agent_env = "UIUX_REUSABLE_UI_COMPONENTS_AGENT_COMMAND"
 scenario_env = "UIUX_REUSABLE_UI_COMPONENTS_SCENARIO"
 prompt_instructions = """
 Do not implement code. Return the component decision and next implementation

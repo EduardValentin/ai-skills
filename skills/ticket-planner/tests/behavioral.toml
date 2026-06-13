@@ -2,7 +2,6 @@
 name = "ticket-planner"
 skill = "ticket-planner"
 skill_path = "skills/ticket-planner/SKILL.md"
-agent_env = "TICKET_PLANNER_AGENT_COMMAND"
 scenario_env = "TICKET_PLANNER_SCENARIO"
 prompt_instructions = """
 Do not create tracker issues or edit PRD.md. Return only the planning workflow, questions, ticket-quality fixes, story-slicing behavior, and approval gates.

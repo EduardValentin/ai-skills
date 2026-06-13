@@ -2,7 +2,6 @@
 name = "manage-bitbucket-pr"
 skill = "manage-bitbucket-pr"
 skill_path = "skills/manage-bitbucket-pr/SKILL.md"
-agent_env = "MANAGE_BITBUCKET_PR_AGENT_COMMAND"
 scenario_env = "MANAGE_BITBUCKET_PR_SCENARIO"
 prompt_instructions = """
 Do not call Bitbucket. Return only the workflow, safety gates, commands or API path choices, and report behavior the Bitbucket PR agent should use.

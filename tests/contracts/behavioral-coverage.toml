@@ -14,12 +14,19 @@ values = [
   "[suite]",
   "skill = \"{frontmatter_name}\"",
   "skill_path = \"{path}\"",
-  "agent_env = ",
   "scenario_env = ",
   "prompt_instructions = ",
   "judge_context = ",
   "[[scenario]]",
   "[[scenario.criteria]]",
+]
+
+[[assertion]]
+type = "not_contains_for_each"
+glob = "skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+values = [
+  "agent_env = ",
 ]
 
 [[assertion]]

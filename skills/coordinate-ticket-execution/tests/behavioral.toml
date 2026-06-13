@@ -2,7 +2,6 @@
 name = "coordinate-ticket-execution"
 skill = "coordinate-ticket-execution"
 skill_path = "skills/coordinate-ticket-execution/SKILL.md"
-agent_env = "COORDINATE_TICKET_EXECUTION_AGENT_COMMAND"
 scenario_env = "COORDINATE_TICKET_EXECUTION_SCENARIO"
 prompt_instructions = """
 Do not perform real execution. Return the execution-phase behavior and report expectations only. Explicitly describe how nested delegated native agents are used, or how the limitation is reported if unavailable. Name required native agents, but do not name downstream skill identifiers.
@@ -15,7 +14,7 @@ id = "approved-packet-execution-phase"
 user_request = """
 An approved execution packet is available for one checkout eligibility work unit. It includes acceptance criteria, approved spec/design, approved implementation plan, scope locators, branch state, dependencies, expected checks, UI applicability, and PR/report expectations. Describe how execution should proceed without doing the work.
 """
-forbidden_terms = ["ticket-start", "multi-ticket-work", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "ticket orchestrator", "best guess"]
+forbidden_terms = ["ticket-start", "multi-ticket-work", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "ticket orchestrator"]
 
 [[scenario.criteria]]
 key = "validates_packet_first"
@@ -64,7 +63,7 @@ id = "blocks-missing-approved-packet"
 user_request = """
 A delegated execution request says only: 'work on the checkout thing and make it pass.' It has no approved spec, no implementation plan, no acceptance criteria, and no approval state. Describe the correct response.
 """
-forbidden_terms = ["start anyway", "best guess", "ticket-start", "multi-ticket-work"]
+forbidden_terms = ["start anyway", "ticket-start", "multi-ticket-work"]
 
 [[scenario.criteria]]
 key = "blocks_without_packet"

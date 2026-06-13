@@ -2,7 +2,6 @@
 name = "verify-pr"
 skill = "verify-pr"
 skill_path = "skills/verify-pr/SKILL.md"
-agent_env = "VERIFY_PR_AGENT_COMMAND"
 scenario_env = "VERIFY_PR_SCENARIO"
 prompt_instructions = """
 Do not perform external mutations. If metadata is missing and no tool calls are

@@ -2,7 +2,6 @@
 name = "uiux-web-copy"
 skill = "web-copy"
 skill_path = "plugins/uiux/skills/web-copy/SKILL.md"
-agent_env = "UIUX_WEB_COPY_AGENT_COMMAND"
 scenario_env = "UIUX_WEB_COPY_SCENARIO"
 prompt_instructions = """
 Do not rewrite the full page copy. Return the next copy approach or brief request

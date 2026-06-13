@@ -14,7 +14,7 @@ TESTS_DIR = REPO_ROOT / "tests"
 sys.path.append(str(TESTS_DIR))
 
 from behavioral_harness import (  # noqa: E402
-    GLOBAL_AGENT_ENV_VAR,
+    AGENT_COMMAND_ENV_VAR,
     GLOBAL_SCENARIO_FILTER_ENV_VAR,
     load_behavioral_scenarios,
     load_behavioral_suite_config,
@@ -34,17 +34,9 @@ def main() -> int:
             print_suite_list(suite_paths)
             return 0
 
-        missing_commands = [
-            load_behavioral_suite_config(path).agent_env_var
-            for path in suite_paths
-            if not resolve_behavioral_agent_command(load_behavioral_suite_config(path).agent_env_var)
-        ]
-        if missing_commands:
+        if not resolve_behavioral_agent_command():
             print_usage()
-            raise RuntimeError(
-                f"{GLOBAL_AGENT_ENV_VAR} or suite env vars are required: "
-                + ", ".join(sorted(set(missing_commands)))
-            )
+            raise RuntimeError(f"{AGENT_COMMAND_ENV_VAR} is required")
 
         passed = 0
         for path in suite_paths:
@@ -127,20 +119,18 @@ def print_suite_list(paths: tuple[Path, ...]) -> None:
         scenario_count = len(load_behavioral_scenarios(path))
         print(
             f"{config.skill_name}: {path.relative_to(REPO_ROOT)} "
-            f"({scenario_count} scenarios, env {config.agent_env_var})"
+            f"({scenario_count} scenarios)"
         )
 
 
 def print_usage() -> None:
     print(
         f"""Usage:
-  {GLOBAL_AGENT_ENV_VAR}='<command reading stdin>' python3 tests/behavioral_pressure.py
+  {AGENT_COMMAND_ENV_VAR}='<command reading stdin>' python3 tests/behavioral_pressure.py
 
 Optional:
   BEHAVIORAL_SKILL='<skill-name>' or --skill <skill-name>
   {GLOBAL_SCENARIO_FILTER_ENV_VAR}='<scenario-id>' or --scenario <scenario-id>
-
-Per-suite agent env vars are supported for focused harness configuration.
 """,
         file=sys.stderr,
     )

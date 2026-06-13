@@ -2,7 +2,6 @@
 name = "multi-ticket-work"
 skill = "multi-ticket-work"
 skill_path = "skills/multi-ticket-work/SKILL.md"
-agent_env = "MULTI_TICKET_WORK_AGENT_COMMAND"
 scenario_env = "MULTI_TICKET_WORK_SCENARIO"
 prompt_instructions = """
 Do not execute the work. Return a concise orchestration plan only. It must explain:
