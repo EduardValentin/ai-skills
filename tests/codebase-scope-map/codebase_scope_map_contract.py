@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for codebase-scope-map."""
+"""Compatibility wrapper for codebase-scope-map TOML contracts."""
 
 from __future__ import annotations
 
@@ -8,36 +8,15 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILL_PATH = REPO_ROOT / "skills" / "codebase-scope-map" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
 
-
-def main() -> int:
-    try:
-        skill = SKILL_PATH.read_text(encoding="utf-8")
-        check_skill_contract(skill)
-    except AssertionError as error:
-        print(f"FAIL: {error}", file=sys.stderr)
-        return 1
-
-    print("PASS: codebase-scope-map contract")
-    return 0
-
-
-def check_skill_contract(skill: str) -> None:
-    forbidden_terms = (
-        "small edits are allowed",
-        "minor edits are allowed",
-        "cleanup edits are allowed",
-        "formatting-only edits are allowed",
-    )
-    for term in forbidden_terms:
-        assert_not_contains(skill, term)
-
-
-def assert_not_contains(haystack: str, needle: str) -> None:
-    if needle in haystack:
-        raise AssertionError(f"expected not to find {needle!r}")
+from contract_compat import run_compat_contract  # noqa: E402
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        run_compat_contract(
+            "skills/codebase-scope-map/tests/contracts.toml",
+            "PASS: codebase-scope-map contract",
+        )
+    )

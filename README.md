@@ -16,6 +16,7 @@ Use this repository as the tracked source for your personal AI skills while keep
 Run deterministic skill-trigger contracts with:
 
 ```bash
+python3 tests/contract.py
 python3 tests/skill-trigger/static_contract.py
 python3 tests/workflow-dispatch/static_contract.py
 ```
@@ -36,8 +37,13 @@ SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge'
   python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```
 
-`tests/behavioral_pressure.py` discovers `tests/<skill>/scenarios.toml` for every
-canonical skill and runs each suite through the shared loaded-skill harness. Use
+`tests/contract.py` discovers TOML contract suites colocated under
+`skills/*/tests/contracts.toml`, `plugins/*/tests/contracts.toml`, and
+repo-wide `tests/contracts/*.toml` files.
+
+`tests/behavioral_pressure.py` discovers colocated
+`skills/*/tests/behavioral.toml` and `plugins/*/skills/*/tests/behavioral.toml`
+files, then runs each suite through the shared loaded-skill harness. Use
 `--skill <skill-name>` or `--scenario <scenario-id>` for focused runs.
 
 `skill-trigger` behavioral tests are black-box installed-harness tests: they do

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for ticket-start UI/UX visual verification."""
+"""Compatibility wrapper for ticket-start TOML contracts."""
 
 from __future__ import annotations
 
@@ -8,35 +8,15 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILL_PATH = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
 
-
-def main() -> int:
-    skill = SKILL_PATH.read_text(encoding="utf-8")
-
-    try:
-        check_uiux_contract(skill)
-    except AssertionError as error:
-        print(f"FAIL: {error}", file=sys.stderr)
-        return 1
-
-    print("PASS: ticket-start UI/UX visual verification contract")
-    return 0
-
-
-def check_uiux_contract(skill: str) -> None:
-    assert_not_contains(skill, "ui-verification")
-
-    assert_not_contains(skill, "Do not accept template/source inspection")
-    assert_not_contains(skill, "proxy-component screenshots")
-    assert_not_contains(skill, "storybook-only renders")
-    assert_not_contains(skill, "Every verified row has non-blank")
-
-
-def assert_not_contains(haystack: str, needle: str) -> None:
-    if needle in haystack:
-        raise AssertionError(f"expected not to find {needle!r}")
+from contract_compat import run_compat_contract  # noqa: E402
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        run_compat_contract(
+            "skills/ticket-start/tests/contracts.toml",
+            "PASS: ticket-start UI/UX visual verification contract",
+        )
+    )

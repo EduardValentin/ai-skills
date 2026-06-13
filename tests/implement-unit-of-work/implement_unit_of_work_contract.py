@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for implement-unit-of-work."""
+"""Compatibility wrapper for implement-unit-of-work TOML contracts."""
 
 from __future__ import annotations
 
@@ -8,57 +8,15 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SKILL_PATH = REPO_ROOT / "skills" / "implement-unit-of-work" / "SKILL.md"
-TICKET_START = REPO_ROOT / "skills" / "ticket-start" / "SKILL.md"
-MULTI_TICKET_WORK = REPO_ROOT / "skills" / "multi-ticket-work" / "SKILL.md"
+sys.path.append(str(REPO_ROOT / "tests"))
 
-
-def main() -> int:
-    try:
-        skill = SKILL_PATH.read_text(encoding="utf-8")
-        check_skill_contract(skill)
-        check_orchestrator(TICKET_START.read_text(encoding="utf-8"))
-        check_orchestrator(MULTI_TICKET_WORK.read_text(encoding="utf-8"))
-    except Exception as error:
-        print(f"FAIL: {error}", file=sys.stderr)
-        return 1
-
-    print("PASS: implement-unit-of-work contract")
-    return 0
-
-
-def check_skill_contract(skill: str) -> None:
-    assert_line_count_at_most(skill, 130)
-
-    forbidden_terms = (
-        "QA verification",
-        "UI/UX verification",
-        "QA/UIUX",
-        "ready for verification",
-        "readiness ledger",
-        "Ship readiness",
-        "ticket-state",
-        "handoff notes for QA",
-        "UI/UX focus",
-    )
-    for term in forbidden_terms:
-        assert_not_contains(skill, term, "implement-unit-of-work")
-
-
-def check_orchestrator(skill: str) -> None:
-    assert_not_contains(skill, "implement-unit-of-work", "orchestrator skill")
-
-
-def assert_not_contains(haystack: str, needle: str, context: str) -> None:
-    if needle in haystack:
-        raise AssertionError(f"{context} must not contain {needle!r}")
-
-
-def assert_line_count_at_most(text: str, limit: int) -> None:
-    line_count = len(text.splitlines())
-    if line_count > limit:
-        raise AssertionError(f"expected implement-unit-of-work to be at most {limit} lines, found {line_count}")
+from contract_compat import run_compat_contract  # noqa: E402
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        run_compat_contract(
+            "skills/implement-unit-of-work/tests/contracts.toml",
+            "PASS: implement-unit-of-work contract",
+        )
+    )

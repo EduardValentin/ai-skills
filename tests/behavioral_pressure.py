@@ -78,11 +78,9 @@ def discover_behavioral_suite_paths(
     scenario_filter: str = "",
 ) -> tuple[Path, ...]:
     paths: list[Path] = []
-    for scenarios_path in sorted(TESTS_DIR.glob("*/scenarios.toml")):
-        if scenarios_path.parent.name == "skill-trigger":
-            continue
+    for scenarios_path in discover_all_behavioral_suite_paths():
         config = load_behavioral_suite_config(scenarios_path)
-        if skill_filter and skill_filter not in {config.skill_name, scenarios_path.parent.name}:
+        if skill_filter and skill_filter not in {config.skill_name, scenarios_path.parent.name, scenarios_path.parent.parent.name}:
             continue
         if scenario_filter and not scenario_exists(scenarios_path, scenario_filter):
             continue
@@ -98,6 +96,22 @@ def discover_behavioral_suite_paths(
         raise ValueError(f"no loaded-skill behavioral suites found{suffix}")
 
     return tuple(paths)
+
+
+def discover_all_behavioral_suite_paths() -> tuple[Path, ...]:
+    paths: set[Path] = set()
+    for scenarios_path in TESTS_DIR.glob("*/scenarios.toml"):
+        if scenarios_path.parent.name == "skill-trigger":
+            continue
+        paths.add(scenarios_path)
+
+    for pattern in (
+        "skills/*/tests/behavioral.toml",
+        "plugins/*/skills/*/tests/behavioral.toml",
+    ):
+        paths.update(REPO_ROOT.glob(pattern))
+
+    return tuple(sorted(paths))
 
 
 def scenario_exists(scenarios_path: Path, scenario_id: str) -> bool:

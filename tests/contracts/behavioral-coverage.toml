@@ -1,0 +1,39 @@
+[suite]
+name = "canonical skill behavioral coverage"
+
+[[assertion]]
+type = "exists_for_each"
+glob = "skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+
+[[assertion]]
+type = "contains_for_each"
+glob = "skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+values = [
+  "[suite]",
+  "skill = \"{frontmatter_name}\"",
+  "skill_path = \"{path}\"",
+  "agent_env = ",
+  "scenario_env = ",
+  "prompt_instructions = ",
+  "judge_context = ",
+  "[[scenario]]",
+  "[[scenario.criteria]]",
+]
+
+[[assertion]]
+type = "absent_glob"
+glob = "skills/*/tests/*behavioral_pressure.py"
+
+[[assertion]]
+type = "absent_glob"
+glob = "skills/*/tests/pressure-scenarios.md"
+
+[[assertion]]
+type = "absent_glob"
+glob = "skills/*/tests/evals.md"
+
+[[assertion]]
+type = "absent_glob"
+glob = "skills/*/tests/test-log.md"

@@ -1,0 +1,45 @@
+[suite]
+name = "github-interaction contract"
+
+[[assertion]]
+type = "line_count_at_most"
+path = "skills/github-interaction/SKILL.md"
+max = 70
+
+[[assertion]]
+type = "not_contains"
+path = "skills/github-interaction/SKILL.md"
+values = [
+  "bot-identity",
+  "ticket-start",
+  "personal-workflow",
+  "job-workflow",
+  "Setup runbook",
+  "Step A",
+  "Token rotation",
+  "NordPass",
+  "Claude Opus",
+  "historical",
+  "gh pr create/edit/comment/review/merge",
+  "gh api --method",
+]
+
+[[assertion]]
+type = "contains"
+path = "skills/github-interaction/scripts/get-bot-gh-token.sh"
+values = [
+  "ai-skills.gh-bot",
+  "security find-generic-password",
+  "https://api.github.com/app/installations",
+  "printf '%s\\n' \"$TOKEN\"",
+]
+
+[[assertion]]
+type = "not_contains"
+path = "skills/github-interaction/scripts/get-bot-gh-token.sh"
+values = [
+  "bot-identity",
+  "runbook Step",
+  "personal-workflow",
+  "job-workflow",
+]

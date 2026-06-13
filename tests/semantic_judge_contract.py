@@ -15,6 +15,7 @@ from semantic_judge import SemanticCriterion, assert_forbidden_terms, judge_resp
 def main() -> int:
     try:
         test_accepts_passing_judgment()
+        test_accepts_shell_pipeline_judgment()
         test_rejects_failed_criterion()
         test_rejects_non_json_judgment()
         test_ignores_empty_forbidden_terms()
@@ -36,6 +37,23 @@ def test_accepts_passing_judgment() -> None:
         scenario_prompt="Coordinate approved work.",
         response="I will delegate implementation.",
         criteria=(SemanticCriterion("delegates_work", "Implementation is delegated."),),
+    )
+    assert result.passes is True
+
+
+def test_accepts_shell_pipeline_judgment() -> None:
+    command = (
+        fake_judge_command(
+            '{"passes": true, "criteria": {"handles_shell": true}, "failures": []}'
+        )
+        + " | cat"
+    )
+    result = judge_response(
+        judge_command=command,
+        scenario_id="shell-pipeline",
+        scenario_prompt="Use the configured command.",
+        response="I used the configured command.",
+        criteria=(SemanticCriterion("handles_shell", "Shell command pipelines are supported."),),
     )
     assert result.passes is True
 

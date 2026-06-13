@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import os
-import shlex
-import subprocess
 import sys
 import ast
 from dataclasses import dataclass
@@ -21,6 +19,7 @@ from semantic_judge import (  # noqa: E402
     assert_forbidden_terms,
     judge_response,
     resolve_judge_command,
+    run_command,
 )
 
 
@@ -67,17 +66,25 @@ def load_behavioral_suite_config(scenarios_path: Path) -> BehavioralSuiteConfig:
     if not isinstance(suite, dict):
         raise ValueError(f"{scenarios_path} must define a [suite] table")
 
-    skill_name = require_string(scenarios_path, suite, "skill")
-    skill_path = Path(str(suite.get("skill_path", f"skills/{skill_name}/SKILL.md")))
+    inferred_skill_path = infer_colocated_skill_path(scenarios_path)
+    skill_path_value = str(suite.get("skill_path", "")).strip()
+    if skill_path_value:
+        skill_path = Path(skill_path_value)
+    elif inferred_skill_path is not None:
+        skill_path = inferred_skill_path
+    else:
+        skill_name_for_default = require_string(scenarios_path, suite, "skill")
+        skill_path = Path(f"skills/{skill_name_for_default}/SKILL.md")
     if not skill_path.is_absolute():
         skill_path = REPO_ROOT / skill_path
+    skill_name = optional_string(suite, "skill") or frontmatter_name(skill_path)
 
     return BehavioralSuiteConfig(
-        suite_name=require_string(scenarios_path, suite, "name"),
+        suite_name=optional_string(suite, "name") or skill_name,
         skill_name=skill_name,
         skill_path=skill_path,
-        agent_env_var=require_string(scenarios_path, suite, "agent_env"),
-        scenario_filter_env_var=require_string(scenarios_path, suite, "scenario_env"),
+        agent_env_var=optional_string(suite, "agent_env") or default_agent_env(skill_name),
+        scenario_filter_env_var=optional_string(suite, "scenario_env") or default_scenario_env(skill_name),
         prompt_instructions=require_string(scenarios_path, suite, "prompt_instructions"),
         judge_context=require_string(scenarios_path, suite, "judge_context"),
     )
@@ -227,11 +234,50 @@ def require_string(path: Path, payload: dict[str, object], key: str) -> str:
     return value.strip()
 
 
+def optional_string(payload: dict[str, object], key: str) -> str:
+    value = payload.get(key, "")
+    if isinstance(value, str):
+        return value.strip()
+    return ""
+
+
 def require_string_list(path: Path, payload: dict[str, object], key: str) -> list[str]:
     value = payload.get(key, [])
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"{path}: field {key!r} must be a string list")
     return value
+
+
+def infer_colocated_skill_path(scenarios_path: Path) -> Path | None:
+    if scenarios_path.parent.name != "tests":
+        return None
+
+    candidate = scenarios_path.parent.parent / "SKILL.md"
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def frontmatter_name(skill_path: Path) -> str:
+    text = skill_path.read_text(encoding="utf-8")
+    in_frontmatter = False
+    for line in text.splitlines():
+        if line.strip() == "---":
+            if not in_frontmatter:
+                in_frontmatter = True
+                continue
+            break
+        if in_frontmatter and line.startswith("name:"):
+            return line.split(":", 1)[1].strip().strip('"')
+    raise ValueError(f"{skill_path.relative_to(REPO_ROOT)} is missing name frontmatter")
+
+
+def default_agent_env(skill_name: str) -> str:
+    return f"{skill_name.upper().replace('-', '_')}_AGENT_COMMAND"
+
+
+def default_scenario_env(skill_name: str) -> str:
+    return f"{skill_name.upper().replace('-', '_')}_SCENARIO"
 
 
 def run_loaded_skill_behavioral_suite(
@@ -339,20 +385,7 @@ def select_scenarios(
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
-    completed = subprocess.run(
-        shlex.split(agent_command),
-        input=prompt,
-        text=True,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            "agent command failed with exit code "
-            f"{completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
-        )
-    return completed.stdout
+    return run_command(agent_command, prompt, "agent")
 
 
 def check_semantic_response(

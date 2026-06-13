@@ -1,0 +1,12 @@
+[suite]
+name = "codebase-scope-map contract"
+
+[[assertion]]
+type = "not_contains"
+path = "skills/codebase-scope-map/SKILL.md"
+values = [
+  "small edits are allowed",
+  "minor edits are allowed",
+  "cleanup edits are allowed",
+  "formatting-only edits are allowed",
+]

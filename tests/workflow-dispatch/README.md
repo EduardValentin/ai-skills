@@ -5,18 +5,18 @@ actions after the parent skill body is loaded. It is separate from
 `skill-trigger`, whose behavioral suite is the black-box installed-harness test
 for whether a user request picks up a skill without injected context.
 
-Keep workflow tests here only when the behavior being tested is "skill X emits
-a delegated request that the installed harness can auto-discover as skill Y."
-Do not duplicate broad loaded-skill behavioral pressure tests here. Group tests
-by the skill under test. Keep scenario data in TOML when scenarios share the same
-harness, and use Python only for the grouped runner, static contract, or custom
-response checks, for example:
+Keep workflow tests only when the behavior being tested is "skill X emits a
+delegated request that the installed harness can auto-discover as skill Y." Do
+not duplicate broad loaded-skill behavioral pressure tests here.
+
+Scenario data is colocated with the skill under test:
 
 ```text
-tests/workflow-dispatch/ticket-start/scenarios.toml
-tests/workflow-dispatch/ticket-start/ticket_start_contract.py
-tests/workflow-dispatch/ticket-start/ticket_start_behavioral_pressure.py
+skills/ticket-start/tests/workflow-dispatch.toml
+skills/multi-ticket-work/tests/workflow-dispatch.toml
 ```
+
+The reusable runner and black-box discovery helper stay in this directory.
 
 ## Static Contract
 
@@ -26,10 +26,10 @@ Run in CI:
 python3 tests/workflow-dispatch/static_contract.py
 ```
 
-The static contract runs grouped `*_contract.py` tests under skill folders. Each
-test guards against stale embedded-prompt references and hardcoded downstream
-skill identifiers in parent/orchestrator skill prose. It also guards the
-downstream discovery helper so it cannot rebuild or inject a skill index.
+The static contract is TOML-backed. It verifies that colocated workflow dispatch
+scenarios declare downstream discovery expectations, that stale grouped workflow
+files are gone, and that the downstream discovery helper cannot rebuild or
+inject a skill index.
 
 ## Behavioral Dispatch
 
@@ -44,11 +44,11 @@ SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge'
 If `WORKFLOW_DISPATCH_AGENT_COMMAND` is unset, the harness falls back to
 `SKILL_TRIGGER_AGENT_COMMAND`.
 
-The behavioral harness runs grouped `*_behavioral_pressure.py` tests under skill
-folders. Each test gives the agent the loaded parent skill body and asks for a
-workflow action ledger. This is a loaded-skill pressure test, not proof that the
-parent skill was discovered by the installed harness. Parent-skill discovery
-belongs in `tests/skill-trigger/behavioral_pressure.py`.
+The behavioral harness discovers colocated `workflow-dispatch.toml` files. Each
+scenario gives the agent the loaded parent skill body and asks for a workflow
+action ledger. This is a loaded-skill pressure test, not proof that the parent
+skill was discovered by the installed harness. Parent-skill discovery belongs in
+`tests/skill-trigger/behavioral_pressure.py`.
 
 For downstream discovery coverage, workflow behavioral tests then send only the
 emitted action rows for the handoff to the installed harness and assert that the

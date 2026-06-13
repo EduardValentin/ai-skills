@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import shlex
-import subprocess
 import sys
 from pathlib import Path
 
@@ -18,24 +16,12 @@ from semantic_judge import (  # noqa: E402
     assert_forbidden_terms,
     judge_response,
     resolve_judge_command,
+    run_command,
 )
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
-    completed = subprocess.run(
-        shlex.split(agent_command),
-        input=prompt,
-        text=True,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(
-            "agent command failed with exit code "
-            f"{completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
-        )
-    return completed.stdout
+    return run_command(agent_command, prompt, "agent")
 
 
 def assert_auto_discovers(agent_command: str, delegated_request: str, expected_skill: str) -> str:
