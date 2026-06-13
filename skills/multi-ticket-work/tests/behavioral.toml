@@ -4,17 +4,12 @@ skill = "multi-ticket-work"
 skill_path = "skills/multi-ticket-work/SKILL.md"
 scenario_env = "MULTI_TICKET_WORK_SCENARIO"
 prompt_instructions = """
-Do not execute the work. Return a concise orchestration plan only. It must explain:
-- how the full ticket scope is gathered,
-- where durable orchestration notes are saved and when they are re-read,
-- how sequencing and parallel work are decided,
-- how cross-ticket alignment, spec, plan, and user approval happen before dispatch,
-- how approved execution packets are prepared,
-- how first-level ticket-execution-coordinator native agents are assigned and what they must not do,
-- how ticket coordinators dispatch deeper implementation, review, security review when applicable, QA, UI/UX, fix, and PR-preparation work,
-- what makes each ticket or unit complete,
-- what appears in the final PR review report.
-Do not name downstream skill identifiers or unrelated skills. Do name native agents when multi-ticket-work requires a specialized native agent.
+This is a behavioral pressure test. Do not perform external tool calls, edit
+files, run commands, create branches, create pull requests, or execute the
+ticket work. Answer the scenario as the loaded skill would, focusing on the
+correct next workflow decisions and boundaries. Include enough concrete detail
+to make the decisions, handoffs, required evidence, and blockers clear. Do not
+quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: multi-ticket-work. Judge orchestration behavior, not exact wording.
@@ -51,9 +46,9 @@ The response conducts the user-facing alignment across each ticket in scope whil
 """
 
 [[scenario.criteria]]
-key = "preserves_state_across_compaction"
+key = "preserves_durable_state"
 description = """
-The response maintains a durable uncommitted orchestration note with scope, approved spec/plan, execution packets, assignments, status, PRs, blockers, and decisions, and re-reads it after compaction/resume and before later dispatches or final reporting.
+The response maintains a durable uncommitted orchestration note with scope, dependency map, approved plan, execution packets or assignments, status, PRs, blockers, decisions, and next actions, and re-reads it before dependent dispatches or final reporting.
 """
 
 [[scenario.criteria]]
@@ -77,7 +72,7 @@ The response does not ask ticket coordinator subagents to perform ticket intake,
 [[scenario.criteria]]
 key = "ticket_coordinators_delegate_deeper_phases"
 description = """
-The response says each ticket-execution-coordinator must use implementation-worker plus deeper focused agents for independent review, security review when applicable, QA, UI/UX when applicable, scoped fixes, and PR preparation when nested delegation is available, or report the limitation when it is unavailable.
+The response says ticket coordinators coordinate deeper separated phases for implementation, independent review, security review when applicable, QA, UI/UX when applicable, scoped fixes, reruns, and PR preparation when nested delegation is available, rather than collapsing all work into one worker task.
 """
 
 [[scenario.criteria]]

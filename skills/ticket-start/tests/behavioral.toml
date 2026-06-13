@@ -4,21 +4,12 @@ skill = "ticket-start"
 skill_path = "skills/ticket-start/SKILL.md"
 scenario_env = "TICKET_START_BEHAVIOR_SCENARIO"
 prompt_instructions = """
-Do not execute the ticket. Return a concise ordered workflow only. It must explain:
-- how the main agent stays the intake and routing orchestrator for one ticket,
-- the ticket intake through MCP or API, including title, description, acceptance criteria, links, status, dependencies, ambiguity, and parent context before brainstorming or planning,
-- the artifact, repo-state, freshness, worktree, and scoping steps before planning,
-- how the brainstorming phase maintains a complete open-questions ledger, surfaces all material unknowns, reaches shared understanding, and produces the approved spec/design,
-- how plan writing is routed after spec/design approval and then gets plan approval,
-- how explicit user plan approval blocks coding, scaffolding, product mutations, and execution until both spec and plan are approved,
-- how branch choice, worktree setup, draft diff knowledge, investigation progress, internal plans/checklists, and working notes do not count as user approval,
-- how the main agent enters execution with an approved execution packet and the shared execution contract while remaining the current-session orchestrator,
-- the order of implementation, independent review, security review or skip, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, PR preparation, and PR verification or handoff,
-- how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,
-- which compact context ticket-start forwards,
-- how CANNOT_VERIFY is handled when verifier tooling or access is missing,
-- how returned reports are reconciled before PR verification or handoff.
-Do not name downstream worker skill identifiers. Do name the shared execution contract and native agents when ticket-start requires them.
+This is a behavioral pressure test. Do not perform external tool calls, edit
+files, run commands, create branches, create pull requests, or execute the
+ticket. Answer the scenario as the loaded skill would, focusing on the correct
+next workflow decisions and boundaries. Include enough concrete detail to make
+the decisions, handoffs, required evidence, and blockers clear. Do not quote the
+skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: ticket-start. Judge the routing plan, not exact wording.
@@ -154,13 +145,13 @@ The response explicitly blocks product-code and test edits in the main session b
 [[scenario.criteria]]
 key = "brainstorming_is_iterative"
 description = """
-The response requires a real user-facing brainstorming loop with targeted follow-up questions and confirmation of shared understanding, not one perfunctory question or a generic "any concerns?".
+The response routes to user-facing requirements/design alignment with targeted questions or a clear open-questions ledger before spec/design approval, rather than treating the user's "start working" wording as implementation approval.
 """
 
 [[scenario.criteria]]
 key = "writes_spec_for_approval"
 description = """
-The response says the agent must write a concise spec/design from the brainstorming result and ask the user to approve it before plan writing.
+The response preserves the written spec/design approval gate before implementation-plan writing.
 """
 
 [[scenario.criteria]]
