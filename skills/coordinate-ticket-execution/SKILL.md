@@ -1,9 +1,9 @@
 ---
-name: execute-ticket-work
+name: coordinate-ticket-execution
 description: Use when coordinating the execution phase for one ticket or work unit from an approved execution packet, especially when implementation, independent review, QA or UI verification, fixes, PR preparation, and completion evidence must remain phase-separated. Do not use for intake, brainstorming, spec creation, plan creation, approval gathering, planning-only work, QA-only work, PR-only work, or multi-ticket coordination.
 ---
 
-# Execute Ticket Work
+# Coordinate Ticket Execution
 
 ## Purpose
 
@@ -11,7 +11,7 @@ Use this skill during execution of one already-approved ticket or work unit. You
 
 This skill is not for discovering or negotiating scope. Missing requirements go back to the parent or main coordinator.
 
-Core rule: do not personally perform all execution phases as one worker. Use nested delegated subagents for implementation, independent review, QA, UI/UX verification, scoped fixes, and PR preparation when available. If nested delegation is unavailable, state that limitation and preserve phase separation locally.
+Core rule: do not personally perform all execution phases as one worker. When naming execution delegation, name `implementation-worker` for implementation, `code-reviewer` for independent review, `security-reviewer` when there is a plausible security surface, `qa-verifier` for behavior verification, and `uiux-verifier` for UI/UX verification when available. If nested delegation is unavailable, state that limitation and preserve phase separation locally.
 
 ## Required Input
 
@@ -29,16 +29,17 @@ If required packet details are missing, stale, contradictory, or unapproved, sto
 
 ## Execution Workflow
 
-1. Validate the approved packet and restate the execution boundary. If validation finds missing, stale, contradictory, or unapproved facts, return `BLOCKED_NEEDS_PARENT_INPUT` to the parent or main coordinator.
+1. Validate the approved packet and restate the execution boundary. Always state that missing, stale, contradictory, or unapproved facts return `BLOCKED_NEEDS_PARENT_INPUT` to the parent or main coordinator.
 2. Create a compact execution ledger for delegated work, findings, fixes, reruns, PR state, blockers, and final evidence.
-3. Dispatch focused implementation subagents when nested delegation is available. Keep implementation separate from independent review and verification.
-4. Dispatch independent review against the approved packet, implementation evidence, and diff.
-5. Dispatch QA verification against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
-6. For UI-facing or mixed work, dispatch UI/UX verification. For non-UI work, record the skip reason.
-7. Aggregate findings. Delegate scoped fixes for fixable findings, then rerun affected review or verification.
-8. Repeat the finding, fix, and rerun loop until each required phase is clean, explicitly blocked, or explicitly out of scope.
-9. Prepare the PR with reviewer-friendly summary, testing evidence, and review focus.
-10. Return the completion report. Do not mark complete without the required phase evidence and PR link.
+3. Dispatch `implementation-worker` native agent(s) for the approved implementation slice or slices. Keep implementation separate from independent review and verification.
+4. Dispatch `code-reviewer` against the approved packet, implementation evidence, and diff.
+5. Dispatch `security-reviewer` when the change has a plausible security surface. Record the skip reason only when there is no plausible security surface.
+6. Dispatch `qa-verifier` against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
+7. For UI-facing or mixed work, dispatch `uiux-verifier`. For non-UI work, record the skip reason.
+8. Aggregate findings. Delegate scoped fixes for fixable findings, then rerun affected review or verification.
+9. Repeat the finding, fix, and rerun loop until each required phase is clean, explicitly blocked, or explicitly out of scope.
+10. Prepare the PR with reviewer-friendly summary, testing evidence, and review focus.
+11. Return the completion report. Do not mark complete without the required phase evidence and PR link.
 
 If nested delegation is unavailable, perform the coordination locally and make that limitation explicit in the report.
 
@@ -65,6 +66,7 @@ Return a compact report:
 ## Phase evidence
 - Implementation: <report summary>
 - Independent review: <clean / findings fixed / blocked>
+- Security review: <clean / findings fixed / blocked / not applicable>
 - QA: <clean / bugs found / cannot verify / not applicable>
 - UI/UX: <clean / findings / cannot verify / not applicable>
 - Fixes and reruns: <summary>

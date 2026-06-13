@@ -47,6 +47,7 @@ class BehavioralSuiteConfig:
 
 PromptBuilder = Callable[[str, BehavioralScenario], str]
 GLOBAL_AGENT_ENV_VAR = "BEHAVIORAL_AGENT_COMMAND"
+GENERIC_AGENT_ENV_VAR = "SKILL_TRIGGER_AGENT_COMMAND"
 GLOBAL_SCENARIO_FILTER_ENV_VAR = "BEHAVIORAL_SCENARIO"
 
 
@@ -301,7 +302,7 @@ def run_loaded_skill_behavioral_suite(
     if not agent_command:
         print_usage(agent_env_var, scenario_filter_env_var, sys.argv[0])
         print(
-            f"FAIL: {agent_env_var} or {GLOBAL_AGENT_ENV_VAR} is required",
+            f"FAIL: {agent_env_var}, {GLOBAL_AGENT_ENV_VAR}, or {GENERIC_AGENT_ENV_VAR} is required",
             file=sys.stderr,
         )
         return 1
@@ -346,6 +347,7 @@ def resolve_behavioral_agent_command(agent_env_var: str) -> str:
     return (
         os.environ.get(agent_env_var, "").strip()
         or os.environ.get(GLOBAL_AGENT_ENV_VAR, "").strip()
+        or os.environ.get(GENERIC_AGENT_ENV_VAR, "").strip()
     )
 
 
@@ -417,6 +419,7 @@ def print_usage(agent_env_var: str, scenario_filter_env_var: str, script_path: s
 
 Fallback:
   {GLOBAL_AGENT_ENV_VAR}='<command reading stdin>' python3 {script_path}
+  {GENERIC_AGENT_ENV_VAR}='<command reading stdin>' python3 {script_path}
 
 Optional:
   {scenario_filter_env_var}='<scenario-id>' to run one scenario.

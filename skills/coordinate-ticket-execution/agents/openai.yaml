@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coordinate Ticket Execution"
+  short_description: "Run approved ticket execution packets with phase evidence"
+  default_prompt: "Use $coordinate-ticket-execution when an approved ticket or work-unit execution packet is ready and execution must coordinate implementation-worker, review, security review when applicable, QA, UI/UX when applicable, fixes, PR preparation, and reporting."

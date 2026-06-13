@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import shutil
 import sys
 from pathlib import Path
@@ -51,6 +52,28 @@ def push(skill_name: str) -> None:
         raise FileNotFoundError(f"missing canonical skill: {canonical}")
     sync_tree(canonical, claude)
     sync_tree(canonical, codex)
+    push_native_agents_for_group(skill_name)
+
+
+def push_native_agents_for_group(skill_name: str) -> None:
+    root = repo_root()
+    manifest = root / "agents" / "manifest.toml"
+    script = root / "scripts" / "sync_native_agents.py"
+    if not manifest.is_file():
+        return
+    if not script.is_file():
+        raise FileNotFoundError(f"missing native agent sync script: {script}")
+
+    env = os.environ.copy()
+    env["AI_SKILLS_REPO"] = str(root)
+    result = subprocess.run(
+        [sys.executable, str(script), "push", "--group", skill_name],
+        check=False,
+        env=env,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"native agent sync failed for group: {skill_name}")
 
 
 def pull(skill_name: str, agent: str) -> None:

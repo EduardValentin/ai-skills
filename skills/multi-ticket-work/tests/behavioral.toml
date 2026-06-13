@@ -11,11 +11,11 @@ Do not execute the work. Return a concise orchestration plan only. It must expla
 - how sequencing and parallel work are decided,
 - how cross-ticket alignment, spec, plan, and user approval happen before dispatch,
 - how approved execution packets are prepared,
-- how first-level ticket coordinator subagents are assigned and what they must not do,
-- how ticket coordinators dispatch deeper implementation, review, QA, UI/UX, fix, and PR-preparation work,
+- how first-level ticket-execution-coordinator native agents are assigned and what they must not do,
+- how ticket coordinators dispatch deeper implementation, review, security review when applicable, QA, UI/UX, fix, and PR-preparation work,
 - what makes each ticket or unit complete,
 - what appears in the final PR review report.
-Do not name downstream skill identifiers or unrelated skills.
+Do not name downstream skill identifiers or unrelated skills. Do name native agents when multi-ticket-work requires a specialized native agent.
 """
 judge_context = """
 Loaded skill under test: multi-ticket-work. Judge orchestration behavior, not exact wording.
@@ -25,7 +25,7 @@ id = "epic-ticket-set-delegates-prs-and-review-order"
 user_request = """
 Use multi-ticket-work for the Billing Revamp Epic. It has tickets for pricing API, checkout UI, invoice migration, and analytics events. Explain how the main agent should coordinate the full implementation.
 """
-forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "coordinate-ticket-execution", "ticket orchestrator", "ticket-orchestrator"]
 
 [[scenario.criteria]]
 key = "gathers_full_ticket_scope"
@@ -60,7 +60,7 @@ The response maintains a durable uncommitted orchestration note with scope, appr
 [[scenario.criteria]]
 key = "dispatches_one_ticket_coordinator_per_approved_packet"
 description = """
-The response dispatches one ticket coordinator subagent per approved ticket or unit with an approved execution packet and dependency context.
+The response dispatches one ticket-execution-coordinator native agent per approved ticket or unit with an approved execution packet and dependency context.
 """
 
 [[scenario.criteria]]
@@ -78,7 +78,7 @@ The response does not ask ticket coordinator subagents to perform ticket intake,
 [[scenario.criteria]]
 key = "ticket_coordinators_delegate_deeper_phases"
 description = """
-The response says each ticket coordinator must use another level of focused subagents for implementation, independent review, QA, UI/UX when applicable, scoped fixes, and PR preparation when nested delegation is available, or report the limitation when it is unavailable.
+The response says each ticket-execution-coordinator must use implementation-worker plus deeper focused agents for independent review, security review when applicable, QA, UI/UX when applicable, scoped fixes, and PR preparation when nested delegation is available, or report the limitation when it is unavailable.
 """
 
 [[scenario.criteria]]
@@ -90,7 +90,7 @@ The response does not treat parent-side review or implementation-worker self-che
 [[scenario.criteria]]
 key = "requires_pr_and_report_per_unit"
 description = """
-A ticket or unit is complete only after its ticket coordinator returns PR evidence and distinct implementation, review, QA, and UI/UX-or-skip evidence.
+A ticket or unit is complete only after its ticket coordinator returns PR evidence and distinct implementation, review, security-review-or-skip, QA, and UI/UX-or-skip evidence.
 """
 
 [[scenario.criteria]]
@@ -110,7 +110,7 @@ id = "prevents-worker-collapse-of-ticket-orchestration"
 user_request = """
 The Commerce Epic has five independent tickets. A rushed coordinator proposes: 'dispatch immediately before approval; each worker should implement, self-review, QA, run UI checks, push a PR, and the parent session can run one source-control review afterward.' Explain the correct multi-ticket coordination.
 """
-forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "execute-ticket-work", "ticket orchestrator", "ticket-orchestrator"]
+forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "coordinate-ticket-execution", "ticket orchestrator", "ticket-orchestrator"]
 
 [[scenario.criteria]]
 key = "rejects_preapproval_dispatch"
@@ -121,7 +121,7 @@ The response rejects dispatching ticket coordinators before cross-ticket require
 [[scenario.criteria]]
 key = "first_level_agents_are_ticket_coordinators"
 description = """
-The response makes the first-level subagent for each approved ticket or unit a ticket coordinator with an approved execution packet and dependency context.
+The response makes the first-level native agent for each approved ticket or unit ticket-execution-coordinator, with an approved execution packet and dependency context.
 """
 
 [[scenario.criteria]]
@@ -145,5 +145,41 @@ The response says parent-session or source-control review cannot replace indepen
 [[scenario.criteria]]
 key = "completion_needs_distinct_phase_evidence"
 description = """
-The response requires distinct returned evidence for implementation, independent review, QA, UI/UX-or-not-applicable, fixes/reruns, PR link, and completion report before marking a ticket complete.
+The response requires distinct returned evidence for implementation, independent review, security-review-or-not-applicable, QA, UI/UX-or-not-applicable, fixes/reruns, PR link, and completion report before marking a ticket complete.
+"""
+
+[[scenario]]
+id = "approved-packet-dispatches-ticket-execution-coordinator"
+user_request = """
+The Billing Revamp Epic scope, dependency map, cross-ticket spec, and implementation
+plan are user-approved. APP-10 invoice migration has an approved execution packet
+with ticket context, parent Epic context, approved spec/design, approved plan,
+dependency constraints, repository instructions, PR expectations, reviewer-friendly
+PR body expectation, and completion-report requirements. Describe the correct
+handoff for APP-10.
+"""
+forbidden_terms = ["ticket-start", "coordinate-ticket-execution", "ticket orchestrator", "ticket-orchestrator", "direct implementation", "start brainstorming"]
+
+[[scenario.criteria]]
+key = "uses_ticket_coordinator_native_agent"
+description = """
+The response dispatches ticket-execution-coordinator as the first-level native agent for APP-10 rather than naming a downstream skill or assigning the work to a generic worker.
+"""
+
+[[scenario.criteria]]
+key = "handoff_is_self_contained"
+description = """
+The ticket-execution-coordinator handoff includes APP-10 ticket context, Epic or parent context, approved spec/design, approved plan, dependency constraints, repository instructions, PR expectations, completion-report expectations, and downstream dependency notes.
+"""
+
+[[scenario.criteria]]
+key = "approved_packet_is_execution_boundary"
+description = """
+The response starts ticket-execution-coordinator from the approved execution packet and does not ask it to gather approval, run user-facing brainstorming, create a spec, or create a plan.
+"""
+
+[[scenario.criteria]]
+key = "requires_deeper_phase_separation"
+description = """
+The response tells ticket-execution-coordinator to preserve deeper phase separation for implementation through implementation-worker, independent review, security review when applicable, QA, UI/UX when applicable, fixes, PR preparation, and reporting when nested delegation is available, or to report that limitation.
 """

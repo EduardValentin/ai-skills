@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import os
 from pathlib import Path
 
 
@@ -16,6 +17,7 @@ from behavioral_harness import (  # noqa: E402
     build_loaded_skill_prompt,
     load_behavioral_scenarios,
     load_behavioral_suite_config,
+    resolve_behavioral_agent_command,
     select_scenarios,
 )
 from semantic_judge import SemanticCriterion  # noqa: E402
@@ -113,6 +115,29 @@ description = "The response follows the TOML scenario."
         raise AssertionError("loaded TOML criterion mismatch")
     if loaded[0].forbidden_terms != ("nope",):
         raise AssertionError("loaded TOML forbidden terms mismatch")
+
+    original_env = os.environ.copy()
+    try:
+        for key in ("DEMO_AGENT_COMMAND", "BEHAVIORAL_AGENT_COMMAND", "SKILL_TRIGGER_AGENT_COMMAND"):
+            os.environ.pop(key, None)
+
+        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "":
+            raise AssertionError("agent command should be empty when no env vars are set")
+
+        os.environ["SKILL_TRIGGER_AGENT_COMMAND"] = "generic-cmd"
+        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "generic-cmd":
+            raise AssertionError("generic harness command should be used as fallback")
+
+        os.environ["BEHAVIORAL_AGENT_COMMAND"] = "behavioral-cmd"
+        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "behavioral-cmd":
+            raise AssertionError("global behavioral command should override generic fallback")
+
+        os.environ["DEMO_AGENT_COMMAND"] = "suite-cmd"
+        if resolve_behavioral_agent_command("DEMO_AGENT_COMMAND") != "suite-cmd":
+            raise AssertionError("suite command should override global fallbacks")
+    finally:
+        os.environ.clear()
+        os.environ.update(original_env)
 
 
 def assert_contains(haystack: str, needle: str) -> None:

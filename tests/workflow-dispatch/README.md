@@ -9,14 +9,9 @@ Keep workflow tests only when the behavior being tested is "skill X emits a
 delegated request that the installed harness can auto-discover as skill Y." Do
 not duplicate broad loaded-skill behavioral pressure tests here.
 
-Scenario data is colocated with the skill under test:
-
-```text
-skills/ticket-start/tests/workflow-dispatch.toml
-skills/multi-ticket-work/tests/workflow-dispatch.toml
-```
-
-The reusable runner and black-box discovery helper stay in this directory.
+Scenario data, when needed, is colocated with the skill under test as
+`skills/<skill-name>/tests/workflow-dispatch.toml`. The reusable runner and
+black-box discovery helper stay in this directory.
 
 ## Static Contract
 
@@ -34,7 +29,8 @@ inject a skill index.
 
 ## Behavioral Dispatch
 
-Run manually, nightly, or in a model-enabled CI job:
+Run manually, nightly, or in a model-enabled CI job when colocated
+`workflow-dispatch.toml` suites exist:
 
 ```bash
 WORKFLOW_DISPATCH_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \

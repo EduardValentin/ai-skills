@@ -57,8 +57,8 @@ values = [
   "configured GitHub bot identity",
   "ambient personal GitHub credentials",
   "multi-ticket-work",
-  "execute-ticket-work",
   "implement-unit-of-work",
+  "ticket-execution-coordinator",
   "qa-verification",
   "verify-pr",
   "ui-verification",
@@ -76,13 +76,25 @@ glob = "skills/ticket-start/**/*.md"
 path = "{path}"
 values = [
   "multi-ticket-work",
-  "execute-ticket-work",
   "implement-unit-of-work",
+  "ticket-execution-coordinator",
   "qa-verification",
   "verify-pr",
   "ui-verification",
   "codebase-scope-map",
   "github-interaction",
+]
+
+[[assertion]]
+type = "contains"
+path = "skills/ticket-start/SKILL.md"
+values = [
+  "coordinate-ticket-execution",
+  "implementation-worker",
+  "code-reviewer",
+  "security-reviewer",
+  "qa-verifier",
+  "uiux-verifier",
 ]
 
 [[assertion]]

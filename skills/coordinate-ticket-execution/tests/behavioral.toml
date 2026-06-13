@@ -1,14 +1,14 @@
 [suite]
-name = "execute-ticket-work"
-skill = "execute-ticket-work"
-skill_path = "skills/execute-ticket-work/SKILL.md"
-agent_env = "EXECUTE_TICKET_WORK_AGENT_COMMAND"
-scenario_env = "EXECUTE_TICKET_WORK_SCENARIO"
+name = "coordinate-ticket-execution"
+skill = "coordinate-ticket-execution"
+skill_path = "skills/coordinate-ticket-execution/SKILL.md"
+agent_env = "COORDINATE_TICKET_EXECUTION_AGENT_COMMAND"
+scenario_env = "COORDINATE_TICKET_EXECUTION_SCENARIO"
 prompt_instructions = """
-Do not perform real execution. Return the execution-phase behavior and report expectations only. Explicitly describe how nested delegated subagents are used, or how the limitation is reported if unavailable. Keep it concise and do not name downstream skill identifiers.
+Do not perform real execution. Return the execution-phase behavior and report expectations only. Explicitly describe how nested delegated native agents are used, or how the limitation is reported if unavailable. Name required native agents, but do not name downstream skill identifiers.
 """
 judge_context = """
-Loaded skill under test: execute-ticket-work. Judge execution-phase boundaries, not exact wording.
+Loaded skill under test: coordinate-ticket-execution. Judge execution-phase boundaries, not exact wording.
 """
 [[scenario]]
 id = "approved-packet-execution-phase"
@@ -30,9 +30,15 @@ The response coordinates implementation, independent review, QA, UI/UX when appl
 """
 
 [[scenario.criteria]]
+key = "uses_implementation_worker"
+description = """
+The response delegates implementation to implementation-worker when native subagents are available.
+"""
+
+[[scenario.criteria]]
 key = "supports_nested_phase_delegation"
 description = """
-The response uses nested delegated subagents for implementation, independent review, QA, UI/UX verification when applicable, scoped fixes, and PR preparation when the runtime supports it, or reports the limitation when it does not.
+The response uses nested delegated native agents for implementation, independent review, security review when applicable, QA, UI/UX verification when applicable, and scoped fixes when the runtime supports it, or reports the limitation when it does not. PR preparation remains a separate phase but does not require a dedicated native PR-preparer agent.
 """
 
 [[scenario.criteria]]
