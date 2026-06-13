@@ -1,4 +1,4 @@
 interface:
   display_name: "Frontend Interface Design"
-  short_description: "Design polished accessible frontend interfaces"
-  default_prompt: "Design a polished accessible frontend page"
+  short_description: "Build polished accessible GUI interfaces"
+  default_prompt: "Build a polished accessible interface"

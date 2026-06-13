@@ -381,9 +381,9 @@ forbidden_terms = ["qa-verification", "QA verification", "another workflow", "ge
 response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
-id = "uiux-frontend-interface-design-accessible-page"
+id = "uiux-frontend-interface-design-accessible-interface"
 skill = "frontend-interface-design"
-prompt = "Design a polished responsive settings page with semantic HTML, keyboard support, loading and error states, and subtle motion."
+prompt = "Build a polished settings interface in this GUI app with accessible controls, adaptive layout, loading and error states, and subtle motion."
 forbidden_terms = []
 
 [[scenario]]
