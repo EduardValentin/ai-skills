@@ -1,0 +1,99 @@
+[suite]
+name = "uiux-prototype-work"
+skill = "prototype-work"
+skill_path = "plugins/uiux/skills/prototype-work/SKILL.md"
+agent_env = "UIUX_PROTOTYPE_WORK_AGENT_COMMAND"
+scenario_env = "UIUX_PROTOTYPE_WORK_SCENARIO"
+prompt_instructions = """
+Do not edit files. Return the next action and, when blocked on missing input,
+the resume step after the user provides it. Preserve the prototype-work
+constraints. When async behavior is present, include the required async states
+in the companion obligations.
+"""
+judge_context = """
+Loaded skill under test: prototype-work. Judge whether the response stays
+focused on prototype reference apps, setup under designs/, browser evidence,
+compact context reports, mock separation, and concise PRD consolidation.
+"""
+
+[[scenario]]
+id = "reference-app-not-found"
+user_request = """
+The user asks for a prototype flow change, but the worktree has no designs/ directory and no app path was provided.
+
+Options:
+A) Stop and ask the user for the reference app path before doing anything else.
+B) Search the entire repo for any React app and pick the first package.json.
+C) Continue by editing docs first while waiting for an app path.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "chooses_stop_and_ask"
+description = "The response chooses option A or clearly stops and asks for the reference app path before doing anything else."
+
+[[scenario.criteria]]
+key = "does_not_edit_without_app_path"
+description = "The response does not edit files, docs, or code before the reference app path is provided."
+
+[[scenario.criteria]]
+key = "reruns_with_app_root"
+description = "The response plans to rerun the preparation script with --app-root after the user provides the path."
+
+[[scenario]]
+id = "new-user-flow-requires-prd-and-mocks"
+user_request = """
+The user asks to add a new onboarding flow to the prototype, with mocked eligibility rules and a simulated API fetch that can load, succeed, return no eligible result, or fail. They ask you to list every companion obligation before editing.
+
+What must accompany the prototype change?
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "updates_prd_for_behavior_change"
+description = "The response updates PRD.md because product behavior changed."
+
+[[scenario.criteria]]
+key = "keeps_prd_business_only"
+description = "The response keeps PRD content limited to business rules and product behavior when describing what to write; broad trigger conditions for PRD consolidation do not count as PRD content."
+
+[[scenario.criteria]]
+key = "adds_explicit_mocks"
+description = "The response adds explicit mocks for the eligibility rule and API-like fetch."
+
+[[scenario.criteria]]
+key = "adds_async_states"
+description = "The response includes loading, success, empty, and error behavior for the async prototype flow."
+
+[[scenario.criteria]]
+key = "uses_browser_navigation"
+description = "The response exercises the changed flow through browser navigation and browser evidence."
+
+[[scenario]]
+id = "compact-context-reports"
+user_request = """
+The user asks for a new dashboard panel in the prototype. The app has root-level PRD.md, DESIGN.md, and brandvoice.md, plus existing mock data and routes.
+
+What context should the agent gather before changing the prototype?
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "gathers_product_report"
+description = "The response gathers a compact product report from PRD.md."
+
+[[scenario.criteria]]
+key = "gathers_voice_report"
+description = "The response gathers a compact voice report from brand-voice guidance."
+
+[[scenario.criteria]]
+key = "gathers_design_report"
+description = "The response gathers a compact design report from DESIGN.md."
+
+[[scenario.criteria]]
+key = "scopes_app_structure"
+description = "The response scopes routes, mock boundaries, theme configuration, component inventory, and design-system configuration."
+
+[[scenario.criteria]]
+key = "does_not_dump_raw_docs"
+description = "The response avoids dumping raw companion docs into the main context."

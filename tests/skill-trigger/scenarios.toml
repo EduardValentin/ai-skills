@@ -321,10 +321,10 @@ forbidden_terms = []
 response_forbidden_terms = ["verify-pr", "qa-verification"]
 
 [[scenario]]
-id = "design-studio-visual-bug"
-skill = "design-studio"
-prompt = "Fix the mobile spacing bug in the React reference app dashboard and keep the prototype style intact."
-forbidden_terms = []
+id = "prototype-work-flow-change"
+skill = "prototype-work"
+prompt = "In the React prototype reference app under designs/, add a new onboarding page with mocked eligibility rules, a mocked CRM handoff, and browser validation."
+forbidden_terms = ["design-studio", "prepare-design-studio.sh"]
 
 [[scenario]]
 id = "ticket-planner-prd-to-stories"
@@ -381,9 +381,9 @@ forbidden_terms = ["qa-verification", "QA verification", "another workflow", "ge
 response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
-id = "uiux-frontend-interface-design-accessible-page"
+id = "uiux-frontend-interface-design-accessible-interface"
 skill = "frontend-interface-design"
-prompt = "Design a polished responsive settings page with semantic HTML, keyboard support, loading and error states, and subtle motion."
+prompt = "Build a polished settings interface in this GUI app with accessible controls, adaptive layout, loading and error states, and subtle motion."
 forbidden_terms = []
 
 [[scenario]]
@@ -401,7 +401,7 @@ forbidden_terms = []
 [[scenario]]
 id = "uiux-visual-validation-breakpoints"
 skill = "visual-validation"
-prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking overflow, clipping, contrast, focus states, and broad visual quality against the product aesthetic."
+prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking card title alignment, text overflow, inconsistent sibling colors, clipping, contrast, focus states, and parity with the reference app."
 forbidden_terms = []
 
 [[scenario]]
@@ -411,8 +411,14 @@ prompt = "I want to change the visual direction of this dashboard so it feels mo
 forbidden_terms = []
 
 [[scenario]]
-id = "uiux-web-copy-brand-voice-hero-cta"
-skill = "web-copy-from-brand-voice"
+id = "uiux-design-direction-visual-addition"
+skill = "design-direction-brainstorming"
+prompt = "Add a new visual summary section to the onboarding app, but I have not decided what style, density, emotional tone, or first impression it should have."
+forbidden_terms = []
+
+[[scenario]]
+id = "uiux-web-copy-hero-cta"
+skill = "web-copy"
 prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so it fits our brand voice and conversion goal."
 forbidden_terms = []
 

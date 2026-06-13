@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,8 +79,13 @@ def assert_forbidden_terms(text: str, terms: tuple[str, ...], context: str) -> N
 
 
 def run_judge(judge_command: str, prompt: str) -> str:
+    return run_command(judge_command, prompt, "judge")
+
+
+def run_command(command: str, prompt: str, label: str) -> str:
     completed = subprocess.run(
-        shlex.split(judge_command),
+        command,
+        shell=True,
         input=prompt,
         text=True,
         cwd=REPO_ROOT,
@@ -90,7 +94,7 @@ def run_judge(judge_command: str, prompt: str) -> str:
     )
     if completed.returncode != 0:
         raise RuntimeError(
-            "judge command failed with exit code "
+            f"{label} command failed with exit code "
             f"{completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
         )
     return completed.stdout

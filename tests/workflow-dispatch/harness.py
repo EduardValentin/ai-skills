@@ -44,6 +44,14 @@ class WorkflowDispatchScenario(BehavioralScenario):
     response_checks: tuple[ResponseCheck, ...] = ()
 
 
+@dataclass(frozen=True)
+class WorkflowDispatchSuiteConfig:
+    suite_name: str
+    parent_skill_name: str
+    skill_path: Path
+    scenario_filter_env_var: str
+
+
 def run_workflow_dispatch_suite(
     *,
     suite_name: str,
@@ -101,12 +109,61 @@ def run_workflow_dispatch_suite(
     return 0
 
 
+def run_workflow_dispatch_suite_from_path(
+    scenarios_path: Path,
+    *,
+    response_checks: dict[str, ResponseCheck] | None = None,
+) -> int:
+    config = load_workflow_suite_config(scenarios_path)
+    return run_workflow_dispatch_suite(
+        suite_name=config.suite_name,
+        parent_skill_name=config.parent_skill_name,
+        skill_path=config.skill_path,
+        scenarios=load_workflow_scenarios(
+            scenarios_path,
+            response_checks=response_checks,
+        ),
+        scenario_filter_env_var=config.scenario_filter_env_var,
+    )
+
+
+def load_workflow_suite_config(scenarios_path: Path) -> WorkflowDispatchSuiteConfig:
+    payload = load_workflow_scenario_payload(scenarios_path)
+    suite = payload.get("suite")
+    if suite is not None and not isinstance(suite, dict):
+        raise ValueError(f"{scenarios_path} [suite] must be a table")
+    suite_payload = suite if isinstance(suite, dict) else {}
+
+    inferred_skill_path = infer_colocated_skill_path(scenarios_path)
+    skill_path_value = str(suite_payload.get("skill_path", "")).strip()
+    if skill_path_value:
+        skill_path = Path(skill_path_value)
+    elif inferred_skill_path is not None:
+        skill_path = inferred_skill_path
+    else:
+        parent_name = scenarios_path.parent.name
+        skill_path = REPO_ROOT / "skills" / parent_name / "SKILL.md"
+
+    if not skill_path.is_absolute():
+        skill_path = REPO_ROOT / skill_path
+
+    parent_skill_name = optional_string(suite_payload, "skill") or frontmatter_name(skill_path)
+    return WorkflowDispatchSuiteConfig(
+        suite_name=optional_string(suite_payload, "name")
+        or f"{parent_skill_name} workflow dispatch scenarios",
+        parent_skill_name=parent_skill_name,
+        skill_path=skill_path,
+        scenario_filter_env_var=optional_string(suite_payload, "scenario_env")
+        or f"{parent_skill_name.upper().replace('-', '_')}_WORKFLOW_DISPATCH_SCENARIO",
+    )
+
+
 def load_workflow_scenarios(
     scenarios_path: Path,
     *,
     response_checks: dict[str, ResponseCheck] | None = None,
 ) -> tuple[WorkflowDispatchScenario, ...]:
-    checks_by_name = response_checks or {}
+    checks_by_name = {**builtin_response_checks(), **(response_checks or {})}
     payload = load_workflow_scenario_payload(scenarios_path)
 
     scenarios = payload.get("scenario", [])
@@ -127,6 +184,7 @@ def load_workflow_scenario_payload(scenarios_path: Path) -> dict[str, object]:
 
 
 def load_workflow_scenario_payload_with_fallback(scenarios_path: Path) -> dict[str, object]:
+    suite: dict[str, object] = {}
     scenarios: list[dict[str, object]] = []
     current: dict[str, object] | None = None
     current_scenario: dict[str, object] | None = None
@@ -152,6 +210,10 @@ def load_workflow_scenario_payload_with_fallback(scenarios_path: Path) -> dict[s
                 multiline_value = []
             else:
                 multiline_value.append(raw_line)
+            continue
+
+        if line == "[suite]":
+            current = suite
             continue
 
         if line == "[[scenario]]":
@@ -193,7 +255,7 @@ def load_workflow_scenario_payload_with_fallback(scenarios_path: Path) -> dict[s
     if multiline_key is not None:
         raise ValueError(f"{scenarios_path}: unterminated multiline string for {multiline_key!r}")
 
-    return {"scenario": scenarios}
+    return {"suite": suite, "scenario": scenarios}
 
 
 def parse_workflow_toml_scalar(path: Path, line_number: int, raw_value: str) -> object:
@@ -267,6 +329,13 @@ def require_string(path: Path, payload: dict[str, object], key: str) -> str:
     return value.strip()
 
 
+def optional_string(payload: dict[str, object], key: str) -> str:
+    value = payload.get(key, "")
+    if isinstance(value, str):
+        return value.strip()
+    return ""
+
+
 def require_string_list(path: Path, payload: dict[str, object], key: str) -> list[str]:
     value = payload.get(key, [])
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
@@ -282,6 +351,101 @@ def require_nested_string_list(path: Path, payload: dict[str, object], key: str)
         if not isinstance(item, list) or not all(isinstance(term, str) for term in item):
             raise ValueError(f"{path}: field {key!r} must be a list of string lists")
     return value
+
+
+def infer_colocated_skill_path(scenarios_path: Path) -> Path | None:
+    if scenarios_path.parent.name != "tests":
+        return None
+
+    candidate = scenarios_path.parent.parent / "SKILL.md"
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def frontmatter_name(skill_path: Path) -> str:
+    text = skill_path.read_text(encoding="utf-8")
+    in_frontmatter = False
+    for line in text.splitlines():
+        if line.strip() == "---":
+            if not in_frontmatter:
+                in_frontmatter = True
+                continue
+            break
+        if in_frontmatter and line.startswith("name:"):
+            return line.split(":", 1)[1].strip().strip('"')
+    raise ValueError(f"{skill_path.relative_to(REPO_ROOT)} is missing name frontmatter")
+
+
+def builtin_response_checks() -> dict[str, ResponseCheck]:
+    return {
+        "no_dispatch_request": assert_no_dispatch_request,
+        "scoping_before_local_mapping": assert_scoping_before_local_mapping,
+        "ticket_coordinator_handoff": assert_ticket_coordinator_handoff,
+    }
+
+
+def assert_no_dispatch_request(response: str) -> None:
+    for line in response.splitlines():
+        normalized = line.casefold()
+        if normalized.lstrip().startswith("action:") and "dispatch_request" in normalized:
+            raise AssertionError("execution-phase handoff must use PHASE_CONTRACT, not DISPATCH_REQUEST")
+
+
+def assert_scoping_before_local_mapping(response: str) -> None:
+    scoping_index = first_index(response, "dispatch_request", "scoping")
+    if scoping_index < 0:
+        scoping_index = first_index(response, "dispatch_request", "scope")
+    if scoping_index < 0:
+        raise AssertionError("Scoping dispatch request action is required")
+
+    prefix = response[:scoping_index].lower()
+    local_scoping_markers = (
+        "local scope map",
+        "local scoping",
+        "map the code",
+        "map code",
+        "codebase map",
+        "scope map",
+        "affected surfaces",
+    )
+    if any(marker in prefix for marker in local_scoping_markers):
+        raise AssertionError("performed local scoping before Scoping dispatch")
+
+
+def assert_ticket_coordinator_handoff(response: str) -> None:
+    dispatch_lines = []
+    for line in action_lines(response):
+        normalized = line.casefold()
+        if "dispatch_request" in normalized:
+            dispatch_lines.append(normalized)
+
+    if not dispatch_lines:
+        raise AssertionError("ticket coordinator dispatch request is required")
+
+    first_dispatch = dispatch_lines[0]
+    missing = [
+        term
+        for term in ("ticket coordinator", "approved execution packet")
+        if term not in first_dispatch
+    ]
+    if missing:
+        raise AssertionError(f"ticket coordinator handoff missing terms: {missing}")
+
+    deeper_terms = ("implementation", "review", "qa")
+    if not all(term in first_dispatch for term in deeper_terms):
+        raise AssertionError(
+            "ticket coordinator handoff must mention deeper implementation, review, and QA coordination"
+        )
+
+
+def first_index(haystack: str, *needles: str) -> int:
+    normalized_needles = tuple(needle.lower() for needle in needles)
+    for line in haystack.splitlines():
+        normalized_line = line.lower()
+        if all(needle in normalized_line for needle in normalized_needles):
+            return haystack.find(line)
+    return -1
 
 
 def build_workflow_prompt(

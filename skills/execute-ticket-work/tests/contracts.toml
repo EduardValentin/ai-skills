@@ -1,0 +1,25 @@
+[suite]
+name = "execute-ticket-work contract"
+
+[[assertion]]
+type = "line_count_at_most"
+path = "skills/execute-ticket-work/SKILL.md"
+max = 95
+
+[[assertion]]
+type = "not_contains"
+path = "skills/execute-ticket-work/SKILL.md"
+values = [
+  "ticket-start",
+  "multi-ticket-work",
+  "implement-unit-of-work",
+  "qa-verification",
+  "ui-verification",
+  "verify-pr",
+  "codebase-scope-map",
+  "pr-reviewer-summary",
+  "ticket orchestrator",
+  "ticket-orchestrator",
+  "readiness ledger",
+  "Ship readiness",
+]

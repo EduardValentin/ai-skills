@@ -1,0 +1,31 @@
+[suite]
+name = "uiux plugin behavioral coverage"
+
+[[assertion]]
+type = "exists_for_each"
+glob = "plugins/uiux/skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+
+[[assertion]]
+type = "contains_for_each"
+glob = "plugins/uiux/skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+values = [
+  "[suite]",
+  "skill = \"{frontmatter_name}\"",
+  "skill_path = \"{path}\"",
+  "agent_env = ",
+  "scenario_env = ",
+  "prompt_instructions = ",
+  "judge_context = ",
+  "[[scenario]]",
+  "[[scenario.criteria]]",
+]
+
+[[assertion]]
+type = "absent_glob"
+glob = "plugins/uiux/skills/*/tests/pressure-scenarios.md"
+
+[[assertion]]
+type = "absent"
+path = "plugins/uiux/tests/evaluations.md"

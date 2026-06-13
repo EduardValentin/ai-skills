@@ -9,6 +9,12 @@ description: Use when creating, refactoring, or reviewing frontend UI patterns t
 
 Prefer reusable components when they preserve meaning and reduce real duplication. A good component models a stable role in the product, exposes a small intentional API, and keeps page-specific behavior at the page boundary.
 
+## When To Use
+
+- Creating, refactoring, or reviewing UI patterns that repeat or are likely to repeat.
+- Deciding whether to reuse a component, extend variants, add slots/composition, or create a new component.
+- Component APIs, duplication, variants, page-specific logic, or design-system boundaries are part of the work.
+
 ## Workflow
 
 1. Inventory nearby components before creating new UI. Look for matching role, structure, states, variants, and usage frequency.
@@ -26,6 +32,8 @@ Prefer reusable components when they preserve meaning and reduce real duplicatio
 - Prefer composition or slots when callers need to provide rich content.
 - Keep class overrides rare. If callers repeatedly need the same override, promote it to a variant.
 - Preserve accessibility responsibilities inside the component when the component owns interaction.
+- Component internals own their spacing, typography, icon sizing, radius, state styling, and interaction details.
+- Page layouts may arrange components and pass content, but should not reach into component internals.
 
 ## When To Ask The User
 

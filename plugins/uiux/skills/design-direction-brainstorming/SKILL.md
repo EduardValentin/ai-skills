@@ -1,28 +1,32 @@
 ---
 name: design-direction-brainstorming
-description: Use when a UI or UX task changes the visual direction of a page, component, flow, or product surface; has multiple plausible design directions; has unclear audience, emotional tone, or success criteria; or needs alignment before visual or interaction decisions.
+description: Use whenever a UI or UX task adds or changes a visual part of an application, screen, flow, feature, or product surface, especially when the request does not provide a specific design direction.
 ---
 
 # Design Direction Brainstorming
 
 ## Overview
 
-Run a relentless collaborative interview before changing visual direction. The goal is shared, common understanding: the user and agent agree on audience, intent, constraints, desired reaction, and the design direction before pixels, components, or styling decisions are chosen.
+Align on design direction before changing visual UI. The goal is shared, common understanding: the user and agent agree on audience, intent, constraints, desired reaction, and the design direction before layout or styling decisions are chosen.
 
-## When Direction Is Unclear
+## When To Use
 
-Pause before implementation or redesign when:
+Use before implementation whenever the user wants to add or modify a visual part of an application:
 
-- The user wants to change how a page, component, section, flow, or product surface should land visually.
-- Several aesthetics, layouts, densities, interaction models, or emotional tones could reasonably fit.
+- A screen, flow, feature, component, page, layout, style, interaction, or product surface will visually change.
+- The user asks to add a new visual surface or element, even if they provide a concrete direction.
 - The user asks for broad improvement like "make it better", "more premium", "cleaner", "friendlier", or "less cluttered".
-- The change affects first impression, trust, perceived quality, or product positioning.
-- The audience, workflow, or success criteria are unstated.
-- The component may become a reusable pattern.
+- The request does not specify the desired design direction, audience reaction, visual tone, density, or constraints.
+- Several aesthetics, layouts, densities, interaction models, or emotional tones could reasonably fit.
+- The change affects first impression, trust, perceived quality, product positioning, or user confidence.
 
-## Relentless Brainstorm Interview
+## Direction Alignment
 
-Do not treat the first answer as enough if the direction is still fuzzy. Keep interviewing, synthesizing, and narrowing until the next design choices are constrained.
+Scale the depth to the request:
+
+- If the user gives a specific design direction, briefly restate the direction, note any meaningful tradeoff or constraint, and proceed unless something important is ambiguous.
+- If the user does not give a specific direction, pause for a collaborative interview before implementing.
+- If the direction is fuzzy, do not treat the first answer as enough. Keep interviewing, synthesizing, and narrowing until the next design choices are constrained.
 
 Ask targeted questions that change the design decision:
 
@@ -42,7 +46,7 @@ After enough context is gathered, propose two or three distinct directions. Each
 - Core idea.
 - Best fit.
 - Tradeoff.
-- Visual language: hierarchy, density, color rhythm, typography, motion, component shape.
+- Visual language: hierarchy, density, color rhythm, typography, motion, and shape language.
 
 Then recommend one option and explain why it best fits the audience, goal, constraints, and desired impression. The recommendation should be opinionated, but still invite correction before implementation.
 
@@ -64,12 +68,3 @@ Shared design direction:
 ```
 
 Do not implement until the brief is confirmed or the remaining open questions are clearly non-blocking. If the user disagrees with the recommendation, keep brainstorming until a common direction emerges.
-
-## Common Mistakes
-
-| Mistake | Correction |
-|---|---|
-| Asking one vague question and moving on | Continue the interview until the design tradeoffs are explicit. |
-| Treating "you decide" as permission to skip alignment | Present options, recommend one, and confirm the reasoning. |
-| Offering options before understanding audience or constraints | Gather the decision-shaping context first. |
-| Making every option a mild variation of the same idea | Make options meaningfully different in density, tone, hierarchy, or interaction model. |

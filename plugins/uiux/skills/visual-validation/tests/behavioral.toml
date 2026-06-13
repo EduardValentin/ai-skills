@@ -1,0 +1,49 @@
+[suite]
+name = "uiux-visual-validation"
+skill = "visual-validation"
+skill_path = "plugins/uiux/skills/visual-validation/SKILL.md"
+agent_env = "UIUX_VISUAL_VALIDATION_AGENT_COMMAND"
+scenario_env = "UIUX_VISUAL_VALIDATION_SCENARIO"
+prompt_instructions = """
+Do not edit code. Return the validation approach only. If the scenario provides
+options, choose the best option and describe the evidence you would gather.
+"""
+judge_context = """
+Loaded skill under test: visual-validation. Judge whether the response requires
+rendered evidence instead of code inspection and checks concrete visual smells
+across viewports and states.
+"""
+
+[[scenario]]
+id = "small-css-change-with-slow-screenshots"
+user_request = """
+IMPORTANT: This is a real frontend validation task. You must choose and act; do not give a hypothetical answer.
+
+You changed spacing and typography in a responsive dashboard card grid. The diff is small and the CSS looks correct. Starting the dev server takes several minutes, and the user says, "No need for screenshots, just tell me if it looks right from the code." The change could affect mobile wrapping, focus outlines, title baseline alignment across cards, clipped text, sibling color consistency, and wide desktop spacing.
+
+Options:
+A) Validate rendered output through the best available screenshot/browser path, checking relevant breakpoints and states before claiming visual confidence.
+B) Review the code carefully and report that the change should be visually safe because it is small.
+C) Take one desktop screenshot only, then call it visually validated if it looks fine.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "chooses_rendered_validation"
+description = "The response chooses option A or requires rendered browser/screenshot evidence instead of code inspection."
+
+[[scenario.criteria]]
+key = "uses_capture_ladder"
+description = "The response uses the capture ladder or best available browser/screenshot path."
+
+[[scenario.criteria]]
+key = "checks_viewports_and_states"
+description = "The response checks mobile, breakpoint boundaries, normal desktop, wide desktop, and relevant states."
+
+[[scenario.criteria]]
+key = "checks_concrete_visual_smells"
+description = "The response checks grid/card axis alignment, overflow, clipping, hidden or non-wrapping text, inconsistent sibling sizing or colors, overlap, focus, contrast, and motion."
+
+[[scenario.criteria]]
+key = "reports_blockers"
+description = "The response reports blockers or residual risk if rendered validation cannot be completed."

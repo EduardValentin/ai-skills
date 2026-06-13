@@ -1,4 +1,4 @@
 interface:
   display_name: "Design Direction Brainstorming"
-  short_description: "Align UI direction before design work"
+  short_description: "Align direction for visual UI changes"
   default_prompt: "Help choose a UI design direction"

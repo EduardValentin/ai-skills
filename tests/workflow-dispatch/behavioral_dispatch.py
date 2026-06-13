@@ -11,8 +11,9 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 sys.path.append(str(REPO_ROOT / "tests"))
+sys.path.append(str(SCRIPT_DIR))
 
-from nested_suite import run_grouped_python_scripts  # noqa: E402
+from harness import run_workflow_dispatch_suite_from_path  # noqa: E402
 
 
 def main() -> int:
@@ -53,22 +54,42 @@ Fallback:
   If WORKFLOW_DISPATCH_AGENT_COMMAND is unset, SKILL_TRIGGER_AGENT_COMMAND is used.
 
 The agent command receives a prompt on stdin and must print a workflow action
-ledger on stdout. Grouped tests may inject the loaded parent skill body to
-pressure-test workflow instructions. Downstream skill discovery checks must rely
-on the installed harness without an injected skill index."""
+ledger on stdout. Colocated workflow-dispatch TOML suites inject the loaded
+parent skill body to pressure-test workflow instructions. Downstream skill
+discovery checks must rely on the installed harness without an injected skill
+index."""
     )
 
 
 def run_nested_behavioral_pressure(agent_command: str) -> int:
-    env = os.environ.copy()
-    env["WORKFLOW_DISPATCH_AGENT_COMMAND"] = agent_command
+    suite_paths = discover_workflow_dispatch_suites()
+    if not suite_paths:
+        raise RuntimeError("workflow-dispatch requires workflow-dispatch.toml scenario tests")
 
-    return run_grouped_python_scripts(
-        suite_dir=SCRIPT_DIR,
-        pattern="*/*_behavioral_pressure.py",
-        missing_message="workflow-dispatch requires grouped *_behavioral_pressure.py tests",
-        env=env,
-    )
+    original = os.environ.get("WORKFLOW_DISPATCH_AGENT_COMMAND")
+    os.environ["WORKFLOW_DISPATCH_AGENT_COMMAND"] = agent_command
+    try:
+        for path in suite_paths:
+            result = run_workflow_dispatch_suite_from_path(path)
+            if result != 0:
+                raise RuntimeError(
+                    f"{path.relative_to(REPO_ROOT)} failed with exit code {result}"
+                )
+    finally:
+        if original is None:
+            os.environ.pop("WORKFLOW_DISPATCH_AGENT_COMMAND", None)
+        else:
+            os.environ["WORKFLOW_DISPATCH_AGENT_COMMAND"] = original
+
+    return len(suite_paths)
+
+
+def discover_workflow_dispatch_suites() -> tuple[Path, ...]:
+    paths: set[Path] = set()
+    paths.update(SCRIPT_DIR.glob("*/scenarios.toml"))
+    paths.update(REPO_ROOT.glob("skills/*/tests/workflow-dispatch.toml"))
+    paths.update(REPO_ROOT.glob("plugins/*/skills/*/tests/workflow-dispatch.toml"))
+    return tuple(sorted(paths))
 
 
 if __name__ == "__main__":

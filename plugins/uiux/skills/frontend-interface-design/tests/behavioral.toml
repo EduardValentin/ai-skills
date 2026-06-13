@@ -1,0 +1,47 @@
+[suite]
+name = "uiux-frontend-interface-design"
+skill = "frontend-interface-design"
+skill_path = "plugins/uiux/skills/frontend-interface-design/SKILL.md"
+agent_env = "UIUX_FRONTEND_INTERFACE_DESIGN_AGENT_COMMAND"
+scenario_env = "UIUX_FRONTEND_INTERFACE_DESIGN_SCENARIO"
+prompt_instructions = """
+Do not implement code. Return the design and implementation approach only. If
+the scenario provides options, choose the best option and describe how you would
+proceed.
+"""
+judge_context = """
+Loaded skill under test: frontend-interface-design. Judge execution priorities
+for platform-native UI structure, accessible interaction, adaptive layout,
+state rendering paths, and design-system-aligned composition. Do not require
+HTML unless the scenario is explicitly web UI.
+"""
+
+[[scenario]]
+id = "polished-page-under-deadline-pressure"
+user_request = """
+IMPORTANT: This is a real interface execution task. You must choose and act; do not give a hypothetical answer.
+
+The user asks you to build a polished settings interface quickly in an existing GUI application. They say, "Just make it look premium; we can clean up accessibility later." The design needs toggles, a destructive action, disabled saving states, loading, empty, and error states. The app has established components, tokens, and motion patterns, but there is no provided mockup.
+
+Options:
+A) Start from platform-native UI structure, accessible names, expected input behavior, focus or selection management, adaptive layout structure, and then style the interface.
+B) Move fast with visually polished generic containers, then add accessibility fixes once the layout looks good.
+C) Build only the happy path first because loading/error/empty states can be added in a follow-up.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "chooses_accessible_structure_first"
+description = "The response chooses option A or clearly starts from platform-native structure, accessible names, expected input behavior, focus or selection management, and adaptive layout structure."
+
+[[scenario.criteria]]
+key = "does_not_defer_accessibility"
+description = "The response refuses to defer accessibility until after visual polish."
+
+[[scenario.criteria]]
+key = "covers_behavioral_states"
+description = "The response includes explicit rendering paths for loading, empty, error, disabled, and destructive-action states in the implementation scope."
+
+[[scenario.criteria]]
+key = "uses_design_system_composition"
+description = "The response composes layout, typography, color, and motion from the existing design system or established component/token system rather than generic premium styling."
