@@ -94,6 +94,9 @@ repo-wide `tests/contracts/*.toml` files.
 `skills/*/tests/behavioral.toml` and `plugins/*/skills/*/tests/behavioral.toml`
 files, then runs each suite through the shared loaded-skill harness. Use
 `--skill <skill-name>` or `--scenario <scenario-id>` for focused runs.
+Actor-facing behavioral prompts must stay neutral: they may set safety
+boundaries and scenario facts, but expected workflow behavior belongs in
+criteria, judge context, or deterministic assertions.
 
 `skill-trigger` behavioral tests are black-box installed-harness tests: they do
 not inject skill bodies or available-skill indexes, and they fail when the target

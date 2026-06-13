@@ -181,6 +181,12 @@ SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
 
 The behavioral command should use the target agent/runtime whose skill selection matters for the PR. If the behavioral suite cannot be run, do not silently proceed; report the exact blocker and get explicit user approval before creating the PR.
 
+### 9. Keep agent-driven test prompts neutral
+
+Behavioral tests and any other agent-driven tests must not nudge the tested agent toward the expected answer. Actor-facing prompts may set test boundaries, such as no external tool calls, no file edits, no PR creation, response format, and the scenario facts. They must not include checklists of expected workflow steps, required conclusions, required agent names, or rubric items.
+
+Put expected behavior in `[[scenario.criteria]]`, `judge_context`, deterministic assertions, or the test harness, not in actor-facing `prompt_instructions` or user prompts unless the user prompt is intentionally modeling real user wording. If a behavioral prompt tells the actor what it "must explain", "must mention", or "must state" about the behavior under test, treat that test as invalid and rewrite it before trusting the result.
+
 ---
 
 # Rules for Writing Cross-Agent Skills

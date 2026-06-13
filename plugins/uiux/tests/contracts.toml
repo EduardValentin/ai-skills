@@ -30,6 +30,19 @@ values = [
 ]
 
 [[assertion]]
+type = "not_contains_for_each"
+glob = "plugins/uiux/skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+values = [
+  "It must explain",
+  "must explain:",
+  "must mention",
+  "must state",
+  "Do name ",
+  "Do not name downstream",
+]
+
+[[assertion]]
 type = "absent_glob"
 glob = "plugins/uiux/skills/*/tests/pressure-scenarios.md"
 
