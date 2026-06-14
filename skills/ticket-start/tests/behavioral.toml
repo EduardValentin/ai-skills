@@ -2,24 +2,16 @@
 name = "ticket-start delegated execution"
 skill = "ticket-start"
 skill_path = "skills/ticket-start/SKILL.md"
-agent_env = "TICKET_START_BEHAVIOR_AGENT_COMMAND"
 scenario_env = "TICKET_START_BEHAVIOR_SCENARIO"
 prompt_instructions = """
-Do not execute the ticket. Return a concise ordered workflow only. It must explain:
-- how the main agent stays the intake and routing orchestrator for one ticket,
-- the ticket intake through MCP or API, including title, description, acceptance criteria, links, status, dependencies, ambiguity, and parent context before brainstorming or planning,
-- the artifact, repo-state, freshness, worktree, and scoping steps before planning,
-- how the brainstorming phase maintains a complete open-questions ledger, surfaces all material unknowns, reaches shared understanding, and produces the approved spec/design,
-- how plan writing is routed after spec/design approval and then gets plan approval,
-- how explicit user plan approval blocks coding, scaffolding, product mutations, and execution until both spec and plan are approved,
-- how branch choice, worktree setup, draft diff knowledge, investigation progress, internal plans/checklists, and working notes do not count as user approval,
-- how the main agent enters execution with an approved execution packet while remaining the current-session orchestrator,
-- the order of implementation, independent review, QA, UI/UX when applicable, findings aggregation, scoped fixes, reruns, PR preparation, and PR verification or handoff,
-- how UI/UX verification differs for personal/Linear reference-app parity versus job/Jira visual consistency with existing app elements,
-- which compact context ticket-start forwards,
-- how CANNOT_VERIFY is handled when verifier tooling or access is missing,
-- how returned reports are reconciled before PR verification or handoff.
-Do not name downstream skill identifiers.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: ticket-start. Judge the routing plan, not exact wording.
@@ -29,7 +21,7 @@ id = "ticket-start-execution-corectness"
 user_request = """
 A user asks to start one Linear issue APP-812. The issue is a child under an Epic, adds a billing eligibility business rule, modifies a checkout UI component with a matching reference surface, and may require backend, UI, migration, and analytics work. The user has not yet confirmed the requirements/design understanding, approved a spec, or approved an implementation plan. Explain the correct main-agent workflow from intake through final handoff.
 """
-forbidden_terms = ["Depth budget:", "IMPLEMENTATION_SLICE_RESULT", "BROWSER_VERIFICATION_RESULT", "Root -> child -> grandchild", "orchestration map", "leaf-only", "grandchild", "four Linear tickets", "I would implement inline", "qa-verification", "implement-unit-of-work", "multi-ticket-work", "verify-pr", "ui-verification", "execute-ticket-work", "TodoWrite", "two-stage review", "spec compliance reviewer", "code quality reviewer", "ticket orchestrator", "ticket-orchestrator", "does not define", "does not prescribe"]
+forbidden_terms = ["Depth budget:", "IMPLEMENTATION_SLICE_RESULT", "BROWSER_VERIFICATION_RESULT", "Root -> child -> grandchild", "orchestration map", "leaf-only", "grandchild", "four Linear tickets", "I would implement inline", "qa-verification", "implement-unit-of-work", "multi-ticket-work", "verify-pr", "ui-verification", "ticket-execution-coordinator", "TodoWrite", "two-stage review", "spec compliance reviewer", "code quality reviewer", "ticket orchestrator", "ticket-orchestrator", "does not define", "does not prescribe"]
 
 [[scenario.criteria]]
 key = "ticket_start_is_single_ticket_router"
@@ -52,7 +44,7 @@ The response gathers only relevant PRD/design/reference context, reads repo inst
 [[scenario.criteria]]
 key = "scoping_before_planning"
 description = """
-The response delegates codebase scoping before implementation planning.
+The response delegates codebase scoping through code-mapper before implementation planning.
 """
 
 [[scenario.criteria]]
@@ -86,9 +78,21 @@ The response does not hand off main-ticket orchestration to another agent or des
 """
 
 [[scenario.criteria]]
+key = "uses_shared_execution_contract"
+description = """
+The response says the approved execution phase follows the shared coordinate-ticket-execution contract while ticket-start remains the main coordinator.
+"""
+
+[[scenario.criteria]]
+key = "uses_implementation_worker"
+description = """
+The response coordinates implementation through implementation-worker rather than implementing inline.
+"""
+
+[[scenario.criteria]]
 key = "coordinates_execution_and_verification_loop"
 description = """
-The response coordinates implementation, independent review, QA, UI/UX where applicable, scoped fixes, and reruns through delegated work as needed instead of doing them inline.
+The response coordinates implementation through implementation-worker, independent review through code-reviewer, security review through security-reviewer when applicable, QA through qa-verifier, UI/UX through uiux-verifier when applicable, scoped fixes, and reruns through delegated work as needed instead of doing them inline.
 """
 
 [[scenario.criteria]]
@@ -106,7 +110,7 @@ The response describes compact context included in delegated requests, such as t
 [[scenario.criteria]]
 key = "execution_order"
 description = """
-The response preserves the ticket work order: implement first, verify through independent review plus QA plus UI/UX when applicable, aggregate findings, delegate scoped fixes, rerun affected verification, then PR verification.
+The response preserves the ticket work order: implement first, verify through independent review plus security review or explicit skip plus QA plus UI/UX when applicable, aggregate findings, delegate scoped fixes, rerun affected verification, then PR verification.
 """
 
 [[scenario.criteria]]
@@ -118,13 +122,13 @@ The response says delegated QA and UI/UX verifiers must report CANNOT_VERIFY wit
 [[scenario.criteria]]
 key = "readiness_requires_resolved_reports"
 description = """
-The response says PR verification or handoff waits until implementation, independent review, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.
+The response says PR verification or handoff waits until implementation, independent review, security review or skip, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.
 """
 
 [[scenario]]
 id = "ticket-start-start-working-does-not-code"
 user_request = """
-The user says: "Let's start working on this ticket: https://yesenergy.atlassian.net/browse/SS-2785. We are only concerned with the coding part in this repository and not the alert creation subticket. We are working on a feature branch, so base this worktree and future PR on SS-2766-centralized-monitoring-of-submission-services-components." The agent has read enough ticket and repo context to know likely affected files, but the user has not approved a written spec/design or an implementation plan. Describe the correct immediate behavior.
+The user says: "Let's start working on this ticket: https://yesenergy.atlassian.net/browse/SS-2785. We are only concerned with the coding part in this repository and not the alert creation subticket. We are working on a feature branch, so base this worktree and future PR on SS-2766-centralized-monitoring-of-submission-services-components." The agent has read enough ticket and repo context to know likely affected files and has an internal checklist saying implementation is next, but the user has not approved a written spec/design or an implementation plan. Describe the correct immediate behavior.
 """
 forbidden_terms = ["Implemented the coding slice", "I implemented it myself", "start coding now", "edit files now", "update_plan is approval"]
 
@@ -143,19 +147,19 @@ The response explicitly blocks product-code and test edits in the main session b
 [[scenario.criteria]]
 key = "brainstorming_is_iterative"
 description = """
-The response requires a real user-facing brainstorming loop with targeted follow-up questions and confirmation of shared understanding, not one perfunctory question or a generic "any concerns?".
+The response routes to user-facing requirements/design alignment with targeted questions or a clear open-questions ledger before spec/design approval, rather than treating the user's "start working" wording as implementation approval.
 """
 
 [[scenario.criteria]]
 key = "writes_spec_for_approval"
 description = """
-The response says the agent must write a concise spec/design from the brainstorming result and ask the user to approve it before plan writing.
+The response preserves the written spec/design approval gate before coding or execution.
 """
 
 [[scenario.criteria]]
 key = "writes_plan_for_approval"
 description = """
-The response says an implementation plan must be produced after spec approval and explicitly approved by the user before execution or coding.
+The response preserves the explicit implementation-plan approval gate before coding or execution.
 """
 
 [[scenario.criteria]]
@@ -222,12 +226,12 @@ tests, and prior implementation history. The agent is tempted to do local
 scoping and ask the user those questions before dispatching because it thinks
 subagents need a separate explicit ask. Describe the correct next behavior.
 """
-forbidden_terms = ["local scoping is enough", "ask the user first", "separate explicit ask", "skip scoping dispatch"]
+forbidden_terms = ["local scoping is enough", "ask the user first", "need a separate explicit ask", "wait for a separate explicit ask", "skip scoping dispatch"]
 
 [[scenario.criteria]]
 key = "dispatch_before_brainstorming"
 description = """
-The response says the next step is to dispatch a codebase scoping subagent before brainstorming, spec/design writing, implementation-plan writing, execution, product edits, or test edits.
+The response says the next step is to dispatch code-mapper before brainstorming, spec/design writing, implementation-plan writing, execution, product edits, or test edits.
 """
 
 [[scenario.criteria]]
@@ -239,7 +243,7 @@ The response says local scoping by the main agent does not satisfy ticket-start 
 [[scenario.criteria]]
 key = "ticket_request_authorizes_scoping"
 description = """
-The response says the user's ticket-start request is sufficient authorization to dispatch the scoping subagent; the agent should not wait for a separate explicit user ask.
+The response says the user's ticket-start request is sufficient authorization to dispatch code-mapper; the agent should not wait for a separate explicit user ask.
 """
 
 [[scenario.criteria]]
@@ -252,6 +256,114 @@ The response requires an ambitious, comprehensive code scope sweep that tries to
 key = "brainstorm_from_scoping_evidence"
 description = """
 The response says brainstorming questions should be based on the returned scoping evidence, so the user is only asked about unknowns the codebase sweep could not resolve.
+"""
+
+[[scenario]]
+id = "ticket-start-brainstorming-after-scoping"
+user_request = """
+Ticket intake and codebase scoping for one Linear issue are complete. Parent context,
+relevant artifact slices, repo state, worktree freshness, and a compact code-mapper
+scope report are available. Known ambiguity: whether tax-exempt customers should
+bypass the new eligibility rule. Affected surfaces: billing API, checkout
+eligibility banner, and analytics event naming. Constraint: do not change legacy
+invoice migration behavior. Success criteria: eligible users can check out,
+ineligible users see the approved message, and analytics events are stable. The
+user and agent have not yet reached shared requirements/design understanding.
+Describe the correct next behavior.
+"""
+forbidden_terms = ["write the implementation plan now", "start coding", "execute now", "dispatch another scoping pass"]
+
+[[scenario.criteria]]
+key = "routes_to_user_facing_brainstorming"
+description = """
+The response routes a user-facing brainstorming session grounded in the ticket, parent context, artifact slices, repo state, scope report, known ambiguity, affected surfaces, constraints, and success criteria.
+"""
+
+[[scenario.criteria]]
+key = "brainstorming_not_summary_only"
+description = """
+The response asks for an iterative brainstorming loop with targeted open questions and shared-understanding confirmation, not only a briefing or requirements summary.
+"""
+
+[[scenario.criteria]]
+key = "blocks_plan_until_spec_approval"
+description = """
+The response states that plan writing and execution wait until brainstorming produces a written spec/design and the user approves it.
+"""
+
+[[scenario.criteria]]
+key = "requests_complete_open_questions"
+description = """
+The response maintains a complete open-questions ledger and blocks spec/design writing until material unknowns are resolved or explicitly approved as assumptions.
+"""
+
+[[scenario]]
+id = "ticket-start-plan-writing-after-spec-approval"
+user_request = """
+The brainstorming phase for one Linear issue has produced a user-approved
+spec/design. Ticket context, parent context, artifact slices, codebase scope, and
+repo constraints are available. No implementation plan has been written or
+approved yet. Describe the correct next behavior.
+"""
+forbidden_terms = ["start coding", "execute now", "edit product code", "skip plan approval"]
+
+[[scenario.criteria]]
+key = "routes_plan_writing"
+description = """
+The response routes implementation-plan writing from the approved spec/design and ticket context instead of writing code or dispatching implementation.
+"""
+
+[[scenario.criteria]]
+key = "plan_request_is_self_contained"
+description = """
+The response says the plan-writing request or plan context must include the approved spec/design, ticket facts, parent context, artifact slices, codebase scope, repo constraints, expected checks, and non-goals.
+"""
+
+[[scenario.criteria]]
+key = "blocks_execution_until_plan_approval"
+description = """
+The response keeps execution, product edits, test edits, and draft validation out of scope until the implementation plan is written and explicitly approved by the user.
+"""
+
+[[scenario]]
+id = "ticket-start-execution-phase-uses-native-agents"
+user_request = """
+The user approved the spec/design and implementation plan for one Linear issue.
+The approved execution packet is ready with ticket facts, parent context,
+acceptance criteria, approved spec/design, approved plan, scope locators,
+branch/worktree state, constraints, expected checks, PR expectations, and report
+requirements. Describe what the main agent should do next.
+"""
+forbidden_terms = ["ticket orchestrator", "ticket-orchestrator", "ticket-execution-coordinator", "handoff main-ticket orchestration", "qa-verification", "ui-verification", "verify-pr", "codebase-scope-map"]
+
+[[scenario.criteria]]
+key = "enters_current_session_execution_phase"
+description = """
+The response enters a current-session execution phase from the approved execution packet, restates the packet fields, uses the shared coordinate-ticket-execution contract, and keeps the main agent as the orchestrator rather than handing off ticket orchestration.
+"""
+
+[[scenario.criteria]]
+key = "execution_uses_implementation_worker"
+description = """
+The response coordinates implementation through implementation-worker before review and verification.
+"""
+
+[[scenario.criteria]]
+key = "execution_uses_native_review_and_verifier_agents"
+description = """
+The response coordinates independent review through code-reviewer, security review through security-reviewer when there is a plausible security surface, QA through qa-verifier, and UI/UX verification through uiux-verifier when applicable.
+"""
+
+[[scenario.criteria]]
+key = "security_review_has_explicit_skip_rule"
+description = """
+The response requires security-reviewer when there is a plausible security surface and records an explicit skip reason only when there is no plausible security surface.
+"""
+
+[[scenario.criteria]]
+key = "execution_reports_gate_pr_readiness"
+description = """
+The response says PR verification waits until implementation, independent review, security review or skip, QA, UI/UX or skip, fixes, and affected reruns are resolved, blocked, or explicitly out of scope.
 """
 
 [[scenario]]
@@ -276,7 +388,7 @@ The response treats start-tackling language, coding-scope language, feature-bran
 [[scenario.criteria]]
 key = "scoping_delegation_is_mandatory_after_intake"
 description = """
-The response requires delegated codebase scoping after ticket, parent, artifact, and repo intake before brainstorming or implementation planning, with no trivial-scope skip or local replacement.
+The response requires delegated codebase scoping through code-mapper after ticket, parent, artifact, and repo intake before brainstorming or implementation planning, with no trivial-scope skip or local replacement.
 """
 
 [[scenario.criteria]]
@@ -295,6 +407,35 @@ The response preserves the required order: delegated scoping, iterative brainsto
 key = "approval_requests_are_explicit"
 description = """
 The response requires explicit user approval for both the written spec/design and the implementation plan; investigation progress, branch choice, internal checklist, or working notes cannot satisfy either approval gate.
+"""
+
+[[scenario]]
+id = "ticket-start-pr-readiness-after-existing-pr"
+user_request = """
+Personal workflow: Linear ticket APP-123 is In Review, PR #12 exists as a draft
+on branch feature/app-123, implementation and verification reports are clean,
+the intended action is final PR verification before merge approval, merge has
+not been explicitly approved yet, and PR metadata/checks/reviews/comments have
+not been re-read. Describe the correct next behavior.
+"""
+forbidden_terms = ["merge now", "mark ready inline", "update the ticket inline", "dismiss comments inline", "final report now"]
+
+[[scenario.criteria]]
+key = "delegates_pr_readiness_without_mutation"
+description = """
+The response delegates or routes a self-contained PR readiness verification request instead of evaluating readiness, merging, updating tickets, dismissing comments, or mutating source-control state inline.
+"""
+
+[[scenario.criteria]]
+key = "readiness_request_carries_current_state"
+description = """
+The response carries forward the PR number, branch, current tracker state, clean report state, stale metadata/checks/reviews/comments, intended action, and lack of merge approval.
+"""
+
+[[scenario.criteria]]
+key = "merge_requires_fresh_readiness_and_approval"
+description = """
+The response states that merge cannot happen until readiness metadata is freshly checked and explicit merge approval exists.
 """
 
 [[scenario]]

@@ -25,6 +25,8 @@ Documentul descrie cele 8 faze ale workflow-ului, fiecare cu hard-gate. Acest fi
    - PFA real — venit PFA în sistem real (NU norma de venit)
    - Ambele — output unificat
 
+Pentru răspunsuri care aleg clar doar **PFA real**, confirmă scenariul PFA real și cere documentele PFA relevante. Nu enumera exemple, documente, cache-uri sau liste din PF investiții în aceeași întrebare; dacă trebuie verificat dacă mai există alte scenarii, întreabă generic dacă există și alte venituri care ar schimba scenariul.
+
 **Acțiuni la pass:**
 - Creează `/Users/trocaneduard/Documents/Personal/declaratii-unice/{an_fiscal}/sesiuni/{YYYY-MM-DD}_{persoana_slug}/` cu subfoldere `inputs/` și `outputs/`.
 - Creează `worklog.md` în folderul sesiunii cu primul entry:

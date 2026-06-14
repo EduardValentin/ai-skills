@@ -17,6 +17,7 @@ from contract_harness import load_toml_payload, run_contract_suite  # noqa: E402
 def main() -> int:
     try:
         check_toml_payload_parser()
+        check_toml_suite_field_assertions()
         run_contract_suite(REPO_ROOT / "tests" / "contracts" / "behavioral-coverage.toml")
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
@@ -67,6 +68,51 @@ description = "The response does the demo."
         raise AssertionError("multiline scenario string did not parse")
     if scenario["criteria"][0]["key"] != "does_demo":
         raise AssertionError("scenario criteria did not parse")
+
+
+def check_toml_suite_field_assertions() -> None:
+    with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmpdir:
+        tmp_path = Path(tmpdir)
+        sample = tmp_path / "sample-behavioral.toml"
+        sample.write_text(
+            '''
+[suite]
+prompt_instructions = """
+This is a neutral test prompt.
+Do not perform external calls.
+"""
+
+[[scenario]]
+id = "demo"
+user_request = "Demo."
+'''.lstrip(),
+            encoding="utf-8",
+        )
+
+        contract = tmp_path / "contract.toml"
+        contract.write_text(
+            f'''
+[[assertion]]
+type = "toml_suite_field_contains_for_each"
+glob = "{sample.relative_to(REPO_ROOT)}"
+path = "{{path}}"
+field = "prompt_instructions"
+values = [
+  "neutral test prompt",
+]
+
+[[assertion]]
+type = "toml_suite_field_not_contains_for_each"
+glob = "{sample.relative_to(REPO_ROOT)}"
+path = "{{path}}"
+field = "prompt_instructions"
+values = [
+  "must explain",
+]
+'''.lstrip(),
+            encoding="utf-8",
+        )
+        run_contract_suite(contract)
 
 
 if __name__ == "__main__":

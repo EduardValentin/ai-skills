@@ -2,10 +2,16 @@
 name = "implement-unit-of-work"
 skill = "implement-unit-of-work"
 skill_path = "skills/implement-unit-of-work/SKILL.md"
-agent_env = "IMPLEMENT_UNIT_AGENT_COMMAND"
 scenario_env = "IMPLEMENT_UNIT_SCENARIO"
 prompt_instructions = """
-Do not perform real implementation. Return only the implementation approach and report behavior the implementer should use. Keep it concise.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: implement-unit-of-work. Judge implementation behavior and report boundaries.

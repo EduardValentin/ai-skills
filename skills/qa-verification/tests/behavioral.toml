@@ -2,10 +2,16 @@
 name = "qa-verification"
 skill = "qa-verification"
 skill_path = "skills/qa-verification/SKILL.md"
-agent_env = "QA_VERIFICATION_AGENT_COMMAND"
 scenario_env = "QA_VERIFICATION_SCENARIO"
 prompt_instructions = """
-Do not execute QA inside this pressure test. Return only the concrete manual/runtime verification the QA verifier must perform during the real QA run, plus the report shape and how BUGS FOUND would be reported if a check fails. Populate metadata source, access sequence, and scope basis from scenario facts instead of leaving placeholders. If PR/ticket tooling has not been attempted yet, require that before diff fallback; ask for missing PR/ticket details before using the diff as provisional scope. If a local diff is available after those gates, state how it scopes affected routes, setup, implemented surfaces, and regression risks. If the scenario provides reachable runtime/dependencies, do not report QA cannot proceed only because this pressure test is not executing QA. If the scenario says required runtime, credentials, data, or real third-party dependencies are unavailable, return the blocker verdict/report that QA must produce now instead of a future verification plan. Do not answer with a passive template that omits the required interactions. Keep it concise.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: qa-verification. Judge QA behavior, scope, and report boundaries. The pressure prompt asks for the approach/report shape only; do not require proof that QA was actually executed.
@@ -16,7 +22,8 @@ user_request = """
 Use the loaded qa-verification skill for a backend API change. The service is
 running at http://localhost:8080 with a seeded API token and a test database.
 Acceptance criteria require validating successful creation, duplicate rejection,
-auth boundaries, persisted state, and error payloads against the running service.
+auth boundaries, state transitions, persisted state, side effects, and error
+payloads against the running service.
 """
 forbidden_terms = ["unit tests are enough", "clean because tests passed", "before Ship", "visual parity", "UI/UX"]
 
@@ -145,7 +152,12 @@ The response describes a QA report with verdict, coverage performed, evidence, b
 [[scenario]]
 id = "mixed-api-and-ui"
 user_request = """
-Use the loaded qa-verification skill for a mixed invite flow where the invite API and invite form changed together. Verify backend behavior, browser-observed behavior, and the integration between them.
+Use the loaded qa-verification skill for a mixed invite flow where the invite API
+and invite form changed together. The app is running at
+http://localhost:3000/invites, the API is running at http://localhost:8080, and
+seeded users are available. Acceptance criteria require invite creation through
+the API, invite submission through the form, duplicate rejection, visible form
+errors, persisted invite state, and matching UI/API invite status.
 """
 forbidden_terms = ["only backend", "only ui", "before Ship", "visual parity", "UI/UX"]
 
@@ -195,7 +207,7 @@ The response uses diff scoping only as a fallback when metadata and caller-provi
 [[scenario]]
 id = "frontend-pr-readable-no-testing-notes"
 user_request = """
-Use the loaded qa-verification skill for a frontend PR. PR metadata and the ticket are readable, but the PR has no testing section. The ticket says users can filter saved places by status, and the diff changes a filter panel and badge count.
+Use the loaded qa-verification skill for a frontend PR. PR metadata and the ticket are readable, but the PR has no testing section. The ticket says users can filter saved places by status, and the diff changes a filter panel and badge count. The app is running at http://localhost:3000/saved-places with seeded Active and Archived saved places.
 """
 forbidden_terms = ["QA cannot proceed because notes are absent", "frontend-pr-test", "visual parity", "UI/UX"]
 

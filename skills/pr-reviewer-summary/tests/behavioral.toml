@@ -2,10 +2,16 @@
 name = "pr-reviewer-summary"
 skill = "pr-reviewer-summary"
 skill_path = "skills/pr-reviewer-summary/SKILL.md"
-agent_env = "PR_REVIEWER_SUMMARY_AGENT_COMMAND"
 scenario_env = "PR_REVIEWER_SUMMARY_SCENARIO"
 prompt_instructions = """
-Do not inspect a real diff. Return only the PR-body drafting workflow, required context, output sections, and blocker behavior.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: pr-reviewer-summary. Judge reviewer usefulness, final-state summarization, context requirements, and manual-testing quality.
@@ -13,7 +19,13 @@ Loaded skill under test: pr-reviewer-summary. Judge reviewer usefulness, final-s
 [[scenario]]
 id = "final-state-pr-body"
 user_request = """
-Generate a PR description for a branch that added saved-place filtering. The work had several iterations and a false start, but the final diff changes the filter panel, API query parameter, and badge count behavior.
+Generate a PR description for a branch that added saved-place filtering.
+
+Mocked review context:
+- Branch diff summary: final diff changes the filter panel, API query parameter, and active filter badge count behavior.
+- Changed files: `FilterPanel`, results query serialization, and active filter badge count logic.
+- Recent commits: saved-place filter control, query parameter wiring, badge count update.
+- Ticket/conversation context: users need to narrow results to saved places; the work had several iterations and a false start, but the PR description should describe only the final shipped state.
 """
 forbidden_terms = ["initially", "after feedback", "then we changed it again"]
 

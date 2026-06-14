@@ -27,6 +27,8 @@ Scale the depth to the request:
 - If the user gives a specific design direction, briefly restate the direction, note any meaningful tradeoff or constraint, and proceed unless something important is ambiguous.
 - If the user does not give a specific direction, pause for a collaborative interview before implementing.
 - If the direction is fuzzy, do not treat the first answer as enough. Keep interviewing, synthesizing, and narrowing until the next design choices are constrained.
+- Before enough context is gathered, do not state a current lean, recommend a direction, or choose final styling. Naming possible tradeoff dimensions is fine; picking one side is not.
+- The first response to an ambiguous visual request is incomplete unless it also says the answers will be synthesized into two or three distinct directions with tradeoffs and visual language, then narrowed into a shared brief before implementation.
 
 Ask targeted questions that change the design decision:
 
@@ -37,7 +39,7 @@ Ask targeted questions that change the design decision:
 5. What should this avoid feeling like?
 6. What existing product surfaces, references, or competitors should it resemble or reject?
 
-Interview adaptively. After each answer, reflect back the current read and ask the next highest-leverage question. If the user says "you decide", still present the tradeoff you are deciding on and ask for confirmation unless the direction is already unambiguous.
+Interview adaptively. After each answer, reflect back the current read and ask the next highest-leverage question. If the user says "you decide", treat that as permission to lead the alignment process, not permission to skip it. Name the tradeoff dimensions, gather the minimum context needed, then synthesize options before recommending one unless the direction is already unambiguous.
 
 ## Options And Recommendation
 

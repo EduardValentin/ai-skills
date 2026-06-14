@@ -14,12 +14,52 @@ values = [
   "[suite]",
   "skill = \"{frontmatter_name}\"",
   "skill_path = \"{path}\"",
-  "agent_env = ",
   "scenario_env = ",
   "prompt_instructions = ",
   "judge_context = ",
   "[[scenario]]",
   "[[scenario.criteria]]",
+]
+
+[[assertion]]
+type = "not_contains_for_each"
+glob = "skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+values = [
+  "agent_env = ",
+]
+
+[[assertion]]
+type = "toml_suite_field_contains_for_each"
+glob = "skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+field = "prompt_instructions"
+values = [
+  "This is a behavioral pressure test.",
+  "Treat scenario facts\nas the only available runtime facts.",
+  "Do not treat these test-harness limits as\nruntime blockers unless the scenario itself says the needed access, tooling, or\nruntime is unavailable.",
+  "Do not quote the skill text or test criteria.",
+]
+
+[[assertion]]
+type = "toml_suite_field_not_contains_for_each"
+glob = "skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+field = "prompt_instructions"
+values = [
+  "It must explain",
+  "must explain:",
+  "must mention",
+  "must state",
+  "must include",
+  "Do name ",
+  "Do not name downstream",
+  "Explicitly describe",
+  "Name required",
+  "Return only the",
+  "choose the best option",
+  "Populate ",
+  "BUGS FOUND",
 ]
 
 [[assertion]]

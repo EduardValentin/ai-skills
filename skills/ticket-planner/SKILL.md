@@ -15,10 +15,10 @@ PRD owns business rules; prototype owns UI, interaction details, and visible cop
 ## Required Rules
 
 - Stay issue-tracker neutral while planning; publishing belongs to a separate tracker-specific skill.
-- PRD and prototype are optional inputs. If product context is missing or thin, run a requirements brainstorming phase before drafting.
+- PRD and prototype are optional inputs. If product context is missing or thin, run a requirements brainstorming phase before drafting. It must cover users, flow, data, permissions, integrations, edge cases, and non-goals, then produce a provisional shared-understanding brief with open questions and wait for user approval before drafting.
 - Draft no stories from guesses; first get user approval on a shared-understanding brief.
 - Slice stories by user outcome and integration path, not by UI component, layer, or technical task.
-- Cover relevant integration points in the first viable story for a feature: UI/API/data/permissions/external systems/notifications/analytics.
+- Cover relevant integration points in the first viable story for a feature: UI, API, data, permissions, external systems, notifications, and analytics. When pushing back on layer-based slices, explicitly name that full set and state that relevant concerns should be folded into the first viable vertical story rather than split into separate layer tickets.
 - Every story draft must include a dedicated Acceptance Criteria section with concrete, verifiable checks.
 - Apply the ticket draft quality rules below before presenting drafts for approval.
 - Edit no `PRD.md` content until the user approves the proposed business-rule additions.
@@ -46,6 +46,7 @@ If PRD and prototype conflict, ask which source wins before drafting.
 
 - Use plain outcome titles; keep mechanisms, parameters, files, and implementation steps out of titles.
 - Separate the business overview from technical notes. Put concrete pass/fail checks in the dedicated acceptance-criteria section.
+- In cleanup responses, explicitly require the Acceptance Criteria section to contain concrete pass/fail checks rather than generic criteria or prose-only requirements.
 - Make each ticket self-contained. Preserve interfaces, paths, behaviors, edge cases, contracts, dependencies, and output conditions while trimming noise.
 - Keep parent tickets high-level; child tickets own implementation specifics. Fix stale names, omitted items, and contradictions across related tickets.
 - Reformat dense identifier prose into a lead-in plus formatted block. In aligned blocks, mark human-readable explanations with comment markers; leave pure value lists or identifier mappings unmarked.
@@ -83,6 +84,8 @@ Do not ask about details already settled by the PRD or prototype. Put non-blocki
 When clarifications add new business details not in `PRD.md`, propose a concise PRD patch summary and ask before editing.
 
 Only add business rules, domain concepts, data models, user flows, permissions, lifecycle rules, or business-impacting edge cases. Never add implementation details, component architecture, layout, styling, or UI-widget choices.
+
+If a proposed PRD update still needs a follow-up clarification, ask that clarification and still explicitly state that `PRD.md` will not be edited until the user approves the final wording.
 
 ## Definition Of Done
 

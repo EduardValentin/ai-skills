@@ -7,12 +7,20 @@ path = "skills/multi-ticket-work/SKILL.md"
 max = 105
 
 [[assertion]]
+type = "contains"
+path = "skills/multi-ticket-work/SKILL.md"
+values = [
+  "ticket-execution-coordinator",
+  "implementation-worker",
+]
+
+[[assertion]]
 type = "not_contains"
 path = "skills/multi-ticket-work/SKILL.md"
 values = [
   "readiness ledger",
   "Ship readiness",
-  "execute-ticket-work",
+  "coordinate-ticket-execution",
   "implement-unit-of-work",
   "qa-verification",
   "ui-verification",

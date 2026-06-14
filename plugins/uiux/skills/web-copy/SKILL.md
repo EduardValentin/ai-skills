@@ -21,6 +21,10 @@ Write copy from the product's language, the page's job, and the user's context. 
 4. Review for human tone: remove filler, vague claims, buzzwords, repeated phrases, and anything the brand would not actually say.
 5. Check accessibility: button/link text should make sense out of context, error text should explain recovery, and headings should describe the section honestly.
 
+If the user asks not to answer copy questions, continue only by naming the missing brief inputs and marking the working voice as temporary and needing confirmation. Do not hide missing audience, page goal, key message, tone, must-use terms, banned terms, or desired action behind a polished draft.
+
+Every copy decision or blocker response must include the quality checks that will govern the draft: CTA clarity, recoverable error text, honest headings, human tone, and fit within the design hierarchy and available space.
+
 ## Copy Principles
 
 - Copy must follow the product's brand voice, audience, message, tone, conversion goal, and context.

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import os
 from pathlib import Path
 
 
@@ -16,6 +17,7 @@ from behavioral_harness import (  # noqa: E402
     build_loaded_skill_prompt,
     load_behavioral_scenarios,
     load_behavioral_suite_config,
+    resolve_behavioral_agent_command,
     select_scenarios,
 )
 from semantic_judge import SemanticCriterion  # noqa: E402
@@ -78,7 +80,6 @@ def check_behavioral_harness_contract() -> None:
 name = "demo-suite"
 skill = "demo"
 skill_path = "skills/demo/SKILL.md"
-agent_env = "DEMO_AGENT_COMMAND"
 scenario_env = "DEMO_SCENARIO"
 prompt_instructions = "Return the demo response shape."
 judge_context = "Judge demo behavior."
@@ -101,8 +102,6 @@ description = "The response follows the TOML scenario."
         raise AssertionError("loaded TOML suite name mismatch")
     if suite.skill_name != "demo":
         raise AssertionError("loaded TOML suite skill mismatch")
-    if suite.agent_env_var != "DEMO_AGENT_COMMAND":
-        raise AssertionError("loaded TOML suite agent env mismatch")
     if suite.scenario_filter_env_var != "DEMO_SCENARIO":
         raise AssertionError("loaded TOML suite scenario env mismatch")
     if len(loaded) != 1:
@@ -113,6 +112,20 @@ description = "The response follows the TOML scenario."
         raise AssertionError("loaded TOML criterion mismatch")
     if loaded[0].forbidden_terms != ("nope",):
         raise AssertionError("loaded TOML forbidden terms mismatch")
+
+    original_env = os.environ.copy()
+    try:
+        os.environ.pop("SKILL_TRIGGER_AGENT_COMMAND", None)
+
+        if resolve_behavioral_agent_command() != "":
+            raise AssertionError("agent command should be empty when no env vars are set")
+
+        os.environ["SKILL_TRIGGER_AGENT_COMMAND"] = "generic-cmd"
+        if resolve_behavioral_agent_command() != "generic-cmd":
+            raise AssertionError("generic harness command should be used")
+    finally:
+        os.environ.clear()
+        os.environ.update(original_env)
 
 
 def assert_contains(haystack: str, needle: str) -> None:

@@ -9,7 +9,7 @@ description: Use when the user asks to work a set of Jira or Linear tickets, an 
 
 Use this skill when the requested unit of work is a full multi-ticket scope: several Jira or Linear tickets, an Epic with multiple tickets, or a parent ticket with child tickets or sub-tickets.
 
-The main agent is the multi-ticket coordinator. It identifies the complete ticket scope, aligns the cross-ticket plan with the user, gets approval, dispatches one ticket coordinator subagent per approved ticket or unit, coordinates blockers, collects completion reports, and gives the human a final PR review order. The main agent does not implement ticket work inline.
+The main agent is the multi-ticket coordinator. It identifies the complete ticket scope, aligns the cross-ticket plan with the user, gets approval, dispatches one `ticket-execution-coordinator` native agent per approved ticket or unit, coordinates blockers, collects completion reports, and gives the human a final PR review order. The main agent does not implement ticket work inline.
 
 ## Workflow
 
@@ -22,10 +22,11 @@ The main agent is the multi-ticket coordinator. It identifies the complete ticke
    - List each ticket or unit of work.
    - Identify dependencies, shared files, integration risks, and order constraints.
    - Decide which tickets can be worked in parallel and which must happen consecutively.
-   - Keep one ticket coordinator subagent per ticket by default. Split into units of work only when one ticket is too large or has separable sequencing constraints.
+   - Keep one `ticket-execution-coordinator` per ticket by default. Split into units of work only when one ticket is too large or has separable sequencing constraints.
 
 3. Align and approve the work.
    - Run the user-facing cross-ticket requirements and brainstorming session needed to reach shared understanding for each ticket, including dependencies, boundaries, risks, and success criteria.
+   - Do not dispatch before cross-ticket requirements gathering, user-facing brainstorming, spec creation, implementation planning, and user approval are all complete.
    - Name each in-scope ticket and material dependency in that session instead of summarizing only the Epic or parent ticket.
    - Produce or route the multi-ticket spec and implementation plan from that understanding.
    - Get user approval before dispatching execution.
@@ -39,12 +40,12 @@ The main agent is the multi-ticket coordinator. It identifies the complete ticke
    - When returning workflow actions, make note creation/update and the required re-read checkpoints explicit instead of hiding them inside generic status tracking.
 
 5. Dispatch ticket coordinators.
-   - Dispatch one ticket coordinator subagent per approved ticket or unit of work.
+   - Dispatch one `ticket-execution-coordinator` native agent per approved ticket or unit of work.
    - Each dispatch must include the approved execution packet facts, dependency context, and completion-report requirements. Do not merely say that a packet exists.
-   - Do not ask ticket coordinators to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering.
-   - State plainly in each dispatch that the ticket coordinator coordinates execution for that ticket and must use a deeper level of focused implementation, independent review, QA, UI/UX, fix, and PR-preparation subagents when nested delegation is available. If nested delegation is unavailable, the ticket coordinator must report that limitation.
+   - Do not ask ticket coordinators to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering. State this exclusion plainly when rejecting a worker-collapse plan.
+   - State plainly in each dispatch that the ticket coordinator coordinates execution for that ticket and must use `implementation-worker` plus deeper focused independent review, security review when applicable, QA, UI/UX, fix, and PR-preparation subagents when nested delegation is available. If nested delegation is unavailable, the ticket coordinator must report that limitation.
    - Do not phrase the handoff as if the ticket coordinator should personally implement, review, QA-check, UI-check, fix, prepare the PR, and report in one worker task.
-   - A ticket or unit is not complete until its ticket coordinator has returned PR evidence and the required implementation, review, QA, UI/UX-or-skip, fixes/reruns, risk, and dependency evidence.
+   - A ticket or unit is not complete until its ticket coordinator has returned PR evidence plus distinct implementation, independent review, security-review-or-not-applicable, QA, UI/UX-or-not-applicable, scoped fixes/reruns, risk, dependency, and completion-report evidence.
    - The main agent tracks status and blockers, but does not take over implementation inline.
 
 6. Coordinate sequencing.
@@ -62,13 +63,14 @@ The main agent is the multi-ticket coordinator. It identifies the complete ticke
 
 ## Subagent Completion Report
 
-Each ticket coordinator must report back with:
+Each `ticket-execution-coordinator` must report back with:
 
 - ticket or unit worked
 - PR link
 - summary of what changed
 - implementation report
 - independent review report
+- security review report, or not-applicable reason
 - QA report
 - UI/UX report, or not-applicable/cannot-verify reason
 - scoped fixes and reruns after verifier findings
@@ -90,10 +92,14 @@ In each dispatch, ask for a reviewer-friendly PR body with summary, manual testi
 - A ticket coordinator handoff says to own all execution directly instead of coordinating deeper delegated phases.
 - Parent-side review is treated as a replacement for independent per-ticket review.
 - Completion is summarized as a generic report instead of the required phase evidence.
-- A combined worker report is accepted instead of distinct implementation, review, QA, and UI/UX-or-skip evidence.
+- A combined worker report is accepted instead of distinct implementation, review, security-review-or-skip, QA, and UI/UX-or-skip evidence.
 - The ticket set, Epic children, or sub-tickets were not fully gathered.
 - Work begins before dependencies and parallelization are mapped.
 - The durable orchestration note is missing, stale, or not re-read after compaction or resume.
 - A ticket is marked complete without both a PR and subagent report.
 - The final report lacks PR links, review order, or dependency rationale.
 - A PR body does not give the human enough review focus.
+
+When rejecting a rushed worker-collapse plan, the response must explicitly state:
+- Ticket coordinators must not perform user-facing brainstorming, spec creation, plan creation, or approval gathering.
+- Each ticket remains incomplete until distinct returned evidence includes implementation, independent review, security-review-or-not-applicable, QA, UI/UX-or-not-applicable, fixes/reruns, PR link, completion report, risks, and blockers or downstream notes.

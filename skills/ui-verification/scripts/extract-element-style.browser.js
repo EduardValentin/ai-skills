@@ -2,7 +2,8 @@
 //
 // Evaluate this in the page against a CSS selector for the element being
 // inspected. It returns the computed-style and bounding-rect fields needed to
-// fill the ui-verification matched-element inventory.
+// fill the ui-verification matched-element inventory. The global `uiux-verifier`
+// agent uses this same evidence contract when it delegates visual checks.
 
 ((selector) => {
   const el = document.querySelector(selector);

@@ -11,6 +11,8 @@ Generate a full PR body in Markdown that helps a reviewer understand what change
 
 Requires repo read access and enough review context to inspect the branch diff, changed files, recent commits, and available ticket or conversation context.
 
+A user-provided prose summary of the change is useful context, but it is not a substitute for branch diff, changed-file summary, recent commits, or PR URL. If those are unavailable, do not produce a final PR body; ask for the missing reliable context or state that the draft is blocked.
+
 Fallbacks:
 
 - If the branch diff is unavailable, ask for the PR diff, changed-file summary, or PR URL before drafting.
@@ -22,6 +24,7 @@ Fallbacks:
 
 1. Gather the review context.
    Inspect the current branch diff against the normal review base for the repository. Review the changed files, recent commits, and the user conversation that led to the work. Use ticket details if they are available.
+   Any response before drafting must preserve this gate: inspect or obtain branch diff, changed files, recent commits, and available ticket or conversation context.
 2. Identify the reviewer-visible story.
    Distill the change into the smallest set of user-facing or externally observable outcomes that matter for review. Ignore refactors, renames, formatting, test-only changes, or small cleanups unless they materially affect behavior or the review path.
 3. Collapse iteration history into final-state behavior.
@@ -64,6 +67,8 @@ Fallbacks:
 - Stay concrete without turning the section into a file-by-file changelog.
 
 ## Output Shape
+
+Before the Markdown PR body, include one short context line unless the user explicitly asks for body-only output. The line must name the review context inspected or required: branch diff, changed files, recent commits, and ticket or conversation context. If that context is unavailable, stop there and ask for it instead of drafting final body text.
 
 Use these headings exactly when they are present:
 

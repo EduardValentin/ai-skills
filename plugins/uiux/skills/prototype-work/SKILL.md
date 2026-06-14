@@ -34,6 +34,8 @@ Prototype reference applications define product UX before production work: user 
 
 The script only auto-detects React apps under `designs/`. If it cannot find one, stop and ask the user for the reference app path. Then rerun with `--app-root <abs-path>`.
 
+When stopping for a missing reference app path, the response must include both parts: ask for the path and state that preparation will be rerun with `--app-root <abs-path>` after the user provides it. Do not edit code or docs while this path is unknown.
+
 2. Start the dev server from the command printed by the script.
 
 3. Use the browser to click through the app and take 2-3 screenshots from different pages or flow states. Summarize the app's visual vibe in a few bullets.
@@ -44,11 +46,14 @@ The script only auto-detects React apps under `designs/`. If it cannot find one,
    - Design: design philosophy, visual direction, accessibility priorities, and design-system rules.
    - App scope: routes, mock boundaries, semantic tokens, theme configuration, component inventory, variants, and design-system configuration.
 
+Preparation is incomplete until those outputs are framed as compact reports: product report, voice report, design report, and app-scope report. Do not replace them with raw doc dumps or a vague note that the docs were read.
+
 ## Prototype Rules
 
 - Keep mocks, routing, and business rules separate from presentational components.
 - Use configured router primitives and exercise flows by clicking through the app instead of manually typing URLs that lose app state.
 - Mock new or changed business rules explicitly in the prototype.
+- When a flow includes a simulated fetch, API boundary, or backend-facing behavior, list and implement an explicit API-like mock for that behavior; do not rely on async states alone to imply the mock.
 - Represent async prototype behavior with appropriate loading, success, empty, and error states.
 
 ## PRD Consolidation
@@ -56,6 +61,8 @@ The script only auto-detects React apps under `designs/`. If it cannot find one,
 If the change adds or alters a user flow, page, component, business rule, data field, permission, branch, mocked integration, or backend-facing behavior even slightly, update `PRD.md`.
 
 Keep PRD edits concise and non-redundant. The PRD contains business rules and product behavior only: no code, component names, design decisions, token names, layout details, or implementation mechanics.
+
+Whenever listing obligations for a prototype behavior change, state both halves: `PRD.md` must be updated, and the PRD content must stay limited to business rules and product behavior rather than mocks, simulated API mechanics, component details, or implementation notes.
 
 ## Completion
 
