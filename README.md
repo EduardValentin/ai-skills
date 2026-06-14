@@ -103,10 +103,10 @@ not inject skill bodies or available-skill indexes, and they fail when the targe
 harness cannot discover the expected skill.
 
 `workflow-dispatch` behavioral tests are loaded-parent-skill pressure tests for
-downstream skill auto-discovery contracts. Prefer colocated
+skills whose core behavior is choosing another skill route. Prefer colocated
 `skills/<skill-name>/tests/behavioral.toml` coverage for ordinary workflow
-behavior. Add workflow-dispatch suites only when a skill still depends on
-downstream skill auto-discovery as the thing being tested.
+behavior. Add workflow-dispatch suites only when route selection itself is the
+behavior under test.
 
 Behavioral pressure tests use deterministic hard gates for protocol and
 forbidden terms, then use a semantic judge for rubric-based behavior checks. The

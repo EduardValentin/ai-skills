@@ -19,6 +19,8 @@ Use this skill whenever the PR or repository is hosted on Bitbucket, even if the
 
 Never print, paste, commit, or place credentials in URLs. Read secrets from an approved store or environment, and redact tokens in reports.
 
+Any response that uses or proposes credential-helper, environment, CLI, keychain, or token-based auth must state that secrets stay in memory only and are not printed, stored, committed, embedded in URLs, or placed in command history.
+
 ## Host Detection And Scope
 
 - Cloud PR URL: `https://bitbucket.org/<workspace>/<repo_slug>/pull-requests/<id>`.
@@ -38,6 +40,10 @@ For supported Cloud operations, prefer `scripts/bitbucket-cloud-pr.sh` when its 
 3. Run `scripts/bitbucket-cloud-pr.sh pr-details ...` before related reads or writes.
 4. For comments, run `scripts/bitbucket-cloud-pr.sh read-comments ...` and follow `next` pagination until complete.
 5. Report unavailable fields or permission failures.
+
+For vague requests such as "this branch" or "the current PR", do not ask for a PR URL as the first response unless local repo/remote context is unavailable. First state that the workflow derives workspace/repo from the Bitbucket remote, looks up PR candidates for the source branch, and asks the user to choose if multiple candidates are found.
+
+For PR testing or verification requests, missing credentials, authentication failure, permission denial, or ambiguous PR lookup must be reported as exact blockers or metadata gaps. Do not silently skip PR metadata gathering.
 
 ## Write Workflow
 
@@ -63,6 +69,8 @@ For writes, report:
 - Payload summary, with sensitive values redacted.
 - API result status.
 - Any merge-task polling, unresolved checks, or permission gaps.
+
+When a write is requested but blocked before mutation, still state the write-result report contract that will be required after the mutation: operation, PR identity, redacted payload summary, API result, and comment or task identity if available.
 
 ## Common Mistakes
 

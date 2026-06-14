@@ -4,7 +4,14 @@ skill = "coordinate-ticket-execution"
 skill_path = "skills/coordinate-ticket-execution/SKILL.md"
 scenario_env = "COORDINATE_TICKET_EXECUTION_SCENARIO"
 prompt_instructions = """
-Do not perform real execution. Return the execution-phase behavior and report expectations only. Explicitly describe how nested delegated native agents are used, or how the limitation is reported if unavailable. Name required native agents, but do not name downstream skill identifiers.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: coordinate-ticket-execution. Judge execution-phase boundaries, not exact wording.

@@ -7,6 +7,16 @@ description: "Use when recapping an existing US-listed stock thesis — catching
 
 A two-flow skill that keeps an existing investment thesis alive. After `stock-research` produces an initial deep dive, `stock-recap` is what you run to catch up on every 10-Q / 10-K filed since the last touch (Quarterly mode) or to analyze the impact of a material event between earnings (News mode). It mechanically diffs actuals vs the saved bull/base/bear projections, LLM-evaluates every saved English sell trigger in 4 states, and optionally proposes a surgical or reclassifying thesis update.
 
+## First response contract
+
+When beginning a recap, the response must preserve these gates before any recap work:
+
+- Prior research preconditions: `verdict.json`, `projections.json`, `financials.json`, `market-expectations.json`, the SEC EDGAR user-agent, the installed financial toolkit, and the investing research repo.
+- Gap detection: check for new 10-Q / 10-K filings since the latest saved financial period.
+- Mode routing: in the first response, state both routing branches explicitly: if filings exist, offer quarterly catch-up or news mode; if no filings exist, offer switch to news mode, valuation-only recap, or exit.
+- Quarterly mechanics: refresh financials and valuation, mechanically diff actuals against saved bull case / base case / bear case projections, and evaluate every saved sell trigger as fired, flashing, clear, or cannot-evaluate. Do not shorten this to "evaluate sell triggers" without naming the four states.
+- Checkpoints: explicitly state that the workflow uses the walkthrough and trigger/trajectory checkpoints before any thesis update, asks before any surgical patch or reclassification, and asks again before pushing changes to remote. Do not omit these checkpoint gates from the first response.
+
 ## When to use
 
 - The user wants to catch up on what's happened with a ticker they already researched. Phrases: "catch me up on NVDA", "recap MSFT since last quarter", "new earnings just dropped on TSLA".

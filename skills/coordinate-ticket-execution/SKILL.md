@@ -43,6 +43,12 @@ If required packet details are missing, stale, contradictory, or unapproved, sto
 
 If nested delegation is unavailable, perform the coordination locally and make that limitation explicit in the report.
 
+The delegation summary is incomplete unless it covers scoped fixes for review or verification findings: delegate fixable findings back to an implementation worker or equivalent scoped fix worker, then rerun the affected review or verification phase. If the runtime cannot delegate scoped fixes, say so explicitly and preserve the same fix/rerun separation locally.
+
+The completion gate is incomplete unless it explicitly includes risk evidence as well as implementation, independent review, security-or-skip, QA, UI/UX-or-skip, fixes/reruns, checks, blockers, and PR evidence.
+
+Even when the packet is currently approved and execution-ready, every execution-ready response must state the contingency path: any missing, stale, contradictory, or unapproved approval/scope fact goes back to the parent or main coordinator as `BLOCKED_NEEDS_PARENT_INPUT`.
+
 ## Completion Report
 
 Return a compact report:

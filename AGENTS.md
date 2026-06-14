@@ -185,6 +185,8 @@ The behavioral command should use the target agent/runtime whose skill selection
 
 Behavioral tests and any other agent-driven tests must not nudge the tested agent toward the expected answer. Actor-facing prompts may set test boundaries, such as no external tool calls, no file edits, no PR creation, response format, and the scenario facts. They must not include checklists of expected workflow steps, required conclusions, required agent names, or rubric items.
 
+Treat actor-facing `prompt_instructions` like mocks or stubs in classic unit tests: they constrain unavailable side effects and injected facts, while assertions and judge criteria verify the behavior.
+
 Put expected behavior in `[[scenario.criteria]]`, `judge_context`, deterministic assertions, or the test harness, not in actor-facing `prompt_instructions` or user prompts unless the user prompt is intentionally modeling real user wording. If a behavioral prompt tells the actor what it "must explain", "must mention", or "must state" about the behavior under test, treat that test as invalid and rewrite it before trusting the result.
 
 ---

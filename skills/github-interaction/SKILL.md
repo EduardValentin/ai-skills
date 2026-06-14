@@ -23,6 +23,8 @@ Requires shell execution, `git`, `curl`, `openssl`, `python3`, `xxd`, macOS Keyc
 
 If a required input is missing, stop and ask.
 
+Every response that is ready to perform a GitHub write must restate this checklist before the mutation: repository/worktree, target object, intended action, exact approved content when posting text, confirmation that the write is intended, and bot git identity preflight for commit-capable flows. The identity preflight must say bot git name/email come from Keychain and fail closed if they cannot be read.
+
 ## Bot Identity
 
 Before committing, set the worktree git author from Keychain:
@@ -35,6 +37,8 @@ git -C <worktree> config user.email "$BOT_GIT_EMAIL"
 ```
 
 If either Keychain read fails, stop. Do not fall back to personal git config.
+
+For any commit-capable flow, state that bot git identity must be read from Keychain and that failure to read it blocks the mutation.
 
 ## GitHub Writes
 
@@ -61,3 +65,5 @@ Read-only GitHub operations may use ambient credentials if needed. Writes may no
 ## Fail Closed
 
 If token minting, bot git identity, permissions, or the write command fails, stop and report the blocker. Draft intended text in chat instead of posting through personal credentials.
+
+Every GitHub-write response must preserve this fail-closed path explicitly: token minting, permission, bot identity, or write-command failure means no mutation and only a draft/report is returned.

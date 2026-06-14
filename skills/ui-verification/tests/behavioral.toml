@@ -4,7 +4,14 @@ skill = "ui-verification"
 skill_path = "skills/ui-verification/SKILL.md"
 scenario_env = "UI_VERIFICATION_SCENARIO"
 prompt_instructions = """
-Do not launch a browser or inspect a real app. Return only the UI verification approach, evidence requirements, fallback behavior, and report verdict shape.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: ui-verification. Judge parity/consistency mode selection, inventory scoping, DOM evidence, fallback handling, and rerun behavior.
@@ -12,7 +19,11 @@ Loaded skill under test: ui-verification. Judge parity/consistency mode selectio
 [[scenario]]
 id = "reference-parity-evidence"
 user_request = """
-Compare the implemented React dashboard against the runnable designs/ reference app before release. I care about every visible element matching the prototype, not just the obvious cards.
+Compare the implemented React dashboard against the runnable designs/ reference
+app before release. Production and reference routes are available, and I
+authorize best-effort in-session inventory scoping if no affected-element
+inventory was provided. I care about every visible element matching the
+prototype, not just the obvious cards.
 """
 forbidden_terms = ["checked the important elements", "screenshot comparison only"]
 
@@ -25,13 +36,17 @@ The response uses parity mode because a runnable reference app is available.
 [[scenario.criteria]]
 key = "requires_matched_inventory"
 description = """
-The response builds or verifies a matched-element inventory covering all relevant visible elements and states.
+Because the pressure prompt forbids browser/tool calls, the response requires
+building or verifying a matched-element inventory covering all relevant visible
+elements and states before any CLEAN/FINDINGS verdict.
 """
 
 [[scenario.criteria]]
 key = "dom_evidence_primary"
 description = """
-The response uses DOM computed-style and bounding-rect evidence as primary evidence, with screenshots only secondary.
+Because the pressure prompt forbids browser/tool calls, the response requires
+DOM computed-style and bounding-rect evidence as primary evidence, with
+screenshots only secondary.
 """
 
 [[scenario]]
@@ -63,6 +78,11 @@ The response adds observed production or reference elements missing from supplie
 id = "no-reference-consistency"
 user_request = """
 There is no prototype for this UI change. Review whether the new settings panel matches the rest of the production app's typography, spacing, borders, shadows, focus states, and accessibility.
+The production app route, changed UI files, and credible analog panels from the
+existing profile and billing settings routes are available as comparison basis.
+Best-effort in-session inventory scoping is authorized if no affected-element
+inventory was supplied.
+Some scoped rows may still lack a credible production analog after inspection.
 """
 forbidden_terms = []
 
@@ -88,6 +108,9 @@ The response returns BLOCKED or degraded evidence for rows where no credible ana
 id = "missing-inventory-requires-scoping"
 user_request = """
 Verify this frontend change against the ticket description and diff. No affected-element inventory was provided.
+Ticket description, acceptance criteria, changed UI files, routes/states, and a
+comparison basis are available. Best-effort in-session inventory scoping is
+authorized.
 """
 forbidden_terms = []
 

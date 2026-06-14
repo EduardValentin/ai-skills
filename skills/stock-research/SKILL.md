@@ -7,6 +7,16 @@ description: "Use when researching a US-listed company end-to-end — fundamenta
 
 End-to-end fundamentals research on a US-listed company, following a long-horizon, business-owner investing philosophy (Buffett/Munger/Dalio, modernized). Produces a durable thesis on disk that the user revisits over years and that the future `stock-recap` skill can mechanically diff against new quarterly results.
 
+## First response contract
+
+When starting fresh research, the response must preserve these gates before durable work begins:
+
+- Setup and identity: resolve ticker/company identity, check `SR_SEC_USER_AGENT`, verify the scripts environment, verify the investing research repo, and check whether a ticker folder already exists.
+- User framing: ask for the GVD lens through a structured choice when available and ask the free-form session-context question that will be captured in `THESIS.md`.
+- Workflow shape: outline the phase sequence and checkpoints: business/moat, financials, parallel competitors/SWOR, earnings calls, valuation, market expectations, bull/base/bear projections, verdict/price-action plan, and commit/index.
+- Durable artifacts: state that the workflow writes Markdown and JSON artifacts under the ticker research folder, including `THESIS.md`, `business-and-moat.md`, `financials.md`, `financials.json`, market expectations, projections, valuation, verdict, and index updates.
+- Scope boundary: keep the work to long-horizon fundamentals research; do not provide technical analysis, options strategy, or day-trading advice.
+
 ## When to use
 
 - The user wants an investment thesis on a specific US-listed ticker
@@ -14,7 +24,7 @@ End-to-end fundamentals research on a US-listed company, following a long-horizo
 - Explicit slash invocation: `/stock-research <TICKER>`
 
 **Do not use for:**
-- Quarterly updates of an existing thesis → that's `stock-recap` (separate skill, not yet built)
+- Quarterly updates of an existing thesis → that's `stock-recap`
 - Technical analysis, options strategies, day trading
 - Non-US listings (the data pipeline is SEC EDGAR + yfinance, both US-focused)
 

@@ -9,6 +9,8 @@ description: Use when an implementation, review, planning, ticket, or handoff ta
 
 Produce a compact, read-only map of the code surface relevant to a requested change. The output is a navigable index, not a transcript: downstream agents should know where to look, what each slice is for, and what risks or gaps exist without loading full files into context.
 
+Every response preserves two boundaries explicitly: scoping is read-only, and the deliverable is a locator-backed downstream index rather than source dumping, solution selection, or implementation.
+
 ## When To Use
 
 - A task needs implementation scoping before planning or coding.
@@ -33,12 +35,20 @@ Expected input from the caller:
 
 If required facts are missing, still map what can be mapped, then list the gap under `## Needs clarification or input`.
 
+If current repository inspection is unavailable or forbidden, do not invent locators or switch into planning. Return the same contract shape, mark the missing current-repo evidence under `## Needs clarification or input`, and state that the real map must be rebuilt from current file:line evidence before downstream work begins.
+
 ## Output Contract
 
-Return Markdown with **exactly** these sections in this order. Keep every heading. If a section has no entries, write `_None._`. Every item uses `path:line` or `path:start-end`; names and signatures are quoted verbatim; relevance is one sentence.
+Return Markdown with the fixed preamble and **exactly** these sections in this order. Keep every heading. If a section has no entries, write `_None._`. Every item uses `path:line` or `path:start-end`; names and signatures are quoted verbatim; relevance is one sentence.
+
+The two preamble lines after the title are fixed output-contract lines; do not rewrite or omit them when repository evidence is missing.
 
 ```markdown
 # Codebase scope map — <task title>
+
+Read-only scope boundary: no edits, generated writes, formatting rewrites, staging, commits, cleanup, solution selection, or implementation; this deliverable is a locator-backed downstream index, not a source dump or transcript.
+
+Token discipline: use one-line representative entries and grouping for large sections; put high-risk omitted or uncertain areas under `## Potential conflict points` or `## Needs clarification or input` instead of dropping them silently.
 
 ## Needs clarification or input
 - <question or missing input> | why it matters | suggested owner: <user / caller / downstream reader>
@@ -98,6 +108,8 @@ Return Markdown with **exactly** these sections in this order. Keep every headin
 ## Prototype / Reference App Rule
 
 When the task touches UI and a runnable prototype/reference app is in scope, `## Prototype or reference elements` is mandatory. List one row per visible relevant declaration in the scoped prototype/reference slices. If you cannot enumerate because composition is too dynamic or third-party code hides the rendered DOM, surface that limitation under `## Conflicts surfaced for caller` or `## Needs clarification or input`; do not emit `_None._` silently.
+
+For reference-backed UI work, `## Affected surface map` is incomplete unless it pairs production locators with the relevant route, state, selector, and prototype counterpart. Do not emit `_None._` for this section on a reference-backed UI task. If current evidence is unavailable, include an `unavailable` row in `## Affected surface map` that states the expected production locator + route/state/selector + prototype counterpart pairing, and also surface the missing evidence under `## Needs clarification or input` or `## Potential conflict points`.
 
 ## Forbidden Behaviors
 

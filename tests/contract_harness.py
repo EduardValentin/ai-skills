@@ -216,6 +216,22 @@ def run_assertion(suite_path: Path, assertion: dict[str, Any]) -> None:
                 require_string(suite_path, assertion, "field"),
                 bool(assertion.get("non_empty", True)),
             )
+    elif assertion_type == "toml_suite_field_contains_for_each":
+        for variables in iterate_variables(suite_path, assertion):
+            assert_toml_suite_field_contains_all(
+                suite_path,
+                resolve_path(render_path(assertion, "path", variables)),
+                require_string(suite_path, assertion, "field"),
+                render_values(suite_path, assertion, variables),
+            )
+    elif assertion_type == "toml_suite_field_not_contains_for_each":
+        for variables in iterate_variables(suite_path, assertion):
+            assert_toml_suite_field_not_contains_any(
+                suite_path,
+                resolve_path(render_path(assertion, "path", variables)),
+                require_string(suite_path, assertion, "field"),
+                render_values(suite_path, assertion, variables),
+            )
     else:
         raise ValueError(f"{suite_path}: unknown contract assertion type {assertion_type!r}")
 
@@ -342,6 +358,50 @@ def assert_toml_scenarios_require_field(
             raise AssertionError(
                 f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} must set {field!r}"
             )
+
+
+def assert_toml_suite_field_contains_all(
+    suite_path: Path,
+    path: Path,
+    field: str,
+    values: list[str],
+) -> None:
+    value = toml_suite_string_field(suite_path, path, field)
+    missing = [item for item in values if item not in value]
+    if missing:
+        raise AssertionError(
+            f"{suite_path}: {path.relative_to(REPO_ROOT)} suite field {field!r} "
+            f"missing expected text: {missing}"
+        )
+
+
+def assert_toml_suite_field_not_contains_any(
+    suite_path: Path,
+    path: Path,
+    field: str,
+    values: list[str],
+) -> None:
+    value = toml_suite_string_field(suite_path, path, field)
+    found = [item for item in values if item and item in value]
+    if found:
+        raise AssertionError(
+            f"{suite_path}: {path.relative_to(REPO_ROOT)} suite field {field!r} "
+            f"contains forbidden text: {found}"
+        )
+
+
+def toml_suite_string_field(suite_path: Path, path: Path, field: str) -> str:
+    payload = load_toml_payload(path)
+    suite = payload.get("suite")
+    if not isinstance(suite, dict):
+        raise AssertionError(f"{path.relative_to(REPO_ROOT)} must define a [suite] table")
+    value = suite.get(field)
+    if not isinstance(value, str):
+        raise AssertionError(
+            f"{suite_path}: {path.relative_to(REPO_ROOT)} suite field {field!r} "
+            "must be a string"
+        )
+    return value
 
 
 def is_empty_value(value: Any) -> bool:

@@ -4,7 +4,14 @@ skill = "ticket-planner"
 skill_path = "skills/ticket-planner/SKILL.md"
 scenario_env = "TICKET_PLANNER_SCENARIO"
 prompt_instructions = """
-Do not create tracker issues or edit PRD.md. Return only the planning workflow, questions, ticket-quality fixes, story-slicing behavior, and approval gates.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: ticket-planner. Judge product planning, prototype boundaries, vertical slicing, PRD update gates, and tracker neutrality.
@@ -38,7 +45,9 @@ forbidden_terms = []
 [[scenario.criteria]]
 key = "tracker_not_required"
 description = """
-The response produces platform-neutral drafts and does not treat issue-tracker access as required for planning.
+The response does not treat issue-tracker access as required for planning and
+continues through the platform-neutral planning path, including a
+shared-understanding brief before drafts when approval is still needed.
 """
 
 [[scenario.criteria]]

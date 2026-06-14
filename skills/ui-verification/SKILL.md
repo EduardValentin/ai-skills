@@ -45,6 +45,8 @@ UI verification requires an affected-element inventory before normal verificatio
 
 If the caller did not provide an affected-element or matched-element inventory, produce or obtain one before normal verification. Prefer delegated scoping when available; otherwise return `BLOCKED` unless the caller explicitly requests best-effort in-session scoping from the ticket description, acceptance criteria, approved artifacts, diff or changed UI files, routes and states, and the reference or production comparison basis. The verifier may refine the scoped inventory during live DOM inspection, but must not skip the scoping step or invent an inventory from visual impressions alone.
 
+When a delegated UI/UX gate provides production and prototype URLs, approved requirements/design, changed UI files, and an affected surface map with reference rows and production locators, the response must name all of those as starting inputs. It must state that every in-scope inventory row gets font, color/background, box, layout, size, state/accessibility, and verdict evidence, and that observed production or reference elements missing from the supplied inventory are recorded under inventory provenance gaps.
+
 ## Mode Selection
 
 - **Parity mode**: use when a runnable prototype, reference app, design implementation, or `designs/` React app is available. The reference is the visual source of truth.
@@ -121,6 +123,8 @@ Parity mode is clean only when the inventory covers caller-supplied affected sur
 ## Consistency Mode
 
 Use when there is no runnable reference and the implemented UI should fit existing production patterns.
+
+Every consistency-mode response must state that rows without a credible production sibling or analog are marked BLOCKED or degraded instead of inventing a comparison basis.
 
 1. Start or open the production app and any relevant analog routes/states. Match viewport, device scale, and browser zoom before comparing.
 2. Use the supplied inventory, or the scoped inventory produced from the ticket description and diff, as the starting matched-element inventory. Refine it with changed UI files, live DOM inspection, reusable component usage, and credible production sibling or analog elements.

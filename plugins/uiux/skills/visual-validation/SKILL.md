@@ -15,6 +15,10 @@ Do not declare visual work complete from code inspection alone. Validate the ren
 - Checking overflow, clipping, focus states, contrast, visual parity, canvas/3D output, or browser-rendered states.
 - A task is ready to be judged by rendered evidence rather than source inspection alone.
 
+## Minimum Checklist
+
+For responsive grid or card changes, every validation plan, blocker report, or completion report must name the minimum visual smell checklist: grid/card axis alignment, overflow, clipping, hidden or non-wrapping text, overlap, inconsistent sibling sizing, sibling color consistency, focus states, contrast, motion, and spacing.
+
 ## Capture Ladder
 
 Use the highest available capability:
@@ -25,6 +29,8 @@ Use the highest available capability:
 4. User-provided screenshots when automation is unavailable.
 
 If none of these is possible, report the blocker instead of claiming visual confidence.
+
+If validation is delayed or cannot be completed in the current turn, say what is blocked, record the residual risk, and still list the concrete viewport/state matrix and visual smell families that must be checked next. Waiting for a slow server is acceptable; claiming visual confidence before rendered evidence is not.
 
 ## Viewport Matrix
 
@@ -38,6 +44,8 @@ Use the product's configured breakpoints when available. At minimum cover:
 For stateful UI, capture the relevant states: default, loading, empty, error, disabled, focused, expanded, selected, and long-content cases.
 
 ## What To Check
+
+In a validation plan or report, name the relevant visual smell families instead of summarizing them as "layout issues." Do not limit the checklist to risks named by the caller. For responsive grids and cards, explicitly include alignment, overflow, clipping, hidden or non-wrapping text, overlap, inconsistent sibling sizing or colors, focus states, contrast, motion, and spacing.
 
 - No unintended horizontal scroll, clipping, overlap, 0-height sections, or broken alignment.
 - Repeated items align on shared axes. In grids, card titles, media, controls, and baselines should not drift up, down, left, or right unless the layout intentionally varies them.
@@ -61,6 +69,8 @@ Visual validation:
 - Fixes applied: <summary or none>
 - Residual risk: <anything not observable>
 ```
+
+When evidence is still pending, do not write only `pending`. Fill the same fields with the planned matrix and the minimum unverified smell list: grid/card axis alignment, overflow, clipping, hidden or non-wrapping text, overlap, sibling sizing, sibling colors, focus states, contrast, motion, and spacing.
 
 ## Done Means
 

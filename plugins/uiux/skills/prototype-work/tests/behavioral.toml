@@ -4,10 +4,14 @@ skill = "prototype-work"
 skill_path = "plugins/uiux/skills/prototype-work/SKILL.md"
 scenario_env = "UIUX_PROTOTYPE_WORK_SCENARIO"
 prompt_instructions = """
-Do not edit files. Return the next action and, when blocked on missing input,
-the resume step after the user provides it. Preserve the prototype-work
-constraints. When async behavior is present, include the required async states
-in the companion obligations.
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
 judge_context = """
 Loaded skill under test: prototype-work. Judge whether the response stays
