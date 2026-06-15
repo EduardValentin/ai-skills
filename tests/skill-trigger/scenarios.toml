@@ -386,6 +386,13 @@ forbidden_terms = ["qa-verification", "QA verification", "another workflow", "ge
 response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
+id = "bitbucket-update-description"
+skill = "manage-bitbucket-pr"
+prompt = "Update the description on Bitbucket Cloud PR 42 in acme/widget with the final QA evidence."
+forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
+response_forbidden_terms = ["qa-verification"]
+
+[[scenario]]
 id = "bitbucket-merge-status"
 skill = "manage-bitbucket-pr"
 prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report blockers."

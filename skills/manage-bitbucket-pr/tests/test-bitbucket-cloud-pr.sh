@@ -5,7 +5,6 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SKILL_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 SCRIPT="$SKILL_DIR/scripts/bitbucket-cloud-pr.sh"
 SKILL_DOC="$SKILL_DIR/SKILL.md"
-REFERENCE_DOC="$SKILL_DIR/references/cloud-capabilities-reference.md"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -35,6 +34,11 @@ assert_contains "$output" "METHOD=POST"
 assert_contains "$output" "URL=https://api.bitbucket.org/2.0/repositories/acme/widget/pullrequests/42/comments"
 assert_contains "$output" 'BODY={"content":{"raw":"QA passed on staging"}}'
 
+output=$("$SCRIPT" --dry-run update-description acme widget 42 "Updated PR description")
+assert_contains "$output" "METHOD=PUT"
+assert_contains "$output" "URL=https://api.bitbucket.org/2.0/repositories/acme/widget/pullrequests/42"
+assert_contains "$output" 'BODY={"description":"Updated PR description"}'
+
 output=$("$SCRIPT" --dry-run merge acme widget 42)
 assert_contains "$output" "METHOD=POST"
 assert_contains "$output" "URL=https://api.bitbucket.org/2.0/repositories/acme/widget/pullrequests/42/merge"
@@ -54,20 +58,16 @@ fi
 assert_contains "$(cat "$auth_output")" "Set BITBUCKET_TOKEN or BITBUCKET_EMAIL + BITBUCKET_API_TOKEN"
 
 skill_doc=$(cat "$SKILL_DOC")
-reference_doc=$(cat "$REFERENCE_DOC")
-docs_text="${skill_doc}
-${reference_doc}"
 assert_contains "$skill_doc" "find-prs-for-branch"
+assert_contains "$skill_doc" "update-description"
 assert_contains "$skill_doc" "Bitbucket-hosted pull request/repository"
 assert_contains "$skill_doc" "testing or verifying PR behavior"
 assert_contains "$skill_doc" "Git credential helper for \`bitbucket.org\`"
+assert_contains "$skill_doc" "printf 'protocol=https\\nhost=bitbucket.org\\n\\n' | git credential fill"
 assert_contains "$skill_doc" "direct HTTPS request"
-assert_contains "$reference_doc" "Basic auth"
+assert_contains "$skill_doc" "Basic auth"
+assert_contains "$skill_doc" "codex-bitbucket-api-token"
+assert_contains "$skill_doc" "try the next approved source before reporting a blocker"
 assert_contains "$skill_doc" "testing or verifying PR behavior"
-
-credential_helper_count=$(printf '%s' "$docs_text" | rg -o "Git credential helper" | wc -l | tr -d ' ')
-[[ "$credential_helper_count" == "1" ]] || fail "credential-helper fallback should be documented once across skill and reference"
-
-[[ "$skill_doc" != *"Basic auth"* ]] || fail "skill should delegate Basic/Bearer auth mechanics to the Cloud reference"
 
 printf 'PASS: bitbucket-cloud-pr dry-run contract\n'

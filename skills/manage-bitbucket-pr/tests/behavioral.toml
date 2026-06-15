@@ -67,6 +67,56 @@ Because this pressure prompt forbids external calls, the response says the write
 """
 
 [[scenario]]
+id = "description-update-write"
+user_request = """
+Update the description on Bitbucket Cloud PR 42 in acme/widget to `QA evidence added, ready for final review`.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "supports_description_update"
+description = """
+The response treats a PR description update as a supported Bitbucket Cloud write instead of an unsupported helper gap.
+"""
+
+[[scenario.criteria]]
+key = "read_before_description_write"
+description = """
+Because this pressure prompt forbids external calls, the response requires verifying PR details, state, and target before updating the description.
+"""
+
+[[scenario.criteria]]
+key = "uses_exact_description_payload"
+description = """
+The response preserves the requested description payload and does not replace it with a summary or unrelated PR text.
+"""
+
+[[scenario]]
+id = "write-scope-credential-fallback"
+user_request = """
+Post `Ready for QA` on Bitbucket PR 42 in acme/widget. The approved local keychain token can read PR metadata but receives 403 when posting comments. The Git credential helper has approved bitbucket.org credentials.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "does_not_stop_after_write_403"
+description = """
+The response does not treat the first write 403 as final while another approved credential source remains available.
+"""
+
+[[scenario.criteria]]
+key = "tries_next_approved_source"
+description = """
+Because this pressure prompt forbids external calls, the response requires trying the Git credential helper credential path before reporting a blocker.
+"""
+
+[[scenario.criteria]]
+key = "distinguishes_read_and_write_scope"
+description = """
+The response recognizes that credentials able to read PR metadata may still lack write scope.
+"""
+
+[[scenario]]
 id = "vague-merge-request"
 user_request = """
 Can you take care of merging the Bitbucket PR for this branch?
@@ -76,7 +126,7 @@ forbidden_terms = ["merge it now", "merged successfully", "I merged"]
 [[scenario.criteria]]
 key = "resolves_branch_to_candidates"
 description = """
-Because this pressure prompt forbids external calls, the response requires deriving PR candidates from the branch and asking the user to choose if the exact PR is ambiguous.
+Because this pressure prompt forbids external calls, the response requires resolving a concrete PR candidate from the branch before merging and treats missing or ambiguous lookup data as a blocker.
 """
 
 [[scenario.criteria]]
