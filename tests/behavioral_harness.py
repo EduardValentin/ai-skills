@@ -47,6 +47,14 @@ class BehavioralSuiteConfig:
 PromptBuilder = Callable[[str, BehavioralScenario], str]
 AGENT_COMMAND_ENV_VAR = "SKILL_TRIGGER_AGENT_COMMAND"
 GLOBAL_SCENARIO_FILTER_ENV_VAR = "BEHAVIORAL_SCENARIO"
+CAPABILITY_ACCOUNTING_INSTRUCTIONS = (
+    "Before choosing a path, account for native runtime capabilities from the scenario facts. "
+    "If a scenario says a native capability is available, treat it as available. "
+    "If a scenario says a capability is missing, unavailable, or policy-blocked, "
+    "report that blocker before substituting another path. "
+    "Do not ask for separate permission solely to use an available capability unless "
+    "the scenario states that the runtime policy requires it."
+)
 
 
 def load_behavioral_scenarios(scenarios_path: Path) -> tuple[BehavioralScenario, ...]:
@@ -355,6 +363,8 @@ Loaded skill: {skill_name}
 
 User request:
 {scenario.user_request}
+
+{CAPABILITY_ACCOUNTING_INSTRUCTIONS}
 
 {prompt_instructions}
 """

@@ -22,6 +22,7 @@ from semantic_judge import (  # noqa: E402
     resolve_judge_command,
     run_command,
 )
+from behavioral_harness import CAPABILITY_ACCOUNTING_INSTRUCTIONS  # noqa: E402
 
 
 def main() -> int:
@@ -127,6 +128,8 @@ def make_prompt(scenario: dict[str, object]) -> str:
 
 User request:
 {scenario["prompt"]}
+
+{CAPABILITY_ACCOUNTING_INSTRUCTIONS}
 
 Return only this format:
 SELECTED_SKILLS: comma-separated skill names

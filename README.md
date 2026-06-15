@@ -104,6 +104,10 @@ files, then runs each suite through the shared loaded-skill harness. Use
 Actor-facing behavioral prompts must stay neutral: they may set safety
 boundaries and scenario facts, but expected workflow behavior belongs in
 criteria, judge context, or deterministic assertions.
+The shared harness also instructs the agent under test to account for native
+runtime capabilities from scenario facts before choosing a path, so available,
+unavailable, or policy-blocked tools are handled explicitly without adding
+scenario-specific nudges.
 
 `skill-trigger` behavioral tests are black-box installed-harness tests: they do
 not inject skill bodies or available-skill indexes, and they fail when the target
