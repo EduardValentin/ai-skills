@@ -46,7 +46,7 @@ Do not use for Epics, parent tickets with children requested as one scope, multi
   - execution contract: the execution phase follows `coordinate-ticket-execution` while `ticket-start` remains the main current-session coordinator
   - named agents and order: `implementation-worker`, `code-reviewer`, `security-reviewer` or explicit skip, `qa-verifier`, `uiux-verifier` or explicit skip, aggregate findings, scoped fixes, affected reruns, PR creation or blocker, PR readiness verification, final handoff
   - verifier fallback: QA and UI/UX verifier requests must return `CANNOT_VERIFY` with reason and missing capability when they lack required tooling or access
-  - PR readiness gate: not allowed while implementation, independent review, security review or skip, QA, UI/UX or skip, scoped fixes, or necessary reruns are missing, unresolved, or not explicitly blocked/out of scope
+  - PR readiness gate: not allowed while implementation, independent review, security review or skip, manual/runtime QA evidence, UI/UX or skip, scoped fixes, or necessary reruns are missing, unresolved, or not explicitly blocked/out of scope
   - UI/UX project rules: personal/Linear compares changed production UI against the runnable reference app; job/Jira checks visual consistency with the rest of the application and similar existing elements
 
 ## Step 1 - Gather Facts
@@ -91,7 +91,7 @@ Respect this execution order:
 2. Coordinate implementation through `implementation-worker` for the approved plan.
 3. Coordinate independent review through `code-reviewer` against the ticket, acceptance criteria, approved plan, implementation evidence, and diff.
 4. Coordinate security review through `security-reviewer` whenever the change has a plausible security surface. When summarizing this gate, do not say "security review or skip" without the condition: record a skip reason only when there is no plausible security surface.
-5. Coordinate QA verification through `qa-verifier` against acceptance-criteria behavior in the running app, service, API, job, script, or integration. If QA cannot verify because tooling or access is missing, it must return `CANNOT_VERIFY` with the reason and missing capability.
+5. Coordinate QA verification through `qa-verifier` against manual/runtime acceptance-criteria behavior in the running app, service, API, job, script, or integration. Automated checks, including unit tests, are checks and do not count as QA evidence. If QA cannot verify because tooling or access is missing, it must return `CANNOT_VERIFY` with the reason and missing capability.
 6. For UI-facing or mixed work, coordinate UI/UX verification through `uiux-verifier`. If UI/UX cannot verify because tooling or access is missing, it must return `CANNOT_VERIFY` with the reason and missing capability. For backend-only/non-UI work, record the skip reason.
 7. Aggregate findings from independent review, security review or skip, QA, and UI/UX verification.
 8. Coordinate scoped fixes for fixable findings.
@@ -103,7 +103,7 @@ When routing verifier work, include this fallback instruction: if a verifier lac
 
 Include the `CANNOT_VERIFY` fallback in delegated `qa-verifier` and `uiux-verifier` verification requests so verifier agents fail fast instead of inventing evidence.
 
-Track returned reports compactly enough to know what is implemented, reviewed, verified, fixed, rerun, clean, blocked, or explicitly out of scope. Do not route the ticket to PR verification until implementation, independent review, security review or skip, QA, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.
+Track returned reports compactly enough to know what is implemented, reviewed, manually verified, fixed, rerun, clean, blocked, or explicitly out of scope. Do not route the ticket to PR verification until implementation, independent review, security review or skip, QA with manual/runtime evidence, UI/UX or skip, scoped fixes, and necessary reruns are resolved or explicitly blocked/out of scope.
 
 Execution routing is incomplete unless it states that PR verification waits for those resolved, blocked, or out-of-scope reports and is not allowed while any required report is missing.
 
@@ -120,7 +120,7 @@ End with a concise report:
 - ticket, approved spec, and approved plan summary
 - what was implemented
 - what worked, what did not, and unresolved blockers
-- implementation reports, self-review/review results, security review result or skip rationale, QA results, UI/UX results, and skipped rows with reasons
+- implementation reports, self-review/review results, security review result or skip rationale, manual/runtime QA results, UI/UX results, and skipped rows with reasons
 - plan-match or deviation findings from self-review/review, plus follow-up verification
 - tests/checks/run evidence and remote check state
 - PR link or PR-creation blocker, PR readiness result, ticket state, and recommended next step
@@ -135,6 +135,6 @@ Stop and recover when:
 - ticket, repo, branch, PR, or requirement facts are stale or unavailable but would affect the decision
 - spec approval or implementation-plan approval is skipped
 - specialized-agent work is silently replaced by inline implementation, review, security review, QA, UI/UX verification, or PR/ticket mutation
-- PR verification is requested while required implementation, review, security review or skip, QA, UI/UX, finding, fix, or rerun reports are missing
+- PR verification is requested while required implementation, review, security review or skip, manual/runtime QA, UI/UX, finding, fix, or rerun reports are missing
 - the final ticket report is prepared while no reviewable PR exists and no concrete PR-creation blocker is recorded
 - merge or ticket completion is attempted without required checks and explicit user approval

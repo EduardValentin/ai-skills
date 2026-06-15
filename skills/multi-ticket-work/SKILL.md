@@ -45,7 +45,7 @@ The main agent is the multi-ticket coordinator. It identifies the complete ticke
    - Do not ask ticket coordinators to perform ticket intake, user-facing brainstorming, spec creation, plan creation, or approval gathering. State this exclusion plainly when rejecting a worker-collapse plan.
    - State plainly in each dispatch that the ticket coordinator coordinates execution for that ticket and must use `implementation-worker` plus deeper focused independent review, security review when applicable, QA, UI/UX, fix, and PR-preparation subagents when nested delegation is available. If nested delegation is unavailable, the ticket coordinator must report that limitation.
    - Do not phrase the handoff as if the ticket coordinator should personally implement, review, QA-check, UI-check, fix, prepare the PR, and report in one worker task.
-   - A ticket or unit is not complete until its ticket coordinator has returned PR evidence plus distinct implementation, independent review, security-review-or-not-applicable, QA, UI/UX-or-not-applicable, scoped fixes/reruns, risk, dependency, and completion-report evidence.
+   - A ticket or unit is not complete until its ticket coordinator has returned PR evidence plus distinct implementation, independent review, security-review-or-not-applicable, manual/runtime QA, UI/UX-or-not-applicable, scoped fixes/reruns, risk, dependency, and completion-report evidence.
    - The main agent tracks status and blockers, but does not take over implementation inline.
 
 6. Coordinate sequencing.
@@ -71,7 +71,7 @@ Each `ticket-execution-coordinator` must report back with:
 - implementation report
 - independent review report
 - security review report, or not-applicable reason
-- QA report
+- QA report with manual/runtime evidence
 - UI/UX report, or not-applicable/cannot-verify reason
 - scoped fixes and reruns after verifier findings
 - important decisions or deviations
@@ -92,7 +92,7 @@ In each dispatch, ask for a reviewer-friendly PR body with summary, manual testi
 - A ticket coordinator handoff says to own all execution directly instead of coordinating deeper delegated phases.
 - Parent-side review is treated as a replacement for independent per-ticket review.
 - Completion is summarized as a generic report instead of the required phase evidence.
-- A combined worker report is accepted instead of distinct implementation, review, security-review-or-skip, QA, and UI/UX-or-skip evidence.
+- A combined worker report is accepted instead of distinct implementation, review, security-review-or-skip, manual/runtime QA, and UI/UX-or-skip evidence.
 - The ticket set, Epic children, or sub-tickets were not fully gathered.
 - Work begins before dependencies and parallelization are mapped.
 - The durable orchestration note is missing, stale, or not re-read after compaction or resume.
@@ -102,4 +102,4 @@ In each dispatch, ask for a reviewer-friendly PR body with summary, manual testi
 
 When rejecting a rushed worker-collapse plan, the response must explicitly state:
 - Ticket coordinators must not perform user-facing brainstorming, spec creation, plan creation, or approval gathering.
-- Each ticket remains incomplete until distinct returned evidence includes implementation, independent review, security-review-or-not-applicable, QA, UI/UX-or-not-applicable, fixes/reruns, PR link, completion report, risks, and blockers or downstream notes.
+- Each ticket remains incomplete until distinct returned evidence includes implementation, independent review, security-review-or-not-applicable, manual/runtime QA, UI/UX-or-not-applicable, fixes/reruns, PR link, completion report, risks, and blockers or downstream notes.

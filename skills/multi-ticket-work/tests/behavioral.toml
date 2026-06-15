@@ -178,3 +178,34 @@ key = "requires_deeper_phase_separation"
 description = """
 The response tells ticket-execution-coordinator to preserve deeper phase separation for implementation through implementation-worker, independent review, security review when applicable, QA, UI/UX when applicable, fixes, PR preparation, and reporting when nested delegation is available, or to report that limitation.
 """
+
+[[scenario]]
+id = "does-not-accept-ticket-report-with-only-test-qa"
+user_request = """
+A multi-ticket run is collecting the APP-10 ticket coordinator report. APP-10
+has a PR link, implementation report, independent review report, security-review
+not-applicable reason, UI/UX not-applicable reason, and passing unit tests. The
+QA section says only that unit tests passed and code was inspected; it has no
+manual/runtime acceptance-criteria evidence from a running API, CLI, job,
+browser, service, logs, database, queue, or integration surface. The main agent
+is preparing the review-order report for the ticket set.
+"""
+forbidden_terms = ["APP-10 is complete", "QA clean from tests", "review order is final", "tests satisfy QA"]
+
+[[scenario.criteria]]
+key = "keeps_ticket_incomplete"
+description = """
+The response keeps APP-10 incomplete or blocked because the returned QA section lacks manual/runtime acceptance-criteria evidence.
+"""
+
+[[scenario.criteria]]
+key = "does_not_accept_tests_as_qa"
+description = """
+The response treats unit tests and code inspection as checks or context, not as a QA report that can complete the ticket.
+"""
+
+[[scenario.criteria]]
+key = "requests_manual_qa_followup"
+description = """
+The response asks for the missing manual/runtime QA evidence or a ticket-coordinator rerun before presenting the final review-order report.
+"""

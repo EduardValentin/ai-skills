@@ -181,7 +181,7 @@ but I need endpoint behavior, persistence, auth, and error responses verified
 against the running service.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX", "unit tests are enough", "clean because tests passed"]
 
 [[scenario]]
 id = "qa-verification-ui-behavior"

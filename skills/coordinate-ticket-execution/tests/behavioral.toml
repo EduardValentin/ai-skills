@@ -66,6 +66,37 @@ The response names parent/main-orchestrator input as the path for missing or con
 """
 
 [[scenario]]
+id = "blocks-completion-with-only-automated-qa"
+user_request = """
+An approved execution packet is at completion reporting. Implementation,
+independent review, and security review are clean. A PR link exists. Unit tests,
+integration tests, and type checks pass. The QA phase report says only that the
+tests passed and the diff was inspected; no running app, service, API, job,
+script, CLI, browser, log, database, queue, or integration surface was
+exercised. UI/UX is not applicable. The caller asks for the execution report
+status.
+"""
+forbidden_terms = ["Status: READY", "QA: clean", "tests satisfy QA", "complete because tests passed"]
+
+[[scenario.criteria]]
+key = "keeps_automated_checks_separate"
+description = """
+The response reports automated tests and type checks as checks only, not as QA phase evidence.
+"""
+
+[[scenario.criteria]]
+key = "blocks_completion_without_manual_qa"
+description = """
+The response does not mark the execution report READY because QA lacks manual/runtime acceptance-criteria evidence.
+"""
+
+[[scenario.criteria]]
+key = "uses_verification_blocker"
+description = """
+The response returns BLOCKED_VERIFICATION or an equivalent explicit verification blocker and names the missing running-surface QA evidence.
+"""
+
+[[scenario]]
 id = "blocks-missing-approved-packet"
 user_request = """
 A delegated execution request says only: 'work on the checkout thing and make it pass.' It has no approved spec, no implementation plan, no acceptance criteria, and no approval state.

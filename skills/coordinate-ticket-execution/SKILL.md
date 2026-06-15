@@ -34,7 +34,7 @@ If required packet details are missing, stale, contradictory, or unapproved, sto
 3. Dispatch `implementation-worker` native agent(s) for the approved implementation slice or slices. Keep implementation separate from independent review and verification.
 4. Dispatch `code-reviewer` against the approved packet, implementation evidence, and diff.
 5. Dispatch `security-reviewer` when the change has a plausible security surface. Record the skip reason only when there is no plausible security surface.
-6. Dispatch `qa-verifier` against acceptance-criteria behavior in the running app, service, API, job, script, or integration.
+6. Dispatch `qa-verifier` against manual/runtime acceptance-criteria behavior in the running app, service, API, job, script, or integration. Automated checks, including unit tests, are separate checks and do not count as QA evidence.
 7. For UI-facing or mixed work, dispatch `uiux-verifier`. For non-UI work, record the skip reason.
 8. Aggregate findings. Delegate scoped fixes for fixable findings, then rerun affected review or verification.
 9. Repeat the finding, fix, and rerun loop until each required phase is clean, explicitly blocked, or explicitly out of scope.
@@ -45,7 +45,7 @@ If nested delegation is unavailable, perform the coordination locally and make t
 
 The delegation summary is incomplete unless it covers scoped fixes for review or verification findings: delegate fixable findings back to an implementation worker or equivalent scoped fix worker, then rerun the affected review or verification phase. If the runtime cannot delegate scoped fixes, say so explicitly and preserve the same fix/rerun separation locally.
 
-The completion gate is incomplete unless it explicitly includes risk evidence as well as implementation, independent review, security-or-skip, QA, UI/UX-or-skip, fixes/reruns, checks, blockers, and PR evidence.
+The completion gate is incomplete unless it explicitly includes risk evidence as well as implementation, independent review, security-or-skip, manual/runtime QA, UI/UX-or-skip, fixes/reruns, checks, blockers, and PR evidence.
 
 Even when the packet is currently approved and execution-ready, every execution-ready response must state the contingency path: any missing, stale, contradictory, or unapproved approval/scope fact goes back to the parent or main coordinator as `BLOCKED_NEEDS_PARENT_INPUT`.
 
@@ -73,7 +73,7 @@ Return a compact report:
 - Implementation: <report summary>
 - Independent review: <clean / findings fixed / blocked>
 - Security review: <clean / findings fixed / blocked / not applicable>
-- QA: <clean / bugs found / cannot verify / not applicable>
+- QA: <clean manual/runtime evidence / bugs found / cannot verify / not applicable>
 - UI/UX: <clean / findings / cannot verify / not applicable>
 - Fixes and reruns: <summary>
 
@@ -88,6 +88,6 @@ Return a compact report:
 - Starting without an approved execution packet.
 - Brainstorming with the human, inventing requirements, negotiating scope, or changing the approved plan.
 - Combining implementation, independent review, QA, and UI/UX verification into one undifferentiated worker task.
-- Treating implementer self-checks or parent-side inspection as independent review or verification.
+- Treating implementer self-checks, automated tests, or parent-side inspection as independent review or QA verification.
 - Marking complete without PR evidence and required phase reports.
 - Hiding missing tooling, access, tests, acceptance criteria, or approval state.

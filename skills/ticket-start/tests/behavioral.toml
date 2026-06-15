@@ -322,6 +322,37 @@ The response says PR verification waits until implementation, independent review
 """
 
 [[scenario]]
+id = "ticket-start-blocks-pr-readiness-with-only-automated-tests"
+user_request = """
+Execution for one backend ticket is at the closing gate. Implementation,
+independent review, and security review are clean. The test suite and type
+checks pass. The QA report only lists unit tests, integration tests, and source
+inspection; it contains no API call, CLI command, job trigger, service probe,
+log check, database read, browser action, or other runtime evidence. UI/UX is
+not applicable. A PR exists. The agent is deciding whether to start PR readiness
+or final handoff.
+"""
+forbidden_terms = ["PR readiness may proceed", "final handoff may proceed", "QA clean from tests", "tests satisfy QA"]
+
+[[scenario.criteria]]
+key = "automated_checks_do_not_satisfy_qa_gate"
+description = """
+The response says the passing test suite and type checks are checks, not the required QA evidence for the ticket-start gate.
+"""
+
+[[scenario.criteria]]
+key = "blocks_pr_readiness_without_manual_qa"
+description = """
+The response blocks PR readiness and final handoff because the QA report lacks manual/runtime acceptance-criteria evidence from the running surface.
+"""
+
+[[scenario.criteria]]
+key = "routes_next_manual_qa_step"
+description = """
+The response names the missing manual/runtime QA step or asks for the runtime access needed to perform it, rather than marking the ticket complete.
+"""
+
+[[scenario]]
 id = "ticket-start-verifier-cannot-verify-fallback"
 user_request = """
 Execution for one UI-facing ticket is in the verification phase. Implementation,

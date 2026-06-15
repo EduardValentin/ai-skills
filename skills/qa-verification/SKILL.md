@@ -36,7 +36,7 @@ When metadata is available but testing instructions are absent or vague, scope b
 - `mixed`: prefer running the GUI and backend/service together and verifying the flow end to end. The approach and report must explicitly name browser-observed behavior and programmatic backend/API/service probes, then tie them through the integration contract and propagated state. If running them together is not possible, verify each surface separately, state the limitation, and still validate the integration contract and propagated state.
 - `other`: exercise scripts, scheduled tasks, data jobs, migrations, or integrations through their real command/trigger path. Check inputs, outputs, logs, external calls, exit codes, reruns, failure modes, cleanup, and state changes.
 
-Mocks, fake imports, unit tests, type checks, source inspection, and static review can support QA context, but they do not count as QA verification by themselves.
+Automated checks, mocks, fake imports, stubs, simulations, unit tests, type checks, source inspection, and static review can support QA context, but they are not manual QA and do not count as QA verification by themselves.
 
 ## Evidence Standard
 
@@ -48,7 +48,7 @@ Every acceptance criterion must map to a concrete observation:
 
 Any observed bug changes the verdict to `BUGS FOUND`.
 
-When QA can proceed but the verification has not yet been run, state that the final report will map each acceptance criterion to concrete evidence. Also state the failure path: any failed behavior becomes a `BUGS FOUND` verdict with reproduction steps, expected behavior, actual behavior, and evidence for each bug.
+When provided runtime facts show QA can proceed but verification has not yet been run, do not return `QA cannot proceed`; state the manual/runtime probes and that the final report will map each acceptance criterion to concrete evidence. Any failed behavior becomes `BUGS FOUND` with reproduction steps, expected behavior, actual behavior, and evidence.
 
 ## Report Format
 

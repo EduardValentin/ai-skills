@@ -89,6 +89,35 @@ Because Celery beat, Oracle, and Vault are unavailable, the response returns QA 
 """
 
 [[scenario]]
+id = "unit-tests-do-not-satisfy-manual-qa"
+user_request = """
+Ticket-linked backend change. The implementation report says unit tests,
+integration tests, and type checks pass. No endpoint call against a running
+service, CLI command, job trigger, database read, log check, browser action, or
+integration probe has been performed. The caller asks for the current QA
+verdict.
+"""
+forbidden_terms = ["CLEAN because tests passed", "unit tests are enough", "automated checks are QA", "source inspection is enough"]
+
+[[scenario.criteria]]
+key = "separates_checks_from_qa"
+description = """
+The response treats passing automated checks as support context only, not as manual QA evidence.
+"""
+
+[[scenario.criteria]]
+key = "blocks_clean_without_runtime_evidence"
+description = """
+Because no running surface was exercised, the response does not return CLEAN; it reports QA cannot proceed, CANNOT_VERIFY, or an equivalent blocked or not-yet-verified verdict.
+"""
+
+[[scenario.criteria]]
+key = "names_runtime_evidence_needed"
+description = """
+The response names the manual/runtime probes needed, such as endpoint calls, CLI or job triggers, browser actions, logs, database reads, or integration checks.
+"""
+
+[[scenario]]
 id = "third-party-dependencies-must-be-real"
 user_request = """
 Backend job that reads enabled rows from Oracle, fetches each certificate from
