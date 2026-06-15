@@ -16,6 +16,13 @@ Use this repository as the tracked source for your personal AI skills and specia
 
 Specialized agents are first-class reusable assets. Skills may request agents by name, but agents are not owned by a single skill.
 
+## Current Skill Capabilities
+
+- `manage-prd` owns PRD creation, editing, cleanup, and review, keeping product requirements focused on business context and free of implementation detail leakage.
+- `feature-work-planning` owns upstream work planning before ticket drafting, including requirements alignment, affected systems, dependencies, sequencing, risks, rollout, and ticket-writing packets.
+- `ticket-writing` owns clean, platform-neutral agile ticket prose from approved or sufficiently scoped context.
+- `linear-issue-writing` owns publishing approved backlog drafts into Linear with the correct issue modeling and metadata.
+
 ## Native Agents
 
 Native agents live in `agents/*.md` with delivery metadata in `agents/manifest.toml`.
