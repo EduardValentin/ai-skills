@@ -8,7 +8,7 @@ compatibility: Requires a working Linear-capable integration for creation or upd
 
 ## Overview
 
-Convert approved, platform-neutral backlog drafts into well-structured Linear issues. This skill owns Linear modeling, metadata, duplicate checks, and publishing gates. It does not invent product scope; use `ticket-planner` first for PRD-to-story planning.
+Convert approved, platform-neutral backlog drafts into well-structured Linear issues. This skill owns Linear modeling, metadata, duplicate checks, and publishing gates. It does not invent product scope; use `ticket-writing` for draft refinement or `feature-work-planning` when the work still needs planning.
 
 ## Required Rules
 

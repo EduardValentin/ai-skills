@@ -1,0 +1,69 @@
+[suite]
+name = "ticket-writing"
+skill = "ticket-writing"
+skill_path = "skills/ticket-writing/SKILL.md"
+scenario_env = "TICKET_WRITING_SCENARIO"
+prompt_instructions = """
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
+"""
+judge_context = """
+Loaded skill under test: ticket-writing. Judge agile ticket quality, concise prose, acceptance criteria, dependencies, vertical slicing, and scope boundaries.
+"""
+
+[[scenario]]
+id = "planning-packet-to-story"
+user_request = """
+Turn this approved planning packet into a user story: admins invite teammates by email, duplicate pending invites are blocked, invites expire after 7 days, and accepted users join the workspace with the selected role. It depends on the email service setup story.
+"""
+forbidden_terms = ["published to Linear", "edit PRD", "plan the feature first"]
+
+[[scenario.criteria]]
+key = "writes_agile_story"
+description = "The response drafts a platform-neutral agile story with a concise outcome title, overview, acceptance criteria, and notes."
+
+[[scenario.criteria]]
+key = "acceptance_criteria_cover_behavior"
+description = "The acceptance criteria cover invite creation, duplicate pending invite handling, expiration, acceptance, role assignment, and dependency-aware behavior."
+
+[[scenario.criteria]]
+key = "links_dependency"
+description = "The response captures the email service setup dependency clearly."
+
+[[scenario]]
+id = "cleanup-draft-quality"
+user_request = """
+Clean up this draft ticket: title is "Add cert_expiry_sweep.py with vault_path parameter"; description mixes business reason with Oracle paths and event fields; ACs are buried in prose; it still mentions alert creation, which is out of scope.
+"""
+forbidden_terms = ["created issue", "published"]
+
+[[scenario.criteria]]
+key = "outcome_title"
+description = "The response rewrites or requires the title around the work outcome rather than file names or parameters."
+
+[[scenario.criteria]]
+key = "clean_sections"
+description = "The response separates business overview, acceptance criteria, and concise technical notes."
+
+[[scenario.criteria]]
+key = "removes_stale_scope"
+description = "The response removes or flags stale out-of-scope alert-creation content."
+
+[[scenario]]
+id = "thin-context-routes-upstream"
+user_request = "Write implementation-ready tickets for the new scheduling feature. We have not decided roles, flow, data, edge cases, or integrations yet."
+forbidden_terms = ["Here are the implementation-ready tickets", "final ticket draft"]
+
+[[scenario.criteria]]
+key = "does_not_invent_scope"
+description = "The response does not invent full ticket scope or acceptance criteria from thin context."
+
+[[scenario.criteria]]
+key = "routes_to_planning"
+description = "The response asks for missing facts or routes to feature-work-planning before final ticket writing."

@@ -327,14 +327,26 @@ prompt = "In the React prototype reference app under designs/, add a new onboard
 forbidden_terms = ["design-studio", "prepare-design-studio.sh"]
 
 [[scenario]]
-id = "ticket-planner-prd-to-stories"
-skill = "ticket-planner"
-prompt = "Turn this PRD and prototype into implementation-ready epics, vertical-slice user stories, and acceptance criteria."
+id = "manage-prd-business-rule-update"
+skill = "manage-prd"
+prompt = "Update the PRD so archived plans stay visible to coaches forever but clients cannot see them."
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-planner-clean-draft-quality"
-skill = "ticket-planner"
+id = "feature-work-planning-breakdown"
+skill = "feature-work-planning"
+prompt = "Plan the work for checkout eligibility before we write tickets: scope the systems, dependencies, risks, rollout, and ticket breakdown."
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-writing-create-stories"
+skill = "ticket-writing"
+prompt = "Turn this approved planning packet into clean epics, vertical-slice user stories, dependencies, and acceptance criteria."
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-writing-clean-draft-quality"
+skill = "ticket-writing"
 prompt = """
 Clean up these draft epics and stories before publishing: make titles plain,
 separate business overview from technical details, add real acceptance criteria,

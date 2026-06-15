@@ -1,0 +1,70 @@
+[suite]
+name = "manage-prd"
+skill = "manage-prd"
+skill_path = "skills/manage-prd/SKILL.md"
+scenario_env = "MANAGE_PRD_SCENARIO"
+prompt_instructions = """
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
+"""
+judge_context = """
+Loaded skill under test: manage-prd. Judge PRD writing quality, edit gates, business focus, coherence, redundancy, and technical-detail boundaries.
+"""
+
+[[scenario]]
+id = "business-rule-patch-needs-approval"
+user_request = "Clarification: archived plans stay visible to coaches forever but clients cannot see them. Update the PRD wording."
+forbidden_terms = ["acceptance criteria", "Linear", "implementation plan", "database column"]
+
+[[scenario.criteria]]
+key = "identifies_prd_rule"
+description = "The response treats the clarification as a product permission/lifecycle rule that belongs in the PRD."
+
+[[scenario.criteria]]
+key = "proposes_concise_patch"
+description = "The response proposes concise PRD wording or a patch target without adding implementation details."
+
+[[scenario.criteria]]
+key = "asks_before_editing"
+description = "Because the pressure prompt forbids file mutation, the response asks for approval or states it will not edit until approved."
+
+[[scenario]]
+id = "remove-technical-leakage-and-redundancy"
+user_request = """
+Review this PRD section. It repeats the archive visibility rule in three places,
+mentions a React component, a database column, and an API endpoint, and mixes
+coach/client business behavior with implementation details. Clean up the PRD
+wording.
+"""
+forbidden_terms = []
+
+[[scenario.criteria]]
+key = "removes_technical_details"
+description = "The response removes or flags implementation details such as components, database columns, API endpoints, file paths, styling, or tracker metadata as inappropriate for PRD content."
+
+[[scenario.criteria]]
+key = "consolidates_redundancy"
+description = "The response consolidates repeated archive visibility rules into concise PRD wording instead of duplicating them across sections."
+
+[[scenario.criteria]]
+key = "keeps_business_context"
+description = "The response keeps the PRD focused on coherent coach/client product behavior, permissions, lifecycle, constraints, or business outcomes."
+
+[[scenario]]
+id = "ticket-request-stays-out-of-scope"
+user_request = "Review this PRD section and then create the implementation tickets for it."
+forbidden_terms = ["published to Linear", "created the tickets"]
+
+[[scenario.criteria]]
+key = "handles_prd_only"
+description = "The response handles PRD review or PRD readiness without drafting final backlog tickets."
+
+[[scenario.criteria]]
+key = "does_not_create_non_prd_output"
+description = "The response does not create non-PRD output and keeps the next step focused on PRD review or missing PRD input."
