@@ -232,6 +232,14 @@ def run_assertion(suite_path: Path, assertion: dict[str, Any]) -> None:
                 require_string(suite_path, assertion, "field"),
                 render_values(suite_path, assertion, variables),
             )
+    elif assertion_type == "toml_scenario_field_not_contains_for_each":
+        for variables in iterate_variables(suite_path, assertion):
+            assert_toml_scenario_field_not_contains_any(
+                suite_path,
+                resolve_path(render_path(assertion, "path", variables)),
+                require_string(suite_path, assertion, "field"),
+                render_values(suite_path, assertion, variables),
+            )
     else:
         raise ValueError(f"{suite_path}: unknown contract assertion type {assertion_type!r}")
 
@@ -388,6 +396,35 @@ def assert_toml_suite_field_not_contains_any(
             f"{suite_path}: {path.relative_to(REPO_ROOT)} suite field {field!r} "
             f"contains forbidden text: {found}"
         )
+
+
+def assert_toml_scenario_field_not_contains_any(
+    suite_path: Path,
+    path: Path,
+    field: str,
+    values: list[str],
+) -> None:
+    payload = load_toml_payload(path)
+    scenarios = payload.get("scenario", [])
+    if not isinstance(scenarios, list):
+        raise AssertionError(f"{path.relative_to(REPO_ROOT)} must define [[scenario]] tables")
+
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            raise AssertionError(f"{path.relative_to(REPO_ROOT)} scenario must be a table")
+        scenario_id = str(scenario.get("id", "<missing-id>"))
+        value = scenario.get(field)
+        if not isinstance(value, str):
+            raise AssertionError(
+                f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} "
+                f"field {field!r} must be a string"
+            )
+        found = [item for item in values if item and item in value]
+        if found:
+            raise AssertionError(
+                f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} "
+                f"field {field!r} contains forbidden text: {found}"
+            )
 
 
 def toml_suite_string_field(suite_path: Path, path: Path, field: str) -> str:

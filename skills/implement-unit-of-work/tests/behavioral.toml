@@ -19,7 +19,7 @@ Loaded skill under test: implement-unit-of-work. Judge implementation behavior a
 [[scenario]]
 id = "approved-ad-hoc-script-implementation"
 user_request = """
-Use the loaded implement-unit-of-work skill for an approved ad hoc request: add a repository script that exports stale feature flags. Acceptance criteria, design direction, implementation plan, and scope notes are approved. Do not edit files; return the implementation approach and final report shape.
+Approved ad hoc request: add a repository script that exports stale feature flags. Acceptance criteria, design direction, implementation plan, and scope notes are approved. Do not edit files; return the implementation approach and final report shape.
 """
 forbidden_terms = ["QA verification", "UI/UX verification", "ready to ship", "ready to merge"]
 
@@ -68,7 +68,7 @@ The response returns an implementation report shape with changed files, TDD evid
 [[scenario]]
 id = "blocked-missing-approved-plan"
 user_request = """
-Use the loaded implement-unit-of-work skill, but the request only says 'add whatever script seems useful' and provides no accepted requirements, acceptance criteria, approved plan, or scope notes. Describe the correct response.
+The request only says 'add whatever script seems useful' and provides no accepted requirements, acceptance criteria, approved plan, or scope notes.
 """
 forbidden_terms = ["start coding anyway", "best guess"]
 

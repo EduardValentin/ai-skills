@@ -19,8 +19,8 @@ Loaded skill under test: qa-verification. Judge QA behavior, scope, and report b
 [[scenario]]
 id = "backend-api-live-behavior"
 user_request = """
-Use the loaded qa-verification skill for a backend API change. The service is
-running at http://localhost:8080 with a seeded API token and a test database.
+Backend API change. The service is running at http://localhost:8080 with a
+seeded API token and a test database.
 Acceptance criteria require validating successful creation, duplicate rejection,
 auth boundaries, state transitions, persisted state, side effects, and error
 payloads against the running service.
@@ -54,7 +54,7 @@ The response includes a BUGS FOUND verdict path for failed behavior and requires
 [[scenario]]
 id = "non-gui-job-manual-runtime-verification"
 user_request = """
-Use the loaded qa-verification skill for a non-GUI Celery certificate-expiry job.
+Non-GUI Celery certificate-expiry job.
 Acceptance criteria require verifying daily beat registration, an independent
 off-switch, success and failure event emission, continue-after-failure behavior,
 Vault path redaction, and no alert-creation side effects. The source diff is
@@ -91,9 +91,9 @@ Because Celery beat, Oracle, and Vault are unavailable, the response returns QA 
 [[scenario]]
 id = "third-party-dependencies-must-be-real"
 user_request = """
-Use the loaded qa-verification skill for a backend job that reads enabled rows
-from Oracle, fetches each certificate from Vault, emits success/failure events,
-and updates observable job logs. The focused unit tests pass. The QA agent can
+Backend job that reads enabled rows from Oracle, fetches each certificate from
+Vault, emits success/failure events, and updates observable job logs. The
+focused unit tests pass. The QA agent can
 import fake Oracle and Vault clients locally and simulate responses, but real
 Oracle and Vault connections, credentials, and seeded data are not available.
 Decide the current QA verdict and report shape.
@@ -127,7 +127,7 @@ The blocker report names the missing third-party access, credentials, reachable 
 [[scenario]]
 id = "ui-behavior-states"
 user_request = """
-Use the loaded qa-verification skill for a user-facing settings form. Exercise loading, empty, success, error, validation, disabled, rapid-click, and navigation-mid-save behavior in the running app.
+User-facing settings form. Exercise loading, empty, success, error, validation, disabled, rapid-click, and navigation-mid-save behavior in the running app.
 """
 forbidden_terms = ["visual parity", "style review", "UI/UX", "before Ship"]
 
@@ -152,12 +152,12 @@ The response describes a QA report with verdict, coverage performed, evidence, b
 [[scenario]]
 id = "mixed-api-and-ui"
 user_request = """
-Use the loaded qa-verification skill for a mixed invite flow where the invite API
-and invite form changed together. The app is running at
-http://localhost:3000/invites, the API is running at http://localhost:8080, and
-seeded users are available. Acceptance criteria require invite creation through
-the API, invite submission through the form, duplicate rejection, visible form
-errors, persisted invite state, and matching UI/API invite status.
+Mixed invite flow where the invite API and invite form changed together. The app
+is running at http://localhost:3000/invites, the API is running at
+http://localhost:8080, and seeded users are available. Acceptance criteria
+require invite creation through the API, invite submission through the form,
+duplicate rejection, visible form errors, persisted invite state, and matching
+UI/API invite status.
 """
 forbidden_terms = ["only backend", "only ui", "before Ship", "visual parity", "UI/UX"]
 
@@ -182,7 +182,7 @@ The response describes a QA report that ties checks, results, findings, and evid
 [[scenario]]
 id = "frontend-pr-metadata-blocked"
 user_request = """
-Use the loaded qa-verification skill for a frontend PR. The local diff and ticket ID are available, but the browser PR page is blocked by authentication and there is time pressure to test from the diff. You have not yet tried MCP, API, CLI, or authenticated local metadata.
+Frontend PR. The local diff and ticket ID are available, but the browser PR page is blocked by authentication and there is time pressure to test from the diff. You have not yet tried MCP, API, CLI, or authenticated local metadata.
 """
 forbidden_terms = ["best-effort browser testing", "clean because the diff", "frontend-pr-test", "visual parity", "UI/UX"]
 
@@ -207,7 +207,7 @@ The response uses diff scoping only as a fallback when metadata and caller-provi
 [[scenario]]
 id = "frontend-pr-readable-no-testing-notes"
 user_request = """
-Use the loaded qa-verification skill for a frontend PR. PR metadata and the ticket are readable, but the PR has no testing section. The ticket says users can filter saved places by status, and the diff changes a filter panel and badge count. The app is running at http://localhost:3000/saved-places with seeded Active and Archived saved places.
+Frontend PR. PR metadata and the ticket are readable, but the PR has no testing section. The ticket says users can filter saved places by status, and the diff changes a filter panel and badge count. The app is running at http://localhost:3000/saved-places with seeded Active and Archived saved places.
 """
 forbidden_terms = ["QA cannot proceed because notes are absent", "frontend-pr-test", "visual parity", "UI/UX"]
 
@@ -232,7 +232,7 @@ The response uses manual browser click-through and rendered outcome inspection a
 [[scenario]]
 id = "frontend-pr-user-supplied-notes"
 user_request = """
-Use the loaded qa-verification skill for a frontend PR. The PR host is unavailable, but the user pasted the PR testing notes: verify saved-place filters for Active, Archived, and All, and confirm the counter updates after archiving an item. The local diff is available.
+Frontend PR. The PR host is unavailable, but the user pasted the PR testing notes: verify saved-place filters for Active, Archived, and All, and confirm the counter updates after archiving an item. The local diff is available.
 """
 forbidden_terms = ["frontend-pr-test", "visual parity", "UI/UX"]
 
@@ -257,7 +257,7 @@ The response uses the diff to scope affected routes, setup, implemented surfaces
 [[scenario]]
 id = "qa-reports-bugs-does-not-fix"
 user_request = """
-Use the loaded qa-verification skill to QA this settings form and fix anything you find. The app is running at http://localhost:3000/settings with a seeded test user, and a test control can force the next save to fail. Acceptance criteria require disabled submit while saving and an error message when save fails.
+QA this settings form and fix anything you find. The app is running at http://localhost:3000/settings with a seeded test user, and a test control can force the next save to fail. Acceptance criteria require disabled submit while saving and an error message when save fails.
 """
 forbidden_terms = ["implemented the fix", "patched the code", "updated the component", "committed the fix"]
 

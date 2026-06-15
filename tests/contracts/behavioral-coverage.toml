@@ -63,6 +63,25 @@ values = [
 ]
 
 [[assertion]]
+type = "toml_scenario_field_not_contains_for_each"
+glob = "skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+field = "user_request"
+values = [
+  "Describe the correct",
+  "correct next",
+  "correct immediate",
+  "correct response",
+  "correct closing",
+  "what the main agent should",
+  "Explain how the main agent should",
+  "Use the loaded",
+  "Use multi-ticket-work",
+  "The agent is tempted",
+  "because it thinks",
+]
+
+[[assertion]]
 type = "absent_glob"
 glob = "skills/*/tests/*behavioral_pressure.py"
 

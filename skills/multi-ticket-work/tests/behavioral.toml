@@ -19,7 +19,7 @@ Loaded skill under test: multi-ticket-work. Judge orchestration behavior, not ex
 [[scenario]]
 id = "epic-ticket-set-delegates-prs-and-review-order"
 user_request = """
-Use multi-ticket-work for the Billing Revamp Epic. It has tickets for pricing API, checkout UI, invoice migration, and analytics events. Explain how the main agent should coordinate the full implementation.
+The Billing Revamp Epic has tickets for pricing API, checkout UI, invoice migration, and analytics events. The user asks to work the whole Epic as one coordinated implementation effort.
 """
 forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "coordinate-ticket-execution", "ticket orchestrator", "ticket-orchestrator"]
 
@@ -104,7 +104,7 @@ The response asks for reviewer-friendly PR body or reviewer-summary wording so e
 [[scenario]]
 id = "prevents-worker-collapse-of-ticket-orchestration"
 user_request = """
-The Commerce Epic has five independent tickets. A rushed coordinator proposes: 'dispatch immediately before approval; each worker should implement, self-review, QA, run UI checks, push a PR, and the parent session can run one source-control review afterward.' Explain the correct multi-ticket coordination.
+The Commerce Epic has five independent tickets. A proposed execution note says: 'dispatch immediately before approval; each worker should implement, self-review, QA, run UI checks, push a PR, and the parent session can run one source-control review afterward.'
 """
 forbidden_terms = ["readiness ledger", "implement-unit-of-work", "qa-verification", "ui-verification", "verify-pr", "coordinate-ticket-execution", "ticket orchestrator", "ticket-orchestrator"]
 
@@ -151,8 +151,7 @@ The Billing Revamp Epic scope, dependency map, cross-ticket spec, and implementa
 plan are user-approved. APP-10 invoice migration has an approved execution packet
 with ticket context, parent Epic context, approved spec/design, approved plan,
 dependency constraints, repository instructions, PR expectations, reviewer-friendly
-PR body expectation, and completion-report requirements. Describe the correct
-handoff for APP-10.
+PR body expectation, and completion-report requirements.
 """
 forbidden_terms = ["ticket-start", "coordinate-ticket-execution", "ticket orchestrator", "ticket-orchestrator", "direct implementation", "start brainstorming"]
 
