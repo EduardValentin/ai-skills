@@ -58,7 +58,7 @@ The response preserves the explicit implementation-plan approval gate before cod
 [[scenario.criteria]]
 key = "internal_plan_is_not_user_approval"
 description = """
-The response says internal checklists, update plans, working notes, or branch selection do not count as user approval of the spec/design or implementation plan.
+The response does not treat internal checklists, update plans, working notes, investigation progress, or branch selection as user approval of the spec/design or implementation plan.
 """
 
 [[scenario]]
@@ -133,9 +133,9 @@ The response says local scoping by the main agent does not satisfy ticket-start 
 """
 
 [[scenario.criteria]]
-key = "ticket_request_authorizes_scoping"
+key = "does_not_request_separate_scoping_authorization"
 description = """
-The response says the user's ticket-start request is sufficient authorization to dispatch code-mapper; the agent should not wait for a separate explicit user ask.
+The response proceeds toward delegated code-mapper scoping as the next action without asking the user for separate authorization to use native agents or delegation.
 """
 
 [[scenario.criteria]]
@@ -160,7 +160,7 @@ delegation capability, and that capability's current policy says it can only be
 used when the user's message explicitly asks for subagents or delegation. The
 user's message did not use those words.
 """
-forbidden_terms = ["I will scope locally", "local scoping is enough", "start implementation", "ask code questions first"]
+forbidden_terms = ["I will scope locally", "local scoping is enough", "I will start implementation", "ask code questions first"]
 
 [[scenario.criteria]]
 key = "treats_tool_policy_as_delegation_blocker"
@@ -304,7 +304,7 @@ The response coordinates independent review through code-reviewer, security revi
 """
 
 [[scenario.criteria]]
-key = "forwards_compact_context"
+key = "forward_compact_context"
 description = """
 The response describes compact context included in delegated requests, such as ticket/AC, parent context, approved decisions, approved plan, artifact slices, scope/codebase locators, branch state, constraints, expected checks, and output expectations.
 """
@@ -477,11 +477,11 @@ The response routes or coordinates PR preparation/opening from the completed bra
 [[scenario.criteria]]
 key = "runs_pr_readiness_after_pr_exists"
 description = """
-The response states that after the PR is opened or identified, PR readiness verification must run before final handoff so PR creation alone is not treated as completion.
+The response treats PR readiness verification as the next gate after the PR is opened or identified, so PR creation alone is not treated as completion.
 """
 
 [[scenario.criteria]]
-key = "final_report_includes_pr_state"
+key = "blocked_report_names_pr_state"
 description = """
-The final report includes the PR link or blocker, PR readiness result, ticket state, checks or remote status, and recommended next step for the user.
+The blocked closing report names the missing PR state, says PR readiness is not run until a PR exists, and gives PR creation as the next step or a concrete PR-creation blocker.
 """

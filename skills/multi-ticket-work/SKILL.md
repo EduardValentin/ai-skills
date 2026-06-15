@@ -19,10 +19,10 @@ The main agent is the multi-ticket coordinator. It identifies the complete ticke
    - Confirm which tickets are in scope when the ticket system, branch state, or user request is ambiguous.
 
 2. Build the execution map.
-   - List each ticket or unit of work.
-   - Identify dependencies, shared files, integration risks, and order constraints.
-   - Decide which tickets can be worked in parallel and which must happen consecutively.
+   - List each ticket or unit of work from the known facts; mark missing ticket details as unknowns or blockers instead of stopping at a vague request for context.
+   - Identify dependencies, shared files, integration risks, order constraints, and which tickets can run in parallel. Use a provisional map when only the user's named tickets are available.
    - Keep one `ticket-execution-coordinator` per ticket by default. Split into units of work only when one ticket is too large or has separable sequencing constraints.
+   - For a broad Epic or ticket-set start request, return a coordination skeleton: ticket inventory, dependency/parallel map, per-ticket alignment questions, durable note path with status/next-actions/re-read checkpoints, approval gate, packet fields, planned coordinator dispatch per ticket, required phase evidence, PR review order, and reviewer-focus expectations.
 
 3. Align and approve the work.
    - Run the user-facing cross-ticket requirements and brainstorming session needed to reach shared understanding for each ticket, including dependencies, boundaries, risks, and success criteria.
@@ -37,7 +37,7 @@ The main agent is the multi-ticket coordinator. It identifies the complete ticke
    - Include ticket inventory, parent context, dependency map, approved spec/plan summary, approved execution packets, dispatch assignments, status, PR links, blockers, decisions, and next actions.
    - Update it after scope gathering, execution mapping, approval, every dispatch, every subagent report, every blocker, and every PR.
    - Re-read it at the start of work, after any context compaction or resume, before dispatching dependent work, and before the final report.
-   - When returning workflow actions, make note creation/update and the required re-read checkpoints explicit instead of hiding them inside generic status tracking.
+   - When returning workflow actions, make note creation/update and the required re-read checkpoints explicit instead of hiding them inside generic status tracking. In mocked/no-write contexts, name the intended path and ledger contents instead of saying durable state is absent.
 
 5. Dispatch ticket coordinators.
    - Dispatch one `ticket-execution-coordinator` native agent per approved ticket or unit of work.
@@ -81,7 +81,7 @@ Each `ticket-execution-coordinator` must report back with:
 
 ## PR Description Requirement
 
-In each dispatch, ask for a reviewer-friendly PR body with summary, manual testing, and review focus. Phrase it as a PR-description or reviewer-summary request so the appropriate PR-summary capability can handle the wording.
+Broad-start coordination skeletons and each dispatch must include reviewer-friendly PR body expectations with summary, manual testing, and per-ticket review focus. Phrase it as a PR-description or reviewer-summary request so the appropriate PR-summary capability can handle the wording.
 
 ## Failure Signals
 
@@ -94,7 +94,7 @@ In each dispatch, ask for a reviewer-friendly PR body with summary, manual testi
 - Completion is summarized as a generic report instead of the required phase evidence.
 - A combined worker report is accepted instead of distinct implementation, review, security-review-or-skip, manual/runtime QA, and UI/UX-or-skip evidence.
 - The ticket set, Epic children, or sub-tickets were not fully gathered.
-- Work begins before dependencies and parallelization are mapped.
+- Work begins before dependencies and parallelization are mapped and approved.
 - The durable orchestration note is missing, stale, or not re-read after compaction or resume.
 - A ticket is marked complete without both a PR and subagent report.
 - The final report lacks PR links, review order, or dependency rationale.
