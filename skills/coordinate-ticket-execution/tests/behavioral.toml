@@ -97,6 +97,36 @@ The response returns BLOCKED_VERIFICATION or an equivalent explicit verification
 """
 
 [[scenario]]
+id = "accepts-review-quality-findings-beyond-ac"
+user_request = """
+An approved execution packet is at completion reporting. The implementation
+satisfies every acceptance criterion, QA has clean manual/runtime evidence, and
+UI/UX is not applicable. The independent code-review report marks a blocking
+maintainability finding: the implementation duplicates the same eligibility rule
+in three modules instead of using the existing shared policy helper, creating
+repo-convention drift and likely future inconsistency. The caller asks whether
+the unit can be marked ready because the ACs pass.
+"""
+
+[[scenario.criteria]]
+key = "treats_quality_review_finding_as_valid"
+description = """
+The response treats the maintainability and convention-fit review finding as a valid independent review finding even though it is not a direct acceptance-criteria violation.
+"""
+
+[[scenario.criteria]]
+key = "does_not_mark_ready_from_ac_only"
+description = """
+The response does not mark the unit READY solely because acceptance criteria and QA pass while the independent review finding remains unresolved.
+"""
+
+[[scenario.criteria]]
+key = "routes_scoped_fix_and_review_rerun"
+description = """
+The response routes a scoped fix for the duplication/convention finding and requires the affected independent review phase to rerun before completion.
+"""
+
+[[scenario]]
 id = "blocks-missing-approved-packet"
 user_request = """
 A delegated execution request says only: 'work on the checkout thing and make it pass.' It has no approved spec, no implementation plan, no acceptance criteria, and no approval state.

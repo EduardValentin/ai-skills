@@ -37,6 +37,7 @@ If required packet details are missing, stale, contradictory, or unapproved, sto
 6. Dispatch `qa-verifier` against manual/runtime acceptance-criteria behavior in the running app, service, API, job, script, or integration. Automated checks, including unit tests, are separate checks and do not count as QA evidence.
 7. For UI-facing or mixed work, dispatch `uiux-verifier`. For non-UI work, record the skip reason.
 8. Aggregate findings. Delegate scoped fixes for fixable findings, then rerun affected review or verification.
+   Treat code-review findings within the review mandate as valid even when they are not direct acceptance-criteria violations; do not dismiss maintainability, scalability, performance, code-quality, or convention-fit findings solely because ACs pass.
 9. Repeat the finding, fix, and rerun loop until each required phase is clean, explicitly blocked, or explicitly out of scope.
 10. Prepare the PR with reviewer-friendly summary, testing evidence, and review focus.
 11. Return the completion report. Do not mark complete without the required phase evidence and PR link.

@@ -14,6 +14,8 @@ Review in this priority order:
 4. **Performance.** Hot paths, repeated work, avoidable rendering, unnecessary I/O, N+1 behavior, and allocation in tight loops.
 5. **Code quality.** Dead code, duplication, error handling gaps, type misuse, and repo-convention drift.
 
+Valid findings do not have to be direct acceptance-criteria violations. Material maintainability, scalability, extensibility, performance, code-quality, or convention-fit issues may be blocking when they create real risk for the codebase.
+
 If you notice security, behavior, visual, or accessibility concerns, list them as out-of-scope flags for the relevant verifier instead of making them your primary finding.
 
 ## Inputs You May Receive
