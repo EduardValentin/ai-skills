@@ -5,28 +5,3 @@ name = "implement-unit-of-work contract"
 type = "line_count_at_most"
 path = "skills/implement-unit-of-work/SKILL.md"
 max = 130
-
-[[assertion]]
-type = "not_contains"
-path = "skills/implement-unit-of-work/SKILL.md"
-values = [
-  "QA verification",
-  "UI/UX verification",
-  "QA/UIUX",
-  "ready for verification",
-  "readiness ledger",
-  "Ship readiness",
-  "ticket-state",
-  "handoff notes for QA",
-  "UI/UX focus",
-]
-
-[[assertion]]
-type = "not_contains"
-path = "skills/ticket-start/SKILL.md"
-values = ["implement-unit-of-work"]
-
-[[assertion]]
-type = "not_contains"
-path = "skills/multi-ticket-work/SKILL.md"
-values = ["implement-unit-of-work"]

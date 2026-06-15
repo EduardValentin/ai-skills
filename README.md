@@ -59,7 +59,6 @@ Run deterministic repo contracts with:
 python3 tests/contract.py
 python3 tests/contract_harness_contract.py
 python3 tests/skill-trigger/static_contract.py
-python3 tests/workflow-dispatch/workflow_harness_contract.py
 ```
 
 Run deterministic sync tests with:
@@ -95,7 +94,8 @@ TOML files do not define separate command variables.
 
 `tests/contract.py` discovers TOML contract suites colocated under
 `skills/*/tests/contracts.toml`, `plugins/*/tests/contracts.toml`, and
-repo-wide `tests/contracts/*.toml` files.
+repo-wide `tests/contracts/*.toml` files. Contract suites check structure only:
+file presence or absence, line-count limits, and required TOML tables/fields.
 
 `tests/behavioral_pressure.py` discovers colocated
 `skills/*/tests/behavioral.toml` and `plugins/*/skills/*/tests/behavioral.toml`

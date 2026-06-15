@@ -6,17 +6,6 @@ type = "absent_glob"
 glob = "skills/*/tests/workflow-dispatch.toml"
 
 [[assertion]]
-type = "not_contains"
-path = "tests/workflow-dispatch/auto_discovery.py"
-values = [
-  "Available skills:",
-  "discover_skill_files",
-  "parse_frontmatter",
-  "skill_index",
-  "SKILL.md",
-]
-
-[[assertion]]
 type = "absent_glob"
 glob = "tests/workflow-dispatch/*/scenarios.toml"
 

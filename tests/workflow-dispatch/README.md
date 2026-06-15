@@ -19,13 +19,10 @@ Run in CI:
 
 ```bash
 python3 tests/contract.py --suite workflow-dispatch
-python3 tests/workflow-dispatch/workflow_harness_contract.py
 ```
 
-The static contract is TOML-backed. It verifies that colocated workflow dispatch
-scenarios declare downstream discovery expectations, that stale grouped workflow
-files are gone, and that the downstream discovery helper cannot rebuild or
-inject a skill index.
+The static contract is TOML-backed and checks only structural repository
+expectations such as stale grouped workflow files being absent.
 
 ## Behavioral Dispatch
 

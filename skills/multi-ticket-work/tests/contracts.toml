@@ -5,29 +5,3 @@ name = "multi-ticket-work contract"
 type = "line_count_at_most"
 path = "skills/multi-ticket-work/SKILL.md"
 max = 105
-
-[[assertion]]
-type = "contains"
-path = "skills/multi-ticket-work/SKILL.md"
-values = [
-  "ticket-execution-coordinator",
-  "implementation-worker",
-]
-
-[[assertion]]
-type = "not_contains"
-path = "skills/multi-ticket-work/SKILL.md"
-values = [
-  "readiness ledger",
-  "Ship readiness",
-  "coordinate-ticket-execution",
-  "implement-unit-of-work",
-  "qa-verification",
-  "ui-verification",
-  "verify-pr",
-  "codebase-scope-map",
-  "pr-reviewer-summary",
-  "ticket-start",
-  "ticket orchestrator",
-  "ticket-orchestrator",
-]

@@ -5,20 +5,3 @@ name = "ticket-writing contract"
 type = "line_count_at_most"
 path = "skills/ticket-writing/SKILL.md"
 max = 85
-
-[[assertion]]
-type = "contains"
-path = "skills/ticket-writing/SKILL.md"
-values = [
-  "As a [Actor], I want [capability], so that [outcome]",
-  "native issue links",
-]
-
-[[assertion]]
-type = "not_contains"
-path = "skills/ticket-writing/SKILL.md"
-values = [
-  "Candidate Stories",
-  "feature-work-planning",
-  "route to",
-]

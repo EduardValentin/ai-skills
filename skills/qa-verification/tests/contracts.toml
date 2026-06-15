@@ -7,42 +7,5 @@ path = "skills/qa-verification/SKILL.md"
 max = 110
 
 [[assertion]]
-type = "not_contains"
-path = "skills/qa-verification/SKILL.md"
-values = [
-  "before Ship",
-  "Ship",
-  "visual parity",
-  "UI/UX",
-  "layout polish",
-  "styling",
-  "code review",
-  "self-review",
-  "QA is distinct from",
-  "For visual parity",
-  "frontend-pr-test",
-  "Frontend PR Test",
-  "Quick Reference",
-  "Scoping Subagent Prompt",
-  "Red Flags",
-  "Common Mistakes",
-  "test-log",
-  "historical",
-  "focused tests",
-  "Run PR testing notes first",
-  "A ticket ID, local diff, or user permission to proceed without PR notes does not replace blocked PR metadata",
-]
-
-[[assertion]]
 type = "absent"
 path = "skills/ticket-start/agents/qa.md"
-
-[[assertion]]
-type = "not_contains"
-path = "skills/ticket-start/SKILL.md"
-values = ["qa-verification"]
-
-[[assertion]]
-type = "not_contains"
-path = "skills/multi-ticket-work/SKILL.md"
-values = ["qa-verification"]

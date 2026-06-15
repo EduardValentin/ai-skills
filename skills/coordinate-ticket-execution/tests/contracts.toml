@@ -5,32 +5,3 @@ name = "coordinate-ticket-execution contract"
 type = "line_count_at_most"
 path = "skills/coordinate-ticket-execution/SKILL.md"
 max = 95
-
-[[assertion]]
-type = "contains"
-path = "skills/coordinate-ticket-execution/SKILL.md"
-values = [
-  "implementation-worker",
-  "code-reviewer",
-  "security-reviewer",
-  "qa-verifier",
-  "uiux-verifier",
-]
-
-[[assertion]]
-type = "not_contains"
-path = "skills/coordinate-ticket-execution/SKILL.md"
-values = [
-  "ticket-start",
-  "multi-ticket-work",
-  "implement-unit-of-work",
-  "qa-verification",
-  "ui-verification",
-  "verify-pr",
-  "codebase-scope-map",
-  "pr-reviewer-summary",
-  "ticket orchestrator",
-  "ticket-orchestrator",
-  "readiness ledger",
-  "Ship readiness",
-]

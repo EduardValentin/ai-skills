@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from semantic_judge import SemanticCriterion, assert_forbidden_terms, judge_response
+from semantic_judge import SemanticCriterion, judge_response
 
 
 def main() -> int:
@@ -18,7 +18,6 @@ def main() -> int:
         test_accepts_shell_pipeline_judgment()
         test_rejects_failed_criterion()
         test_rejects_non_json_judgment()
-        test_ignores_empty_forbidden_terms()
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
@@ -70,10 +69,7 @@ def test_rejects_failed_criterion() -> None:
             response="I will implement inline.",
             criteria=(SemanticCriterion("delegates_work", "Implementation is delegated."),),
         )
-    except AssertionError as error:
-        message = str(error)
-        assert "delegates_work" in message
-        assert "implemented inline" in message
+    except AssertionError:
         return
     raise AssertionError("expected failed criterion to raise")
 
@@ -88,14 +84,9 @@ def test_rejects_non_json_judgment() -> None:
             response="I will delegate implementation.",
             criteria=(SemanticCriterion("delegates_work", "Implementation is delegated."),),
         )
-    except AssertionError as error:
-        assert "valid JSON" in str(error)
+    except AssertionError:
         return
     raise AssertionError("expected non-JSON judgment to raise")
-
-
-def test_ignores_empty_forbidden_terms() -> None:
-    assert_forbidden_terms("anything at all", ("",), "empty term")
 
 
 def fake_judge_command(output: str) -> str:

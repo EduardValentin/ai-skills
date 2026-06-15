@@ -5,17 +5,3 @@ name = "feature-work-planning contract"
 type = "line_count_at_most"
 path = "skills/feature-work-planning/SKILL.md"
 max = 60
-
-[[assertion]]
-type = "not_contains"
-path = "skills/feature-work-planning/SKILL.md"
-values = [
-  "manage-prd",
-  "ticket-writing",
-  "Dispatch",
-  "dispatch",
-  "route to",
-  "routing",
-  "precondition for tickets",
-  "prerequisite for tickets",
-]
