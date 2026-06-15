@@ -335,7 +335,7 @@ forbidden_terms = []
 [[scenario]]
 id = "feature-work-planning-breakdown"
 skill = "feature-work-planning"
-prompt = "Plan the work for checkout eligibility before we write tickets: scope the systems, dependencies, risks, rollout, and ticket breakdown."
+prompt = "Plan the future work for checkout eligibility. We do not have a ticket yet; scope the systems, dependencies, risks, rollout, and delivery slices."
 forbidden_terms = []
 
 [[scenario]]
