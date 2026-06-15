@@ -12,15 +12,16 @@ Create clean, human-readable, platform-neutral ticket drafts from approved conte
 ## Rules
 
 - Write tickets; do not plan the feature from scratch, edit PRDs, or publish to a tracker.
-- If context is too thin for coherent acceptance criteria, ask for missing facts or route to `feature-work-planning`.
+- If context is too thin for coherent acceptance criteria, ask for missing facts or switch back to work planning before drafting final ticket prose.
 - Keep titles short, specific, and outcome-based. Avoid file names, parameters, mechanisms, or vague labels.
-- Use standard agile shape: user/business outcome, concise description, acceptance criteria, dependencies, and useful delivery notes.
+- Use standard agile user-story shape when drafting stories: `As a [Actor], I want [capability], so that [outcome]`.
 - Keep technical details concise, formatted, and human-readable. Preserve real contracts, interfaces, dependencies, and edge cases, but remove noise.
 - Acceptance criteria must be concrete, coherent, pass/fail, and cover the feature's behavior, permissions, edge cases, and integration outcomes.
-- Link dependencies clearly: parent, blocked-by, blocks, related work, follow-up, and out-of-scope items when known.
+- Mark dependencies clearly: parent, blocked-by, blocks, related work, follow-up, and out-of-scope items when known.
+- When tickets will be created in a tracker, do not leave dependencies as prose only. Preserve the relationship type so the tracker or ticket-planning app can create native issue links.
 - For user stories, prefer vertical slices that deliver user-observable value and include relevant UI, API, data, permissions, integrations, notifications, analytics, or external systems.
 - Reference prototype routes/states instead of copying layout, styling, placeholders, helper text, or button copy unless the wording is business-critical or explicitly requested.
-- Keep parent epics high-level; child tickets carry implementation specifics.
+- Keep parent epics high-level; child tickets carry implementation specifics and should link back to the epic through the tracker's native parent/child relationship.
 
 ## Templates
 
@@ -29,8 +30,8 @@ Story/task:
 ```markdown
 Title: <short outcome>
 
-## Overview
-<who needs what, why, and what outcome this ticket delivers>
+## User Story
+As a [Actor], I want [capability], so that [outcome].
 
 ## Acceptance Criteria
 - [ ] <observable pass/fail behavior>
@@ -53,11 +54,9 @@ Title: <feature capability>
 ## Scope
 - <included capability>
 
-## Candidate Stories
-- <story title>
-
 ## Notes
 - Dependencies:
+- Native issue links:
 - Source context:
 - Open questions:
 ```
@@ -66,7 +65,8 @@ Title: <feature capability>
 
 - title is concise and outcome-based
 - description separates business overview from technical notes
+- user stories use "As a [Actor], I want [capability], so that [outcome]"
 - acceptance criteria are present and testable
-- dependencies and parent/child relationships are explicit
+- dependencies and parent/child relationships are explicit and ready for native issue links
 - stale, contradictory, or out-of-scope content is removed
 - dense identifiers are reformatted into blocks; explanatory comments are marked

@@ -341,7 +341,7 @@ forbidden_terms = []
 [[scenario]]
 id = "ticket-writing-create-stories"
 skill = "ticket-writing"
-prompt = "Turn this approved planning packet into clean epics, vertical-slice user stories, dependencies, and acceptance criteria."
+prompt = "Turn this approved planning packet into clean epics, vertical-slice user stories, dependency relationships for native issue links, and acceptance criteria."
 forbidden_terms = []
 
 [[scenario]]

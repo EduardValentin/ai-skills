@@ -26,7 +26,7 @@ forbidden_terms = ["published to Linear", "edit PRD", "plan the feature first"]
 
 [[scenario.criteria]]
 key = "writes_agile_story"
-description = "The response drafts a platform-neutral agile story with a concise outcome title, overview, acceptance criteria, and notes."
+description = "The response drafts a platform-neutral agile story with a concise outcome title, the form 'As a [Actor], I want [capability], so that [outcome]', acceptance criteria, and notes."
 
 [[scenario.criteria]]
 key = "acceptance_criteria_cover_behavior"
@@ -34,7 +34,29 @@ description = "The acceptance criteria cover invite creation, duplicate pending 
 
 [[scenario.criteria]]
 key = "links_dependency"
-description = "The response captures the email service setup dependency clearly."
+description = "The response captures the email service setup dependency clearly and preserves the relationship type so a tracker can create a native blocked-by or related issue link."
+
+[[scenario]]
+id = "epic-template-no-candidate-stories"
+user_request = """
+Draft an epic from this approved planning packet: checkout eligibility should
+protect ineligible customers from failed purchases, explain eligibility state,
+make existing data compatible, and support controlled rollout. Child stories
+will be drafted separately.
+"""
+forbidden_terms = ["Candidate Stories", "story title", "published to Linear"]
+
+[[scenario.criteria]]
+key = "writes_epic_without_child_story_list"
+description = "The response drafts an epic with title, overview, scope, notes, dependencies, source context, and open questions without adding a Candidate Stories section."
+
+[[scenario.criteria]]
+key = "keeps_child_specifics_out_of_epic"
+description = "The response keeps implementation specifics and child story details out of the parent epic."
+
+[[scenario.criteria]]
+key = "dependency_links_ready"
+description = "The response preserves known dependency relationship types so child stories can later be linked through native tracker issue links."
 
 [[scenario]]
 id = "cleanup-draft-quality"
@@ -65,5 +87,5 @@ key = "does_not_invent_scope"
 description = "The response does not invent full ticket scope or acceptance criteria from thin context."
 
 [[scenario.criteria]]
-key = "routes_to_planning"
-description = "The response asks for missing facts or routes to feature-work-planning before final ticket writing."
+key = "asks_for_planning"
+description = "The response asks for missing facts or switches back to planning before final ticket writing."
