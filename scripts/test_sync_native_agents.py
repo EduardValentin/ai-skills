@@ -38,7 +38,18 @@ def main() -> int:
         agents = repo / "agents"
         agents.mkdir(parents=True)
         home.mkdir()
+        codex_home = home / ".codex"
+        codex_home.mkdir()
+        (codex_home / "config.toml").write_text(
+            """
+model = "gpt-5.5"
 
+[agents.existing-agent]
+description = "An existing unmanaged agent."
+config_file = "agents/existing-agent.toml"
+""".lstrip(),
+            encoding="utf-8",
+        )
         (agents / "mapper.md").write_text("# Mapper\n\nMap code precisely.\n", encoding="utf-8")
         (agents / "manifest.toml").write_text(
             """
@@ -71,11 +82,17 @@ color = "cyan"
             raise AssertionError(push.stderr or push.stdout)
 
         codex_agent = home / ".codex" / "agents" / "demo-mapper.toml"
+        codex_config = home / ".codex" / "config.toml"
         claude_agent = home / ".claude" / "agents" / "demo-mapper.md"
-        assert_file_contains(codex_agent, 'name = "demo-mapper"')
         assert_file_contains(codex_agent, 'sandbox_mode = "read-only"')
         assert_file_contains(codex_agent, "developer_instructions = ")
         assert_file_contains(codex_agent, str(home / ".codex" / "skills" / "codebase-scope-map" / "SKILL.md"))
+        assert_file_contains(codex_agent, "enabled = true")
+        assert_file_contains(codex_config, "[agents.existing-agent]")
+        assert_file_contains(codex_config, "# BEGIN ai-skills native agent registration: demo-mapper")
+        assert_file_contains(codex_config, "[agents.demo-mapper]")
+        assert_file_contains(codex_config, 'description = "Read-only mapper for implementation scoping."')
+        assert_file_contains(codex_config, 'config_file = "agents/demo-mapper.toml"')
         assert_file_contains(claude_agent, 'name: "demo-mapper"')
         assert_file_contains(claude_agent, 'permissionMode: "plan"')
         assert_file_contains(claude_agent, '  - "codebase-scope-map"')

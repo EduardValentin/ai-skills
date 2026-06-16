@@ -53,6 +53,9 @@ CLAUDE_FIELD_ORDER = (
     "initialPrompt",
 )
 
+CODEX_REGISTRATION_PREFIX = "# BEGIN ai-skills native agent registration:"
+CODEX_REGISTRATION_SUFFIX = "# END ai-skills native agent registration:"
+
 
 @dataclass(frozen=True)
 class NativeAgent:
@@ -238,8 +241,6 @@ def render_codex(agent: NativeAgent) -> str:
     body = read_agent_body(agent)
     lines = [
         f"# {generated_notice(agent)}",
-        'name = ' + toml_string(agent.agent_id),
-        'description = ' + toml_string(agent.description),
         'developer_instructions = ' + toml_string(body),
     ]
     for key in ("model", "model_reasoning_effort", "sandbox_mode"):
@@ -251,7 +252,12 @@ def render_codex(agent: NativeAgent) -> str:
     preload_skills = [*agent.preload_skills, *agent.codex.get("preload_skills", [])]
     for skill_name in preload_skills:
         skill_path = Path.home() / ".codex" / "skills" / skill_name / "SKILL.md"
-        lines.extend(["", "[[skills.config]]", f"path = {toml_string(str(skill_path))}"])
+        lines.extend([
+            "",
+            "[[skills.config]]",
+            f"path = {toml_string(str(skill_path))}",
+            "enabled = true",
+        ])
     return "\n".join(lines) + "\n"
 
 
@@ -318,6 +324,10 @@ def claude_destination(agent: NativeAgent) -> Path:
     return Path.home() / ".claude" / "agents" / f"{agent.agent_id}.md"
 
 
+def codex_config_path() -> Path:
+    return Path.home() / ".codex" / "config.toml"
+
+
 def push(agents: list[NativeAgent]) -> None:
     for agent in agents:
         for destination, content in (
@@ -327,6 +337,7 @@ def push(agents: list[NativeAgent]) -> None:
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(content, encoding="utf-8")
             print(f"synced native agent: {destination}")
+    sync_codex_agent_registrations(agents)
 
 
 def check(agents: list[NativeAgent]) -> None:
@@ -342,6 +353,63 @@ def check(agents: list[NativeAgent]) -> None:
             if actual != content:
                 raise ValueError(f"native agent out of sync: {destination}")
             print(f"in sync: {destination}")
+        expected_registration = render_codex_agent_registration(agent)
+        config_path = codex_config_path()
+        if not config_path.is_file():
+            raise FileNotFoundError(f"missing Codex config for native agent registration: {config_path}")
+        config_text = config_path.read_text(encoding="utf-8")
+        if expected_registration not in config_text:
+            raise ValueError(f"native agent registration out of sync: {config_path} ({agent.agent_id})")
+        print(f"in sync: {config_path} ({agent.agent_id})")
+
+
+def sync_codex_agent_registrations(agents: list[NativeAgent]) -> None:
+    path = codex_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    for agent in agents:
+        text = upsert_codex_agent_registration(text, agent)
+    path.write_text(text, encoding="utf-8")
+    print(f"synced native agent registrations: {path}")
+
+
+def render_codex_agent_registration(agent: NativeAgent) -> str:
+    lines = [
+        f"{CODEX_REGISTRATION_PREFIX} {agent.agent_id}",
+        f"[agents.{agent.agent_id}]",
+        f"description = {toml_string(agent.description)}",
+        f"config_file = {toml_string('agents/' + agent.agent_id + '.toml')}",
+        f"{CODEX_REGISTRATION_SUFFIX} {agent.agent_id}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def upsert_codex_agent_registration(text: str, agent: NativeAgent) -> str:
+    block = render_codex_agent_registration(agent)
+    start_marker = f"{CODEX_REGISTRATION_PREFIX} {agent.agent_id}"
+    end_marker = f"{CODEX_REGISTRATION_SUFFIX} {agent.agent_id}"
+
+    start = text.find(start_marker)
+    if start == -1:
+        return append_toml_block(text, block)
+
+    end = text.find(end_marker, start)
+    if end == -1:
+        raise ValueError(f"unterminated Codex native agent registration block for {agent.agent_id}")
+    end += len(end_marker)
+    if end < len(text) and text[end] == "\n":
+        end += 1
+    return text[:start] + block + text[end:]
+
+
+def append_toml_block(text: str, block: str) -> str:
+    if not text:
+        return block
+    if not text.endswith("\n"):
+        text += "\n"
+    if not text.endswith("\n\n"):
+        text += "\n"
+    return text + block
 
 
 def render(agents: list[NativeAgent], harness: str) -> None:

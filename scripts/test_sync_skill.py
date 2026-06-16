@@ -77,7 +77,9 @@ groups = ["demo-skill"]
         assert_file_contains(codex_skill / "SKILL.md", "canonical v1")
         assert_missing(claude_skill / "tests" / ".gitkeep")
         assert_missing(codex_skill / "tests" / ".gitkeep")
-        assert_file_contains(home / ".codex" / "agents" / "demo-agent.toml", 'name = "demo-agent"')
+        assert_file_contains(home / ".codex" / "agents" / "demo-agent.toml", "developer_instructions = ")
+        assert_file_contains(home / ".codex" / "config.toml", "[agents.demo-agent]")
+        assert_file_contains(home / ".codex" / "config.toml", 'config_file = "agents/demo-agent.toml"')
         assert_file_contains(home / ".claude" / "agents" / "demo-agent.md", 'name: "demo-agent"')
 
         (codex_skill / "SKILL.md").write_text("codex v2\n")
