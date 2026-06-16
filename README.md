@@ -6,9 +6,11 @@ This repository tracks the canonical source for personal AI skills and reusable 
 
 - `skills/` contains canonical cross-agent skills.
 - `agents/` contains canonical reusable specialized agents plus `manifest.toml`.
-- `scripts/sync_skill.py` syncs skills into `/Users/trocaneduard/.codex/skills/` and `/Users/trocaneduard/.claude/skills/`.
+- `scripts/sync_skill.py` syncs standalone skills into `/Users/trocaneduard/.codex/skills/` and `/Users/trocaneduard/.claude/skills/`.
 - `scripts/sync_native_agents.py` generates native Codex and Claude Code agent definitions into `/Users/trocaneduard/.codex/agents/` and `/Users/trocaneduard/.claude/agents/`, and registers Codex agents in `/Users/trocaneduard/.codex/config.toml`.
 - `plugins/` contains plugin-packaged skill bundles and harness metadata.
+
+Plugin-packaged skills are consumed through their plugin installs only. Do not also mirror them into direct skill install directories; that creates duplicate skill triggers in Claude Code and Codex.
 
 ## Purpose
 
