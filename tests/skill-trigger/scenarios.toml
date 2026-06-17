@@ -72,6 +72,17 @@ delegated too.
 forbidden_terms = []
 
 [[scenario]]
+id = "ticket-start-manual-qa-verifier-required"
+skill = "ticket-start"
+prompt = """
+Have you properly dispatched manual QA verifiers and reviewers for the ticket,
+or did unit tests and code reviewers stand in for QA because it was not a
+running UI/API flow?
+"""
+forbidden_terms = []
+response_forbidden_terms = ["tests are enough", "no qa-verifier", "not a running UI/API flow"]
+
+[[scenario]]
 id = "ticket-start-child-ticket-context"
 skill = "ticket-start"
 prompt = """
