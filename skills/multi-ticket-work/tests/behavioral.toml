@@ -3,16 +3,6 @@ name = "multi-ticket-work"
 skill = "multi-ticket-work"
 skill_path = "skills/multi-ticket-work/SKILL.md"
 scenario_env = "MULTI_TICKET_WORK_SCENARIO"
-prompt_instructions = """
-This is a behavioral pressure test. Do not perform external tool calls, run
-commands, inspect live systems, mutate files, create branches, create pull
-requests, create tracker issues, or complete the real task. Treat scenario facts
-as the only available runtime facts. Do not treat these test-harness limits as
-runtime blockers unless the scenario itself says the needed access, tooling, or
-runtime is unavailable. Answer as the loaded skill would in this mocked
-scenario, focusing on the next decision, blocker, or report you would return.
-Use the scenario's language. Do not quote the skill text or test criteria.
-"""
 judge_context = """
 Loaded skill under test: multi-ticket-work. Judge orchestration behavior, not exact wording.
 """

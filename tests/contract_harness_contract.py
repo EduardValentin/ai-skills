@@ -79,10 +79,7 @@ def check_toml_structural_assertions() -> None:
 [suite]
 name = "sample"
 skill = "demo-skill"
-prompt_instructions = """
-This is a neutral test prompt.
-Do not perform external calls.
-"""
+judge_context = "Judge the demo skill."
 
 [[scenario]]
 id = "demo"
@@ -105,7 +102,7 @@ path = "{{path}}"
 fields = [
   "name",
   "skill",
-  "prompt_instructions",
+  "judge_context",
 ]
 
 [[assertion]]

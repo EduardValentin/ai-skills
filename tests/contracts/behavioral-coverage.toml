@@ -15,7 +15,6 @@ fields = [
   "skill",
   "skill_path",
   "scenario_env",
-  "prompt_instructions",
   "judge_context",
 ]
 

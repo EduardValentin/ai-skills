@@ -45,7 +45,6 @@ def check_behavioral_harness_contract() -> None:
         skill_name="demo",
         skill_text="DEMO SKILL BODY",
         scenario=scenario,
-        prompt_instructions="Return the demo response shape.",
     )
 
     if not isinstance(prompt, str) or not prompt.strip():
@@ -74,7 +73,6 @@ name = "demo-suite"
 skill = "demo"
 skill_path = "skills/demo/SKILL.md"
 scenario_env = "DEMO_SCENARIO"
-prompt_instructions = "Return the demo response shape."
 judge_context = "Judge demo behavior."
 
 [[scenario]]

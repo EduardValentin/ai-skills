@@ -40,21 +40,27 @@ class BehavioralSuiteConfig:
     skill_name: str
     skill_path: Path
     scenario_filter_env_var: str
-    prompt_instructions: str
     judge_context: str
 
 
 PromptBuilder = Callable[[str, BehavioralScenario], str]
 AGENT_COMMAND_ENV_VAR = "SKILL_TRIGGER_AGENT_COMMAND"
 GLOBAL_SCENARIO_FILTER_ENV_VAR = "BEHAVIORAL_SCENARIO"
-CAPABILITY_ACCOUNTING_INSTRUCTIONS = (
-    "Before choosing a path, account for native runtime capabilities from the scenario facts. "
-    "If a scenario says a native capability is available, treat it as available. "
-    "If a scenario says a capability is missing, unavailable, or policy-blocked, "
-    "report that blocker before substituting another path. "
-    "Do not ask for separate permission solely to use an available capability unless "
-    "the scenario states that the runtime policy requires it."
-)
+GLOBAL_PROMPT_INSTRUCTIONS = """This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
+
+Before choosing a path, account for native runtime capabilities from the scenario
+facts. If a scenario says a native capability is available, treat it as available.
+If a scenario says a capability is missing, unavailable, or policy-blocked,
+report that blocker before substituting another path. Do not ask for separate
+permission solely to use an available capability unless the scenario states that
+the runtime policy requires it."""
 
 
 def load_behavioral_scenarios(scenarios_path: Path) -> tuple[BehavioralScenario, ...]:
@@ -91,7 +97,6 @@ def load_behavioral_suite_config(scenarios_path: Path) -> BehavioralSuiteConfig:
         skill_name=skill_name,
         skill_path=skill_path,
         scenario_filter_env_var=optional_string(suite, "scenario_env") or default_scenario_env(skill_name),
-        prompt_instructions=require_string(scenarios_path, suite, "prompt_instructions"),
         judge_context=require_string(scenarios_path, suite, "judge_context"),
     )
 
@@ -108,7 +113,6 @@ def run_behavioral_suite_from_path(
         skill_path=config.skill_path,
         scenarios=load_behavioral_scenarios(scenarios_path),
         scenario_filter_env_var=config.scenario_filter_env_var,
-        prompt_instructions=config.prompt_instructions,
         judge_context=config.judge_context,
         scenario_filter=scenario_filter,
     )
@@ -288,7 +292,6 @@ def run_loaded_skill_behavioral_suite(
     skill_path: Path,
     scenarios: tuple[BehavioralScenario, ...],
     scenario_filter_env_var: str,
-    prompt_instructions: str,
     judge_context: str,
     prompt_builder: PromptBuilder | None = None,
     scenario_filter: str | None = None,
@@ -321,7 +324,6 @@ def run_loaded_skill_behavioral_suite(
                 skill_name=skill_name,
                 skill_text=text,
                 scenario=scenario,
-                prompt_instructions=prompt_instructions,
             )
         )
 
@@ -351,7 +353,6 @@ def build_loaded_skill_prompt(
     skill_name: str,
     skill_text: str,
     scenario: BehavioralScenario,
-    prompt_instructions: str,
 ) -> str:
     return f"""You are pressure-testing whether an agent follows the {skill_name} skill.
 
@@ -364,9 +365,7 @@ Loaded skill: {skill_name}
 User request:
 {scenario.user_request}
 
-{CAPABILITY_ACCOUNTING_INSTRUCTIONS}
-
-{prompt_instructions}
+{GLOBAL_PROMPT_INSTRUCTIONS}
 """
 
 
