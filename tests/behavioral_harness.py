@@ -46,6 +46,12 @@ class BehavioralSuiteConfig:
 PromptBuilder = Callable[[str, BehavioralScenario], str]
 AGENT_COMMAND_ENV_VAR = "SKILL_TRIGGER_AGENT_COMMAND"
 GLOBAL_SCENARIO_FILTER_ENV_VAR = "BEHAVIORAL_SCENARIO"
+CAPABILITY_ACCOUNTING_INSTRUCTIONS = """Before choosing a path, account for native runtime capabilities from the scenario
+facts. If a scenario says a native capability is available, treat it as available.
+If a scenario says a capability is missing, unavailable, or policy-blocked,
+report that blocker before substituting another path. Do not ask for separate
+permission solely to use an available capability unless the scenario states that
+the runtime policy requires it."""
 GLOBAL_PROMPT_INSTRUCTIONS = """This is a behavioral pressure test. Do not perform external tool calls, run
 commands, inspect live systems, mutate files, create branches, create pull
 requests, create tracker issues, or complete the real task. Treat scenario facts
@@ -55,12 +61,7 @@ runtime is unavailable. Answer as the loaded skill would in this mocked
 scenario, focusing on the next decision, blocker, or report you would return.
 Use the scenario's language. Do not quote the skill text or test criteria.
 
-Before choosing a path, account for native runtime capabilities from the scenario
-facts. If a scenario says a native capability is available, treat it as available.
-If a scenario says a capability is missing, unavailable, or policy-blocked,
-report that blocker before substituting another path. Do not ask for separate
-permission solely to use an available capability unless the scenario states that
-the runtime policy requires it."""
+""" + CAPABILITY_ACCOUNTING_INSTRUCTIONS
 
 
 def load_behavioral_scenarios(scenarios_path: Path) -> tuple[BehavioralScenario, ...]:
