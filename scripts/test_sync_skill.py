@@ -48,11 +48,14 @@ def main() -> int:
         repo_scripts = repo / "scripts"
         repo_agents = repo / "agents"
         canonical_tests.mkdir(parents=True)
+        canonical_venv = canonical / "scripts" / ".venv"
+        canonical_venv.mkdir(parents=True)
         repo_scripts.mkdir()
         repo_agents.mkdir()
         home.mkdir()
         (canonical / "SKILL.md").write_text("canonical v1\n")
         (canonical_tests / ".gitkeep").write_text("do not sync\n")
+        (canonical_venv / "pyvenv.cfg").write_text("do not sync\n")
         shutil.copy2(Path(__file__).with_name("sync_native_agents.py"), repo_scripts / "sync_native_agents.py")
         (repo_agents / "demo-agent.md").write_text("# Demo Agent\n\nMap things.\n")
         (repo_agents / "manifest.toml").write_text(
@@ -73,10 +76,23 @@ groups = ["demo-skill"]
 
         claude_skill = home / ".claude" / "skills" / skill
         codex_skill = home / ".codex" / "skills" / skill
+        (claude_skill / "scripts" / ".venv").mkdir(parents=True)
+        (codex_skill / "scripts" / ".venv").mkdir(parents=True)
+        (claude_skill / "scripts" / ".venv" / "installed.txt").write_text("preserve claude venv\n")
+        (codex_skill / "scripts" / ".venv" / "installed.txt").write_text("preserve codex venv\n")
+
+        push_again = run_sync(script, repo, home, "push", skill)
+        if push_again.returncode != 0:
+            raise AssertionError(push_again.stderr or push_again.stdout)
+
         assert_file_contains(claude_skill / "SKILL.md", "canonical v1")
         assert_file_contains(codex_skill / "SKILL.md", "canonical v1")
         assert_missing(claude_skill / "tests" / ".gitkeep")
         assert_missing(codex_skill / "tests" / ".gitkeep")
+        assert_missing(claude_skill / "scripts" / ".venv" / "pyvenv.cfg")
+        assert_missing(codex_skill / "scripts" / ".venv" / "pyvenv.cfg")
+        assert_file_contains(claude_skill / "scripts" / ".venv" / "installed.txt", "preserve claude")
+        assert_file_contains(codex_skill / "scripts" / ".venv" / "installed.txt", "preserve codex")
         assert_file_contains(home / ".codex" / "agents" / "demo-agent.toml", "developer_instructions = ")
         assert_file_contains(home / ".codex" / "config.toml", "[agents.demo-agent]")
         assert_file_contains(home / ".codex" / "config.toml", 'config_file = "agents/demo-agent.toml"')

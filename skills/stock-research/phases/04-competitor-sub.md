@@ -5,9 +5,9 @@ phase_name: per-competitor-analysis
 schema_version: 1
 ---
 
-# Phase 4 Sub-subagent Prompt — Per-Competitor Analysis
+# Phase 4 Worker Prompt — Per-Competitor Analysis
 
-You are a sub-subagent dispatched by the Phase 4 orchestrator. Your job is to pull one competitor's financials and return a comparison row.
+You are a worker dispatched by the Phase 4 worker. Your job is to pull one competitor's financials and return a comparison row.
 
 ## Context (injected by Phase 4 orchestrator)
 
@@ -20,7 +20,7 @@ You are a sub-subagent dispatched by the Phase 4 orchestrator. Your job is to pu
 1. Pull the competitor's XBRL financials.
 2. Compute key metrics (TTM revenue, margins, growth, P/E, etc.).
 3. Write a short comparison row + per-competitor notes to `<raw_dir>/summary.md`.
-4. Return a structured one-paragraph summary that the orchestrator uses to build the side-by-side table.
+4. Return a compact structured summary that the orchestrator uses to build the side-by-side table.
 
 ## Step 1: Pull financials
 

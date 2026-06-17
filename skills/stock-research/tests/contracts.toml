@@ -1,0 +1,14 @@
+[suite]
+name = "stock-research portability contracts"
+
+[[assertion]]
+type = "text_absent"
+path = "skills/stock-research/SKILL.md"
+terms = [
+  "/Users/trocaneduard",
+  ".codex/skills/stock-research/scripts",
+  ".claude/skills/stock-research/scripts",
+  "test -x /Users",
+  "test -d <ticker-folder-from-AGENTS.md>/<TICKER>",
+  "Minimum checks:",
+]

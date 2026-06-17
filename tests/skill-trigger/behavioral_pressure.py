@@ -75,12 +75,17 @@ The response must include the expected skill name from the scenario registry."""
 def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, object]) -> None:
     scenario_id = str(scenario["id"])
     skill = str(scenario["skill"])
+    should_trigger = bool(scenario.get("should_trigger", True))
     prompt = make_prompt(scenario)
     response = run_agent(agent_command, prompt)
+    selected = selected_skills(response)
 
-    if skill not in response:
+    if should_trigger and skill not in selected:
         print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
         raise ValueError(f"{scenario_id} did not select expected skill: {skill}")
+    if not should_trigger and skill in selected:
+        print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
+        raise ValueError(f"{scenario_id} selected skill that should not trigger: {skill}")
 
     try:
         assert_forbidden_terms(
@@ -93,30 +98,62 @@ def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, obj
             scenario_id=scenario_id,
             scenario_prompt=str(scenario["prompt"]),
             response=response,
-            criteria=(
-                SemanticCriterion(
-                    "expected_skill_is_relevant",
-                    f"The response includes {skill} because it is relevant to the user request before any task work begins. Extra selected skills are acceptable unless they match the scenario's forbidden terms.",
-                ),
-                SemanticCriterion(
-                    "selection_is_from_prompt",
-                    "The rationale explains the trigger condition from the user request rather than relying on an injected skill list or performing the task.",
-                ),
-                SemanticCriterion(
-                    "does_not_perform_task",
-                    "The response only reports selected skills and a short rationale; it does not start executing the user request.",
-                ),
-            ),
-            context=(
-                "This is an installed-harness black-box skill trigger test. "
-                f"The deterministic requirement is that {skill} is selected; extra selected skills are allowed unless explicitly forbidden by the scenario."
-            ),
+            criteria=semantic_criteria(skill, should_trigger),
+            context=semantic_context(skill, should_trigger),
         )
     except AssertionError as error:
         print(f"Response for {scenario_id}:\n{response}", file=sys.stderr)
         raise ValueError(f"{scenario_id} failed semantic trigger judgment: {error}") from error
 
-    print(f"PASS: {scenario_id} selected {skill}", flush=True)
+    action = "selected" if should_trigger else "did not select"
+    print(f"PASS: {scenario_id} {action} {skill}", flush=True)
+
+
+def semantic_criteria(skill: str, should_trigger: bool) -> tuple[SemanticCriterion, ...]:
+    if should_trigger:
+        expected = (
+            f"The response includes {skill} because it is relevant to the user "
+            "request before any task work begins. Extra selected skills are "
+            "acceptable unless they match the scenario's forbidden terms."
+        )
+    else:
+        expected = (
+            f"The response does not include {skill} because the user request is "
+            "outside that skill's trigger boundary. Other selected skills are "
+            "acceptable unless they match the scenario's forbidden terms."
+        )
+
+    return (
+        SemanticCriterion("expected_skill_boundary", expected),
+        SemanticCriterion(
+            "selection_is_from_prompt",
+            "The rationale is grounded in the user request and the relevant trigger boundary; it does not rely on an injected skill list or perform the task.",
+        ),
+        SemanticCriterion(
+            "does_not_perform_task",
+            "The response only reports selected skills and a short rationale; it does not start executing the user request.",
+        ),
+    )
+
+
+def semantic_context(skill: str, should_trigger: bool) -> str:
+    requirement = "is selected" if should_trigger else "is not selected"
+    return (
+        "This is an installed-harness black-box skill trigger test. "
+        f"The deterministic requirement is that {skill} {requirement}; "
+        "extra selected skills are allowed unless explicitly forbidden by the scenario."
+    )
+
+
+def selected_skills(response: str) -> set[str]:
+    for line in response.splitlines():
+        if not line.startswith("SELECTED_SKILLS:"):
+            continue
+        value = line.split(":", 1)[1].strip()
+        if not value or value.lower() in {"none", "n/a", "no skills"}:
+            return set()
+        return {part.strip() for part in value.split(",") if part.strip()}
+    return set()
 
 
 def run_agent(agent_command: str, prompt: str) -> str:
@@ -125,6 +162,10 @@ def run_agent(agent_command: str, prompt: str) -> str:
 
 def make_prompt(scenario: dict[str, object]) -> str:
     return f"""Select skills for this request and stop. Do not perform the task.
+Select only skills whose trigger conditions are directly satisfied. It is valid
+to select none. Do not choose a closest-fit skill just because the request names
+a related domain, ticker, technology, artifact, or predecessor workflow. Respect
+each skill's "do not use" and boundary language.
 
 User request:
 {scenario["prompt"]}

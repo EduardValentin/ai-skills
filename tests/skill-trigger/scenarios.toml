@@ -454,6 +454,39 @@ prompt = "Research AAPL end-to-end and help me decide whether it belongs on my l
 forbidden_terms = []
 
 [[scenario]]
+id = "stock-research-initial-thesis"
+skill = "stock-research"
+prompt = "Research AAPL end-to-end as a long-term investment. I want a fundamentals deep dive and a buy/watch/avoid view at the current price."
+forbidden_terms = []
+
+[[scenario]]
+id = "stock-research-financial-extractor-postmortem"
+skill = "stock-research"
+prompt = "Deep dive on a US-listed company, but watch for an extractor failure: the 10-K has debt tags, missing dividends may be inferred zero only from policy language, and a stock split may require normalized shares."
+forbidden_terms = []
+
+[[scenario]]
+id = "stock-research-quarterly-update-negative"
+skill = "stock-research"
+should_trigger = false
+prompt = "Update my existing AAPL thesis for the latest quarter and compare the new results against the prior thesis."
+forbidden_terms = []
+
+[[scenario]]
+id = "stock-research-technical-analysis-negative"
+skill = "stock-research"
+should_trigger = false
+prompt = "Do technical analysis on TSLA, including chart patterns, options strategy, and day-trading entry levels."
+forbidden_terms = []
+
+[[scenario]]
+id = "stock-research-current-price-negative"
+skill = "stock-research"
+should_trigger = false
+prompt = "What is Apple's current stock price right now?"
+forbidden_terms = []
+
+[[scenario]]
 id = "stock-recap-news-impact"
 skill = "stock-recap"
 prompt = "Microsoft just announced acquiring Activision for $69B. I have an existing thesis on MSFT — recap it through the lens of this acquisition."

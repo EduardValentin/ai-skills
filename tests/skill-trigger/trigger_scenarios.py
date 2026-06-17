@@ -81,6 +81,11 @@ def _normalize_scenario(path: Path, scenario: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"{path}: scenario {scenario['id']} field {key!r} must be a string list")
         scenario[key] = value
 
+    should_trigger = scenario.get("should_trigger", True)
+    if not isinstance(should_trigger, bool):
+        raise ValueError(f"{path}: scenario {scenario['id']} field 'should_trigger' must be a boolean")
+    scenario["should_trigger"] = should_trigger
+
     return scenario
 
 
@@ -127,7 +132,12 @@ def _load_with_fallback_parser(path: Path) -> list[dict[str, Any]]:
                 multiline_value = [content] if content else []
             continue
 
-        current[key] = ast.literal_eval(raw_value)
+        if raw_value == "true":
+            current[key] = True
+        elif raw_value == "false":
+            current[key] = False
+        else:
+            current[key] = ast.literal_eval(raw_value)
 
     if multiline_key is not None:
         raise ValueError(f"{path}: unterminated multiline string for {multiline_key!r}")
