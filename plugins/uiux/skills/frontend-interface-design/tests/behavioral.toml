@@ -2,13 +2,7 @@
 name = "uiux-frontend-interface-design"
 skill = "frontend-interface-design"
 skill_path = "plugins/uiux/skills/frontend-interface-design/SKILL.md"
-agent_env = "UIUX_FRONTEND_INTERFACE_DESIGN_AGENT_COMMAND"
 scenario_env = "UIUX_FRONTEND_INTERFACE_DESIGN_SCENARIO"
-prompt_instructions = """
-Do not implement code. Return the design and implementation approach only. If
-the scenario provides options, choose the best option and describe how you would
-proceed.
-"""
 judge_context = """
 Loaded skill under test: frontend-interface-design. Judge execution priorities
 for platform-native UI structure, accessible interaction, adaptive layout,

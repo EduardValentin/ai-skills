@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This repository is the tracked source for personal AI skills used across multiple agents (Claude Code, Codex, and any future agent). It is **not** a place to maintain parallel per-agent copies of the same skill.
+This repository is the tracked source for personal AI skills and reusable specialized agents used across multiple agents (Claude Code, Codex, and any future agent). It is **not** a place to maintain parallel per-agent copies of the same skill or agent.
 
 ## Repository rules
 
@@ -14,7 +14,7 @@ Maintain a **single canonical version** of each skill in this repo. Do not fork 
 
 If you encounter an existing duplicated skill (the same skill present under both `claude/skills/` and `codex/skills/`), prefer to **consolidate** it into one canonical location before making further edits, and call this out to the user.
 
-The canonical layout the repo is migrating toward:
+Use this canonical layout:
 
 ```
 skills/
@@ -37,11 +37,11 @@ plugins/
     └── .claude-plugin/
 ```
 
-Until the migration is complete, the legacy `claude/skills/` and `codex/skills/` trees may still contain skills. New skills should be authored in the canonical location.
+Do not author new skills under per-agent source trees such as `claude/skills/` or `codex/skills/`. Consolidate duplicated per-agent copies into the canonical location before making substantive edits.
 
-### 2. Sync to both install directories on every change
+### 2. Sync standalone skills to both install directories
 
-Every change to a canonical skill must be propagated to **both** agent install directories in the same flow:
+Every change to a standalone canonical skill under `skills/` must be propagated to **both** agent install directories in the same flow:
 
 - `~/.codex/skills/<skill-name>/`
 - `~/.claude/skills/<skill-name>/`
@@ -55,7 +55,9 @@ python3 scripts/sync_skill.py pull <skill-name> claude|codex
 
 Treat the sync as part of the edit — not a follow-up. If a change lands in the repo but only one install dir gets updated, the agents are now running different versions of the skill, which is exactly the situation the single-canonical-copy rule exists to prevent.
 
-For legacy skills that still live under `claude/skills/` or `codex/skills/`, the same applies: the edit in the repo and the corresponding update under `~/.claude/skills/` or `~/.codex/skills/` must happen together.
+If an existing skill still lives under `claude/skills/` or `codex/skills/`, the same applies: the edit in the repo and the corresponding update under `~/.claude/skills/` or `~/.codex/skills/` must happen together.
+
+Do not mirror plugin-packaged skills into direct install directories. A plugin skill should be available through its plugin install only; direct copies under `~/.codex/skills/<skill-name>/` or `~/.claude/skills/<skill-name>/` create duplicate skill triggers and must be removed.
 
 ### 3. Plugin packaging and harness-specific plumbing
 
@@ -81,6 +83,36 @@ Harness metadata is not the skill's domain knowledge. Keep it minimal, declarati
 
 Do not edit installed plugin caches as source of truth. Paths such as `~/.codex/plugins/cache/...` and `~/.claude/plugins/cache/...` are derived install artifacts; refresh them from the repo or local plugin source instead.
 
+### 3a. One canonical copy per specialized agent
+
+Reusable specialized agents live under the repo-level `agents/` directory, not inside a skill folder. A skill may name an agent it wants the harness to spawn, but the agent remains globally reusable and must not be treated as owned by that skill.
+
+The canonical native-agent layout is:
+
+```
+agents/
+├── manifest.toml          # one manifest for all reusable specialized agents
+├── code-mapper.md         # portable role prompt / domain contract
+├── code-reviewer.md
+└── ...
+```
+
+Do not hand-maintain separate Codex and Claude Code agent definitions. Update the canonical Markdown prompt and `agents/manifest.toml`, then run:
+
+```bash
+python3 scripts/sync_native_agents.py push
+python3 scripts/sync_native_agents.py check
+```
+
+`sync_native_agents.py` renders harness-native files into:
+
+- `~/.codex/agents/<agent-id>.toml`
+- `~/.claude/agents/<agent-id>.md`
+
+`agents/manifest.toml` owns harness-specific delivery metadata such as model, reasoning effort, sandbox/permission mode, tool restrictions, display color, and optional preloaded skills. Keep role prompts portable and put harness-specific fields in the manifest.
+
+When a skill change relies on a subset of specialized agents, tag those manifest entries with that skill's group name. `scripts/sync_skill.py push <skill-name>` pushes the skill and then syncs native agents in the matching group.
+
 ### 4. Installing or refreshing plugins across harnesses
 
 When adding or updating a plugin, handle all three layers in the same change:
@@ -95,7 +127,7 @@ For Codex availability:
 - Keep `.agents/plugins/marketplace.json` pointing at the repo plugin source, usually `./plugins/<plugin-name>`.
 - For repo-local testing, the Codex marketplace root is the repo root because `.agents/plugins/marketplace.json` lives there.
 - For user-wide local installation, copy the plugin to `~/plugins/<plugin-name>/`, keep `~/.agents/plugins/marketplace.json` pointing at `./plugins/<plugin-name>`, then add or upgrade the `~` marketplace root.
-- Refresh `~/.codex/skills/<skill-name>/` for each plugin skill when Codex sessions also rely on direct skill discovery.
+- Do not refresh plugin skills into `~/.codex/skills/`; use the plugin install as the only runtime source.
 
 For Claude Code availability:
 
@@ -103,16 +135,14 @@ For Claude Code availability:
 - Validate the plugin before claiming it is installable.
 - Refresh the durable local plugin copy, usually `~/plugins/<plugin-name>/`.
 - Add or update the Claude marketplace source that contains `.claude-plugin/marketplace.json`, then install or update the plugin from that marketplace.
-- Refresh `~/.claude/skills/<skill-name>/` for each plugin skill when Claude sessions also rely on direct skill discovery.
+- Do not refresh plugin skills into `~/.claude/skills/`; use the plugin install as the only runtime source.
 
-For direct skill install directories, copy the canonical skill folder exactly, including scripts, references, tests, and thin `agents/` metadata if present. Do not hand-edit the installed copy and then forget to pull it back into the repo.
+For standalone direct skill install directories, copy the canonical skill folder exactly, including scripts, references, tests, and thin `agents/` metadata if present. Do not hand-edit the installed copy and then forget to pull it back into the repo.
 
 Useful local refresh commands for the current plugin convention:
 
 ```bash
 rsync -a --delete plugins/<plugin-name>/ "$HOME/plugins/<plugin-name>/"
-rsync -a --delete plugins/<plugin-name>/skills/<skill-name>/ "$HOME/.codex/skills/<skill-name>/"
-rsync -a --delete plugins/<plugin-name>/skills/<skill-name>/ "$HOME/.claude/skills/<skill-name>/"
 
 codex plugin marketplace add "$HOME"
 codex plugin marketplace upgrade local
@@ -150,6 +180,14 @@ SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
 ```
 
 The behavioral command should use the target agent/runtime whose skill selection matters for the PR. If the behavioral suite cannot be run, do not silently proceed; report the exact blocker and get explicit user approval before creating the PR.
+
+### 9. Keep agent-driven test prompts neutral
+
+Behavioral tests and any other agent-driven tests must not nudge the tested agent toward the expected answer. Actor-facing prompts may set test boundaries, such as no external tool calls, no file edits, no PR creation, response format, and the scenario facts. They must not include checklists of expected workflow steps, required conclusions, required agent names, or rubric items.
+
+Treat actor-facing `prompt_instructions` like mocks or stubs in classic unit tests: they constrain unavailable side effects and injected facts, while assertions and judge criteria verify the behavior.
+
+Put expected behavior in `[[scenario.criteria]]`, `judge_context`, deterministic assertions, or the test harness, not in actor-facing `prompt_instructions` or user prompts unless the user prompt is intentionally modeling real user wording. If a behavioral prompt tells the actor what it "must explain", "must mention", or "must state" about the behavior under test, treat that test as invalid and rewrite it before trusting the result.
 
 ---
 
@@ -283,7 +321,7 @@ Before committing a skill, walk through this list:
 - [ ] The behavioral trigger pressure suite passed for the target agent/runtime, or the user explicitly approved the documented blocker before PR creation.
 - [ ] No copy of this skill exists for a different agent. (If it does, merge them.)
 - [ ] Adapter files, if any, are under ~30 lines each.
-- [ ] The change has been synced to both `~/.codex/skills/` and `~/.claude/skills/` (see repo rule 2).
+- [ ] Standalone skill changes have been synced to both direct skill install dirs; plugin-packaged skill changes have been refreshed through the plugin install only, with no duplicate direct skill copies.
 
 ## Anti-patterns to refuse
 

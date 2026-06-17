@@ -1,0 +1,81 @@
+[suite]
+name = "ticket-writing"
+skill = "ticket-writing"
+skill_path = "skills/ticket-writing/SKILL.md"
+scenario_env = "TICKET_WRITING_SCENARIO"
+judge_context = """
+Loaded skill under test: ticket-writing. Judge agile ticket quality, concise prose, acceptance criteria, dependencies, vertical slicing, and scope boundaries.
+"""
+
+[[scenario]]
+id = "planning-packet-to-story"
+user_request = """
+Turn this approved planning packet into a user story: admins invite teammates by email, duplicate pending invites are blocked, invites expire after 7 days, and accepted users join the workspace with the selected role. It depends on the email service setup story.
+"""
+forbidden_terms = ["published to Linear", "edit PRD", "plan the feature first"]
+
+[[scenario.criteria]]
+key = "writes_agile_story"
+description = "The response drafts a platform-neutral agile story with a concise outcome title, the form 'As a [Actor], I want [capability], so that [outcome]', acceptance criteria, and notes."
+
+[[scenario.criteria]]
+key = "acceptance_criteria_cover_behavior"
+description = "The acceptance criteria cover invite creation, duplicate pending invite handling, expiration, acceptance, role assignment, and dependency-aware behavior."
+
+[[scenario.criteria]]
+key = "links_dependency"
+description = "The response captures the email service setup dependency clearly and preserves the relationship type so a tracker can create a native blocked-by or related issue link."
+
+[[scenario]]
+id = "epic-template-no-candidate-stories"
+user_request = """
+Draft an epic from this approved planning packet: checkout eligibility should
+protect ineligible customers from failed purchases, explain eligibility state,
+make existing data compatible, and support controlled rollout. Child stories
+will be drafted separately.
+"""
+forbidden_terms = ["Candidate Stories", "story title", "published to Linear"]
+
+[[scenario.criteria]]
+key = "writes_epic_without_child_story_list"
+description = "The response drafts an epic with title, overview, scope, notes, dependencies, source context, and open questions without adding a Candidate Stories section."
+
+[[scenario.criteria]]
+key = "keeps_child_specifics_out_of_epic"
+description = "The response keeps implementation specifics and child story details out of the parent epic."
+
+[[scenario.criteria]]
+key = "dependency_links_ready"
+description = "The response preserves known dependency relationship types so child stories can later be linked through native tracker issue links."
+
+[[scenario]]
+id = "cleanup-draft-quality"
+user_request = """
+Clean up this draft ticket: title is "Add cert_expiry_sweep.py with vault_path parameter"; description mixes business reason with Oracle paths and event fields; ACs are buried in prose; it still mentions alert creation, which is out of scope.
+"""
+forbidden_terms = ["created issue", "published"]
+
+[[scenario.criteria]]
+key = "outcome_title"
+description = "The response rewrites or requires the title around the work outcome rather than file names or parameters."
+
+[[scenario.criteria]]
+key = "clean_sections"
+description = "The response separates business overview, acceptance criteria, and concise technical notes."
+
+[[scenario.criteria]]
+key = "removes_stale_scope"
+description = "The response removes or flags stale out-of-scope alert-creation content."
+
+[[scenario]]
+id = "thin-context-routes-upstream"
+user_request = "Write implementation-ready tickets for the new scheduling feature. We have not decided roles, flow, data, edge cases, or integrations yet."
+forbidden_terms = ["Here are the implementation-ready tickets", "final ticket draft"]
+
+[[scenario.criteria]]
+key = "does_not_invent_scope"
+description = "The response does not invent full ticket scope or acceptance criteria from thin context."
+
+[[scenario.criteria]]
+key = "asks_for_planning"
+description = "The response asks for missing facts or switches back to planning before final ticket writing."

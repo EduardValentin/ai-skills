@@ -2,22 +2,8 @@
 name = "workflow dispatch colocated coverage"
 
 [[assertion]]
-type = "toml_scenarios_require_field_for_each"
+type = "absent_glob"
 glob = "skills/*/tests/workflow-dispatch.toml"
-path = "{path}"
-field = "expected_auto_discovery"
-non_empty = true
-
-[[assertion]]
-type = "not_contains"
-path = "tests/workflow-dispatch/auto_discovery.py"
-values = [
-  "Available skills:",
-  "discover_skill_files",
-  "parse_frontmatter",
-  "skill_index",
-  "SKILL.md",
-]
 
 [[assertion]]
 type = "absent_glob"

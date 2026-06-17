@@ -23,7 +23,7 @@ with the alert creation subticket. We are working on a feature branch, so base
 this worktree and future PR on SS-2766-centralized-monitoring-of-submission-services-components.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
 
 [[scenario]]
 id = "ticket-start-jira-start-tackling-existing-draft"
@@ -35,7 +35,7 @@ future PR, and there is already a draft worktree with changes. Inspect it and
 keep moving.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
 
 [[scenario]]
 id = "ticket-start-jira-brainstorm-unknowns-before-plan"
@@ -47,7 +47,7 @@ event conditions, certificate fallback behavior, and scheduling assumptions
 before any spec or plan is written.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
 
 [[scenario]]
 id = "ticket-start-jira-code-scope-before-brainstorm"
@@ -58,7 +58,7 @@ questions, dispatch a comprehensive codebase scoping pass to answer whatever the
 repo can answer first.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "execute-ticket-work", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
 
 [[scenario]]
 id = "ticket-start-substantial-single-ticket"
@@ -137,8 +137,8 @@ forbidden_terms = []
 response_forbidden_terms = ["ticket-start"]
 
 [[scenario]]
-id = "execute-ticket-work-approved-packet"
-skill = "execute-ticket-work"
+id = "coordinate-ticket-execution-approved-packet"
+skill = "coordinate-ticket-execution"
 prompt = """
 Run this already-approved ticket execution packet for one checkout eligibility
 unit. The packet includes acceptance criteria, approved spec/design direction,
@@ -181,7 +181,7 @@ but I need endpoint behavior, persistence, auth, and error responses verified
 against the running service.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX", "unit tests are enough", "clean because tests passed"]
 
 [[scenario]]
 id = "qa-verification-ui-behavior"
@@ -327,14 +327,26 @@ prompt = "In the React prototype reference app under designs/, add a new onboard
 forbidden_terms = ["design-studio", "prepare-design-studio.sh"]
 
 [[scenario]]
-id = "ticket-planner-prd-to-stories"
-skill = "ticket-planner"
-prompt = "Turn this PRD and prototype into implementation-ready epics, vertical-slice user stories, and acceptance criteria."
+id = "manage-prd-business-rule-update"
+skill = "manage-prd"
+prompt = "Update the PRD so archived plans stay visible to coaches forever but clients cannot see them."
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-planner-clean-draft-quality"
-skill = "ticket-planner"
+id = "feature-work-planning-breakdown"
+skill = "feature-work-planning"
+prompt = "Plan the future work for checkout eligibility. We do not have a ticket yet; scope the systems, dependencies, risks, rollout, and delivery slices."
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-writing-create-stories"
+skill = "ticket-writing"
+prompt = "Turn this approved planning packet into clean epics, vertical-slice user stories, dependency relationships for native issue links, and acceptance criteria."
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-writing-clean-draft-quality"
+skill = "ticket-writing"
 prompt = """
 Clean up these draft epics and stories before publishing: make titles plain,
 separate business overview from technical details, add real acceptance criteria,
@@ -370,6 +382,13 @@ response_forbidden_terms = ["qa-verification"]
 id = "bitbucket-review-summary"
 skill = "manage-bitbucket-pr"
 prompt = "Summarize the review discussion and PR notes for https://bitbucket.org/acme/widget/pull-requests/42."
+forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
+response_forbidden_terms = ["qa-verification"]
+
+[[scenario]]
+id = "bitbucket-update-description"
+skill = "manage-bitbucket-pr"
+prompt = "Update the description on Bitbucket Cloud PR 42 in acme/widget with the final QA evidence."
 forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
 response_forbidden_terms = ["qa-verification"]
 

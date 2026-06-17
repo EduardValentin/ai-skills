@@ -1,0 +1,7 @@
+[suite]
+name = "coordinate-ticket-execution contract"
+
+[[assertion]]
+type = "line_count_at_most"
+path = "skills/coordinate-ticket-execution/SKILL.md"
+max = 95

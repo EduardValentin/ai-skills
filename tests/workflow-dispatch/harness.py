@@ -23,7 +23,9 @@ sys.path.append(str(SCRIPT_DIR))
 
 from auto_discovery import action_lines, assert_auto_discovers  # noqa: E402
 from behavioral_harness import (  # noqa: E402
+    AGENT_COMMAND_ENV_VAR,
     BehavioralScenario,
+    CAPABILITY_ACCOUNTING_INSTRUCTIONS,
     check_semantic_response,
     run_agent,
     select_scenarios,
@@ -59,22 +61,15 @@ def run_workflow_dispatch_suite(
     skill_path: Path,
     scenarios: tuple[WorkflowDispatchScenario, ...],
     scenario_filter_env_var: str,
-    fallback_agent_env_var: str = "SKILL_TRIGGER_AGENT_COMMAND",
 ) -> int:
     if "--help" in sys.argv:
         print_usage(scenario_filter_env_var, sys.argv[0])
         return 0
 
-    agent_command = (
-        os.environ.get("WORKFLOW_DISPATCH_AGENT_COMMAND", "").strip()
-        or os.environ.get(fallback_agent_env_var, "").strip()
-    )
+    agent_command = os.environ.get(AGENT_COMMAND_ENV_VAR, "").strip()
     if not agent_command:
         print_usage(scenario_filter_env_var, sys.argv[0])
-        print(
-            f"FAIL: WORKFLOW_DISPATCH_AGENT_COMMAND or {fallback_agent_env_var} is required",
-            file=sys.stderr,
-        )
+        print(f"FAIL: {AGENT_COMMAND_ENV_VAR} is required", file=sys.stderr)
         return 1
 
     try:
@@ -465,6 +460,8 @@ Loaded skill: {parent_skill_name}
 User request:
 {scenario.user_request}
 
+{CAPABILITY_ACCOUNTING_INSTRUCTIONS}
+
 {scenario.prompt_instructions}
 """
 
@@ -550,10 +547,7 @@ def require_action_lines(
 def print_usage(scenario_filter_env_var: str, script_path: str) -> None:
     print(
         f"""Usage:
-  WORKFLOW_DISPATCH_AGENT_COMMAND='<command reading stdin>' python3 {script_path}
-
-Fallback:
-  If WORKFLOW_DISPATCH_AGENT_COMMAND is unset, SKILL_TRIGGER_AGENT_COMMAND is used.
+  {AGENT_COMMAND_ENV_VAR}='<command reading stdin>' python3 {script_path}
 
 Optional:
   {scenario_filter_env_var}='<scenario-id>' to run one scenario.

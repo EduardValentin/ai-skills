@@ -9,14 +9,9 @@ Keep workflow tests only when the behavior being tested is "skill X emits a
 delegated request that the installed harness can auto-discover as skill Y." Do
 not duplicate broad loaded-skill behavioral pressure tests here.
 
-Scenario data is colocated with the skill under test:
-
-```text
-skills/ticket-start/tests/workflow-dispatch.toml
-skills/multi-ticket-work/tests/workflow-dispatch.toml
-```
-
-The reusable runner and black-box discovery helper stay in this directory.
+Scenario data, when needed, is colocated with the skill under test as
+`skills/<skill-name>/tests/workflow-dispatch.toml`. The reusable runner and
+black-box discovery helper stay in this directory.
 
 ## Static Contract
 
@@ -24,26 +19,20 @@ Run in CI:
 
 ```bash
 python3 tests/contract.py --suite workflow-dispatch
-python3 tests/workflow-dispatch/workflow_harness_contract.py
 ```
 
-The static contract is TOML-backed. It verifies that colocated workflow dispatch
-scenarios declare downstream discovery expectations, that stale grouped workflow
-files are gone, and that the downstream discovery helper cannot rebuild or
-inject a skill index.
+The static contract is TOML-backed and checks only structural repository
+expectations such as stale grouped workflow files being absent.
 
 ## Behavioral Dispatch
 
-Run manually, nightly, or in a model-enabled CI job:
+Run manually, nightly, or in a model-enabled CI job when colocated
+`workflow-dispatch.toml` suites exist:
 
 ```bash
-WORKFLOW_DISPATCH_AGENT_COMMAND='python3 tests/codex_agent_command.py --role actor' \
-SEMANTIC_JUDGE_AGENT_COMMAND='python3 tests/codex_agent_command.py --role judge' \
+SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
   python3 tests/workflow-dispatch/behavioral_dispatch.py
 ```
-
-If `WORKFLOW_DISPATCH_AGENT_COMMAND` is unset, the harness falls back to
-`SKILL_TRIGGER_AGENT_COMMAND`.
 
 The behavioral harness discovers colocated `workflow-dispatch.toml` files. Each
 scenario gives the agent the loaded parent skill body and asks for a workflow
@@ -67,11 +56,10 @@ Behavioral checks use a hybrid model:
 - semantic judge rubrics for workflow quality, such as whether the parent stayed
   an orchestrator and whether delegated requests are self-contained.
 
-Set `SEMANTIC_JUDGE_AGENT_COMMAND` to use a separate judge command. If unset,
-the workflow agent command is reused as the judge.
+The workflow agent command is reused as the judge by default.
 
 Use the repo's `tests/codex_agent_command.py` shim for Codex-backed runs. It
-defaults both actor and judge invocations to `gpt-5.4-mini` with `low` reasoning,
-while still allowing `CODEX_ACTOR_MODEL`, `CODEX_JUDGE_MODEL`,
-`CODEX_ACTOR_REASONING_EFFORT`, and `CODEX_JUDGE_REASONING_EFFORT` overrides for
-the rare scenario that needs more depth.
+defaults Codex invocations to `gpt-5.4-mini` with `low` reasoning, while still
+allowing `CODEX_ACTOR_MODEL`, `CODEX_ACTOR_REASONING_EFFORT`,
+`CODEX_TEST_MODEL`, and `CODEX_TEST_REASONING_EFFORT` overrides for the rare
+scenario that needs more depth.

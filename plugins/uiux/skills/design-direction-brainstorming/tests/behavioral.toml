@@ -2,13 +2,7 @@
 name = "uiux-design-direction-brainstorming"
 skill = "design-direction-brainstorming"
 skill_path = "plugins/uiux/skills/design-direction-brainstorming/SKILL.md"
-agent_env = "UIUX_DESIGN_DIRECTION_BRAINSTORMING_AGENT_COMMAND"
 scenario_env = "UIUX_DESIGN_DIRECTION_BRAINSTORMING_SCENARIO"
-prompt_instructions = """
-Do not implement the design. Return the approach and immediate next message. If
-the scenario provides options, choose the best option and explain how you would
-converge after the first answers.
-"""
 judge_context = """
 Loaded skill under test: design-direction-brainstorming. Judge whether the
 response aligns design direction before implementation. Ambiguous visual changes

@@ -2,16 +2,7 @@
 name = "verify-pr"
 skill = "verify-pr"
 skill_path = "skills/verify-pr/SKILL.md"
-agent_env = "VERIFY_PR_AGENT_COMMAND"
 scenario_env = "VERIFY_PR_SCENARIO"
-prompt_instructions = """
-Do not perform external mutations. If metadata is missing and no tool calls are
-available in this pressure test, describe the mandatory fetch sequence before a
-readiness verdict instead of treating omitted state as final unknown state. If
-the scenario gives concrete current PR, ticket, CI, test, review, or comment
-state, treat those facts as already-fetched source metadata for the purpose of
-checking the gates. If gates pass, list the exact next action. Keep it concise.
-"""
 judge_context = """
 Loaded skill under test: verify-pr. Judge source-of-truth metadata access, PR readiness gates, no-mutation boundaries, and post-merge monitoring behavior.
 """

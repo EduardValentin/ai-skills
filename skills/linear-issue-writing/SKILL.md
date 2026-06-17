@@ -8,14 +8,17 @@ compatibility: Requires a working Linear-capable integration for creation or upd
 
 ## Overview
 
-Convert approved, platform-neutral backlog drafts into well-structured Linear issues. This skill owns Linear modeling, metadata, duplicate checks, and publishing gates. It does not invent product scope; use `ticket-planner` first for PRD-to-story planning.
+Convert approved, platform-neutral backlog drafts into well-structured Linear issues. This skill owns Linear modeling, metadata, duplicate checks, and publishing gates. It does not invent product scope; use `ticket-writing` for draft refinement or `feature-work-planning` when the work still needs planning.
 
 ## Required Rules
 
 - Do not create or update Linear issues unless the Linear integration is available.
 - Create or update nothing until the user approves the exact title, description, parent, project, team, labels, priority, estimate, and other metadata.
+- Publishing responses must say "create or update nothing" until those exact fields are approved; do not shorten the gate to creation only.
 - Treat approved drafts as source material. Preserve scope and ask before changing product meaning.
+- If approved drafts are missing, block publishing and suggest drafting or refinement first instead of asking only for Linear metadata.
 - Run duplicate detection before every issue creation.
+- When describing duplicate detection, state the overlap choices explicitly: skip, update, or create anyway.
 - Report created or updated issue identifiers and URLs.
 
 ## Start Checklist
@@ -57,6 +60,8 @@ Before creating each issue:
 4. Proceed only after the user chooses.
 
 This check is per issue, not once per session.
+
+Publishing-gate responses are incomplete if they say only "resolve overlaps"; they must ask the user to choose skip, update, or create anyway for each likely duplicate.
 
 ## Metadata Guidance
 

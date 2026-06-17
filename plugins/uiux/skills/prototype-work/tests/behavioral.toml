@@ -2,14 +2,7 @@
 name = "uiux-prototype-work"
 skill = "prototype-work"
 skill_path = "plugins/uiux/skills/prototype-work/SKILL.md"
-agent_env = "UIUX_PROTOTYPE_WORK_AGENT_COMMAND"
 scenario_env = "UIUX_PROTOTYPE_WORK_SCENARIO"
-prompt_instructions = """
-Do not edit files. Return the next action and, when blocked on missing input,
-the resume step after the user provides it. Preserve the prototype-work
-constraints. When async behavior is present, include the required async states
-in the companion obligations.
-"""
 judge_context = """
 Loaded skill under test: prototype-work. Judge whether the response stays
 focused on prototype reference apps, setup under designs/, browser evidence,

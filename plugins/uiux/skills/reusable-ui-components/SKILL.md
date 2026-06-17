@@ -24,6 +24,8 @@ Prefer reusable components when they preserve meaning and reduce real duplicatio
 5. Extract repeated markup when it appears twice, is likely to appear again, or carries interaction/accessibility complexity worth centralizing.
 6. Keep page-specific data fetching, routing, analytics, and business logic outside reusable UI components.
 
+Every reuse/refactor decision summary must state the role and interaction model that justify reuse or separation. It must also state the page-boundary rule: the reusable component owns UI structure, variants, slots, states, and accessibility; the page keeps data fetching, routing, analytics, and business logic.
+
 ## API Rules
 
 - Name components after their role: `MetricTile`, `FilterPanel`, `EmptyState`, `PricingTier`, not `BlueCard` or `SectionBlock`.

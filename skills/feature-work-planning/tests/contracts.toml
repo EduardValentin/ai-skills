@@ -1,0 +1,7 @@
+[suite]
+name = "feature-work-planning contract"
+
+[[assertion]]
+type = "line_count_at_most"
+path = "skills/feature-work-planning/SKILL.md"
+max = 60

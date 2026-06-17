@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_COMMAND_TIMEOUT_SECONDS = 600
+COMMAND_TIMEOUT_ENV_VAR = "BEHAVIORAL_COMMAND_TIMEOUT_SECONDS"
 
 
 @dataclass(frozen=True)
@@ -60,11 +64,8 @@ def judge_response(
 
 
 def resolve_judge_command(*fallback_commands: str) -> str:
-    """Return the configured semantic judge command, falling back to agent commands."""
+    """Return the first available agent command for semantic judging."""
 
-    configured = os.environ.get("SEMANTIC_JUDGE_AGENT_COMMAND", "").strip()
-    if configured:
-        return configured
     for command in fallback_commands:
         if command.strip():
             return command.strip()
@@ -83,21 +84,51 @@ def run_judge(judge_command: str, prompt: str) -> str:
 
 
 def run_command(command: str, prompt: str, label: str) -> str:
-    completed = subprocess.run(
+    timeout = resolve_command_timeout()
+    process = subprocess.Popen(
         command,
         shell=True,
-        input=prompt,
-        text=True,
         cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
     )
-    if completed.returncode != 0:
+    try:
+        stdout, stderr = process.communicate(prompt, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        with suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGTERM)
+        try:
+            stdout, stderr = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            stdout, stderr = process.communicate()
+        raise RuntimeError(
+            f"{label} command timed out after {timeout}s\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+        ) from error
+
+    if process.returncode != 0:
         raise RuntimeError(
             f"{label} command failed with exit code "
-            f"{completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
+            f"{process.returncode}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
         )
-    return completed.stdout
+    return stdout
+
+
+def resolve_command_timeout() -> int:
+    raw_timeout = os.environ.get(COMMAND_TIMEOUT_ENV_VAR, "").strip()
+    if not raw_timeout:
+        return DEFAULT_COMMAND_TIMEOUT_SECONDS
+    try:
+        timeout = int(raw_timeout)
+    except ValueError as error:
+        raise RuntimeError(f"{COMMAND_TIMEOUT_ENV_VAR} must be an integer number of seconds") from error
+    if timeout <= 0:
+        raise RuntimeError(f"{COMMAND_TIMEOUT_ENV_VAR} must be greater than zero")
+    return timeout
 
 
 def make_judge_prompt(
@@ -154,13 +185,13 @@ def parse_judgment(raw: str) -> SemanticJudgment:
         isinstance(key, str) and isinstance(value, bool) for key, value in criteria.items()
     ):
         raise AssertionError(f"judge JSON field 'criteria' must be object[str, bool]: {raw}")
-    if not isinstance(failures, list) or not all(isinstance(item, str) for item in failures):
-        raise AssertionError(f"judge JSON field 'failures' must be list[str]: {raw}")
+    if not isinstance(failures, list):
+        raise AssertionError(f"judge JSON field 'failures' must be list: {raw}")
 
     return SemanticJudgment(
         passes=passes,
         criteria=dict(criteria),
-        failures=list(failures),
+        failures=[item if isinstance(item, str) else json.dumps(item, sort_keys=True) for item in failures],
         raw_response=raw,
     )
 

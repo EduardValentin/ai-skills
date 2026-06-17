@@ -7,20 +7,40 @@ glob = "plugins/uiux/skills/*/SKILL.md"
 path = "{parent}/tests/behavioral.toml"
 
 [[assertion]]
-type = "contains_for_each"
+type = "toml_suite_require_fields_for_each"
 glob = "plugins/uiux/skills/*/SKILL.md"
 path = "{parent}/tests/behavioral.toml"
-values = [
-  "[suite]",
-  "skill = \"{frontmatter_name}\"",
-  "skill_path = \"{path}\"",
-  "agent_env = ",
-  "scenario_env = ",
-  "prompt_instructions = ",
-  "judge_context = ",
-  "[[scenario]]",
-  "[[scenario.criteria]]",
+fields = [
+  "name",
+  "skill",
+  "skill_path",
+  "scenario_env",
+  "judge_context",
 ]
+
+[[assertion]]
+type = "toml_scenarios_require_field_for_each"
+glob = "plugins/uiux/skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+field = "id"
+
+[[assertion]]
+type = "toml_scenarios_require_field_for_each"
+glob = "plugins/uiux/skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+field = "user_request"
+
+[[assertion]]
+type = "toml_scenario_criteria_require_field_for_each"
+glob = "plugins/uiux/skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+field = "key"
+
+[[assertion]]
+type = "toml_scenario_criteria_require_field_for_each"
+glob = "plugins/uiux/skills/*/SKILL.md"
+path = "{parent}/tests/behavioral.toml"
+field = "description"
 
 [[assertion]]
 type = "absent_glob"

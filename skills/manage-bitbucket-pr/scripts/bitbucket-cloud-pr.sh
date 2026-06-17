@@ -11,6 +11,7 @@ Usage:
   bitbucket-cloud-pr.sh [--dry-run] find-prs-for-branch <workspace> <repo_slug> <branch_name> [state]
   bitbucket-cloud-pr.sh [--dry-run] read-comments <workspace> <repo_slug> <pull_request_id>
   bitbucket-cloud-pr.sh [--dry-run] post-comment <workspace> <repo_slug> <pull_request_id> <comment text>
+  bitbucket-cloud-pr.sh [--dry-run] update-description <workspace> <repo_slug> <pull_request_id> <description text>
   bitbucket-cloud-pr.sh [--dry-run] merge <workspace> <repo_slug> <pull_request_id>
   bitbucket-cloud-pr.sh [--dry-run] merge-status <workspace> <repo_slug> <pull_request_id> <task_id>
 
@@ -142,6 +143,17 @@ case "$command" in
     [[ -n "$comment" ]] || die "Comment text is required"
     body="{\"content\":{\"raw\":$(json_string "$comment")}}"
     request POST "$BASE_URL/repositories/$workspace/$repo_slug/pullrequests/$pull_request_id/comments" "$body"
+    ;;
+  update-description)
+    require_args 4 "$#"
+    workspace=$1
+    repo_slug=$2
+    pull_request_id=$3
+    shift 3
+    description=$*
+    [[ -n "$description" ]] || die "Description text is required"
+    body="{\"description\":$(json_string "$description")}"
+    request PUT "$BASE_URL/repositories/$workspace/$repo_slug/pullrequests/$pull_request_id" "$body"
     ;;
   merge)
     require_args 3 "$#"

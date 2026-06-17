@@ -159,18 +159,6 @@ def run_assertion(suite_path: Path, assertion: dict[str, Any]) -> None:
         assert_absent(resolve_path(render_path(assertion, "path", {})))
     elif assertion_type == "absent_glob":
         assert_absent_glob(suite_path, require_string(suite_path, assertion, "glob"))
-    elif assertion_type == "contains":
-        assert_contains_all(
-            suite_path,
-            resolve_path(render_path(assertion, "path", {})),
-            require_string_list(suite_path, assertion, "values"),
-        )
-    elif assertion_type == "not_contains":
-        assert_not_contains_any(
-            suite_path,
-            resolve_path(render_path(assertion, "path", {})),
-            require_string_list(suite_path, assertion, "values"),
-        )
     elif assertion_type == "line_count_at_most":
         assert_line_count_at_most(
             suite_path,
@@ -180,26 +168,27 @@ def run_assertion(suite_path: Path, assertion: dict[str, Any]) -> None:
     elif assertion_type == "exists_for_each":
         for variables in iterate_variables(suite_path, assertion):
             assert_exists(resolve_path(render_path(assertion, "path", variables)))
-    elif assertion_type == "contains_for_each":
-        for variables in iterate_variables(suite_path, assertion):
-            assert_contains_all(
-                suite_path,
-                resolve_path(render_path(assertion, "path", variables)),
-                render_values(suite_path, assertion, variables),
-            )
-    elif assertion_type == "not_contains_for_each":
-        for variables in iterate_variables(suite_path, assertion):
-            assert_not_contains_any(
-                suite_path,
-                resolve_path(render_path(assertion, "path", variables)),
-                render_values(suite_path, assertion, variables),
-            )
     elif assertion_type == "line_count_at_most_for_each":
         for variables in iterate_variables(suite_path, assertion):
             assert_line_count_at_most(
                 suite_path,
                 resolve_path(render_path(assertion, "path", variables)),
                 require_int(suite_path, assertion, "max"),
+            )
+    elif assertion_type == "toml_suite_require_fields":
+        assert_toml_suite_require_fields(
+            suite_path,
+            resolve_path(render_path(assertion, "path", {})),
+            require_string_list(suite_path, assertion, "fields"),
+            bool(assertion.get("non_empty", True)),
+        )
+    elif assertion_type == "toml_suite_require_fields_for_each":
+        for variables in iterate_variables(suite_path, assertion):
+            assert_toml_suite_require_fields(
+                suite_path,
+                resolve_path(render_path(assertion, "path", variables)),
+                require_string_list(suite_path, assertion, "fields"),
+                bool(assertion.get("non_empty", True)),
             )
     elif assertion_type == "toml_scenarios_require_field":
         assert_toml_scenarios_require_field(
@@ -211,6 +200,21 @@ def run_assertion(suite_path: Path, assertion: dict[str, Any]) -> None:
     elif assertion_type == "toml_scenarios_require_field_for_each":
         for variables in iterate_variables(suite_path, assertion):
             assert_toml_scenarios_require_field(
+                suite_path,
+                resolve_path(render_path(assertion, "path", variables)),
+                require_string(suite_path, assertion, "field"),
+                bool(assertion.get("non_empty", True)),
+            )
+    elif assertion_type == "toml_scenario_criteria_require_field":
+        assert_toml_scenario_criteria_require_field(
+            suite_path,
+            resolve_path(render_path(assertion, "path", {})),
+            require_string(suite_path, assertion, "field"),
+            bool(assertion.get("non_empty", True)),
+        )
+    elif assertion_type == "toml_scenario_criteria_require_field_for_each":
+        for variables in iterate_variables(suite_path, assertion):
+            assert_toml_scenario_criteria_require_field(
                 suite_path,
                 resolve_path(render_path(assertion, "path", variables)),
                 require_string(suite_path, assertion, "field"),
@@ -249,17 +253,6 @@ def render_path(assertion: dict[str, Any], key: str, variables: dict[str, str]) 
     return render_template(str(assertion.get(key, "")), variables)
 
 
-def render_values(
-    suite_path: Path,
-    assertion: dict[str, Any],
-    variables: dict[str, str],
-) -> list[str]:
-    return [
-        render_template(value, variables)
-        for value in require_string_list(suite_path, assertion, "values")
-    ]
-
-
 def render_template(template: str, variables: dict[str, str]) -> str:
     try:
         return template.format(**variables)
@@ -291,24 +284,6 @@ def assert_absent_glob(suite_path: Path, pattern: str) -> None:
         raise AssertionError(f"{suite_path}: expected glob to match no files: {formatted}")
 
 
-def assert_contains_all(suite_path: Path, path: Path, values: list[str]) -> None:
-    text = read_text(path)
-    missing = [value for value in values if value not in text]
-    if missing:
-        raise AssertionError(
-            f"{suite_path}: {path.relative_to(REPO_ROOT)} missing expected text: {missing}"
-        )
-
-
-def assert_not_contains_any(suite_path: Path, path: Path, values: list[str]) -> None:
-    text = read_text(path)
-    found = [value for value in values if value and value in text]
-    if found:
-        raise AssertionError(
-            f"{suite_path}: {path.relative_to(REPO_ROOT)} contains forbidden text: {found}"
-        )
-
-
 def assert_line_count_at_most(suite_path: Path, path: Path, max_lines: int) -> None:
     line_count = len(read_text(path).splitlines())
     if line_count > max_lines:
@@ -316,6 +291,29 @@ def assert_line_count_at_most(suite_path: Path, path: Path, max_lines: int) -> N
             f"{suite_path}: {path.relative_to(REPO_ROOT)} has {line_count} lines, "
             f"expected at most {max_lines}"
         )
+
+
+def assert_toml_suite_require_fields(
+    suite_path: Path,
+    path: Path,
+    fields: list[str],
+    non_empty: bool,
+) -> None:
+    payload = load_toml_payload(path)
+    suite = payload.get("suite")
+    if not isinstance(suite, dict):
+        raise AssertionError(f"{path.relative_to(REPO_ROOT)} must define a [suite] table")
+
+    for field in fields:
+        value = suite.get(field)
+        if field not in suite:
+            raise AssertionError(
+                f"{suite_path}: {path.relative_to(REPO_ROOT)} suite missing {field!r}"
+            )
+        if non_empty and is_empty_value(value):
+            raise AssertionError(
+                f"{suite_path}: {path.relative_to(REPO_ROOT)} suite must set {field!r}"
+            )
 
 
 def assert_toml_scenarios_require_field(
@@ -342,6 +340,46 @@ def assert_toml_scenarios_require_field(
             raise AssertionError(
                 f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} must set {field!r}"
             )
+
+
+def assert_toml_scenario_criteria_require_field(
+    suite_path: Path,
+    path: Path,
+    field: str,
+    non_empty: bool,
+) -> None:
+    payload = load_toml_payload(path)
+    scenarios = payload.get("scenario", [])
+    if not isinstance(scenarios, list):
+        raise AssertionError(f"{path.relative_to(REPO_ROOT)} must define [[scenario]] tables")
+
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            raise AssertionError(f"{path.relative_to(REPO_ROOT)} scenario must be a table")
+        scenario_id = str(scenario.get("id", "<missing-id>"))
+        criteria = scenario.get("criteria")
+        if not isinstance(criteria, list) or not criteria:
+            raise AssertionError(
+                f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} "
+                "must define [[scenario.criteria]] tables"
+            )
+        for index, criterion in enumerate(criteria, start=1):
+            if not isinstance(criterion, dict):
+                raise AssertionError(
+                    f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} "
+                    f"criterion {index} must be a table"
+                )
+            value = criterion.get(field)
+            if field not in criterion:
+                raise AssertionError(
+                    f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} "
+                    f"criterion {index} missing {field!r}"
+                )
+            if non_empty and is_empty_value(value):
+                raise AssertionError(
+                    f"{suite_path}: {path.relative_to(REPO_ROOT)}:{scenario_id} "
+                    f"criterion {index} must set {field!r}"
+                )
 
 
 def is_empty_value(value: Any) -> bool:

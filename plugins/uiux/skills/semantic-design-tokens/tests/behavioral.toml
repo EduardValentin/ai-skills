@@ -2,12 +2,7 @@
 name = "uiux-semantic-design-tokens"
 skill = "semantic-design-tokens"
 skill_path = "plugins/uiux/skills/semantic-design-tokens/SKILL.md"
-agent_env = "UIUX_SEMANTIC_DESIGN_TOKENS_AGENT_COMMAND"
 scenario_env = "UIUX_SEMANTIC_DESIGN_TOKENS_SCENARIO"
-prompt_instructions = """
-Do not implement code. Return the token decision or review note only. If the
-scenario provides options, choose the best option.
-"""
 judge_context = """
 Loaded skill under test: semantic-design-tokens. Judge whether the response
 preserves token discipline under pressure without inventing global one-off

@@ -32,11 +32,11 @@ When metadata is available but testing instructions are absent or vague, scope b
 ## Verification Modes
 
 - `ui`: start the application, use browser tooling, manually click through the implemented surface, and inspect behavior after each action: copy/data changes, navigation, validation, disabled/submitting behavior, persistence, and errors. The report must name the app start command or URL, browser actions, and rendered outcomes. Cover happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior when relevant.
-- `backend`: use programmatic probes against the running implemented surface, such as HTTP requests, CLI invocations, job triggers, database reads, logs, queues, emitted events, or cache checks. Validate outputs, state transitions, persistence, side effects, auth, validation, error handling, idempotency, retries, and third-party/state propagation when relevant.
-- `mixed`: prefer running the GUI and backend/service together and verifying the flow end to end. If that is not possible, verify each surface separately, state the limitation, and still validate the integration contract and propagated state.
+- `backend`: use programmatic probes against the running implemented surface, such as HTTP requests, CLI invocations, job triggers, database reads, logs, queues, emitted events, or cache checks. Validate outputs, state transitions, persistence, side effects, auth, validation, error handling, idempotency, retries, and third-party/state propagation when relevant. Keep state-transition checks explicit in the approach and report; do not collapse them into persistence or side effects.
+- `mixed`: prefer running the GUI and backend/service together and verifying the flow end to end. The approach and report must explicitly name browser-observed behavior and programmatic backend/API/service probes, then tie them through the integration contract and propagated state. If running them together is not possible, verify each surface separately, state the limitation, and still validate the integration contract and propagated state.
 - `other`: exercise scripts, scheduled tasks, data jobs, migrations, or integrations through their real command/trigger path. Check inputs, outputs, logs, external calls, exit codes, reruns, failure modes, cleanup, and state changes.
 
-Mocks, fake imports, unit tests, type checks, source inspection, and static review can support QA context, but they do not count as QA verification by themselves.
+Automated checks, mocks, fake imports, stubs, simulations, unit tests, type checks, source inspection, and static review can support QA context, but they are not manual QA and do not count as QA verification by themselves.
 
 ## Evidence Standard
 
@@ -48,28 +48,26 @@ Every acceptance criterion must map to a concrete observation:
 
 Any observed bug changes the verdict to `BUGS FOUND`.
 
+When provided runtime facts show QA can proceed but verification has not yet been run, do not return `QA cannot proceed`; state the manual/runtime probes and that the final report will map each acceptance criterion to concrete evidence. Any failed behavior becomes `BUGS FOUND` with reproduction steps, expected behavior, actual behavior, and evidence.
+
 ## Report Format
+
+Every QA response that returns or describes a report must include verdict, mode, metadata source, scope basis, coverage, evidence, bugs, blockers, and notes. Use `explicitly empty` for sections without content instead of omitting them.
 
 ```markdown
 # QA report - <work item>
-
 ## Verdict
 - <CLEAN | BUGS FOUND | QA cannot proceed>
-
 ## Mode
 - <ui | backend | mixed | other>
-
 ## Metadata source
 - <PR/ticket/user-supplied/inferred-from-diff/none, plus blockers if any>
-
 ## Metadata access sequence
 - Tooling attempted: <MCP/API/CLI/local metadata or not applicable>
 - Caller details requested: <yes/no/not needed>
 - Diff fallback used: <no | yes, only after details unavailable>
-
 ## Scope basis
 - <acceptance criteria, testing instructions, implemented surface, diff, entry points, setup/data needs, regression risks>
-
 ## Coverage
 - Acceptance criteria: <AC1 observed | AC2 observed | AC3 failed -> B1>
 - Manual/programmatic verification performed: <browser actions, requests, commands, job triggers, integrations>

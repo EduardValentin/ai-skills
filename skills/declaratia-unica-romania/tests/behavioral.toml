@@ -2,11 +2,7 @@
 name = "declaratia-unica-romania"
 skill = "declaratia-unica-romania"
 skill_path = "skills/declaratia-unica-romania/SKILL.md"
-agent_env = "DECLARATIA_UNICA_AGENT_COMMAND"
 scenario_env = "DECLARATIA_UNICA_SCENARIO"
-prompt_instructions = """
-Nu completa declaratia si nu scrie fisiere. Returneaza doar raspunsul corect de workflow/gate pentru scenariul dat, in romana, concis.
-"""
 judge_context = """
 Loaded skill under test: declaratia-unica-romania. Judge fiscal-source discipline, hard gates, scenario isolation, and artifact isolation.
 """

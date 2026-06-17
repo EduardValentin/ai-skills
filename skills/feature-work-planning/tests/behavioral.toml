@@ -1,0 +1,55 @@
+[suite]
+name = "feature-work-planning"
+skill = "feature-work-planning"
+skill_path = "skills/feature-work-planning/SKILL.md"
+scenario_env = "FEATURE_WORK_PLANNING_SCENARIO"
+judge_context = """
+Loaded skill under test: feature-work-planning. Judge future-work planning boundaries, requirements alignment, technical scope, dependencies, sequencing, and downstream-ready planning output.
+"""
+
+[[scenario]]
+id = "rough-idea-no-artifact"
+user_request = "Plan the future work for team invitations. There is no PRD, ticket, or prototype yet, just the idea that admins should invite teammates."
+forbidden_terms = ["final ticket draft", "published to Linear", "PRD is required"]
+
+[[scenario.criteria]]
+key = "does_not_require_artifact"
+description = "The response plans from rough context and does not treat the lack of a PRD, ticket, or prototype as a blocker by itself."
+
+[[scenario.criteria]]
+key = "runs_requirements_alignment"
+description = "The response runs requirements alignment for users, flow, data, permissions, integrations, edge cases, non-goals, and success criteria before work slicing."
+
+[[scenario.criteria]]
+key = "blocks_final_ticket_prose"
+description = "The response does not produce polished final tickets or publish backlog items while the user is still asking for planning."
+
+[[scenario]]
+id = "technical-breakdown-packet"
+user_request = "Break down this checkout eligibility feature into the future work we need: billing API rule, checkout banner, migration, analytics, rollout, and QA."
+forbidden_terms = ["database ticket", "API ticket", "frontend ticket", "created issues"]
+
+[[scenario.criteria]]
+key = "covers_affected_systems"
+description = "The response covers relevant systems including API, UI, data/migration, analytics, rollout, and verification surfaces."
+
+[[scenario.criteria]]
+key = "plans_by_outcome_or_risk"
+description = "The response proposes slices by user outcome or delivery risk instead of simple technical layer work items."
+
+[[scenario.criteria]]
+key = "produces_planning_packet"
+description = "The response produces or describes a compact planning packet with scope, dependencies, order, integration points, and acceptance themes."
+
+[[scenario]]
+id = "prd-update-needed"
+user_request = "While planning, we discovered tax-exempt customers should bypass eligibility checks, but the product docs do not say that yet."
+forbidden_terms = ["edited PRD.md", "final user story"]
+
+[[scenario.criteria]]
+key = "identifies_source_of_truth_gap"
+description = "The response identifies that the product source of truth may need a PRD update."
+
+[[scenario.criteria]]
+key = "separates_prd_change"
+description = "The response treats the PRD/document update as a separate approved follow-up rather than editing the PRD inline or hiding it inside implementation work."

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -44,10 +45,27 @@ def main() -> int:
 
         canonical = repo / "skills" / skill
         canonical_tests = canonical / "tests"
+        repo_scripts = repo / "scripts"
+        repo_agents = repo / "agents"
         canonical_tests.mkdir(parents=True)
+        repo_scripts.mkdir()
+        repo_agents.mkdir()
         home.mkdir()
         (canonical / "SKILL.md").write_text("canonical v1\n")
         (canonical_tests / ".gitkeep").write_text("do not sync\n")
+        shutil.copy2(Path(__file__).with_name("sync_native_agents.py"), repo_scripts / "sync_native_agents.py")
+        (repo_agents / "demo-agent.md").write_text("# Demo Agent\n\nMap things.\n")
+        (repo_agents / "manifest.toml").write_text(
+            """
+version = 1
+
+[[agent]]
+id = "demo-agent"
+source = "demo-agent.md"
+description = "Demo agent generated as part of skill sync."
+groups = ["demo-skill"]
+""".lstrip()
+        )
 
         push = run_sync(script, repo, home, "push", skill)
         if push.returncode != 0:
@@ -59,6 +77,10 @@ def main() -> int:
         assert_file_contains(codex_skill / "SKILL.md", "canonical v1")
         assert_missing(claude_skill / "tests" / ".gitkeep")
         assert_missing(codex_skill / "tests" / ".gitkeep")
+        assert_file_contains(home / ".codex" / "agents" / "demo-agent.toml", "developer_instructions = ")
+        assert_file_contains(home / ".codex" / "config.toml", "[agents.demo-agent]")
+        assert_file_contains(home / ".codex" / "config.toml", 'config_file = "agents/demo-agent.toml"')
+        assert_file_contains(home / ".claude" / "agents" / "demo-agent.md", 'name: "demo-agent"')
 
         (codex_skill / "SKILL.md").write_text("codex v2\n")
         pull = run_sync(script, repo, home, "pull", skill, "codex")
