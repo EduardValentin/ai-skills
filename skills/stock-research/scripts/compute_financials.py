@@ -83,6 +83,12 @@ CONCEPTS: dict[str, tuple[list[str], str]] = {
         [
             "LongTermDebt",
             "LongTermDebtNoncurrent",
+            "LongTermDebtCurrent",
+            "LongTermDebtAndFinanceLeaseObligationsNoncurrent",
+            "LongTermDebtAndFinanceLeaseObligationsCurrent",
+            "ConvertibleDebtNoncurrent",
+            "ConvertibleDebtCurrent",
+            "DebtInstrumentFaceAmount",
         ],
         "USD",
     ),
@@ -178,9 +184,67 @@ def _pct(num: float | None, denom: float | None) -> float | None:
 
 
 def _net_debt(ltd: float | None, cash: float | None) -> float | None:
-    if ltd is None and cash is None:
+    if ltd is None or cash is None:
         return None
-    return (ltd or 0) - (cash or 0)
+    return ltd - cash
+
+
+def _share_discontinuities(years: list[dict]) -> list[dict]:
+    """Flag share-count jumps that look like unapplied stock splits."""
+    findings: list[dict] = []
+    ordered = [y for y in years if y.get("diluted_shares")]
+    for prev, curr in zip(ordered, ordered[1:]):
+        prev_shares = prev["diluted_shares"]
+        curr_shares = curr["diluted_shares"]
+        if not prev_shares or not curr_shares:
+            continue
+        ratio = curr_shares / prev_shares
+        if ratio >= 2.5 or ratio <= 0.4:
+            findings.append(
+                {
+                    "code": "possible_split_discontinuity",
+                    "from_fiscal_year": prev["fiscal_year"],
+                    "to_fiscal_year": curr["fiscal_year"],
+                    "ratio": ratio,
+                    "message": (
+                        "Diluted shares changed by a split-like ratio. Verify the "
+                        "latest 10-K restated historical share and per-share data "
+                        "before comparing EPS or per-share values."
+                    ),
+                }
+            )
+    return findings
+
+
+def _data_quality(
+    tag_resolution: dict[str, str | None],
+    missing_concepts: list[str],
+    years: list[dict],
+) -> dict:
+    metric_quality = {}
+    for metric, source in tag_resolution.items():
+        metric_quality[metric] = {
+            "status": "missing" if metric in missing_concepts else "reported",
+            "source": source,
+        }
+
+    net_debt_inputs_missing = "long_term_debt" in missing_concepts or "cash" in missing_concepts
+    return {
+        "metrics": metric_quality,
+        "derived_metrics": {
+            "net_debt": {
+                "status": "unreliable" if net_debt_inputs_missing else "computed",
+                "requires": ["long_term_debt", "cash"],
+                "message": (
+                    "Net debt is null/unreliable when cash or debt is missing; "
+                    "do not treat missing debt as zero."
+                    if net_debt_inputs_missing
+                    else "Computed only for years with both cash and debt present."
+                ),
+            },
+        },
+        "warnings": _share_discontinuities(years),
+    }
 
 
 def _build_year(fy: int, raw: dict[str, dict[int, float]]) -> dict:
@@ -276,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "tag_resolution": tag_resolution,
         "missing_concepts": missing_concepts,
+        "data_quality": _data_quality(tag_resolution, missing_concepts, years),
     }
     # If anything failed to resolve, dump the list of available us-gaap
     # concept names so the subagent can manually pick a substitute.

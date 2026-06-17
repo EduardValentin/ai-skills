@@ -303,3 +303,94 @@ def test_missing_concept_listed_with_available_tags(tmp_path) -> None:
     assert "available_us_gaap_concepts" in data
     assert "SomeWeirdProprietaryRevenueTag" in data["available_us_gaap_concepts"]
     assert "Assets" in data["available_us_gaap_concepts"]
+
+
+@responses.activate
+def test_debt_fallback_uses_debt_instrument_face_amount(tmp_path) -> None:
+    company_tickers = {
+        "0": {"cik_str": 9999998, "ticker": "DEBT", "title": "Debt Corp"},
+    }
+    company_facts = {
+        "cik": 9999998,
+        "entityName": "Debt Corp",
+        "facts": {
+            "us-gaap": {
+                "Revenues": {
+                    "units": {"USD": [{"end": "2025-12-31", "val": 5000000000, "fy": 2025, "fp": "FY", "form": "10-K"}]},
+                },
+                "NetIncomeLoss": {
+                    "units": {"USD": [{"end": "2025-12-31", "val": 500000000, "fy": 2025, "fp": "FY", "form": "10-K"}]},
+                },
+                "CashAndCashEquivalentsAtCarryingValue": {
+                    "units": {"USD": [{"end": "2025-12-31", "val": 3726000000, "fy": 2025, "fp": "FY", "form": "10-K"}]},
+                },
+                "DebtInstrumentFaceAmount": {
+                    "units": {"USD": [{"end": "2025-12-31", "val": 1500000000, "fy": 2025, "fp": "FY", "form": "10-K"}]},
+                },
+            },
+        },
+    }
+    import json as _json
+    responses.add(responses.GET, tr.COMPANY_TICKERS_URL, body=_json.dumps(company_tickers), status=200)
+    responses.add(
+        responses.GET,
+        "https://data.sec.gov/api/xbrl/companyfacts/CIK0009999998.json",
+        body=_json.dumps(company_facts),
+        status=200,
+    )
+
+    out_path = tmp_path / "financials.json"
+    rc = compute_financials.main(["DEBT", "--years", "1", "--out", str(out_path)])
+    assert rc == 0
+
+    data = json.loads(out_path.read_text())
+    fy25 = next(y for y in data["years"] if y["fiscal_year"] == 2025)
+    assert data["tag_resolution"]["long_term_debt"] == "DebtInstrumentFaceAmount"
+    assert fy25["long_term_debt"] == 1500000000
+    assert fy25["net_debt"] == 1500000000 - 3726000000
+    assert data["data_quality"]["metrics"]["long_term_debt"]["status"] == "reported"
+
+
+@responses.activate
+def test_net_debt_is_not_computed_when_debt_input_is_missing(tmp_path) -> None:
+    company_tickers = {
+        "0": {"cik_str": 9999997, "ticker": "NODEBT", "title": "No Debt Data Corp"},
+    }
+    company_facts = {
+        "cik": 9999997,
+        "entityName": "No Debt Data Corp",
+        "facts": {
+            "us-gaap": {
+                "Revenues": {
+                    "units": {"USD": [{"end": "2025-12-31", "val": 5000000000, "fy": 2025, "fp": "FY", "form": "10-K"}]},
+                },
+                "NetIncomeLoss": {
+                    "units": {"USD": [{"end": "2025-12-31", "val": 500000000, "fy": 2025, "fp": "FY", "form": "10-K"}]},
+                },
+                "CashAndCashEquivalentsAtCarryingValue": {
+                    "units": {"USD": [{"end": "2025-12-31", "val": 3726000000, "fy": 2025, "fp": "FY", "form": "10-K"}]},
+                },
+            },
+        },
+    }
+    import json as _json
+    responses.add(responses.GET, tr.COMPANY_TICKERS_URL, body=_json.dumps(company_tickers), status=200)
+    responses.add(
+        responses.GET,
+        "https://data.sec.gov/api/xbrl/companyfacts/CIK0009999997.json",
+        body=_json.dumps(company_facts),
+        status=200,
+    )
+
+    out_path = tmp_path / "financials.json"
+    rc = compute_financials.main(["NODEBT", "--years", "1", "--out", str(out_path)])
+    assert rc == 0
+
+    data = json.loads(out_path.read_text())
+    fy25 = next(y for y in data["years"] if y["fiscal_year"] == 2025)
+    assert "long_term_debt" in data["missing_concepts"]
+    assert fy25["cash"] == 3726000000
+    assert fy25["long_term_debt"] is None
+    assert fy25["net_debt"] is None
+    assert data["data_quality"]["metrics"]["long_term_debt"]["status"] == "missing"
+    assert data["data_quality"]["derived_metrics"]["net_debt"]["status"] == "unreliable"

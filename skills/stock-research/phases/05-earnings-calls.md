@@ -7,7 +7,7 @@ schema_version: 1
 
 # Phase 5 Subagent Prompt — Earnings Calls (orchestrator)
 
-You orchestrate Phase 5: fetch the last 3 quarterly earnings call transcripts, dispatch a sub-subagent per quarter for analysis, then aggregate cross-call themes.
+You orchestrate Phase 5: fetch the last 3 quarterly earnings call transcripts, dispatch a worker per quarter for analysis, then aggregate cross-call themes.
 
 ## Context (injected by orchestrator)
 
@@ -18,10 +18,10 @@ Standard: `ticker`, `cik_padded`, `ticker_dir`, `scripts_dir`, `raw_dir`. Plus:
 
 Produce these files in `<ticker_dir>/earnings-calls/`:
 - `<YYYY-Qn>.md` per quarter (cleaned transcript) — 3 files
-- `<YYYY-Qn>-analysis.md` per quarter (your analysis) — 3 files (produced by sub-subagents)
+- `<YYYY-Qn>-analysis.md` per quarter (your analysis) — 3 files (produced by workers)
 - `cross-call-themes.md` (you write this, aggregating across the 3)
 
-Return a **~500-word summary**: tone trajectory across the calls, dropped/added themes, key forward-looking guidance, anything Checkpoint 2 should surface to the user.
+Return the Worker Return Contract requested by the top-level orchestrator. Keep the synthesis compact and put tone trajectory, dropped/added themes, key forward-looking guidance, and anything Checkpoint 3 should surface in `checkpoint_highlights`.
 
 ## Step 1: Determine the 3 quarters to fetch
 
@@ -36,16 +36,16 @@ Convert to `YYYY-Qn` labels (e.g., a 10-Q with report_date `2024-06-29` for Appl
 
 **Be careful with fiscal-year offsets.** Most US companies use calendar quarters (Q1 = Jan-Mar, Q4 = Oct-Dec). Some don't — Apple's FY ends in September, so its Q3 reports cover April-June. Walmart's FY ends Jan 31, so its Q4 reports cover Nov-Jan. Pick the convention the company itself uses (you can usually see it in their press releases).
 
-## Step 2: Dispatch sub-subagents in parallel (one per quarter)
+## Step 2: Dispatch workers in parallel (one per quarter)
 
-For each of the 3 quarters, dispatch a sub-subagent using `phases/05-earnings-call-sub.md`. Inject:
+For each of the 3 quarters, dispatch a worker using `phases/05-earnings-call-sub.md`. Inject:
 - `quarter_label`: `YYYY-Qn`
 - `ticker`, `company_slug`, `scripts_dir`
 - `out_dir`: `<ticker_dir>/earnings-calls/`
 
-Wait for all 3 to complete. Each writes its own `<quarter_label>.md` (transcript) and `<quarter_label>-analysis.md`, and returns a summary covering: tone, prepared-remarks highlights, Q&A themes, guidance.
+Wait for all 3 to complete. Each writes its own `<quarter_label>.md` (transcript) and `<quarter_label>-analysis.md`, and returns a compact summary covering: tone, prepared-remarks highlights, Q&A themes, guidance.
 
-If a sub-subagent returns `NEEDS_CONTEXT` (transcript not findable), the orchestrator pauses and asks the user to paste it inline — see Failure Modes.
+If a worker returns `NEEDS_CONTEXT` (transcript not findable), the orchestrator pauses and asks the user to paste it inline — see Failure Modes.
 
 ## Step 3: Write `cross-call-themes.md`
 
@@ -107,10 +107,10 @@ A short "things worth discussing at Checkpoint 2" list — 3–5 items that you 
 ## Output contract (recap)
 
 - 3 transcript files + 3 analysis files + 1 cross-call-themes file
-- ~500-word summary
+- Worker Return Contract with compact call-trajectory highlights
 
 ## Failure modes
 
-- **`NEEDS_CONTEXT`** if any sub-subagent returns `NEEDS_CONTEXT` (transcript not found by scraper and no manual paste yet). The orchestrator handles this by pausing to ask the user to paste the missing transcript before re-dispatching that single sub-subagent. You report this status to the main orchestrator so it can drive the user interaction.
+- **`NEEDS_CONTEXT`** if any worker returns `NEEDS_CONTEXT` (transcript not found by scraper and no manual paste yet). The orchestrator handles this by pausing to ask the user to paste the missing transcript before re-dispatching that single worker. You report this status to the main orchestrator so it can drive the user interaction.
 - **`DONE_WITH_CONCERNS`** if guidance comparison is incomplete (e.g., company doesn't give forward guidance — many don't)
 - **`DONE`** otherwise

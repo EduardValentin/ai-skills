@@ -19,7 +19,7 @@ Standard. Plus:
 
 Produce **one file**: `<ticker_dir>/valuation.md`. Plus supporting JSON in `.raw/`: `prices.json`, `dividends.json`, `splits.json`, `pe_band.json`, `reverse_dcf.json`.
 
-Return a **~500-word summary**: current multiples, where we sit in the historical P/E band, reverse-DCF implied growth — and the headline "expensive / fair / cheap" verdict for this name.
+Return the Worker Return Contract requested by the top-level orchestrator. Keep the synthesis compact and put current multiples, historical P/E band position, reverse-DCF implied growth, and the headline "expensive / fair / cheap" verdict in `checkpoint_highlights`.
 
 ## Step 1: Fetch prices and analyst data
 
@@ -136,7 +136,7 @@ This is a *snapshot* verdict for orchestrator synthesis. The full BUY/WATCH/AVOI
 ## Output contract (recap)
 
 - `valuation.md` + raw JSONs in `.raw/`
-- ~500-word summary
+- Worker Return Contract with compact valuation highlights
 
 ## Failure modes
 

@@ -4,44 +4,92 @@ skill = "stock-research"
 skill_path = "skills/stock-research/SKILL.md"
 scenario_env = "STOCK_RESEARCH_SCENARIO"
 judge_context = """
-Loaded skill under test: stock-research. Judge fundamentals workflow, setup gates, structured user decisions, artifacts, and scope boundaries.
+Loaded skill under test: stock-research. Judge fundamentals workflow, setup gates, structured user decisions, artifacts, data-quality gates, worker contracts, and scope boundaries.
 """
+
 [[scenario]]
 id = "initial-us-listed-thesis-workflow"
 user_request = """
 Research AAPL from scratch and tell me whether it belongs in a long-term portfolio. I want a durable thesis, not short-term trading advice.
+
+Scenario facts: Phase 1 setup gates have been checked and passed. `AAPL`
+resolved to Apple Inc., `SR_SEC_USER_AGENT` is set, the scripts `.venv` is
+usable, the investing research repo exists, the repo `AGENTS.md` has been
+loaded for path/layout/index rules, and no existing `AAPL` ticker folder is
+present.
 """
 
 [[scenario.criteria]]
-key = "checks_setup_and_identity"
+key = "shows_verified_setup_statuses"
 description = """
-The response requires resolving ticker identity and checking the SEC user-agent, script
-environment, research repo, and existing ticker folder before durable work
-starts.
+The response shows completed Phase 1 setup gate statuses for ticker identity,
+SEC user-agent, scripts environment, research repo instructions, and ticker
+folder state before durable work starts.
 """
 
 [[scenario.criteria]]
-key = "uses_gvd_lens_and_session_context"
+key = "captures_user_framing_after_gates"
 description = """
-The response asks for the GVD lens through structured choice when available and captures free-form session context.
+The response asks for the GVD lens through structured choice when available and
+captures the free-form session context after setup is verified.
 """
 
 [[scenario.criteria]]
-key = "follows_phase_checkpoints"
+key = "follows_current_phase_model"
 description = """
-The response follows the phase structure with business/moat, financials, parallel competitors/earnings/valuation/expectations, projections, verdict, and checkpoints.
+The response follows the phase structure with business/moat, financials,
+parallel competitors/earnings/valuation/expectations, projections, verdict,
+commit/index, worker returns, and checkpoints.
 """
 
 [[scenario.criteria]]
-key = "produces_durable_artifacts"
+key = "names_durable_artifacts_and_repo_authority"
 description = """
-The response writes or plans durable Markdown/JSON research artifacts and uses clear Markdown checkpoint outputs.
+The response names the durable Markdown/JSON artifacts and uses the investing
+repo `AGENTS.md` as the authority for exact paths, index metadata, commit
+conventions, and push policy.
 """
 
 [[scenario.criteria]]
-key = "avoids_trading_scope"
+key = "states_long_horizon_scope"
 description = """
-The response stays in long-horizon fundamentals research and avoids technical analysis, options, and day-trading advice.
+The response frames the work as long-horizon fundamentals research with a
+buy/watch/avoid decision rather than a short-term trading workflow.
+"""
+
+[[scenario]]
+id = "pending-setup-gates-block-lens"
+user_request = """
+Scenario facts: The user asks, "Research AAPL from scratch." The ticker can be
+read from the request, but command execution is unavailable right now, so
+`SR_SEC_USER_AGENT`, the installed skill scripts runtime, the investing
+research repo `AGENTS.md`, and the repo-defined ticker folder state cannot be
+verified yet. The user says, "Just ask me for the GVD lens and we can fix setup
+later."
+
+What should the first stock-research response do?
+"""
+
+[[scenario.criteria]]
+key = "returns_blocked_setup_status"
+description = """
+The response returns a blocked setup status and treats pending setup gates as
+required preconditions for durable research.
+"""
+
+[[scenario.criteria]]
+key = "lists_each_required_gate"
+description = """
+The response names the separate setup gates that must be verified: SEC
+user-agent, installed skill scripts runtime, investing repo `AGENTS.md` and
+repo root, and repo-defined ticker-folder state.
+"""
+
+[[scenario.criteria]]
+key = "defers_framing_and_artifacts_until_verified"
+description = """
+The response defers GVD lens selection, session-context capture, phase planning,
+and artifact initialization until the setup gates are verified.
 """
 
 [[scenario]]
@@ -51,13 +99,214 @@ Do a quick technical analysis on a non-US stock and suggest options trades for n
 """
 
 [[scenario.criteria]]
-key = "rejects_out_of_scope_request"
+key = "applies_scope_boundary"
 description = """
-The response blocks or redirects because non-US listings, technical analysis, options, and short-term trading are outside stock-research scope.
+The response applies the skill's scope boundary because non-US listings,
+technical analysis, options, and short-term trades are outside this workflow.
 """
 
 [[scenario.criteria]]
-key = "does_not_force_fundamental_workflow"
+key = "offers_fundamentals_redirect"
 description = """
-The response does not pretend the stock-research workflow can satisfy an out-of-scope trading request.
+The response redirects toward a US-listed long-horizon fundamentals thesis if
+that is what the user wants to do next.
+"""
+
+[[scenario]]
+id = "missing-debt-blocks-checkpoint"
+user_request = """
+Scenario facts: You are at the Phase 3 financials checkpoint. `financials.json`
+shows `cash = $3.726B`, `long_term_debt = null`, and `net_debt = -$3.726B`.
+The latest 10-K narrative says the company issued `$1.5B` of ten-year notes,
+and available tags include `LongTermDebtNoncurrent` and `DebtInstrumentFaceAmount`.
+`.raw/financials-validation.json` has status `fail` with finding code
+`debt_tags_available_but_unmapped`.
+The user says, "Just keep moving, this is probably fine."
+
+What next decision would stock-research return?
+"""
+
+[[scenario.criteria]]
+key = "blocks_checkpoint_on_validation_failure"
+description = """
+The response blocks Checkpoint 2 until debt is resolved from filing evidence or
+the affected debt and leverage metrics are marked unreliable.
+"""
+
+[[scenario.criteria]]
+key = "uses_validation_report_as_decision_source"
+description = """
+The response uses the `validate_financials.py` report status and finding code
+as the first decision source for the Phase 3 recovery.
+"""
+
+[[scenario.criteria]]
+key = "requires_filing_evidence_for_debt"
+description = """
+The response requires structured filing evidence such as debt tags, contexts,
+tables, notes, or compact narrative snippets before presenting net debt or
+leverage conclusions.
+"""
+
+[[scenario]]
+id = "dividend-inference-requires-filing-language"
+user_request = """
+Scenario facts: Phase 3 returned `dividends_paid = null`. The company is a
+high-growth US-listed software company and probably has never paid dividends.
+The user wants projections now and says dividends are not central to the thesis.
+
+What do you do before writing `financials.md` and `projections.json`?
+"""
+
+[[scenario.criteria]]
+key = "requires_explicit_dividend_policy_evidence"
+description = """
+The response checks filing dividend-policy language and marks zero dividends as
+inferred only when the filing explicitly supports no common dividends paid or
+expected.
+"""
+
+[[scenario.criteria]]
+key = "marks_dependent_metrics_unreliable"
+description = """
+The response keeps shareholder-yield or dividend-dependent calculations
+missing or unreliable while dividend input remains unresolved.
+"""
+
+[[scenario.criteria]]
+key = "records_metric_status_and_evidence"
+description = """
+The response records the dividend metric status with source evidence when it is
+reported, inferred, manual, or missing.
+"""
+
+[[scenario]]
+id = "stock-split-normalization-before-per-share-comparisons"
+user_request = """
+Scenario facts: The latest 10-K says a 5-for-1 stock split was effective after
+fiscal year end and that common share, equity award, and per-share amounts were
+retroactively adjusted. `financials.json` has current-year diluted shares around
+1.04B, but older company-facts years show about 208M. The user says, "EPS
+direction is obvious enough. Continue."
+
+What should the Phase 3 worker or orchestrator do next?
+"""
+
+[[scenario.criteria]]
+key = "flags_split_discontinuity"
+description = """
+The response flags the share-count jump as a split-like discontinuity.
+"""
+
+[[scenario.criteria]]
+key = "selects_consistent_normalization_method"
+description = """
+The response uses latest 10-K restated comparative shares and EPS when
+available or applies one consistent split normalization before per-share
+comparisons.
+"""
+
+[[scenario.criteria]]
+key = "qualifies_per_share_conclusions_until_normalized"
+description = """
+The response blocks or qualifies per-share conclusions until the normalization
+method is stated.
+"""
+
+[[scenario]]
+id = "worker-return-contract-required"
+user_request = """
+Scenario facts: A Phase 4 worker wrote `competitors.md` and `swor.md`, then
+returned a polished 900-word narrative. It did not include `status`,
+`files_written`, `data_quality_flags`, `source_coverage`,
+`checkpoint_highlights`, or `blockers`. Main context is low and the narrative
+sounds useful.
+
+What do you do next?
+"""
+
+[[scenario.criteria]]
+key = "treats_worker_contract_as_completion_gate"
+description = """
+The response treats the compact Worker Return Contract as the completion gate
+for delegated phase work.
+"""
+
+[[scenario.criteria]]
+key = "requests_contract_fields"
+description = """
+The response requests the missing status, files written, data-quality flags,
+source coverage, checkpoint highlights, questions, and blockers fields before
+checkpointing.
+"""
+
+[[scenario.criteria]]
+key = "synthesizes_from_artifacts_compactly"
+description = """
+The response keeps main context small by synthesizing from artifacts and compact
+worker returns.
+"""
+
+[[scenario]]
+id = "raw-sec-html-search-is-not-evidence"
+user_request = """
+Scenario facts: You need evidence for debt and dividend policy. The SEC 10-K
+HTML is a huge single-line inline XBRL document. Raw text search returns
+thousands of characters around every match, but words like "notes" and
+"dividends" are visible in the dump. The user wants a fast answer.
+
+What evidence path do you use?
+"""
+
+[[scenario.criteria]]
+key = "selects_structured_evidence_sources"
+description = """
+The response selects company-facts JSON, inline XBRL tags and contexts,
+extracted tables, extracted sections, or compact nearby narrative snippets as
+the financial evidence path.
+"""
+
+[[scenario.criteria]]
+key = "uses_compact_source_snippets"
+description = """
+The response keeps evidence compact enough for checkpoint review while still
+preserving the relevant source context.
+"""
+
+[[scenario.criteria]]
+key = "records_exact_evidence_for_manual_or_inferred_metrics"
+description = """
+The response keeps tag, table, filing period, context, and narrative evidence
+for manual or inferred metrics.
+"""
+
+[[scenario]]
+id = "context-saving-orchestration"
+user_request = """
+Scenario facts: The user asks for a complete initial deep dive on MSFT. SEC
+filings and transcripts are available, but main context is already long. The
+user says, "Just read everything yourself; I do not mind if this gets long."
+
+What orchestration approach do you take?
+"""
+
+[[scenario.criteria]]
+key = "uses_bounded_workers"
+description = """
+The response uses bounded workers for Phase 2, Phase 3, and Phases 4-7 when
+runtime worker capability is available.
+"""
+
+[[scenario.criteria]]
+key = "keeps_orchestration_compact"
+description = """
+The response keeps raw filings and transcripts out of main context and relies
+on durable artifacts plus compact worker returns.
+"""
+
+[[scenario.criteria]]
+key = "loads_references_phase_by_phase"
+description = """
+The response loads supporting references only when the relevant phase needs
+them for decisions.
 """

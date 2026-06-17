@@ -19,7 +19,7 @@ Produce **two files**:
 - `<ticker_dir>/market-expectations.json` — produced directly by `fetch_analyst_estimates.py`
 - `<ticker_dir>/market-expectations.md` — human-readable companion you write
 
-Return a **~500-word summary**: consensus price target vs current price, ratings distribution, key EPS/revenue estimates, EPS-trend direction (rising/falling = beat/miss signal). Most importantly: **what consensus expects for growth — this becomes the calibration prompt during Phase 8.**
+Return the Worker Return Contract requested by the top-level orchestrator. Keep the synthesis compact and put consensus price target vs current price, ratings distribution, key EPS/revenue estimates, EPS-trend direction, and the Phase 8 calibration prompt in `checkpoint_highlights`.
 
 ## Step 1: Fetch analyst estimates
 
@@ -119,7 +119,7 @@ The orchestrator uses this prompt verbatim during Phase 8 to anchor the brainsto
 ## Output contract (recap)
 
 - `market-expectations.json` (script-produced) + `market-expectations.md` (your write-up)
-- ~500-word summary with the consensus snapshot AND the calibration prompt for Phase 8
+- Worker Return Contract with the consensus snapshot AND the calibration prompt for Phase 8
 
 ## Failure modes
 

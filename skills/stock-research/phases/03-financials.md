@@ -18,8 +18,11 @@ You are a research subagent for `stock-research`. Your job is Phase 3: pull the 
 Produce **two files**:
 - `<ticker_dir>/financials.json` — machine-readable, emitted by `compute_financials.py` (you do not author this; the script does)
 - `<ticker_dir>/financials.md` — human-readable companion you write, structured around the three statements
+- `<ticker_dir>/.raw/financials-validation.json` — emitted by `validate_financials.py`
 
-Return a **~500-word summary** covering: the three statements at a glance, the trend gate verdict, margin trajectory, FCF + SBC concerns, balance sheet read, capital-allocation track record. **Flag any data gaps you noticed** — the user discusses financials with you at the next checkpoint and needs to know what's solid vs. uncertain.
+Return the Worker Return Contract requested by the top-level orchestrator. Keep the synthesis compact and include data-quality flags first. The user discusses financials at the next checkpoint and needs to know what's solid, inferred, manually resolved, missing, or unsafe.
+
+The worker return must explicitly include the `validate_financials.py` status and finding codes from `<ticker_dir>/.raw/financials-validation.json`. If the next decision is `BLOCKED` or `DONE_WITH_CONCERNS`, name the validation finding that drove it; do not rely on a narrative explanation alone.
 
 ## Inputs available
 
@@ -32,6 +35,16 @@ Run `compute_financials.py` if `financials.json` doesn't already exist (Phase 2 
 ```
 
 Re-read the JSON. Use the data for the markdown companion.
+
+Then run the financial validation gate:
+
+```bash
+<scripts_dir>/.venv/bin/python <scripts_dir>/validate_financials.py \
+  <ticker_dir>/financials.json \
+  --out <ticker_dir>/.raw/financials-validation.json
+```
+
+Read the validation JSON before writing `financials.md`. A `fail` status blocks clean presentation: resolve the issue manually from filing evidence or mark the affected metric and any dependent derived metrics as unreliable. A `warn` status must be surfaced at the top of `financials.md` and in your worker return.
 
 ## `financials.json` schema (what the script emits)
 
@@ -80,6 +93,15 @@ Re-read the JSON. Use the data for the markdown companion.
     ...
   },
   "missing_concepts": [],
+  "data_quality": {
+    "metrics": {
+      "long_term_debt": {"status": "reported" | "missing", "source": "LongTermDebtNoncurrent" | null}
+    },
+    "derived_metrics": {
+      "net_debt": {"status": "computed" | "unreliable", "requires": ["long_term_debt", "cash"]}
+    },
+    "warnings": []
+  },
   "available_us_gaap_concepts": [...]   // present only when missing_concepts is non-empty
 }
 ```
@@ -103,6 +125,13 @@ Re-read the JSON. Use the data for the markdown companion.
 
 3. **Verify the tag_resolution makes sense for what you expect.** For a SaaS company (e.g., ServiceNow, Salesforce), `RevenueFromContractWithCustomerExcludingAssessedTax` is normal. For an older industrial, `Revenues` is normal. For a bank, neither — they use `InterestAndDividendIncomeOperating` or similar. If the tag doesn't fit the business model, that's a red flag worth surfacing.
 
+4. **Apply the postmortem-derived financial guardrails.** See `references/financial-data-quality.md`.
+   - Missing debt is not zero debt. If `long_term_debt` is missing but tags such as `LongTermDebtNoncurrent`, `LongTermDebtCurrent`, `DebtInstrumentFaceAmount`, or convertible-debt tags are available, inspect the latest 10-K debt note and inline XBRL before using leverage or net debt.
+   - `net_debt` is valid only when both cash and debt are resolved. Do not compute cash minus zero debt when debt is missing.
+   - Missing dividend tags mean unknown, not zero. Infer zero only from explicit filing language that the company paid no common dividends or does not intend to pay common dividends.
+   - Check for split-like diluted-share jumps. If the latest 10-K says share and per-share values were retroactively adjusted, use the latest restated comparative values or apply one consistent split normalization.
+   - Do not use raw SEC HTML dumps as evidence. Use XBRL tags, contexts, tables, extracted sections, and nearby narrative snippets.
+
 ## `financials.md` structure
 
 Open with frontmatter:
@@ -121,11 +150,18 @@ Then sections **in this order** — the three statements lead, then cross-cuttin
 
 ### 1. Data gaps (only include if there are any)
 
-If `missing_concepts` is non-empty OR you had to apply critical thinking to fill values manually:
+If `missing_concepts` is non-empty, `data_quality.warnings` is non-empty, validation status is not `pass`, OR you had to apply critical thinking to fill values manually:
 
 > **Data gap noted:** the XBRL script could not resolve `<concept>` for this company. <Either: "Filled manually from us-gaap:XXX (see notes per year)." OR: "Left null; this affects rows X, Y, Z below.">
 
 Be explicit. The user discusses this at Checkpoint 2 (Financials).
+
+For every manually resolved or inferred value, include source evidence:
+
+- XBRL tag/table/note used.
+- Filing and fiscal year.
+- Short narrative snippet if the inference comes from prose, such as dividend policy.
+- Whether downstream metrics changed.
 
 ### 2. Income Statement (5–10 yr)
 
@@ -228,10 +264,12 @@ For financial companies (banks, insurers, REITs), ROIC isn't the right metric �
 
 - `financials.json` — script-emitted, untouched by you (except: if you fill data gaps manually, reflect those values in the markdown; do not edit the JSON)
 - `financials.md` — three-statement structure (Income / Balance / Cash Flow), then trend gate, then capital allocation, then shareholder yield, then ROIC
-- ~500-word summary covering the three statements at a glance, trend gate verdict, and any data gaps the user should know about
+- `.raw/financials-validation.json` — validation report
+- Worker Return Contract with `data_quality_flags` populated from missing concepts, validation findings, manual resolutions, inferred values, and any unsafe derived metrics
 
 ## Failure modes
 
 - **`BLOCKED`** if `compute_financials.py` returns non-zero (ticker resolution or XBRL API failure)
-- **`DONE_WITH_CONCERNS`** if `missing_concepts` is non-empty AND you couldn't fill the gaps with critical-thinking substitution — flag specifically which metrics are missing and what the next phase (or the user at the financials checkpoint) needs to decide
+- **`BLOCKED`** if `validate_financials.py` returns `fail` and the issue cannot be resolved from filing evidence
+- **`DONE_WITH_CONCERNS`** if missing, inferred, manually resolved, or validation-warning metrics remain but downstream analysis can proceed with clear caveats
 - **`DONE`** if everything resolved cleanly OR you filled the gaps manually with credible substitutes
