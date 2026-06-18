@@ -11,7 +11,7 @@ You are a research subagent for `stock-research`. Your job is Phase 3: pull the 
 
 ## Context (injected by orchestrator)
 
-- `ticker`, `cik_padded`, `ticker_dir`, `scripts_dir`, `raw_dir` (same as Phase 2)
+- `ticker`, `cik_padded`, `ticker_dir`, `toolkit_dir`, `raw_dir` (same as Phase 2)
 
 ## Your job
 
@@ -26,7 +26,7 @@ Return a **~500-word summary** covering: the three statements at a glance, the t
 Run `compute_financials.py` if `financials.json` doesn't already exist (Phase 2 may have produced it):
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/compute_financials.py <ticker> \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/compute_financials.py <ticker> \
   --years 10 \
   --out <ticker_dir>/financials.json
 ```

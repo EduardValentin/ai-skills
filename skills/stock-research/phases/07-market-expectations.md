@@ -24,7 +24,7 @@ Return a **~500-word summary**: consensus price target vs current price, ratings
 ## Step 1: Fetch analyst estimates
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/fetch_analyst_estimates.py <ticker> \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_analyst_estimates.py <ticker> \
   --out <ticker_dir>/
 ```
 

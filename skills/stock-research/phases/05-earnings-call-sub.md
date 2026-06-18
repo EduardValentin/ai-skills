@@ -14,7 +14,7 @@ You handle one quarter's earnings call. Fetch the transcript, clean it, write an
 - `quarter_label`: `YYYY-Qn` (e.g., `2024-Q3`)
 - `ticker`: parent ticker (e.g., `AAPL`)
 - `company_slug`: best-guess slug for Motley Fool URLs
-- `scripts_dir`, `out_dir` (= `<ticker_dir>/earnings-calls/`)
+- `toolkit_dir`, `out_dir` (= `<ticker_dir>/earnings-calls/`)
 
 ## Your job
 
@@ -27,7 +27,7 @@ Return a **~500-word summary**: tone read, key prepared-remarks points, top 2–
 ## Step 1: Fetch the transcript
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/fetch_transcript.py <ticker> \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_transcript.py <ticker> \
   --quarter <quarter_label> \
   --company-slug <company_slug> \
   --out <out_dir>
@@ -43,7 +43,7 @@ Transcript not found via scraper for <ticker> <quarter_label>. Please paste the 
 The Phase 5 orchestrator handles user paste and re-dispatches with `--manual` mode. Your re-dispatch will receive the transcript via stdin; pass `--manual` to `fetch_transcript.py` and pipe stdin through:
 
 ```bash
-echo "$pasted_transcript" | <scripts_dir>/.venv/bin/python <scripts_dir>/fetch_transcript.py <ticker> \
+echo "$pasted_transcript" | <toolkit_dir>/.venv/bin/python <toolkit_dir>/fetch_transcript.py <ticker> \
   --quarter <quarter_label> \
   --manual \
   --out <out_dir>

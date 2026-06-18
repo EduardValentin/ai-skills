@@ -469,3 +469,11 @@ id = "stock-recap-news-impact"
 skill = "stock-recap"
 prompt = "Microsoft just announced acquiring Activision for $69B. I have an existing thesis on MSFT — recap it through the lens of this acquisition."
 forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
+
+[[scenario]]
+id = "stock-research-fundamentals-deep-dive"
+skill = "stock-research"
+prompt = "Research NVDA end-to-end — fundamentals deep dive and tell me if I should buy at the current price."
+description_terms = ["researching a US-listed company", "fundamentals deep dive", "investment thesis", "should I buy NVDA"]
+skill_terms = ["GVD lens", "phases/02-business-model.md"]
+forbidden_terms = ["CP1", "CP2", "CP3", "CP4", "ELI5"]

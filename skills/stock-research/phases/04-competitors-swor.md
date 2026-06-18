@@ -11,7 +11,7 @@ You are the orchestrator subagent for Phase 4. You fan out to per-competitor sub
 
 ## Context (injected by orchestrator)
 
-Same as Phase 2 + 3: `ticker`, `cik_padded`, `ticker_dir`, `scripts_dir`, `raw_dir`, `gvd_category`. Plus:
+Same as Phase 2 + 3: `ticker`, `cik_padded`, `ticker_dir`, `toolkit_dir`, `raw_dir`, `gvd_category`. Plus:
 - `business_and_moat_summary`: the summary returned by Phase 2 (so you know what segments/moat the parent already identified)
 
 ## Your job
@@ -37,7 +37,7 @@ Aim for diversity: include both direct competitors and substitution threats wher
 
 For each competitor ticker, dispatch a sub-subagent using `phases/04-competitor-sub.md` as the prompt. Inject:
 - `competitor_ticker`: the competitor's ticker
-- `scripts_dir`: same path
+- `toolkit_dir`: same path
 - `raw_dir`: `<ticker_dir>/.raw/competitors/<competitor_ticker>/`
 
 Each sub-subagent fetches its competitor's financials and returns a comparison row. You wait for all sub-subagents to finish before proceeding.
@@ -51,7 +51,7 @@ If `<raw_dir>/10k-sections/` has Item 1A from the most recent 10-K, also find th
 ```bash
 prior_tenk=$(ls -t <raw_dir>/*10-K*.html | sed -n '2p')
 prior_year=$(echo "$prior_tenk" | grep -oE '[0-9]{4}' | tail -1)
-<scripts_dir>/.venv/bin/python <scripts_dir>/extract_10k_sections.py <ticker> \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/extract_10k_sections.py <ticker> \
   --html "$prior_tenk" --year "$prior_year" \
   --out <raw_dir>/10k-sections-prior/
 ```
@@ -59,7 +59,7 @@ prior_year=$(echo "$prior_tenk" | grep -oE '[0-9]{4}' | tail -1)
 Then run the diff:
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/diff_risk_factors.py \
+<toolkit_dir>/.venv/bin/python <toolkit_dir>/diff_risk_factors.py \
   --file-a <raw_dir>/10k-sections-prior/item_1a_risk_factors.md \
   --file-b <raw_dir>/10k-sections/item_1a_risk_factors.md \
   --ticker <TICKER> \

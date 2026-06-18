@@ -36,17 +36,19 @@ When starting fresh research, the response must preserve these gates before dura
    ```
    SEC EDGAR rejects requests without a proper User-Agent.
 
-2. **Python venv.** The skill's `scripts/` directory needs a venv with all dependencies. The path to that directory depends on which agent installed the skill:
-   - Claude Code: `~/.claude/skills/stock-research/scripts`
-   - Codex: `~/.codex/skills/stock-research/scripts`
+2. **`financial-toolkit` installed in the same agent install dir.** The shared toolkit (12 Python CLIs + 5 utilities for SEC filings, prices, transcripts, financials, valuation math) is *not* part of this skill — it lives under `toolkits/financial-toolkit/` in the source repo and gets installed alongside the skill. Its install path depends on which agent installed it:
+   - Claude Code: `~/.claude/toolkits/financial-toolkit/`
+   - Codex: `~/.codex/toolkits/financial-toolkit/`
 
-   In whichever install directory applies, run:
+   The toolkit needs a Python venv with all its dependencies. In whichever install dir applies, run:
 
    ```bash
-   cd <skill-install-dir>/scripts
+   cd <toolkit-install-dir>
    python -m venv .venv
    .venv/bin/pip install -r requirements.txt
    ```
+
+   The `stock-recap` skill (sibling of this one) also depends on the same toolkit.
 
 3. **Research repo exists.** The skill writes artifacts to `/Users/trocaneduard/Documents/Personal/investing-research/`. If this directory doesn't exist, abort with the bootstrap instructions (see "Recovery" below).
 
@@ -129,13 +131,13 @@ Phase 10: Commit & index                     [main agent, sync]
 
 When the skill is invoked (slash command or description-triggered), the orchestrator first runs:
 
-1. **Resolve the ticker.** Use `_lib.ticker_resolver.resolve()` via the script `<scripts>/_lib/ticker_resolver.py` — or just call it inside a one-liner:
+1. **Resolve the ticker.** Use `_lib.ticker_resolver.resolve()` via the script `<toolkit>/_lib/ticker_resolver.py` — or just call it inside a one-liner:
    ```bash
-   <scripts>/.venv/bin/python -c "from _lib.ticker_resolver import resolve; r = resolve('AAPL'); print(r.cik_padded, r.name)"
+   <toolkit>/.venv/bin/python -c "from _lib.ticker_resolver import resolve; r = resolve('AAPL'); print(r.cik_padded, r.name)"
    ```
    If `TickerNotFound`, abort with "Ticker not found on SEC EDGAR. Confirm spelling."
 
-2. **Echo identity.** Show the user: ticker, name, sector (sector requires an extra yfinance lookup — `<scripts>/.venv/bin/python -c "import yfinance as yf; print(yf.Ticker('AAPL').info.get('sector'))"` or skip if it's slow). Estimate market cap from yfinance for context.
+2. **Echo identity.** Show the user: ticker, name, sector (sector requires an extra yfinance lookup — `<toolkit>/.venv/bin/python -c "import yfinance as yf; print(yf.Ticker('AAPL').info.get('sector'))"` or skip if it's slow). Estimate market cap from yfinance for context.
 
 3. **Check existing ticker folder.** If `/Users/trocaneduard/Documents/Personal/investing-research/tickers/<TICKER>/` exists, prompt the user (**use the runtime's native interactive-input mechanism — see "Asking the user for input"**):
    - **Refresh** — re-run all phases, overwrite (commits as `update(TICKER)`)
@@ -157,9 +159,9 @@ When the skill is invoked (slash command or description-triggered), the orchestr
 ## Phase 2: Business model + moat
 
 Dispatch a subagent with `phases/02-business-model.md` as the prompt, injecting context:
-- `ticker`, `cik_padded`, `ticker_dir`, `scripts_dir`, `raw_dir`
+- `ticker`, `cik_padded`, `ticker_dir`, `toolkit_dir`, `raw_dir`
 
-Wait for the subagent to write `business-and-moat.md` and return its summary. The artifact is written directly into the research repo's ticker folder — no install-dir mirroring is needed at runtime. (The skill itself is mirrored from this repo into the agent install dirs by `scripts/mirror.sh` during skill development, not during a research session.)
+Wait for the subagent to write `business-and-moat.md` and return its summary. The artifact is written directly into the research repo's ticker folder — no install-dir mirroring is needed at runtime. (The skill itself is mirrored from this repo into the agent install dirs by the repo-level `scripts/sync_skill.py push stock-research` during skill development, not during a research session.)
 
 ## Checkpoint 1
 
@@ -551,7 +553,7 @@ After Checkpoint 5 approval:
 
 1. **Update `tickers.json`** atomically:
    ```bash
-   <scripts>/.venv/bin/python <scripts>/upsert_ticker.py <TICKER> \
+   <toolkit>/.venv/bin/python <toolkit>/upsert_ticker.py <TICKER> \
      --repo /Users/trocaneduard/Documents/Personal/investing-research \
      --field name="<NAME>" \
      --field sector="<SECTOR>" \
@@ -570,7 +572,7 @@ After Checkpoint 5 approval:
 
 2. **Regenerate `INDEX.md`**:
    ```bash
-   <scripts>/.venv/bin/python <scripts>/update_index.py \
+   <toolkit>/.venv/bin/python <toolkit>/update_index.py \
      --repo /Users/trocaneduard/Documents/Personal/investing-research
    ```
 
@@ -657,12 +659,12 @@ If Phase 1 finds:
 
 - **Python venv missing** → print:
   ````markdown
-  ### ❌ Setup needed: scripts venv
+  ### ❌ Setup needed: financial-toolkit venv
 
-  Set up the skill venv. The `scripts/` directory lives inside the skill's install dir, which depends on which agent installed the skill — `~/.claude/skills/stock-research/scripts` for Claude Code, `~/.codex/skills/stock-research/scripts` for Codex.
+  Set up the shared toolkit's venv. The `financial-toolkit` lives at `~/.claude/toolkits/financial-toolkit` (Claude Code) or `~/.codex/toolkits/financial-toolkit` (Codex), separate from this skill's install dir.
 
   ```bash
-  cd <skill-install-dir>/scripts
+  cd <toolkit-install-dir>
   python -m venv .venv
   .venv/bin/pip install -r requirements.txt
   ```
@@ -672,8 +674,7 @@ If Phase 1 finds:
 
 - `phases/02-business-model.md` through `phases/07-market-expectations.md` — subagent prompts
 - `references/gvd-tailoring.md`, `references/projection-kpis.md`, `references/sizing-matrix.md`, `references/investor-gates.md`, `references/sell-trigger-templates.md`, `references/watch-kpis-by-gvd.md` — Phase 8/9 reference data
-- `scripts/mirror.sh` — refresh install-dir from worktree
-- `scripts/` — Plan 1 Python scripts (call via `<scripts>/.venv/bin/python <script>.py`)
+- Shared toolkit at `~/.<agent>/toolkits/financial-toolkit/` — 12 Python CLIs + 5 utilities the subagents invoke (call via `<toolkit_dir>/.venv/bin/python <toolkit_dir>/<script>.py`). Source lives at `toolkits/financial-toolkit/` in the repo. To sync canonical → both install dirs during development: `python3 scripts/sync_skill.py push stock-research` for this skill, `python3 scripts/sync_toolkit.py push financial-toolkit` for the shared toolkit.
 
 ## Iron rule: never write to user code
 
