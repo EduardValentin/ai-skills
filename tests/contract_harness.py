@@ -165,6 +165,12 @@ def run_assertion(suite_path: Path, assertion: dict[str, Any]) -> None:
             resolve_path(render_path(assertion, "path", {})),
             require_int(suite_path, assertion, "max"),
         )
+    elif assertion_type == "text_absent":
+        assert_text_absent(
+            suite_path,
+            resolve_path(render_path(assertion, "path", {})),
+            require_string_list(suite_path, assertion, "terms"),
+        )
     elif assertion_type == "exists_for_each":
         for variables in iterate_variables(suite_path, assertion):
             assert_exists(resolve_path(render_path(assertion, "path", variables)))
@@ -290,6 +296,16 @@ def assert_line_count_at_most(suite_path: Path, path: Path, max_lines: int) -> N
         raise AssertionError(
             f"{suite_path}: {path.relative_to(REPO_ROOT)} has {line_count} lines, "
             f"expected at most {max_lines}"
+        )
+
+
+def assert_text_absent(suite_path: Path, path: Path, terms: list[str]) -> None:
+    text = read_text(path)
+    present = [term for term in terms if term in text]
+    if present:
+        formatted = ", ".join(repr(term) for term in present)
+        raise AssertionError(
+            f"{suite_path}: {path.relative_to(REPO_ROOT)} contains forbidden text: {formatted}"
         )
 
 

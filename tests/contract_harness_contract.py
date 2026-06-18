@@ -18,6 +18,7 @@ def main() -> int:
     try:
         check_toml_payload_parser()
         check_toml_structural_assertions()
+        check_text_absent_assertion()
         run_contract_suite(REPO_ROOT / "tests" / "contracts" / "behavioral-coverage.toml")
     except Exception as error:
         print(f"FAIL: {error}", file=sys.stderr)
@@ -120,6 +121,36 @@ field = "description"
             encoding="utf-8",
         )
         run_contract_suite(contract)
+
+
+def check_text_absent_assertion() -> None:
+    with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmpdir:
+        tmp_path = Path(tmpdir)
+        target = tmp_path / "sample.md"
+        target.write_text("Portable skill prose.\n", encoding="utf-8")
+
+        passing_contract = tmp_path / "passing.toml"
+        passing_contract.write_text(
+            f'''
+[[assertion]]
+type = "text_absent"
+path = "{target.relative_to(REPO_ROOT)}"
+terms = [
+  "/Users/example/.codex/skills/demo/scripts",
+]
+'''.lstrip(),
+            encoding="utf-8",
+        )
+        run_contract_suite(passing_contract)
+
+        target.write_text("Bad path: /Users/example/.codex/skills/demo/scripts\n", encoding="utf-8")
+        try:
+            run_contract_suite(passing_contract)
+        except AssertionError as error:
+            if "contains forbidden text" not in str(error):
+                raise
+        else:
+            raise AssertionError("text_absent did not reject forbidden text")
 
 
 if __name__ == "__main__":

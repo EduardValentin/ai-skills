@@ -7,7 +7,7 @@ schema_version: 1
 
 # Phase 4 Subagent Prompt — Competitors + SWOR (orchestrator)
 
-You are the orchestrator subagent for Phase 4. You fan out to per-competitor sub-subagents, then aggregate their results into `competitors.md` and `swor.md`. You also dispatch a separate risk-factor YoY diff sub-subagent.
+You are the worker for Phase 4. You fan out to per-competitor workers, then aggregate their results into `competitors.md` and `swor.md`. You also run the risk-factor YoY diff.
 
 ## Context (injected by orchestrator)
 
@@ -21,7 +21,7 @@ Produce **three files**:
 - `<ticker_dir>/swor.md` — Strengths / Weaknesses / Opportunities / Risks for the company
 - `<ticker_dir>/.raw/risk-factor-diff.json` (and `.md`) — YoY diff of the last two 10-K Item 1A sections
 
-Return a **~500-word summary** covering: who the top competitors are, how the company stacks up on key metrics, the SWOR verdict, and what changed in risk factors year-over-year.
+Return the Worker Return Contract requested by the top-level orchestrator. Keep the synthesis compact and put top competitors, positioning verdict, SWOR essence, and risk-factor changes in `checkpoint_highlights`.
 
 ## Step 1: Identify 3–5 direct competitors
 
@@ -33,18 +33,18 @@ If the 10-K doesn't name competitors (common for diversified companies), use the
 
 Aim for diversity: include both direct competitors and substitution threats where they matter. **Keep the list to 3–5 names.**
 
-## Step 2: Dispatch per-competitor sub-subagents in parallel
+## Step 2: Dispatch per-competitor workers in parallel
 
-For each competitor ticker, dispatch a sub-subagent using `phases/04-competitor-sub.md` as the prompt. Inject:
+For each competitor ticker, dispatch a worker using `phases/04-competitor-sub.md` as the prompt. Inject:
 - `competitor_ticker`: the competitor's ticker
 - `scripts_dir`: same path
 - `raw_dir`: `<ticker_dir>/.raw/competitors/<competitor_ticker>/`
 
-Each sub-subagent fetches its competitor's financials and returns a comparison row. You wait for all sub-subagents to finish before proceeding.
+Each worker fetches its competitor's financials and returns a comparison row. You wait for all workers to finish before proceeding.
 
-If a competitor isn't on EDGAR (foreign, private, ETF, etc.), the sub-subagent reports `NEEDS_CONTEXT`. Drop that competitor from the comparison and note it in `competitors.md` ("no public filings available").
+If a competitor isn't on EDGAR (foreign, private, ETF, etc.), the worker reports `NEEDS_CONTEXT`. Drop that competitor from the comparison and note it in `competitors.md` ("no public filings available").
 
-## Step 3: Dispatch the risk-factor YoY diff sub-subagent
+## Step 3: Run the risk-factor YoY diff
 
 If `<raw_dir>/10k-sections/` has Item 1A from the most recent 10-K, also find the prior-year 10-K (it should be in `<raw_dir>` from Phase 2's `fetch_sec.py --since 2y`). Extract its Item 1A:
 
@@ -90,7 +90,7 @@ Then:
 | Ticker | Name | Market cap | Revenue (TTM) | Rev growth (3-yr CAGR) | Gross margin | Op margin | Net margin | FCF margin | ROIC | P/E (TTM) | Diluted-share growth (3-yr) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 
-Each row is the company we're analyzing (first row, highlight it) and each competitor (returned by the sub-subagents). Use the data from each sub-subagent's returned summary.
+Each row is the company we're analyzing (first row, highlight it) and each competitor (returned by the workers). Use the data from each worker's returned contract/artifact.
 
 ### Per-competitor notes
 
@@ -152,11 +152,11 @@ A small section (3–5 sentences) calling out what NEW risks the company added i
 ## Output contract (recap)
 
 - `competitors.md`, `swor.md`, `.raw/risk-factor-diff.{json,md}`
-- ~500-word summary covering: top competitors named, positioning verdict, SWOR essence, what's new in risk factors
+- Worker Return Contract covering: top competitors named, positioning verdict, SWOR essence, what's new in risk factors
 
 ## Failure modes
 
-- **`BLOCKED`** if >50% of competitor sub-subagents fail (you can't build a comparison from 1 of 5)
+- **`BLOCKED`** if >50% of competitor workers fail (you can't build a comparison from 1 of 5)
 - **`DONE_WITH_CONCERNS`** if:
   - Prior-year 10-K isn't in `<raw_dir>` (some companies are newly public, or fetch failed) — skip the risk diff and note it
   - Some competitor financials are incomplete (e.g., private peer with limited filings)

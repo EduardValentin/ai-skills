@@ -1,8 +1,7 @@
 # stock-research scripts
 
-Twelve Python CLI tools that fetch and analyze US-equity fundamentals from SEC
-EDGAR and yfinance. Used by the `stock-research` skill (orchestrator coming in
-Plan 2).
+Thirteen Python CLI tools that fetch, validate, and analyze US-equity
+fundamentals from SEC EDGAR and yfinance. Used by the `stock-research` skill.
 
 ## Setup
 
@@ -10,9 +9,9 @@ Plan 2).
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-export SR_SEC_USER_AGENT="Eduard Trocan eduard.valentin1996@gmail.com"
+export SR_SEC_USER_AGENT="Your Name you@example.com"
 # Optional overrides:
-# export SR_REPO_PATH="$HOME/Documents/Personal/investing-research"
+# export SR_REPO_PATH="/path/to/investing-research"
 # export SR_DISCOUNT_RATE="0.10"
 # export SR_TERMINAL_GROWTH="0.025"
 # export SR_YEARS_OF_HISTORY="10"
@@ -30,6 +29,7 @@ requests without a proper User-Agent header.
 | `extract_10q_sections.py` | Parse Items 2 / 3 / 4 from a 10-Q HTML |
 | `diff_risk_factors.py` | YoY diff of two Item 1A sections |
 | `compute_financials.py` | XBRL company-facts → `financials.json` |
+| `validate_financials.py` | Data-quality checkpoint for debt, net debt, dividends, and split normalization |
 | `fetch_prices.py` | OHLCV + dividends + splits via yfinance |
 | `fetch_analyst_estimates.py` | Analyst consensus via yfinance |
 | `compute_pe_band.py` | Historical P/E percentile bands |

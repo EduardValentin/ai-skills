@@ -23,19 +23,49 @@ def validate_skill_name(skill_name: str) -> str:
     return skill_name
 
 
-def ignore_gitkeep(_directory: str, names: list[str]) -> set[str]:
-    return {".gitkeep"} if ".gitkeep" in names else set()
+IGNORED_NAMES = {".gitkeep", ".pytest_cache", "__pycache__", ".DS_Store", ".venv"}
+PRESERVED_DESTINATION_NAMES = {".venv"}
 
 
-def sync_tree(source: Path, destination: Path) -> None:
+def should_ignore(path: Path) -> bool:
+    return path.name in IGNORED_NAMES or path.suffix == ".pyc"
+
+
+def remove_path(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def sync_tree(source: Path, destination: Path, *, root_call: bool = True) -> None:
     if not source.is_dir():
         raise FileNotFoundError(f"missing source: {source}")
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
-        shutil.rmtree(destination)
-    shutil.copytree(source, destination, ignore=ignore_gitkeep)
-    print(f"synced: {source} -> {destination}")
+    destination.mkdir(parents=True, exist_ok=True)
+
+    source_names = {child.name for child in source.iterdir() if not should_ignore(child)}
+    for child in list(destination.iterdir()):
+        if child.name in PRESERVED_DESTINATION_NAMES:
+            continue
+        if child.name not in source_names:
+            remove_path(child)
+
+    for child in source.iterdir():
+        if should_ignore(child):
+            continue
+
+        target = destination / child.name
+        if child.is_dir() and not child.is_symlink():
+            sync_tree(child, target, root_call=False)
+        else:
+            if target.exists() and target.is_dir():
+                shutil.rmtree(target)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(child, target)
+
+    if root_call:
+        print(f"synced: {source} -> {destination}")
 
 
 def skill_paths(skill_name: str) -> tuple[Path, Path, Path]:

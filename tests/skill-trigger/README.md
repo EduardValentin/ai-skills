@@ -18,6 +18,8 @@ The static contract is deterministic. It verifies:
 - the declared skill name matches its folder;
 - descriptions start with `Use when`;
 - forbidden stale wording is absent.
+- negative scenarios can set `should_trigger = false` to assert that a skill
+  should not load for boundary prompts.
 
 ## Installed-Harness Behavioral Trigger
 
@@ -46,6 +48,9 @@ The recommended Codex command shim defaults calls to `gpt-5.4-mini` with `low`
 reasoning so these simple selection checks do not inherit a heavyweight local
 Codex profile. Use `CODEX_ACTOR_MODEL` or
 `CODEX_TEST_MODEL` to opt into a stronger model for a specific run.
+
+Scenarios can set `should_trigger = false` to assert that the named skill must
+not be selected for an adjacent boundary prompt.
 
 Run one scenario:
 

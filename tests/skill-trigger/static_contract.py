@@ -38,6 +38,7 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
     for scenario in scenarios:
         scenario_id = str(scenario["id"])
         skill = str(scenario["skill"])
+        should_trigger = bool(scenario.get("should_trigger", True))
 
         if scenario_id in seen_ids:
             raise ValueError(f"duplicate scenario id: {scenario_id}")
@@ -56,7 +57,8 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
                 f"{scenario_id} expected skill name {skill!r} but SKILL.md declares {declared_name!r}"
             )
 
-        covered_skills.add(skill)
+        if should_trigger:
+            covered_skills.add(skill)
 
     for skill, skill_file in sorted(skill_files.items()):
         if skill not in covered_skills:
