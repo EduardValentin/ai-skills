@@ -5,92 +5,85 @@ description: Use when asked for a PR description, summary of changes, testing in
 
 # PR Reviewer Summary
 
-Generate a full PR body in Markdown that helps a reviewer understand what changed, why it matters, and how to verify it quickly. Build the draft from the current branch diff, changed files, recent commits, and the surrounding user conversation or ticket context. Describe the final shipped state only, not the sequence of iterations, discarded approaches, or intermediate fixes that happened during development.
+Draft a ready-to-paste Markdown PR body from reliable review context: branch diff or PR diff, changed files, recent commits, and available ticket or conversation context. If there is no diff, changed-file summary, or PR URL, ask for that context instead of inventing the PR body.
 
-## Preconditions
+Describe only the final shipped state. Do not mention iteration history, false starts, agent process, tools used, screenshots, environment limits, or whether the agent personally tested the app.
 
-Requires repo read access and enough review context to inspect the branch diff, changed files, recent commits, and available ticket or conversation context.
+## Output Contract
 
-A user-provided prose summary of the change is useful context, but it is not a substitute for branch diff, changed-file summary, recent commits, or PR URL. If those are unavailable, do not produce a final PR body; ask for the missing reliable context or state that the draft is blocked.
+Output only the PR body. Use these sections in this order:
 
-Fallbacks:
-
-- If the branch diff is unavailable, ask for the PR diff, changed-file summary, or PR URL before drafting.
-- If commit history is unavailable, rely on the current diff and state that commit-level context was not inspected.
-- If ticket or conversation context is unavailable, draft from the observable diff and call out assumptions that could affect reviewer validation.
-- If no reliable change context is available, stop and ask for the missing context instead of inventing a PR body.
-
-## Workflow
-
-1. Gather the review context.
-   Inspect the current branch diff against the normal review base for the repository. Review the changed files, recent commits, and the user conversation that led to the work. Use ticket details if they are available.
-   Any response before drafting must preserve this gate: inspect or obtain branch diff, changed files, recent commits, and available ticket or conversation context.
-2. Identify the reviewer-visible story.
-   Distill the change into the smallest set of user-facing or externally observable outcomes that matter for review. Ignore refactors, renames, formatting, test-only changes, or small cleanups unless they materially affect behavior or the review path.
-3. Collapse iteration history into final-state behavior.
-   Do not narrate how the feature evolved during development. Do not mention earlier versions, retries, back-and-forth changes, or the order in which fixes landed unless that history is required for safe review of migrations or irreversible behavior changes. Describe only the final behavior and the final implementation shape the reviewer needs to evaluate.
-4. Decide whether to include technical detail.
-   Always include `## Summary of Changes` and `## Manual Testing`. Include `## Technical Details` only when the user explicitly asks for it or when the change spans multiple modules, subsystems, or non-obvious logic boundaries.
-5. Write the PR body in Markdown only.
-   Return a ready-to-paste PR description, not notes about how you produced it.
+1. `## Summary of Changes`
+2. `## Automated Tests`
+3. `## Manual Verification`
+4. `## Technical Details` only when explicitly requested or needed for multi-module or non-obvious logic
 
 ## Section Rules
 
 ### `## Summary of Changes`
 
-- Write concise bullets at a high level.
-- Focus on user-facing behavior, workflow changes, visible UI states, or externally observable system behavior.
-- Group related edits into a single reviewer-relevant point.
-- Abstract away low-level implementation details.
-- Omit minor or review-irrelevant edits.
-- Describe the end result only, not the path taken to get there.
-- Prefer outcome language such as what now works, what changed for the user, or what a reviewer should notice.
-- If there is no direct UI impact, describe the observable behavior change at the API, operator, or workflow level instead of padding with internal-only details.
+- Write concise bullets.
+- Focus on user-facing behavior or externally observable API, workflow, operator, or system behavior.
+- Group related edits and omit review-irrelevant cleanup.
 
-### `## Manual Testing`
+### `## Automated Tests`
 
-- Write a numbered list.
-- Include preconditions when needed, such as login state, feature flags, seed data, permissions, or environment setup.
-- Walk the reviewer through the flow step by step with enough detail that they do not need to infer missing navigation or setup.
-- Prefer click-by-click instructions for product changes.
-- For non-UI work, provide equally explicit command-by-command or request-by-request verification steps.
-- Cover the primary happy path and any materially changed states, branches, or regressions that the diff makes reviewer-relevant.
-- Include expected results inline when they help the reviewer confirm success.
+- Include automated test commands only.
+- Use fenced code blocks with real line breaks.
+- Prefer focused commands first, broader checks second.
+- Write `Not specified.` only when no reliable automated command can be inferred.
+
+### `## Manual Verification`
+
+- Include as many steps as the feature needs for meaningful manual verification.
+- Exercise the real app or system against real dependencies whenever practical.
+- Reserve mocks, fakes, stubs, or test-support toggles for dependencies that are hard to spin up, configure, or safely manipulate.
+- When a manual step uses a mock, fake, stub, or test-support toggle, label it as a fallback and state why the real dependency is not practical for that check.
+- Include manual reviewer actions, exact commands to run, and expected results.
+- For UI work, include required setup commands, then short click/input steps.
+- For API, CLI, job, database, or integration work, include exact manual commands, requests, queries, or scripts.
+- Use fenced code blocks for commands, request bodies, SQL, JSON, or multi-line snippets.
+- Do not include automated test runner commands here.
 
 ### `## Technical Details`
 
-- Include this section only when it is warranted by the rules above.
-- Explain the code path step by step.
-- Connect the implementation choices to the surrounding architecture so the reviewer understands why the approach fits the codebase.
-- Highlight module boundaries, data flow, state transitions, persistence changes, migrations, background jobs, or edge-case handling when they are central to the review.
-- Explain the final technical design, not the chronological history of experiments or revisions.
-- Stay concrete without turning the section into a file-by-file changelog.
+- Include only when useful for review.
+- Explain final code path, data flow, state transitions, persistence, migrations, jobs, or edge-case handling.
+- Do not write a file-by-file changelog.
 
-## Output Shape
+## Formatting Rules
 
-Before the Markdown PR body, include one short context line unless the user explicitly asks for body-only output. The line must name the review context inspected or required: branch diff, changed files, recent commits, and ticket or conversation context. If that context is unavailable, stop there and ask for it instead of drafting final body text.
+- Use readable Markdown with blank lines between headings, lists, and code blocks.
+- Add language hints to fenced blocks when known, such as `bash`, `json`, `http`, or `sql`.
+- Do not emit escaped newline text instead of real line breaks.
+- Avoid agent-process phrases such as "I ran", "I was unable to run", "not tested locally", "verified with Playwright", or "screenshots captured".
 
-Use these headings exactly when they are present:
-
-```md
+````md
 ## Summary of Changes
 
 - ...
 
-## Manual Testing
+## Automated Tests
 
-1. ...
-
-## Technical Details
-
-1. ...
+```bash
+npm test -- billing-export
+npm run test:e2e -- billing-export.spec.ts
 ```
 
-## Quality Bar
+## Manual Verification
 
-- Optimize for reviewer speed and clarity.
-- Prefer a small number of high-signal bullets over exhaustive coverage.
-- Make reasonable inferences from the diff and context when necessary.
-- Call out assumptions briefly only when missing context could change how the reviewer validates the work.
-- Avoid phrases that imply iteration history, such as "initially", "then", "later", "after feedback", or "we also changed this again", unless that sequence is essential to understanding a migration or rollout risk.
-- Keep the writing neutral, concrete, and easy to skim.
+1. Start the app:
+
+   ```bash
+   npm run dev
+   ```
+
+2. Open the changed workflow, perform the reviewer action, and confirm the expected result.
+3. Trigger the changed failure state:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/example/fail
+   ```
+
+4. Confirm the visible error or changed state.
+````

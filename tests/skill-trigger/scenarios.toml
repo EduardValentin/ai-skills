@@ -411,6 +411,12 @@ forbidden_terms = ["qa-verification", "QA verification", "another workflow", "ge
 response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
+id = "pr-reviewer-summary-verification-split"
+skill = "pr-reviewer-summary"
+prompt = "Generate a summary of changes for this PR with automated test commands and manual verification steps for the reviewer."
+forbidden_terms = ["## Manual Testing"]
+
+[[scenario]]
 id = "uiux-frontend-interface-design-accessible-interface"
 skill = "frontend-interface-design"
 prompt = "Build a polished settings interface in this GUI app with accessible controls, adaptive layout, loading and error states, and subtle motion."

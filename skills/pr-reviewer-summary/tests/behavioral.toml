@@ -3,9 +3,20 @@ name = "pr-reviewer-summary"
 skill = "pr-reviewer-summary"
 skill_path = "skills/pr-reviewer-summary/SKILL.md"
 scenario_env = "PR_REVIEWER_SUMMARY_SCENARIO"
-judge_context = """
-Loaded skill under test: pr-reviewer-summary. Judge reviewer usefulness, final-state summarization, context requirements, and manual-testing quality.
+prompt_instructions = """
+This is a behavioral pressure test. Do not perform external tool calls, run
+commands, inspect live systems, mutate files, create branches, create pull
+requests, create tracker issues, or complete the real task. Treat scenario facts
+as the only available runtime facts. Do not treat these test-harness limits as
+runtime blockers unless the scenario itself says the needed access, tooling, or
+runtime is unavailable. Answer as the loaded skill would in this mocked
+scenario, focusing on the next decision, blocker, or report you would return.
+Use the scenario's language. Do not quote the skill text or test criteria.
 """
+judge_context = """
+Loaded skill under test: pr-reviewer-summary. Judge reviewer usefulness, final-state summarization, context requirements, automated-test formatting, complete real-world manual verification, manual command inclusion, and absence of agent-process testing notes.
+"""
+
 [[scenario]]
 id = "final-state-pr-body"
 user_request = """
@@ -16,31 +27,72 @@ Mocked review context:
 - Changed files: `FilterPanel`, results query serialization, and active filter badge count logic.
 - Recent commits: saved-place filter control, query parameter wiring, badge count update.
 - Ticket/conversation context: users need to narrow results to saved places; the work had several iterations and a false start, but the PR description should describe only the final shipped state.
+- Automated test command: `npm test -- FilterPanel saved-place`
+- Manual setup command: `npm run dev`
 """
-forbidden_terms = ["initially", "after feedback", "then we changed it again"]
+forbidden_terms = ["initially", "after feedback", "then we changed it again", "## Manual Testing", "I ran", "I was unable", "not tested locally", "Playwright", "screenshot"]
 
 [[scenario.criteria]]
-key = "gathers_review_context"
+key = "uses_reliable_context_and_final_state"
 description = """
-The response requires inspecting branch diff, changed files, recent commits, and available ticket or conversation context before drafting.
-"""
-
-[[scenario.criteria]]
-key = "summarizes_final_state_only"
-description = """
-The PR body describes the final shipped behavior and implementation shape, not iteration history, false starts, or chronological fixes.
+The response uses the mocked diff, changed files, recent commits, and ticket context, and describes final shipped behavior instead of iteration history.
 """
 
 [[scenario.criteria]]
-key = "reviewer_focused_sections"
+key = "uses_required_sections"
 description = """
-The response uses Summary of Changes and Manual Testing, adding Technical Details only when warranted by cross-module or non-obvious logic.
+The PR body uses Summary of Changes, Automated Tests, and Manual Verification, adding Technical Details only when warranted.
 """
 
 [[scenario.criteria]]
-key = "manual_testing_is_actionable"
+key = "automated_tests_are_formatted"
 description = """
-Manual testing is written as explicit steps with preconditions, expected results, and changed states or regressions relevant to the diff.
+Automated Tests contains the automated test command in a fenced code block and preserves command line breaks when commands span multiple lines.
+"""
+
+[[scenario.criteria]]
+key = "manual_verification_is_complete_real_world_and_command_backed"
+description = """
+Manual Verification includes as many steps as needed, uses reviewer-run commands in fenced code blocks, expects real app/system behavior with real dependencies where practical, and keeps automated test runner commands out.
+"""
+
+[[scenario]]
+id = "separates-automated-tests-from-manual-verification"
+user_request = """
+Generate a PR description for a branch that added a billing export CSV download.
+
+Mocked review context:
+- Branch diff summary: final diff adds an Export CSV button to the billing page, calls the new `/api/billing/export` endpoint, and shows an inline error when the export fails.
+- Changed files: billing page toolbar, export API route, toast/error messaging, and billing route tests.
+- Recent commits: export endpoint, toolbar button, error state, tests.
+- Ticket/conversation context: finance admins need to download filtered invoice rows from the billing page.
+- Automated test commands:
+  npm test -- billing-export
+  npm run test:e2e -- billing-export.spec.ts
+- Manual setup command: npm run dev
+- Manual failure command:
+  curl -X POST http://localhost:3000/test-support/billing-export-failure --data '{"enabled":true}' -H 'content-type: application/json'
+- Real-world verification expectation: use the running app and real billing export path. Use the test-support failure toggle only because causing the export dependency to fail naturally is hard to configure safely.
+- Manual flow to cover: open the billing page, apply an invoice status filter, click Export CSV, confirm the downloaded file contains only the filtered rows, then force the export endpoint to fail and confirm the inline error appears.
+"""
+forbidden_terms = ["## Manual Testing", "I ran", "I was unable", "not tested locally", "Playwright", "screenshot"]
+
+[[scenario.criteria]]
+key = "separates_automated_and_manual_verification"
+description = """
+The PR body has separate Automated Tests and Manual Verification sections; automated test runner commands appear only in Automated Tests.
+"""
+
+[[scenario.criteria]]
+key = "manual_section_is_complete_real_world_and_command_backed"
+description = """
+Manual Verification includes the app startup command and failure-state command in fenced code blocks, covers the happy path plus failure state, and treats the failure toggle as a fallback for a hard-to-configure real dependency failure.
+"""
+
+[[scenario.criteria]]
+key = "omits_agent_process_notes"
+description = """
+The PR body does not mention the agent's test process, screenshots, tool usage, environment limits, or whether the agent personally ran the app.
 """
 
 [[scenario]]
@@ -53,11 +105,5 @@ forbidden_terms = []
 [[scenario.criteria]]
 key = "blocks_without_reliable_context"
 description = """
-The response stops and asks for PR diff, changed-file summary, PR URL, or other reliable context instead of inventing a PR body.
-"""
-
-[[scenario.criteria]]
-key = "does_not_fabricate_summary"
-description = """
-The response does not produce a fake Summary of Changes or Manual Testing from missing context.
+The response stops and asks for PR diff, changed-file summary, PR URL, or other reliable context instead of inventing Summary of Changes, Automated Tests, or Manual Verification.
 """
