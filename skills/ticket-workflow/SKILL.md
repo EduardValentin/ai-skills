@@ -1,6 +1,6 @@
 ---
 name: ticket-workflow
-description: Use when the user asks to start or work through one standalone ticket or issue from intake through approved spec/design, approved implementation plan, implementation, and PR readiness. Also use for follow-up status or progress questions about a ticket already in this workflow. Do not use for multi-ticket scopes, code review only, QA only, PR verification only, PR summary only, debugging only, or ticket lookup tasks.
+description: Use when the user asks to start or work through one standalone ticket or issue from intake through approved spec/design, approved implementation plan, implementation, and PR readiness. Use for standalone ticket starts even when the ticket mentions implementation, review, testing, UI checks, or verification. Also use for follow-up status or progress questions about a ticket already in this workflow. Do not use for multi-ticket scopes, code review only, QA only, PR verification only, PR summary only, debugging only, or ticket lookup tasks.
 ---
 
 # Ticket Workflow

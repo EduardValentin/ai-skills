@@ -23,7 +23,7 @@ with the alert creation subticket. We are working on a feature branch, so base
 this worktree and future PR on SS-2766-centralized-monitoring-of-submission-services-components.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
+response_forbidden_terms = ["multi-ticket-workflow", "implementation-workflow"]
 
 [[scenario]]
 id = "ticket-workflow-jira-start-tackling-existing-draft"
@@ -35,7 +35,7 @@ future PR, and there is already a draft worktree with changes. Inspect it and
 keep moving.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
+response_forbidden_terms = ["multi-ticket-workflow", "implementation-workflow"]
 
 [[scenario]]
 id = "ticket-workflow-jira-brainstorm-unknowns-before-plan"
@@ -47,7 +47,7 @@ event conditions, certificate fallback behavior, and scheduling assumptions
 before any spec or plan is written.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
+response_forbidden_terms = ["multi-ticket-workflow", "implementation-workflow"]
 
 [[scenario]]
 id = "ticket-workflow-jira-code-scope-before-brainstorm"
@@ -58,13 +58,13 @@ questions, dispatch a comprehensive codebase scoping pass to answer whatever the
 repo can answer first.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
+response_forbidden_terms = ["multi-ticket-workflow", "implementation-workflow"]
 
 [[scenario]]
-id = "coordinate-ticket-execution-substantial-approved-single-ticket"
-skill = "coordinate-ticket-execution"
+id = "implementation-workflow-substantial-approved-single-ticket"
+skill = "implementation-workflow"
 prompt = """
-Coordinate execution for one ticket from an approved execution packet covering
+Implement one ticket from an approved implementation packet covering
 the billing API, onboarding UI, background job, and migration work. Implementation,
 review, testing, and verification need to remain delegated and phase-separated.
 """
@@ -147,14 +147,14 @@ forbidden_terms = []
 response_forbidden_terms = []
 
 [[scenario]]
-id = "coordinate-ticket-execution-approved-packet"
-skill = "coordinate-ticket-execution"
+id = "implementation-workflow-approved-packet"
+skill = "implementation-workflow"
 prompt = """
-Run this already-approved ticket execution packet for one checkout eligibility
+Run this already-approved implementation packet for one checkout eligibility
 unit. The packet includes acceptance criteria, approved spec/design direction,
 approved implementation plan, approval state, code scope locators, branch state,
 UI applicability, PR expectations, and completion-report requirements.
-Coordinate the execution phase through implementation, review, QA, UI verification
+Own the implementation workflow through implementation, review, QA, UI verification
 when applicable, PR preparation, and report phase evidence.
 """
 forbidden_terms = []

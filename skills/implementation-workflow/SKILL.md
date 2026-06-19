@@ -69,6 +69,8 @@ After each batch of fixes, request a fresh review from every configured review c
 
 When implementation exists but review evidence is missing, state the exact review requests to make next for every configured review channel, including the review focus, PR-comment expectation when supported, fix ownership, comment resolution, and fresh-review loop after each fix batch until every required reviewer approves or an explicit blocker is reported.
 
+When asked whether implementation is complete, treat missing review-loop evidence as incomplete unless the report covers every configured review channel, PR comments when supported, valid findings addressed, comments resolved, affected checks rerun, and fresh approval or explicit blocker from each required reviewer.
+
 ## Security
 
 When the change has a plausible security surface, request a security-focused pass through the same configured review channels. Ask reviewers to focus on auth/session, authorization, user input, data exposure, persistence, redirects, file handling, external requests, privileged actions, dependencies, sensitive logging, and changes to what users can see or do.
