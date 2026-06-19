@@ -1,0 +1,63 @@
+[suite]
+name = "multi-ticket-workflow"
+skill = "multi-ticket-workflow"
+skill_path = "skills/multi-ticket-workflow/SKILL.md"
+scenario_env = "MULTI_TICKET_WORKFLOW_BEHAVIOR_SCENARIO"
+judge_context = """
+Loaded skill under test: multi-ticket-workflow. Judge coordinated intake, planning, delegation, and handoff behavior.
+"""
+
+[[scenario]]
+id = "epic-scope-plans-before-delegation"
+user_request = """
+Work the Billing Revamp Epic as one coordinated scope. The scope includes
+pricing API, checkout UI, invoice migration, and analytics tickets with shared
+dependencies and possible parallel work.
+"""
+forbidden_terms = ["dispatch immediately", "one generic worker", "ticket-workflow"]
+
+[[scenario.criteria]]
+key = "gathers_named_scope"
+description = """
+The response gathers every named in-scope ticket and confirms unclear scope rather than blindly expanding or shrinking the Epic.
+"""
+
+[[scenario.criteria]]
+key = "maps_dependencies"
+description = """
+The response builds a dependency and parallelization map across tickets before execution.
+"""
+
+[[scenario.criteria]]
+key = "requires_spec_ticket_plans_and_coordination_approval"
+description = """
+The response requires cross-ticket brainstorming, approved multi-ticket spec/design, an implementation plan for each in-scope ticket, and an approved coordination plan before delegation.
+"""
+
+[[scenario]]
+id = "approved-scope-delegates-execution-packets"
+user_request = """
+The multi-ticket spec/design is approved. APP-10 and APP-11 each have approved
+ticket implementation plans. APP-11 depends on APP-10's migration output. The
+user asks the coordinator to proceed. Because this is a pressure test, produce
+the execution packet outlines and state the orchestration state you would record.
+"""
+forbidden_terms = ["main agent implements inline", "ticket intake by worker", "user-facing brainstorming by worker"]
+
+[[scenario.criteria]]
+key = "creates_execution_packets"
+description = """
+The response creates self-contained execution packets that include ticket and parent context, approved spec/design slice, approved ticket implementation plan, dependency constraints, affected surfaces, PR or handoff expectations, and completion evidence needs.
+"""
+
+[[scenario.criteria]]
+key = "delegates_adaptively"
+description = """
+The response delegates according to dependencies, running independent work in parallel when safe and holding dependent work until upstream context exists.
+"""
+
+[[scenario.criteria]]
+key = "keeps_orchestration_state"
+description = """
+The response tracks durable orchestration state for inventory, dependencies, approvals, assignments, statuses, PRs, blockers, and final review order.
+"""

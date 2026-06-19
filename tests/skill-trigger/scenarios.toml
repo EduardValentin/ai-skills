@@ -8,14 +8,14 @@ prompt = "Complete my Romanian D212 for dividends from Romania and capital gains
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-start-linear"
-skill = "ticket-start"
+id = "ticket-workflow-linear"
+skill = "ticket-workflow"
 prompt = "Start Linear issue APP-123 and implement it in the repo."
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-start-jira-feature-branch-coding-scope"
-skill = "ticket-start"
+id = "ticket-workflow-jira-feature-branch-coding-scope"
+skill = "ticket-workflow"
 prompt = """
 Let's start working on this ticket: https://yesenergy.atlassian.net/browse/SS-2785.
 We are only going to be concerned with the coding part in this repository and not
@@ -23,11 +23,11 @@ with the alert creation subticket. We are working on a feature branch, so base
 this worktree and future PR on SS-2766-centralized-monitoring-of-submission-services-components.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
 
 [[scenario]]
-id = "ticket-start-jira-start-tackling-existing-draft"
-skill = "ticket-start"
+id = "ticket-workflow-jira-start-tackling-existing-draft"
+skill = "ticket-workflow"
 prompt = """
 Let's start tackling this Jira ticket: https://yesenergy.atlassian.net/browse/SS-2785.
 We only care about the coding part in this repo, use the feature branch for the
@@ -35,11 +35,11 @@ future PR, and there is already a draft worktree with changes. Inspect it and
 keep moving.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
 
 [[scenario]]
-id = "ticket-start-jira-brainstorm-unknowns-before-plan"
-skill = "ticket-start"
+id = "ticket-workflow-jira-brainstorm-unknowns-before-plan"
+skill = "ticket-workflow"
 prompt = """
 Start Jira SS-2785 and keep brainstorming before the implementation plan. The
 branch decision is settled, but we still need to discuss schema fields, emitted
@@ -47,33 +47,32 @@ event conditions, certificate fallback behavior, and scheduling assumptions
 before any spec or plan is written.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
 
 [[scenario]]
-id = "ticket-start-jira-code-scope-before-brainstorm"
-skill = "ticket-start"
+id = "ticket-workflow-jira-code-scope-before-brainstorm"
+skill = "ticket-workflow"
 prompt = """
 Start Jira SS-2785, but before brainstorming or asking me schema and scheduler
 questions, dispatch a comprehensive codebase scoping pass to answer whatever the
 repo can answer first.
 """
 forbidden_terms = []
-response_forbidden_terms = ["multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
+response_forbidden_terms = ["multi-ticket-workflow", "coordinate-ticket-execution", "implementation-workflow"]
 
 [[scenario]]
-id = "ticket-start-substantial-single-ticket"
-skill = "ticket-start"
+id = "coordinate-ticket-execution-substantial-approved-single-ticket"
+skill = "coordinate-ticket-execution"
 prompt = """
-Start Linear issue APP-456. It is one ticket with an approved plan covering the
-billing API, onboarding UI, background job, and migration work, so execution
-needs delegated orchestration while review, testing, and verification are still
-delegated too.
+Coordinate execution for one ticket from an approved execution packet covering
+the billing API, onboarding UI, background job, and migration work. Implementation,
+review, testing, and verification need to remain delegated and phase-separated.
 """
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-start-manual-qa-verifier-required"
-skill = "ticket-start"
+id = "ticket-workflow-manual-qa-verifier-required"
+skill = "ticket-workflow"
 prompt = """
 Have you properly dispatched manual QA verifiers and reviewers for the ticket,
 or did unit tests and code reviewers stand in for QA because it was not a
@@ -83,8 +82,8 @@ forbidden_terms = []
 response_forbidden_terms = ["tests are enough", "no qa-verifier", "not a running UI/API flow"]
 
 [[scenario]]
-id = "ticket-start-child-ticket-context"
-skill = "ticket-start"
+id = "ticket-workflow-child-ticket-context"
+skill = "ticket-workflow"
 prompt = """
 Start Linear issue APP-812. It is a child ticket under the Onboarding Redesign
 Epic, so read the parent Epic context and this child ticket before brainstorming
@@ -93,8 +92,8 @@ requirements or planning implementation.
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-start-personal-artifact-scope"
-skill = "ticket-start"
+id = "ticket-workflow-personal-artifact-scope"
+skill = "ticket-workflow"
 prompt = """
 Start Linear issue APP-924. It adds a new billing eligibility business rule and
 modifies a checkout UI component that has a corresponding route in designs/, so
@@ -103,8 +102,8 @@ gather only the relevant PRD and reference-app context before implementation.
 forbidden_terms = []
 
 [[scenario]]
-id = "ticket-start-uiux-rendered-outcome"
-skill = "ticket-start"
+id = "ticket-workflow-uiux-rendered-outcome"
+skill = "ticket-workflow"
 prompt = """
 Start Linear issue APP-789 for a parity-mode UI ticket. Make sure the UI/UX verification
 checks what the user actually sees in every meaningful state instead of hidden templates,
@@ -113,8 +112,8 @@ storybook-only variants, or implementation proxy components.
 forbidden_terms = []
 
 [[scenario]]
-id = "multi-ticket-work-epic"
-skill = "multi-ticket-work"
+id = "multi-ticket-workflow-epic"
+skill = "multi-ticket-workflow"
 prompt = """
 Work the whole Billing Revamp Epic. It has separate tickets for the invoice
 migration, pricing API, checkout UI, and analytics events. Decide what can run
@@ -123,29 +122,29 @@ one ticket coordinator per ticket or unit, and give me the opened PRs with the
 review order at the end.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "ticket orchestrator"]
+response_forbidden_terms = ["ticket orchestrator"]
 
 [[scenario]]
-id = "multi-ticket-work-ticket-set"
-skill = "multi-ticket-work"
+id = "multi-ticket-workflow-ticket-set"
+skill = "multi-ticket-workflow"
 prompt = """
 Work Jira APP-101, APP-102, and APP-103 as one coordinated scope. Map their
 dependencies, get the coordinated plan approved, dispatch each approved ticket
 execution packet, and return the opened PRs in review order.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "ticket orchestrator"]
+response_forbidden_terms = ["ticket orchestrator"]
 
 [[scenario]]
-id = "multi-ticket-work-parent-children"
-skill = "multi-ticket-work"
+id = "multi-ticket-workflow-parent-children"
+skill = "multi-ticket-workflow"
 prompt = """
 Work parent Jira APP-200 and all of its child tickets as one scope. Gather the
 full child set before dispatching, coordinate dependencies, and return PR review
 order.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = []
 
 [[scenario]]
 id = "coordinate-ticket-execution-approved-packet"
@@ -154,12 +153,12 @@ prompt = """
 Run this already-approved ticket execution packet for one checkout eligibility
 unit. The packet includes acceptance criteria, approved spec/design direction,
 approved implementation plan, approval state, code scope locators, branch state,
-expected checks, UI applicability, PR expectations, and completion-report requirements.
+UI applicability, PR expectations, and completion-report requirements.
 Coordinate the execution phase through implementation, review, QA, UI verification
 when applicable, PR preparation, and report phase evidence.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "multi-ticket-work", "ticket orchestrator"]
+response_forbidden_terms = ["ticket-workflow", "multi-ticket-workflow", "ticket orchestrator"]
 
 [[scenario]]
 id = "github-interaction-bot-pr-write"
@@ -169,19 +168,19 @@ Create a GitHub PR comment for my personal project using the configured GitHub
 App bot identity. Do not post it with my ambient personal gh credentials.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = []
 
 [[scenario]]
-id = "implement-unit-of-work-approved-code-unit"
-skill = "implement-unit-of-work"
+id = "implementation-workflow-approved-code-unit"
+skill = "implementation-workflow"
 prompt = """
 You are an implementer subagent. Implement the approved billing retry slice from
 the provided acceptance criteria, implementation plan, codebase scope map,
-affected surfaces, branch state, and expected checks. Stay inside this unit, use
-TDD where feasible, delegate self-review, and return an implementation report.
+affected surfaces, branch state, dependencies, risks, and non-goals. Stay
+inside this unit, use TDD, request review/security/manual QA as applicable, and return an implementation report.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "qa-verification", "ui-verification", "verify-pr", "codebase-scope-map"]
+response_forbidden_terms = ["ticket-workflow", "qa-verification", "ui-verification", "verify-pr", "codebase-scope-map"]
 
 [[scenario]]
 id = "qa-verification-backend-api"
@@ -192,7 +191,7 @@ but I need endpoint behavior, persistence, auth, and error responses verified
 against the running service.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX", "unit tests are enough", "clean because tests passed"]
+response_forbidden_terms = ["ticket-workflow", "Ship", "visual parity", "UI/UX", "unit tests are enough", "clean because tests passed"]
 
 [[scenario]]
 id = "qa-verification-ui-behavior"
@@ -202,7 +201,7 @@ QA this user-facing UI change. Exercise loading, empty, success, error,
 validation, disabled, and rapid-click behavior in the running app.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-workflow", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "qa-verification-mixed-flow"
@@ -212,7 +211,7 @@ QA this mixed ticket where the invite API and invite form changed together.
 Verify both the API behavior and the browser-observed user flow.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "Ship", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-workflow", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-pr-checks"
@@ -224,7 +223,7 @@ checks, implemented-surface test evidence, review approval, and unresolved
 comments before reporting whether it is ready.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-merge-monitoring"
@@ -236,7 +235,7 @@ post-merge CI, reporting any failing source-control checks with a proposed
 action plan.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-unresolved-comments"
@@ -247,7 +246,7 @@ passing, but the source-control review metadata may have unresolved review
 threads or requested changes that must block readiness.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-after-pr-created-for-review"
@@ -258,7 +257,7 @@ QA, and review reports are clean; after opening the PR, confirm whether anything
 blocks it from being ready for review.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start", "readiness ledger", "visual parity", "UI/UX"]
+response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "codebase-scope-map-implementation-handoff"
@@ -283,14 +282,14 @@ id = "ui-verification-runnable-reference"
 skill = "ui-verification"
 prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before release."
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = []
 
 [[scenario]]
 id = "ui-verification-production-consistency"
 skill = "ui-verification"
 prompt = "Review implemented frontend UI for visual consistency against production analogs. For the new settings panel, produce a matched-element inventory against existing settings/profile panels with computed-style comparison, bounding-rect comparison, accessibility states, and a structured verdict."
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = []
 
 [[scenario]]
 id = "ui-verification-delegated-uiux-gate"
@@ -304,7 +303,7 @@ computed styles and bounding rects for every row, check keyboard, focus, contras
 and accessibility, then return a structured verdict and findings.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = []
 
 [[scenario]]
 id = "ui-verification-missing-inventory-scoping"
@@ -315,14 +314,14 @@ inventory was provided, so scope the visible element inventory first from the di
 ticket description, changed UI files, routes, and reference or production comparison basis.
 """
 forbidden_terms = []
-response_forbidden_terms = ["ticket-start"]
+response_forbidden_terms = []
 
 [[scenario]]
 id = "qa-verification-frontend-pr-acceptance"
 skill = "qa-verification"
 prompt = "QA this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes with evidence."
 forbidden_terms = []
-response_forbidden_terms = ["frontend-pr-test", "ticket-start", "Ship", "visual parity", "UI/UX", "verify-pr"]
+response_forbidden_terms = ["frontend-pr-test", "ticket-workflow", "Ship", "visual parity", "UI/UX", "verify-pr"]
 
 [[scenario]]
 id = "pr-reviewer-summary-current-branch"

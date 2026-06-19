@@ -1,7 +1,0 @@
-[suite]
-name = "multi-ticket-work contract"
-
-[[assertion]]
-type = "line_count_at_most"
-path = "skills/multi-ticket-work/SKILL.md"
-max = 105

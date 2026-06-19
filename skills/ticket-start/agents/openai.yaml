@@ -1,4 +1,0 @@
-interface:
-  display_name: "Ticket Start"
-  short_description: "Run one ticket from intake through approved execution with reusable native agents."
-  default_prompt: "Use $ticket-start to run one Jira or Linear ticket from intake through approval, the shared execution contract, implementation-worker, review, verification, and PR handoff."

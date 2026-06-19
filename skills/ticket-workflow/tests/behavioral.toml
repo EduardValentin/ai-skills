@@ -1,0 +1,79 @@
+[suite]
+name = "ticket-workflow"
+skill = "ticket-workflow"
+skill_path = "skills/ticket-workflow/SKILL.md"
+scenario_env = "TICKET_WORKFLOW_BEHAVIOR_SCENARIO"
+judge_context = """
+Loaded skill under test: ticket-workflow. Judge the workflow gates and boundary, not exact wording.
+"""
+
+[[scenario]]
+id = "start-working-does-not-skip-spec-or-plan"
+user_request = """
+The user says: "Let's start working on this ticket. I'm good with the first
+three decisions and your recommendations. The assumptions sound good as well.
+I think we are good to go." The agent has discussed decisions and assumptions,
+but the user has not yet seen a written spec/design or implementation plan.
+"""
+forbidden_terms = ["start coding", "implementation is approved", "good to go is plan approval"]
+
+[[scenario.criteria]]
+key = "blocks_implementation"
+description = """
+The response treats the user's wording as approval of discussed decisions only, not as approval of an unwritten spec/design or implementation plan.
+"""
+
+[[scenario.criteria]]
+key = "requires_written_artifacts"
+description = """
+The response requires writing the spec/design for approval first, then writing the implementation plan for separate approval before code or test edits.
+"""
+
+[[scenario]]
+id = "reads-parent-and-brainstorms-before-plan"
+user_request = """
+Start one child ticket under an onboarding Epic. The child ticket describes a
+new eligibility rule, but the parent Epic explains the stakeholder goal and
+several rollout constraints. Unknowns remain around copy, edge cases, and
+failure behavior. Because this is a pressure test with no follow-up user
+answer, start the interview and say how the loop continues before spec/design.
+"""
+forbidden_terms = ["write the plan now", "parent context is optional", "skip brainstorming"]
+
+[[scenario.criteria]]
+key = "reads_ticket_and_parent"
+description = """
+The response reads both the child ticket and parent context to understand the goal, stakeholder implications, acceptance criteria, dependencies, and ambiguity.
+"""
+
+[[scenario.criteria]]
+key = "runs_relentless_brainstorming"
+description = """
+The response starts a user-facing brainstorming interview and explicitly says it will continue after answers until impactful unknowns and low-confidence points are resolved or explicitly accepted.
+"""
+
+[[scenario.criteria]]
+key = "plan_waits_for_spec_approval"
+description = """
+The response does not write the implementation plan until the user approves the written spec/design.
+"""
+
+[[scenario]]
+id = "post-implementation-pr-readiness"
+user_request = """
+Implementation for the approved ticket plan is complete and the PR exists. The
+user asks whether the ticket is ready for review.
+"""
+forbidden_terms = ["merge it", "mark done", "skip PR readiness"]
+
+[[scenario.criteria]]
+key = "checks_pr_readiness"
+description = """
+The response treats ticket-workflow as responsible for PR readiness after implementation, checking PR existence or blocker, target, title, description, linked ticket, scope vs approved plan, evidence, blockers, follow-ups, and ticket state.
+"""
+
+[[scenario.criteria]]
+key = "does_not_mutate_without_approval"
+description = """
+The response does not merge, mark ready, update ticket state, or perform final source-control/tracker mutations without approval.
+"""

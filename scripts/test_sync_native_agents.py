@@ -59,7 +59,7 @@ version = 1
 id = "demo-mapper"
 source = "mapper.md"
 description = "Read-only mapper for implementation scoping."
-groups = ["ticket-start"]
+groups = ["ticket-workflow"]
 preload_skills = ["codebase-scope-map"]
 
 [agent.codex]
@@ -77,7 +77,7 @@ color = "cyan"
             encoding="utf-8",
         )
 
-        push = run_sync(script, repo, home, "push", "--group", "ticket-start")
+        push = run_sync(script, repo, home, "push", "--group", "ticket-workflow")
         if push.returncode != 0:
             raise AssertionError(push.stderr or push.stdout)
 
@@ -98,12 +98,12 @@ color = "cyan"
         assert_file_contains(claude_agent, '  - "codebase-scope-map"')
         assert_file_contains(claude_agent, "Map code precisely.")
 
-        check = run_sync(script, repo, home, "check", "--group", "ticket-start")
+        check = run_sync(script, repo, home, "check", "--group", "ticket-workflow")
         if check.returncode != 0:
             raise AssertionError(check.stderr or check.stdout)
 
         codex_agent.write_text(codex_agent.read_text(encoding="utf-8") + "# drift\n", encoding="utf-8")
-        drift = run_sync(script, repo, home, "check", "--group", "ticket-start")
+        drift = run_sync(script, repo, home, "check", "--group", "ticket-workflow")
         if drift.returncode == 0:
             raise AssertionError("expected check to fail after installed file drift")
         if "out of sync" not in drift.stderr:

@@ -1,6 +1,6 @@
 ---
 name: coordinate-ticket-execution
-description: Use when coordinating the execution phase for one ticket or work unit from an approved execution packet, especially when implementation, independent review, QA or UI verification, fixes, PR preparation, and completion evidence must remain phase-separated. Do not use for intake, brainstorming, spec creation, plan creation, approval gathering, planning-only work, QA-only work, PR-only work, or multi-ticket coordination.
+description: Use only when the context already includes an approved execution packet for one ticket or work unit and the task is to coordinate implementation, independent review, QA or UI verification, fixes, PR preparation, and completion evidence as separate execution phases. Do not use for ticket kickoff, draft worktree inspection, intake, brainstorming, spec creation, plan creation, approval gathering, planning-only work, QA-only work, PR-only work, or multi-ticket coordination.
 ---
 
 # Coordinate Ticket Execution

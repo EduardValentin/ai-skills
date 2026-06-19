@@ -32,7 +32,7 @@ Native agents live in `agents/*.md` with delivery metadata in `agents/manifest.t
 Current reusable agents:
 
 - `code-mapper` preloads `codebase-scope-map` for read-only locator-backed code maps.
-- `implementation-worker` preloads `implement-unit-of-work` for approved implementation slices.
+- `implementation-worker` preloads `implementation-workflow` for approved implementation slices.
 - `code-reviewer` reviews finished diffs against approved requirements and engineering quality.
 - `security-reviewer` reviews diffs with plausible trust-boundary, auth, input, dependency, or data-exposure risk.
 - `qa-verifier` preloads `qa-verification` for behavior verification against running surfaces.

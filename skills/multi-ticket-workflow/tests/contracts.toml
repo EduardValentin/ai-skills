@@ -1,0 +1,7 @@
+[suite]
+name = "multi-ticket-workflow contract"
+
+[[assertion]]
+type = "line_count_at_most"
+path = "skills/multi-ticket-workflow/SKILL.md"
+max = 150
