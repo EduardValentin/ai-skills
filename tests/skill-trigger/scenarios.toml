@@ -372,6 +372,14 @@ prompt = "Publish these approved epic and user story drafts into Linear, with th
 forbidden_terms = []
 
 [[scenario]]
+id = "use-linear-graphql-keychain"
+skill = "use-linear"
+prompt = "Linear MCP is disabled. Use my saved API key to find the right Linear project, avoid duplicates, and create the approved issue through GraphQL."
+description_terms = ["Linear GraphQL API", "MCP is unavailable or disabled", "macOS Keychain"]
+skill_terms = ["course-platform.linear-api-key", "security find-generic-password", "Authorization: <token>"]
+forbidden_terms = []
+
+[[scenario]]
 id = "bitbucket-pr-ui-test"
 skill = "manage-bitbucket-pr"
 prompt = """
