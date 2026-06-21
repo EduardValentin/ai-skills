@@ -20,6 +20,7 @@ Manage Linear directly through GraphQL when the Linear MCP path is unavailable. 
 - Run duplicate detection before creating issues. Search existing issues in the target project by title, scope, parent, and status.
 - Preserve approved title, description, acceptance criteria, metadata, and parent/sub-issue scope unless the user approves changes.
 - After writes, report identifiers, issue URLs, and any skipped duplicates or unresolved metadata.
+- If live access is unavailable, stop before mutation but still name the pending sequence: metadata lookup, duplicate search, explicit-ID mutation, re-read, then identifier/URL report.
 
 ## Minimal Workflow
 
