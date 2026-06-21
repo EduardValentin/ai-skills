@@ -1,6 +1,6 @@
 ---
 name: qa-verification
-description: Use when manually verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, frontend PR, or mixed executable surface. Use for browser click-through QA, backend/API probes, CLI checks, persistence, auth, validation, state transitions, regression probes, and PR/ticket-linked QA.
+description: Use when manually verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, frontend PR, or mixed executable surface. Use when the user asks for QA, browser behavior evidence, acceptance-criteria verification, PR-note verification, backend/API probes, CLI checks, persistence, auth, validation, state transitions, regression probes, and PR/ticket-linked QA.
 ---
 
 # QA Verification

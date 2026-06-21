@@ -8,4 +8,4 @@ max = 110
 
 [[assertion]]
 type = "absent"
-path = "skills/ticket-start/agents/qa.md"
+path = "skills/ticket-workflow/agents/qa.md"

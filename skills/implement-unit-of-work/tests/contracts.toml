@@ -1,7 +1,0 @@
-[suite]
-name = "implement-unit-of-work contract"
-
-[[assertion]]
-type = "line_count_at_most"
-path = "skills/implement-unit-of-work/SKILL.md"
-max = 130

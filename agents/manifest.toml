@@ -4,7 +4,7 @@ version = 1
 id = "code-mapper"
 source = "code-mapper.md"
 description = "Read-only codebase mapper for implementation, review, or planning tasks that need precise file and symbol locators before decisions or edits."
-groups = ["ticket-start", "codebase-scope-map"]
+groups = ["ticket-workflow", "codebase-scope-map"]
 preload_skills = ["codebase-scope-map"]
 
 [agent.codex]
@@ -22,7 +22,7 @@ color = "cyan"
 id = "code-reviewer"
 source = "code-reviewer.md"
 description = "Read-only implementation reviewer for finished diffs, focused on spec compliance, maintainability, scalability, performance, and code quality."
-groups = ["ticket-start", "multi-ticket-work", "coordinate-ticket-execution"]
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "high"
@@ -39,7 +39,7 @@ color = "blue"
 id = "security-reviewer"
 source = "security-reviewer.md"
 description = "Read-only security reviewer for code diffs with plausible trust-boundary, input-handling, dependency, auth, data exposure, or privilege risk."
-groups = ["ticket-start", "multi-ticket-work", "coordinate-ticket-execution"]
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "high"
@@ -56,7 +56,7 @@ color = "red"
 id = "qa-verifier"
 source = "qa-verifier.md"
 description = "Behavior verifier for running apps, APIs, services, and user flows where acceptance criteria must be exercised against real behavior."
-groups = ["ticket-start", "multi-ticket-work", "coordinate-ticket-execution", "qa-verification"]
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "qa-verification"]
 preload_skills = ["qa-verification"]
 
 [agent.codex]
@@ -72,7 +72,7 @@ color = "green"
 id = "uiux-verifier"
 source = "uiux-verifier.md"
 description = "Visual and accessibility verifier for frontend changes that need DOM-backed layout, style, responsive, parity, or WCAG checks."
-groups = ["ticket-start", "multi-ticket-work", "coordinate-ticket-execution", "ui-verification"]
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "ui-verification"]
 preload_skills = ["ui-verification"]
 
 [agent.codex]
@@ -85,11 +85,11 @@ effort = "medium"
 color = "purple"
 
 [[agent]]
-id = "implementation-worker"
-source = "implementation-worker.md"
-description = "Implementation worker for approved standalone code units or delegated implementation slices, with scoped code changes, focused checks, delegated self-review, and implementation reporting."
-groups = ["ticket-start", "multi-ticket-work", "coordinate-ticket-execution", "implement-unit-of-work"]
-preload_skills = ["implement-unit-of-work"]
+id = "implementation-coordinator"
+source = "implementation-coordinator.md"
+description = "Implementation coordinator for approved standalone code units or delegated implementation slices, owning implementation, review, security, QA, UI verification when relevant, fixes, and reporting."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+preload_skills = ["implementation-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "high"
@@ -99,19 +99,3 @@ sandbox_mode = "workspace-write"
 model = "sonnet"
 effort = "high"
 color = "orange"
-
-[[agent]]
-id = "ticket-execution-coordinator"
-source = "ticket-execution-coordinator.md"
-description = "Execution coordinator for one approved ticket or work unit inside a larger coordinated scope, with phase-separated implementation, review, QA, UI/UX, fixes, PR evidence, and completion reporting."
-groups = ["multi-ticket-work", "coordinate-ticket-execution"]
-preload_skills = ["coordinate-ticket-execution"]
-
-[agent.codex]
-model_reasoning_effort = "high"
-sandbox_mode = "workspace-write"
-
-[agent.claude]
-model = "sonnet"
-effort = "high"
-color = "yellow"

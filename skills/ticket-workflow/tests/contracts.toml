@@ -1,0 +1,23 @@
+[suite]
+name = "ticket-workflow contract"
+
+[[assertion]]
+type = "line_count_at_most"
+path = "skills/ticket-workflow/SKILL.md"
+max = 100
+
+[[assertion]]
+type = "absent"
+path = "skills/ticket-workflow/personal-workflow.md"
+
+[[assertion]]
+type = "absent"
+path = "skills/ticket-workflow/job-workflow.md"
+
+[[assertion]]
+type = "absent"
+path = "skills/ticket-workflow/bug-fix-loop.md"
+
+[[assertion]]
+type = "absent"
+path = "skills/ticket-workflow/bot-identity.md"

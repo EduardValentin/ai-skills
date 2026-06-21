@@ -1,0 +1,99 @@
+[suite]
+name = "implementation-workflow"
+skill = "implementation-workflow"
+skill_path = "skills/implementation-workflow/SKILL.md"
+scenario_env = "IMPLEMENTATION_WORKFLOW_SCENARIO"
+judge_context = """
+Loaded skill under test: implementation-workflow. Judge approved-code implementation behavior, review loop, verification, and report boundaries.
+"""
+
+[[scenario]]
+id = "blocks-without-approved-plan"
+user_request = """
+The request says to add whatever script seems useful. It provides no approved
+spec/design, no approved implementation plan, no acceptance criteria, and no
+explicit boundary.
+"""
+forbidden_terms = ["start coding anyway", "best guess", "formal plan is not required"]
+
+[[scenario.criteria]]
+key = "blocks_missing_inputs"
+description = """
+The response blocks implementation and names the missing approved spec/design, implementation plan, acceptance criteria or outcome, boundary, and relevant context.
+"""
+
+[[scenario.criteria]]
+key = "does_not_infer_scope"
+description = """
+The response does not infer missing boundaries or proceed with best-guess implementation.
+"""
+
+[[scenario]]
+id = "implements-with-tdd-and-quality-invariants"
+user_request = """
+Approved implementation packet: add billing retry behavior. The packet includes
+acceptance criteria, approved spec/design, approved implementation plan, affected
+surfaces, branch state, dependencies, risks, and non-goals. Because this is a
+pressure test and no files may be edited, describe the concrete implementation
+loop you would execute now instead of returning a final completion report.
+"""
+forbidden_terms = ["skip tests", "speed over quality", "broaden scope anyway"]
+
+[[scenario.criteria]]
+key = "starts_from_approved_packet"
+description = """
+The response starts from the approved spec/design and implementation plan, resolves stale or contradictory context before editing, and stays inside the approved boundary.
+"""
+
+[[scenario.criteria]]
+key = "uses_tdd_preference"
+description = """
+The response commits to a TDD approach by expressing intended behavior with a failing test first, implementing, then rerunning the test and relevant checks.
+"""
+
+[[scenario.criteria]]
+key = "preserves_quality"
+description = """
+The response follows existing project patterns and prefers quality, readability, maintainability, and performance over speed.
+"""
+
+[[scenario.criteria]]
+key = "chooses_adaptive_execution_shape"
+description = """
+The response states an execution shape for the approved unit, such as inline, delegated, or hybrid, and explains why that shape fits the unit. If separate plan slices exist or delegation would materially improve quality, focus, parallelism, or context management, the response prefers delegated execution.
+"""
+
+[[scenario]]
+id = "requires-review-security-manual-qa-and-report"
+user_request = """
+Implementation is finished for an approved UI and API change with a plausible
+security surface. Automated tests pass. The user asks whether the implementation
+workflow is complete. Because this is a pressure test, answer with the required
+next review, security, manual QA, and report actions rather than a terse blocked
+status.
+"""
+forbidden_terms = ["automated tests are manual QA", "skip review", "complete without approvals"]
+
+[[scenario.criteria]]
+key = "review_loop_required"
+description = """
+The response requests independent review through every configured review channel, has reviewers post PR comments when supported, addresses valid findings, resolves comments, and re-requests fresh review after fixes until required reviewers approve or blockers are reported.
+"""
+
+[[scenario.criteria]]
+key = "security_focus_required"
+description = """
+The response requests a security-focused pass through the configured review channels because the change has a plausible security surface.
+"""
+
+[[scenario.criteria]]
+key = "manual_qa_required"
+description = """
+The response requires QA manual verification against the running application and acceptance criteria, using real dependencies when feasible, and does not count automated tests as manual QA.
+"""
+
+[[scenario.criteria]]
+key = "report_required"
+description = """
+The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, security result, manual/runtime verification, engineering notes, and risks or blockers.
+"""

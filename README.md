@@ -32,12 +32,11 @@ Native agents live in `agents/*.md` with delivery metadata in `agents/manifest.t
 Current reusable agents:
 
 - `code-mapper` preloads `codebase-scope-map` for read-only locator-backed code maps.
-- `implementation-worker` preloads `implement-unit-of-work` for approved implementation slices.
+- `implementation-coordinator` preloads `implementation-workflow` for approved implementation slices.
 - `code-reviewer` reviews finished diffs against approved requirements and engineering quality.
 - `security-reviewer` reviews diffs with plausible trust-boundary, auth, input, dependency, or data-exposure risk.
 - `qa-verifier` preloads `qa-verification` for behavior verification against running surfaces.
 - `uiux-verifier` preloads `ui-verification` for visual and accessibility verification.
-- `ticket-execution-coordinator` preloads `coordinate-ticket-execution` for approved per-ticket execution packets, mainly from multi-ticket work.
 
 `groups` in `agents/manifest.toml` are sync groups, not ownership boundaries. If an agent wraps or depends on a skill, include that skill name as a group so `python3 scripts/sync_skill.py push <skill-name>` also refreshes the native wrapper. `preload_skills` declares which skill is installed into the generated native agent.
 

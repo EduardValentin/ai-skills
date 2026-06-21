@@ -1,6 +1,6 @@
 ---
 name: ui-verification
-description: Use when a request asks for UI verification, UI/UX verification, frontend UI review, visual parity, or visual consistency of implemented UI and needs a structured CLEAN/FINDINGS/BLOCKED verdict, matched-element inventory, DOM computed-style or bounding-rect evidence, accessibility states, or scoped reruns after visual findings.
+description: Use when a request asks for UI verification, UI/UX verification, frontend UI review, visual parity, or visual consistency of implemented UI and needs a structured CLEAN/FINDINGS/BLOCKED verdict, matched-element inventory, DOM computed-style or bounding-rect evidence, accessibility states, or scoped reruns after visual findings. Do not use for general QA against acceptance criteria unless the request specifically asks for visual parity, visual consistency, UI/UX review, or visual evidence.
 ---
 
 # UI Verification

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Multi Ticket Workflow"
+  short_description: "Coordinate a multi-ticket scope through shared intake, planning, delegation, and handoff."
+  default_prompt: "Use $multi-ticket-workflow to coordinate a multi-ticket scope through requirements intake, cross-ticket brainstorming, approved planning, delegated execution, dependency handling, and final handoff."
