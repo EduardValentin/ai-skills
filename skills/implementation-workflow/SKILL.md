@@ -33,7 +33,7 @@ If required inputs are missing, stale, or contradictory in a way that affects sa
 
 1. Start from the approved spec/design and implementation plan. Resolve missing, stale, or contradictory context before editing.
 2. Inspect enough code to avoid blind edits, including nearby callers/callees, shared types/contracts, analogous implementations, tests, configuration, and affected architecture surfaces when they could affect the change.
-3. Implement the approved plan. Prefer subagent execution for separate plan slices when it makes sense.
+3. Implement the approved plan using the most appropriate execution shape for the approved unit. Prefer delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management.
 4. Run the review phase.
 5. Run the security phase, or record why there is no plausible security surface.
 6. Run the verification phase.
@@ -51,7 +51,7 @@ If required inputs are missing, stale, or contradictory in a way that affects sa
 - Prefer quality, readability, maintainability, and performance over speed.
 - Keep changes traceable to the unit goal and acceptance criteria.
 
-When summarizing the implementation loop before or during edits, name the existing-patterns check and the quality, readability, maintainability, and performance preference explicitly.
+When summarizing the implementation loop before or during edits, name the chosen execution shape, the existing-patterns check, and the quality, readability, maintainability, and performance preference explicitly.
 
 ## Review
 

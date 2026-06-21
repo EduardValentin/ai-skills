@@ -59,6 +59,33 @@ The response does not write the implementation plan until the user approves the 
 """
 
 [[scenario]]
+id = "states-execution-approach-after-plan-approval"
+user_request = """
+The written spec/design and implementation plan for one ticket are approved.
+The approved plan includes a migration slice, an API slice, and a UI slice with
+some shared contracts and review risk. The user asks the agent to proceed.
+"""
+forbidden_terms = ["define detailed review mechanics", "skip implementation workflow", "approval gate no longer matters"]
+
+[[scenario.criteria]]
+key = "states_execution_approach"
+description = """
+The response states the intended execution approach before editing, choosing inline, delegated, or hybrid based on the approved plan's size, coupling, risk, separability, and implementation context.
+"""
+
+[[scenario.criteria]]
+key = "does_not_define_implementation_mechanics"
+description = """
+The response treats ticket-workflow as an implementation transition and does not define detailed review, security review, QA, UI verification, or fix-loop mechanics.
+"""
+
+[[scenario.criteria]]
+key = "keeps_approval_gate"
+description = """
+The response says that if implementation reveals the approved spec/design or implementation plan should change, it must return to the relevant approval gate before continuing.
+"""
+
+[[scenario]]
 id = "post-implementation-pr-readiness"
 user_request = """
 Implementation for the approved ticket plan is complete and the PR exists. The

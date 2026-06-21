@@ -57,7 +57,7 @@ Produce a concise multi-ticket spec/design that names each in-scope ticket and m
 
 After spec/design approval, write an implementation plan for each in-scope ticket from the approved multi-ticket spec/design, gathered context, dependency map, and full-scope brainstorming discussion.
 
-Then produce a coordination plan that decides how to delegate those ticket implementation plans in the most efficient safe fashion: parallel when independent, sequential when dependency-bound, staged when shared groundwork is needed, and consolidated when splitting would create coordination waste.
+Then produce a coordination plan that decides the execution shape for each ticket or unit: inline, delegated, hybrid, parallel when independent, sequential when dependency-bound, staged when shared groundwork is needed, and consolidated when splitting would create coordination waste.
 
 Ask the user to approve the coordination plan itself. Do not dispatch or implement before both approvals.
 

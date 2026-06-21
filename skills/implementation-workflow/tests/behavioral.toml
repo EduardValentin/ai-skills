@@ -57,6 +57,12 @@ description = """
 The response follows existing project patterns and prefers quality, readability, maintainability, and performance over speed.
 """
 
+[[scenario.criteria]]
+key = "chooses_adaptive_execution_shape"
+description = """
+The response implements using the most appropriate execution shape for the approved unit and prefers delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management.
+"""
+
 [[scenario]]
 id = "requires-review-security-manual-qa-and-report"
 user_request = """

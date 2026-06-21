@@ -34,6 +34,12 @@ description = """
 The response requires cross-ticket brainstorming, approved multi-ticket spec/design, an implementation plan for each in-scope ticket, and an approved coordination plan before delegation.
 """
 
+[[scenario.criteria]]
+key = "coordination_plan_decides_execution_shape"
+description = """
+The response requires the coordination plan to decide the execution shape for each ticket or unit, including whether work should be inline, delegated, hybrid, parallel, sequential, staged, or consolidated based on dependency and coordination facts.
+"""
+
 [[scenario]]
 id = "approved-scope-delegates-execution-packets"
 user_request = """

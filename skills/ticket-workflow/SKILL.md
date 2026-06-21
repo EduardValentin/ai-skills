@@ -9,7 +9,7 @@ description: Use when the user asks to start or work through one standalone tick
 
 Coordinate one standalone ticket from intake to approved implementation plan, then confirm PR readiness after implementation completes.
 
-This workflow owns requirements intake, context gathering, shared understanding, spec/design approval, implementation-plan approval, implementation, and final PR readiness. It does not define detailed review, security review, QA, UI verification, or fix-loop mechanics.
+This workflow owns requirements intake, context gathering, shared understanding, spec/design approval, implementation-plan approval, implementation transition, and final PR readiness. It does not define detailed review, security review, QA, UI verification, or fix-loop mechanics.
 
 Mandatory lifecycle:
 
@@ -39,7 +39,9 @@ After spec/design approval, write an implementation plan that takes into conside
 
 ## Implementation
 
-Implement the approved plan. Prefer quality code over time to complete the task. Make sure the solution is well tested. If implementation reveals that the approved spec/design or plan should change, return to the relevant approval gate before continuing.
+After plan approval, state the intended execution approach before editing: inline, delegated, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context. In the same handoff, state that implementation must return to the relevant approval gate if the approved spec/design or plan needs to change. Do not define detailed execution mechanics here.
+
+Implement the approved plan using that approach. Prefer quality code over time to complete the task. Make sure the solution is well tested. If implementation reveals that the approved spec/design or plan should change, return to the relevant approval gate before continuing.
 
 ## PR Readiness
 
