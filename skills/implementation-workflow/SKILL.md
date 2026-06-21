@@ -33,11 +33,12 @@ If required inputs are missing, stale, or contradictory in a way that affects sa
 
 1. Start from the approved spec/design and implementation plan. Resolve missing, stale, or contradictory context before editing.
 2. Inspect enough code to avoid blind edits, including nearby callers/callees, shared types/contracts, analogous implementations, tests, configuration, and affected architecture surfaces when they could affect the change.
-3. Implement the approved plan using the most appropriate execution shape for the approved unit. Prefer delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management.
-4. Run the review phase.
-5. Run the security phase, or record why there is no plausible security surface.
-6. Run the verification phase.
-7. Return the implementation report.
+3. Choose and state the execution shape before editing: inline, delegated, or hybrid. Use delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management.
+4. Implement the approved plan using the chosen execution shape.
+5. Run the review phase.
+6. Run the security phase, or record why there is no plausible security surface.
+7. Run the verification phase.
+8. Return the implementation report.
 
 ## Engineering Invariants
 

@@ -61,7 +61,7 @@ Then produce a coordination plan that decides the execution shape for each ticke
 
 Ask the user to approve the coordination plan itself. Do not dispatch or implement before both approvals.
 
-When the user asks to proceed from a high-level multi-ticket scope, state the gates explicitly: cross-ticket brainstorming, approved multi-ticket spec/design, one implementation plan per in-scope ticket, and approved coordination plan before delegation. Every gate summary must name all four preconditions.
+When the user asks to work, proceed from, or get started on an unapproved multi-ticket scope, state the gates explicitly before any delegation or implementation: cross-ticket brainstorming, approved multi-ticket spec/design, one implementation plan per in-scope ticket, and approved coordination plan. Every gate summary must name all four preconditions.
 
 ## Execution Packets
 

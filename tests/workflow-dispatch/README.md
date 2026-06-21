@@ -38,7 +38,7 @@ The behavioral harness discovers colocated `workflow-dispatch.toml` files. Each
 scenario gives the agent the loaded parent skill body and asks for a workflow
 action ledger. This is a loaded-skill pressure test, not proof that the parent
 skill was discovered by the installed harness. Parent-skill discovery belongs in
-`tests/skill-trigger/behavioral_pressure.py`.
+`tests/skill-trigger/trigger_harness.py`.
 
 For downstream discovery coverage, workflow behavioral tests then send only the
 emitted action rows for the handoff to the installed harness and assert that the

@@ -126,7 +126,7 @@ def print_suite_list(paths: tuple[Path, ...]) -> None:
 def print_usage() -> None:
     print(
         f"""Usage:
-  {AGENT_COMMAND_ENV_VAR}='<command reading stdin>' python3 tests/behavioral_pressure.py
+  {AGENT_COMMAND_ENV_VAR}='<command reading stdin>' python3 tests/behavioral_pressure_harness.py
 
 Optional:
   BEHAVIORAL_SKILL='<skill-name>' or --skill <skill-name>

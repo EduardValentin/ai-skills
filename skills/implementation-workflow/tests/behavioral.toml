@@ -60,7 +60,7 @@ The response follows existing project patterns and prefers quality, readability,
 [[scenario.criteria]]
 key = "chooses_adaptive_execution_shape"
 description = """
-The response implements using the most appropriate execution shape for the approved unit and prefers delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management.
+The response states an execution shape for the approved unit, such as inline, delegated, or hybrid, and explains why that shape fits the unit. If separate plan slices exist or delegation would materially improve quality, focus, parallelism, or context management, the response prefers delegated execution.
 """
 
 [[scenario]]

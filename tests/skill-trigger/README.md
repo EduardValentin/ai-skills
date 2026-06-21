@@ -25,7 +25,7 @@ Run manually, nightly, or in a model-enabled CI job:
 
 ```bash
 SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
-  python3 tests/skill-trigger/behavioral_pressure.py
+  python3 tests/skill-trigger/trigger_harness.py
 ```
 
 The behavioral harness is a black-box installed-harness test. It sends only the
@@ -52,7 +52,7 @@ Run one scenario:
 ```bash
 SKILL_TRIGGER_SCENARIO=bitbucket-pr-ui-test \
 SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
-  python3 tests/skill-trigger/behavioral_pressure.py
+  python3 tests/skill-trigger/trigger_harness.py
 ```
 
 ## RED-GREEN-REFACTOR For Trigger Bugs
