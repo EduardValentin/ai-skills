@@ -60,7 +60,7 @@ def main() -> int:
 def print_usage() -> None:
     print(
         """Usage:
-  SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' python3 tests/skill-trigger/behavioral_pressure.py
+  SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' python3 tests/skill-trigger/trigger_harness.py
 
 Optional:
   SKILL_TRIGGER_SCENARIO='<scenario-id>' to run one scenario.

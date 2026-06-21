@@ -81,10 +81,10 @@ Behavioral tests are opt-in because they run an installed agent harness. Set one
 
 ```bash
 SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
-  python3 tests/behavioral_pressure.py
+  python3 tests/behavioral_pressure_harness.py
 
 SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
-  python3 tests/skill-trigger/behavioral_pressure.py
+  python3 tests/skill-trigger/trigger_harness.py
 
 # Run this only when a skill has a colocated tests/workflow-dispatch.toml suite.
 SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
@@ -99,7 +99,7 @@ TOML files do not define separate command variables.
 repo-wide `tests/contracts/*.toml` files. Contract suites check structure only:
 file presence or absence, line-count limits, and required TOML tables/fields.
 
-`tests/behavioral_pressure.py` discovers colocated
+`tests/behavioral_pressure_harness.py` discovers colocated
 `skills/*/tests/behavioral.toml` and `plugins/*/skills/*/tests/behavioral.toml`
 files, then runs each suite through the shared loaded-skill harness. Use
 `--skill <skill-name>` or `--scenario <scenario-id>` for focused runs.

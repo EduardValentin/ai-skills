@@ -176,7 +176,7 @@ Before creating a PR for any skill addition or skill update, run the determinist
 ```bash
 python3 tests/skill-trigger/static_contract.py
 SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
-  python3 tests/skill-trigger/behavioral_pressure.py
+  python3 tests/skill-trigger/trigger_harness.py
 ```
 
 The behavioral command should use the target agent/runtime whose skill selection matters for the PR. If the behavioral suite cannot be run, do not silently proceed; report the exact blocker and get explicit user approval before creating the PR.

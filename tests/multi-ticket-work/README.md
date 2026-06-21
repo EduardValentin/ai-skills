@@ -8,5 +8,5 @@ one ticket coordinator subagent per ticket or unit, and returns PRs in review or
 
 ```bash
 SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
-  python3 tests/behavioral_pressure.py --skill multi-ticket-work
+  python3 tests/behavioral_pressure_harness.py --skill multi-ticket-work
 ```
