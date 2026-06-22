@@ -1,6 +1,6 @@
 ---
 name: implementation-workflow
-description: Use only when the context already includes an approved implementation plan, approved plan slice, or approved implementation packet and the user asks to implement that approved code unit, including focused fixes, scripts, migrations, service changes, UI changes, or integrations. Do not use for ticket or issue start, coding-scope setup, feature-branch ticket setup, ticket intake, user-facing requirements approval, spec/design approval, implementation-plan approval, PR readiness only, or ticket-set coordination.
+description: Use when the context already includes an approved implementation plan, approved plan slice, or approved implementation packet and the user or parent workflow asks to implement that approved code unit. Trigger after ticket-workflow or multi-ticket planning once a ticket requirement, user story, or implementation packet is approved. This remains the parent implementation workflow even when the user asks for delegated, hybrid, subagent-driven, parallel-agent, or plan-execution work; those are execution shapes, not replacements. Do not use for ticket or issue start, coding-scope setup, feature-branch ticket setup, ticket intake, user-facing requirements approval, spec/design approval, implementation-plan approval, PR readiness only, or ticket-set coordination.
 ---
 
 # Implementation Workflow
@@ -12,6 +12,8 @@ Implement approved code work with strong engineering judgment, review, verificat
 This workflow owns implementation, code quality, code review, security review when relevant, QA/runtime verification, UI verification when relevant, fixes, reruns, and the implementation report.
 
 It does not own user-facing ticket intake, requirements approval, spec/design approval, implementation-plan approval, PR readiness, release, merge, or tracker-state changes.
+
+Layering rule: use this workflow as soon as ticket-workflow, multi-ticket planning, or another parent planning workflow has an approved implementation plan and the next action is coding that plan. Subagent-driven development, delegated workers, parallel agents, or hybrid execution are execution shapes inside this workflow; they do not replace this workflow's review, security, verification, fix/rerun, or reporting contract.
 
 ## Required Inputs
 

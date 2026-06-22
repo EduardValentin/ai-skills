@@ -1,4 +1,4 @@
 interface:
   display_name: "Implementation Workflow"
   short_description: "Implement approved code work with review, security, manual QA, and reporting."
-  default_prompt: "Use $implementation-workflow when implementing approved code work or approved plan slices through implementation, review, security review when relevant, manual QA verification, and implementation reporting."
+  default_prompt: "Use $implementation-workflow when implementing an approved ticket/user-story plan or approved code slice, even when execution is delegated or subagent-driven; keep review, security, manual QA, fixes/reruns, and reporting inside this workflow."
