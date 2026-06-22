@@ -39,7 +39,7 @@ After spec/design approval, write an implementation plan that takes into conside
 
 ## Implementation
 
-After plan approval, state the intended execution approach before editing: inline, delegated, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context. In the same handoff, state that implementation must return to the relevant approval gate if the approved spec/design or plan needs to change. Do not define detailed execution mechanics here.
+After plan approval, explicitly name `implementation-workflow` as the workflow that now owns the approved implementation unit before editing. State the intended execution approach inside that workflow: inline, delegated, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context. In the same handoff, state that implementation must return to the relevant approval gate if the approved spec/design or plan needs to change. Do not define detailed execution mechanics here.
 
 Implement the approved plan using that approach. Prefer quality code over time to complete the task. Make sure the solution is well tested. If implementation reveals that the approved spec/design or plan should change, return to the relevant approval gate before continuing.
 

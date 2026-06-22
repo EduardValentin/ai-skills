@@ -74,6 +74,12 @@ The response states the intended execution approach before editing, choosing inl
 """
 
 [[scenario.criteria]]
+key = "routes_to_implementation_workflow"
+description = """
+The response treats ticket-workflow as the parent transition and sends the approved implementation unit to implementation-workflow before code or test edits.
+"""
+
+[[scenario.criteria]]
 key = "does_not_define_implementation_mechanics"
 description = """
 The response treats ticket-workflow as an implementation transition and does not define detailed review, security review, QA, UI verification, or fix-loop mechanics.
