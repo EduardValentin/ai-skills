@@ -209,6 +209,10 @@ Treat actor-facing `prompt_instructions` like mocks or stubs in classic unit tes
 
 Put expected behavior in `[[scenario.criteria]]`, `judge_context`, deterministic assertions, or the test harness, not in actor-facing `prompt_instructions` or user prompts unless the user prompt is intentionally modeling real user wording. If a behavioral prompt tells the actor what it "must explain", "must mention", or "must state" about the behavior under test, treat that test as invalid and rewrite it before trusting the result.
 
+### 10. Test positive behavior, not absence
+
+Do not add or preserve tests whose assertion is that something is absent. This includes absent files, absent folders, absent generated artifacts, forbidden phrases, forbidden wording, or forbidden response text. Replace absence checks with positive assertions about expected behavior, structure, outcomes, state transitions, evidence, or lifecycle gates. When touching existing tests, remove absence checks from that test surface instead of carrying them forward.
+
 ---
 
 # Rules for Writing Cross-Agent Skills

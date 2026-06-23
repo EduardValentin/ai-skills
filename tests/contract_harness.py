@@ -155,10 +155,6 @@ def run_assertion(suite_path: Path, assertion: dict[str, Any]) -> None:
     assertion_type = require_string(suite_path, assertion, "type")
     if assertion_type == "exists":
         assert_exists(resolve_path(render_path(assertion, "path", {})))
-    elif assertion_type == "absent":
-        assert_absent(resolve_path(render_path(assertion, "path", {})))
-    elif assertion_type == "absent_glob":
-        assert_absent_glob(suite_path, require_string(suite_path, assertion, "glob"))
     elif assertion_type == "line_count_at_most":
         assert_line_count_at_most(
             suite_path,
@@ -270,18 +266,6 @@ def resolve_path(path_text: str) -> Path:
 def assert_exists(path: Path) -> None:
     if not path.exists():
         raise AssertionError(f"expected file to exist: {path.relative_to(REPO_ROOT)}")
-
-
-def assert_absent(path: Path) -> None:
-    if path.exists():
-        raise AssertionError(f"expected file to be absent: {path.relative_to(REPO_ROOT)}")
-
-
-def assert_absent_glob(suite_path: Path, pattern: str) -> None:
-    matches = sorted(REPO_ROOT.glob(pattern))
-    if matches:
-        formatted = ", ".join(str(path.relative_to(REPO_ROOT)) for path in matches)
-        raise AssertionError(f"{suite_path}: expected glob to match no files: {formatted}")
 
 
 def assert_line_count_at_most(suite_path: Path, path: Path, max_lines: int) -> None:

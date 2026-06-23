@@ -96,7 +96,7 @@ TOML files do not define separate command variables.
 `tests/contract.py` discovers TOML contract suites colocated under
 `skills/*/tests/contracts.toml`, `plugins/*/tests/contracts.toml`, and
 repo-wide `tests/contracts/*.toml` files. Contract suites check structure only:
-file presence or absence, line-count limits, and required TOML tables/fields.
+file presence, line-count limits, and required TOML tables/fields.
 
 `tests/behavioral_pressure_harness.py` discovers colocated
 `skills/*/tests/behavioral.toml` and `plugins/*/skills/*/tests/behavioral.toml`

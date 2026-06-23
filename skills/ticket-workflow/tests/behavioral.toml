@@ -15,7 +15,6 @@ three decisions and your recommendations. The assumptions sound good as well.
 I think we are good to go." The agent has discussed decisions and assumptions,
 but the user has not yet seen a written spec/design or implementation plan.
 """
-forbidden_terms = ["start coding", "implementation is approved", "good to go is plan approval"]
 
 [[scenario.criteria]]
 key = "blocks_implementation"
@@ -38,7 +37,6 @@ several rollout constraints. Unknowns remain around copy, edge cases, and
 failure behavior. Because this is a pressure test with no follow-up user
 answer, start the interview and say how the loop continues before spec/design.
 """
-forbidden_terms = ["write the plan now", "parent context is optional", "skip brainstorming"]
 
 [[scenario.criteria]]
 key = "reads_ticket_and_parent"
@@ -66,7 +64,6 @@ clear, but the relevant code surfaces are unknown. Native subagents capable of
 read-only code scoping are available in this runtime. Because this is a
 pressure test with no file edits, state the next workflow move.
 """
-forbidden_terms = ["skip codebase scoping", "start brainstorming without code scope", "start implementation"]
 
 [[scenario.criteria]]
 key = "delegates_code_scoping"
@@ -93,7 +90,6 @@ The written spec/design and implementation plan for one ticket are approved.
 The approved plan includes a migration slice, an API slice, and a UI slice with
 some shared contracts and review risk. The user asks the agent to proceed.
 """
-forbidden_terms = ["define detailed review mechanics", "skip implementation transition", "approval gate no longer matters"]
 
 [[scenario.criteria]]
 key = "states_execution_approach"
@@ -132,7 +128,6 @@ Implementation for the approved ticket plan is complete and the PR exists. The
 PR pipeline currently has one failing CI check. The user asks whether the ticket
 is ready for review.
 """
-forbidden_terms = ["merge it", "mark done", "skip PR readiness"]
 
 [[scenario.criteria]]
 key = "checks_pr_readiness"
