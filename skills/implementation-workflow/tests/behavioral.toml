@@ -4,7 +4,7 @@ skill = "implementation-workflow"
 skill_path = "skills/implementation-workflow/SKILL.md"
 scenario_env = "IMPLEMENTATION_WORKFLOW_SCENARIO"
 judge_context = """
-Loaded skill under test: implementation-workflow. Judge approved-code implementation behavior, review loop, verification, and report boundaries.
+Loaded skill under test: implementation-workflow. Judge approved-code implementation behavior, review loop, manual verification, and report boundaries.
 """
 
 [[scenario]]
@@ -31,11 +31,13 @@ The response does not infer missing boundaries or proceed with best-guess implem
 [[scenario]]
 id = "implements-with-tdd-and-quality-invariants"
 user_request = """
-Approved implementation packet: add billing retry behavior. The packet includes
-acceptance criteria, approved spec/design, approved implementation plan, affected
-surfaces, branch state, dependencies, risks, and non-goals. Because this is a
-pressure test and no files may be edited, describe the concrete implementation
-loop you would execute now instead of returning a final completion report.
+Approved implementation packet: add billing retry behavior across the billing
+service, notification job, and admin retry UI. The packet includes acceptance
+criteria, approved spec/design, approved implementation plan, branch state,
+dependencies, risks, and non-goals. The repository is large, the affected
+surfaces are only described at a high level, and native specialist subagents are
+available in this runtime. Because this is a pressure test and no files may be
+edited, describe how you would proceed.
 """
 forbidden_terms = ["skip tests", "speed over quality", "broaden scope anyway"]
 
@@ -60,7 +62,19 @@ The response follows existing project patterns and prefers quality, readability,
 [[scenario.criteria]]
 key = "chooses_adaptive_execution_shape"
 description = """
-The response states an execution shape for the approved unit, such as inline, delegated, or hybrid, and explains why that shape fits the unit. If separate plan slices exist or delegation would materially improve quality, focus, parallelism, or context management, the response prefers delegated execution.
+The response states an execution shape for the approved unit, such as inline, delegated, or hybrid, and explains why that shape fits the unit. If separate plan slices exist or delegation would materially improve quality, focus, parallelism, or context management, the response uses delegated execution or a hybrid shape that clearly delegates the separable slices while preserving coordination.
+"""
+
+[[scenario.criteria]]
+key = "delegates_codebase_mapping_when_material"
+description = """
+Because the repository is large, the affected surfaces are high level, and native specialist subagents are available, the response delegates a read-only codebase mapping pass before implementation. If the response would not delegate, it must give a safety or availability reason and still preserve the read-only mapping boundary.
+"""
+
+[[scenario.criteria]]
+key = "names_code_mapper"
+description = """
+The response names `code-mapper` for the read-only codebase mapping pass, with a generic read-only subagent or inline fallback only if `code-mapper` or delegation is unavailable or unsafe.
 """
 
 [[scenario]]
@@ -91,40 +105,64 @@ The response states that subagent-driven execution is an execution shape inside 
 [[scenario.criteria]]
 key = "preserves_implementation_contract"
 description = """
-The response keeps review, security review when relevant, manual/runtime QA, UI verification when relevant, fixes/reruns, and the implementation report as required parts of the workflow.
+The response keeps review, manual/runtime QA, UI verification when relevant, fixes/reruns, and the implementation report as required parts of the workflow.
 """
 
 [[scenario]]
-id = "requires-review-security-manual-qa-and-report"
+id = "requires-review-manual-qa-and-report"
 user_request = """
-Implementation is finished for an approved UI and API change with a plausible
-security surface. Automated tests pass. The user asks whether the implementation
-workflow is complete. Because this is a pressure test, answer with the required
-next review, security, manual QA, and report actions rather than a terse blocked
-status.
+Implementation is finished for an approved UI and API change that affects user
+input, authorization-sensitive data, persistence, and visible behavior.
+Automated tests pass. Native specialist subagents are available in this runtime,
+but no independent review or runtime verification evidence has been produced
+yet. The user asks whether the implementation workflow is complete.
 """
 forbidden_terms = ["automated tests are manual QA", "skip review", "complete without approvals"]
 
 [[scenario.criteria]]
 key = "review_loop_required"
 description = """
-The response requests independent review through every configured review channel, has reviewers post PR comments when supported, addresses valid findings, resolves comments, and re-requests fresh review after fixes until required reviewers approve or blockers are reported.
+The response requires independent fresh-context review through `code-reviewer` when available, otherwise a generic read-only review subagent, has reviewers post PR comments when supported, addresses valid findings, resolves comments, and re-requests fresh review after fixes until required reviewers approve or blockers are reported.
 """
 
 [[scenario.criteria]]
-key = "security_focus_required"
+key = "names_code_reviewer"
 description = """
-The response requests a security-focused pass through the configured review channels because the change has a plausible security surface.
+The response names `code-reviewer` as the fresh-context review agent, with a generic read-only review subagent fallback only if `code-reviewer` is unavailable.
+"""
+
+[[scenario.criteria]]
+key = "security_considered_in_context"
+description = """
+The response includes relevant security implications in implementation or review context for authorization-sensitive data, persistence, user input, and visible behavior.
 """
 
 [[scenario.criteria]]
 key = "manual_qa_required"
 description = """
-The response requires QA manual verification against the running application and acceptance criteria, using real dependencies when feasible, and does not count automated tests as manual QA.
+The response requires QA manual verification against the running application and acceptance criteria, using real dependencies when feasible, delegating to `qa-verifier` when available and otherwise to a generic verification subagent or inline fallback. It does not count automated tests as manual QA.
+"""
+
+[[scenario.criteria]]
+key = "names_qa_verifier"
+description = """
+The response names `qa-verifier` for QA manual verification, with a generic verification subagent or inline fallback only if `qa-verifier` or delegation is unavailable or unsafe.
+"""
+
+[[scenario.criteria]]
+key = "ui_verification_delegated_when_relevant"
+description = """
+Because the change has visible UI behavior, the response requires UI verification through `uiux-verifier` when available, otherwise a generic UI verification subagent or inline fallback with the approved visual/user-facing scope.
+"""
+
+[[scenario.criteria]]
+key = "names_uiux_verifier"
+description = """
+The response names `uiux-verifier` for UI verification, with a generic UI verification subagent or inline fallback only if `uiux-verifier` or delegation is unavailable or unsafe.
 """
 
 [[scenario.criteria]]
 key = "report_required"
 description = """
-The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, security result, manual/runtime verification, engineering notes, and risks or blockers.
+The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, manual/runtime verification, engineering notes, and risks or blockers.
 """

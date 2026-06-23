@@ -1,7 +1,11 @@
 # Skill Trigger Tests
 
-This directory keeps global trigger coverage for canonical skills under `skills/`
+This directory keeps global trigger coverage for ability skills under `skills/`
 and plugin-packaged skills under `plugins/*/skills/`.
+
+Procedural skills are manually invoked workflows. Mark them with
+`metadata.ai-skills-invocation: manual` and `disable-model-invocation: true`;
+they must not have trigger scenarios.
 
 ## Static Contract
 
@@ -13,10 +17,10 @@ python3 tests/skill-trigger/static_contract.py
 
 The static contract is deterministic. It verifies:
 
-- every `skills/*/SKILL.md` and `plugins/*/skills/*/SKILL.md` has at least one trigger scenario;
+- every ability skill has at least one trigger scenario;
+- procedural/manual-invocation skills have no trigger scenarios;
 - every scenario references an existing skill;
 - the declared skill name matches its folder;
-- descriptions start with `Use when`;
 - forbidden stale wording is absent.
 
 ## Installed-Harness Behavioral Trigger
@@ -62,3 +66,6 @@ SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
 3. REFACTOR: run the installed-harness behavioral trigger against an agent and
    tighten forbidden terms or prompt coverage if the agent still rationalizes
    past the skill.
+
+Do this only for ability skills. For procedural skills, prove behavior with the
+loaded-skill behavioral suites instead of installed-harness trigger tests.

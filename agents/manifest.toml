@@ -87,7 +87,7 @@ color = "purple"
 [[agent]]
 id = "implementation-coordinator"
 source = "implementation-coordinator.md"
-description = "Implementation coordinator for approved standalone code units or delegated implementation slices, owning implementation, review, security, QA, UI verification when relevant, fixes, and reporting."
+description = "Implementation coordinator for approved standalone code units or delegated implementation slices, owning implementation, review, QA, UI verification when relevant, fixes, and reporting."
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 preload_skills = ["implementation-workflow"]
 

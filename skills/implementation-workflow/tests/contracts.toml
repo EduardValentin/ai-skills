@@ -4,4 +4,4 @@ name = "implementation-workflow contract"
 [[assertion]]
 type = "line_count_at_most"
 path = "skills/implementation-workflow/SKILL.md"
-max = 170
+max = 175

@@ -43,7 +43,7 @@ forbidden_terms = ["write the plan now", "parent context is optional", "skip bra
 [[scenario.criteria]]
 key = "reads_ticket_and_parent"
 description = """
-The response reads both the child ticket and parent context to understand the goal, stakeholder implications, acceptance criteria, dependencies, and ambiguity.
+The response treats both the child ticket and parent context as required before planning, and uses them to understand the goal, stakeholder implications, acceptance criteria, dependencies, and ambiguity.
 """
 
 [[scenario.criteria]]
@@ -59,13 +59,41 @@ The response does not write the implementation plan until the user approves the 
 """
 
 [[scenario]]
+id = "delegates-code-scoping-before-brainstorm"
+user_request = """
+Start one standalone ticket with broad repository impact. The ticket goal is
+clear, but the relevant code surfaces are unknown. Native subagents capable of
+read-only code scoping are available in this runtime. Because this is a
+pressure test with no file edits, state the next workflow move.
+"""
+forbidden_terms = ["skip codebase scoping", "start brainstorming without code scope", "start implementation"]
+
+[[scenario.criteria]]
+key = "delegates_code_scoping"
+description = """
+The response treats read-only code scoping as the next setup move before brainstorming and delegates it to `code-mapper`, with a generic read-only subagent or inline fallback only if `code-mapper` or delegation is unavailable or unsafe.
+"""
+
+[[scenario.criteria]]
+key = "names_code_mapper"
+description = """
+The response names `code-mapper` as the intended read-only code scoping agent, with a generic read-only subagent or inline fallback only if `code-mapper` or delegation is unavailable or unsafe.
+"""
+
+[[scenario.criteria]]
+key = "preserves_scoping_boundary"
+description = """
+The response keeps code scoping read-only and uses it to gather affected files or surfaces, entry points, analogous implementations, tests, risks, and verification surfaces with locators.
+"""
+
+[[scenario]]
 id = "states-execution-approach-after-plan-approval"
 user_request = """
 The written spec/design and implementation plan for one ticket are approved.
 The approved plan includes a migration slice, an API slice, and a UI slice with
 some shared contracts and review risk. The user asks the agent to proceed.
 """
-forbidden_terms = ["define detailed review mechanics", "skip implementation workflow", "approval gate no longer matters"]
+forbidden_terms = ["define detailed review mechanics", "skip implementation transition", "approval gate no longer matters"]
 
 [[scenario.criteria]]
 key = "states_execution_approach"
@@ -74,15 +102,21 @@ The response states the intended execution approach before editing, choosing inl
 """
 
 [[scenario.criteria]]
-key = "routes_to_implementation_workflow"
+key = "transitions_approved_implementation_unit"
 description = """
-The response treats ticket-workflow as the parent transition and sends the approved implementation unit to implementation-workflow before code or test edits.
+The response treats ticket-workflow as the parent transition and moves the approved implementation unit into implementation before code or test edits.
+"""
+
+[[scenario.criteria]]
+key = "hands_to_implementation_workflow"
+description = """
+The response invokes `implementation-workflow` for the approved unit and names `implementation-coordinator` when delegated or hybrid execution is selected.
 """
 
 [[scenario.criteria]]
 key = "does_not_define_implementation_mechanics"
 description = """
-The response treats ticket-workflow as an implementation transition and does not define detailed review, security review, QA, UI verification, or fix-loop mechanics.
+The response treats ticket-workflow as an implementation transition and does not define detailed implementation, review, QA, UI verification, or fix-loop mechanics.
 """
 
 [[scenario.criteria]]

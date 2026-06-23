@@ -56,9 +56,19 @@ def check_scenarios(scenarios: list[dict[str, object]]) -> None:
                 f"{scenario_id} expected skill name {skill!r} but SKILL.md declares {declared_name!r}"
             )
 
+        if is_manual_invocation(frontmatter):
+            raise ValueError(
+                f"{scenario_id} references manual-invocation skill {skill}: "
+                "procedural skills must not have trigger scenarios"
+            )
+
         covered_skills.add(skill)
 
     for skill, skill_file in sorted(skill_files.items()):
+        frontmatter = parse_frontmatter(skill_file, skill_file.read_text(encoding="utf-8"))
+        if is_manual_invocation(frontmatter):
+            continue
+
         if skill not in covered_skills:
             raise ValueError(
                 f"skill missing trigger scenario: {skill} ({skill_file.relative_to(REPO_ROOT)})"
@@ -77,6 +87,14 @@ def parse_frontmatter(skill_file: Path, skill_doc: str) -> dict[str, str]:
         key, value = raw_line.split(":", 1)
         values[key.strip()] = value.strip().strip('"')
     return values
+
+
+def is_manual_invocation(frontmatter: dict[str, str]) -> bool:
+    if frontmatter.get("disable-model-invocation", "").lower() == "true":
+        return True
+    if frontmatter.get("ai-skills-category", "").lower() == "procedural":
+        return True
+    return frontmatter.get("ai-skills-invocation", "").lower() == "manual"
 
 
 if __name__ == "__main__":
