@@ -31,11 +31,15 @@ Approval is artifact-specific. The user can only approve an artifact they have a
 
 ## Brainstorm
 
-Run a relentless brainstorming interview with the user, grounded in the ticket, parent context, repo facts, relevant docs, and codebase scope. Identify and resolve unknowns, low-confidence assumptions, stakeholder implications, constraints, edge cases, risks, non-goals, alternatives, and any detail that could even slightly affect implementation.
+Run a relentless brainstorming interview with the user, grounded in the ticket, parent context, repo facts, relevant docs, and codebase scope.
 
-Treat brainstorming as an active interview loop, not a one-time question list. When material unknowns remain, ask the next highest-value questions, explicitly state that the interview will continue after the answers, and keep going until each impactful unknown is resolved or explicitly accepted as a risk. Do not move to spec/design after one unanswered batch of questions.
+Identify and resolve unknowns, low-confidence assumptions, stakeholder implications, constraints, edge cases, risks, non-goals, alternatives, and any detail that could even slightly affect implementation.
 
-Continue until there is shared understanding of what needs to be done and every material aspect of the work. Then write a concise spec/design that captures the agreed scope, decisions, acceptance criteria, risks, alternatives considered, and open questions. Ask the user to approve the spec/design itself. Do not write the implementation plan before spec/design approval. When stopping before implementation because approvals are missing, name both required gates: written spec/design approval, then written implementation plan approval.
+Treat brainstorming as an active interview loop, not a one-time question list. Ask one question at a time until you and the user reach a common understanding of the problem.
+
+After a shared common understanding has been achieved, write a concise spec/design that captures the agreed scope, decisions, acceptance criteria, risks, alternatives considered, and open questions. Ask the user to approve the spec/design itself.
+
+Do not write the implementation plan before spec/design approval.
 
 ## Plan
 
