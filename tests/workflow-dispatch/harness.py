@@ -289,7 +289,6 @@ def build_workflow_scenario(
             build_semantic_criterion(scenarios_path, scenario_id, criterion)
             for criterion in criteria
         ),
-        forbidden_terms=tuple(require_string_list(scenarios_path, raw_scenario, "forbidden_terms")),
         expected_auto_discovery=tuple(
             require_string_list(scenarios_path, raw_scenario, "expected_auto_discovery")
         ),

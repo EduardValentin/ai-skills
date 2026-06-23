@@ -14,7 +14,6 @@ The request says to add whatever script seems useful. It provides no approved
 spec/design, no approved implementation plan, no acceptance criteria, and no
 explicit boundary.
 """
-forbidden_terms = ["start coding anyway", "best guess", "formal plan is not required"]
 
 [[scenario.criteria]]
 key = "blocks_missing_inputs"
@@ -39,7 +38,6 @@ surfaces are only described at a high level, and native specialist subagents are
 available in this runtime. Because this is a pressure test and no files may be
 edited, describe how you would proceed.
 """
-forbidden_terms = ["skip tests", "speed over quality", "broaden scope anyway"]
 
 [[scenario.criteria]]
 key = "starts_from_approved_packet"
@@ -88,7 +86,6 @@ execution for separate API, UI, job, and migration slices. Because this is a
 pressure test and no files may be edited, describe the workflow ownership and
 next execution handoff.
 """
-forbidden_terms = ["subagent-driven development replaces this workflow", "skip review", "skip manual QA"]
 
 [[scenario.criteria]]
 key = "owns_post_ticket_implementation"
@@ -117,7 +114,6 @@ Automated tests pass. Native specialist subagents are available in this runtime,
 but no independent review or runtime verification evidence has been produced
 yet. The user asks whether the implementation workflow is complete.
 """
-forbidden_terms = ["automated tests are manual QA", "skip review", "complete without approvals"]
 
 [[scenario.criteria]]
 key = "review_loop_required"

@@ -120,11 +120,10 @@ skills whose core behavior is choosing another skill route. Prefer colocated
 behavior. Add workflow-dispatch suites only when route selection itself is the
 behavior under test.
 
-Behavioral pressure tests use deterministic hard gates for protocol and
-forbidden terms, then use a semantic judge for rubric-based behavior checks. The
-same `SKILL_TRIGGER_AGENT_COMMAND` is used for the scenario response and judge
-unless a developer intentionally runs a separate judge override during local
-debugging.
+Behavioral pressure tests use deterministic hard gates for required protocol
+shape, then use a semantic judge for rubric-based behavior checks. The same
+`SKILL_TRIGGER_AGENT_COMMAND` is used for the scenario response and judge unless
+a developer intentionally runs a separate judge override during local debugging.
 
 The bundled `tests/codex_agent_command.py` shim runs `codex exec` with efficient
 defaults: `gpt-5.4-mini` and `low` reasoning. Override `CODEX_ACTOR_MODEL`,

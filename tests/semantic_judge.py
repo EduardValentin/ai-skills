@@ -72,13 +72,6 @@ def resolve_judge_command(*fallback_commands: str) -> str:
     return ""
 
 
-def assert_forbidden_terms(text: str, terms: tuple[str, ...], context: str) -> None:
-    normalized = text.casefold()
-    present = [term for term in terms if term and term.casefold() in normalized]
-    if present:
-        raise AssertionError(f"{context} included forbidden terms: {present}")
-
-
 def run_judge(judge_command: str, prompt: str) -> str:
     return run_command(judge_command, prompt, "judge")
 

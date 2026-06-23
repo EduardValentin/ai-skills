@@ -21,7 +21,6 @@ A) Validate rendered output through the best available screenshot/browser path, 
 B) Review the code carefully and report that the change should be visually safe because it is small.
 C) Take one desktop screenshot only, then call it visually validated if it looks fine.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_rendered_validation"

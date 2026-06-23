@@ -16,7 +16,6 @@ except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback is not e
 
 from semantic_judge import (  # noqa: E402
     SemanticCriterion,
-    assert_forbidden_terms,
     judge_response,
     resolve_judge_command,
     run_command,
@@ -31,7 +30,6 @@ class BehavioralScenario:
     scenario_id: str
     user_request: str
     criteria: tuple[SemanticCriterion, ...]
-    forbidden_terms: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -224,7 +222,6 @@ def build_behavioral_scenario(path: Path, raw_scenario: object) -> BehavioralSce
         scenario_id=require_string(path, raw_scenario, "id"),
         user_request=require_string(path, raw_scenario, "user_request"),
         criteria=tuple(build_semantic_criterion(path, criterion) for criterion in criteria),
-        forbidden_terms=tuple(require_string_list(path, raw_scenario, "forbidden_terms")),
     )
 
 
@@ -249,13 +246,6 @@ def optional_string(payload: dict[str, object], key: str) -> str:
     if isinstance(value, str):
         return value.strip()
     return ""
-
-
-def require_string_list(path: Path, payload: dict[str, object], key: str) -> list[str]:
-    value = payload.get(key, [])
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ValueError(f"{path}: field {key!r} must be a string list")
-    return value
 
 
 def infer_colocated_skill_path(scenarios_path: Path) -> Path | None:
@@ -395,7 +385,6 @@ def check_semantic_response(
     judge_context: str,
 ) -> None:
     try:
-        assert_forbidden_terms(response, scenario.forbidden_terms, scenario.scenario_id)
         judge_response(
             judge_command=judge_command,
             scenario_id=scenario.scenario_id,

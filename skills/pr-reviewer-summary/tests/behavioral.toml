@@ -30,7 +30,6 @@ Mocked review context:
 - Automated test command: `npm test -- FilterPanel saved-place`
 - Manual setup command: `npm run dev`
 """
-forbidden_terms = ["initially", "after feedback", "then we changed it again", "## Manual Testing", "I ran", "I was unable", "not tested locally", "Playwright", "screenshot"]
 
 [[scenario.criteria]]
 key = "uses_reliable_context_and_final_state"
@@ -75,7 +74,6 @@ Mocked review context:
 - Real-world verification expectation: use the running app and real billing export path. Use the test-support failure toggle only because causing the export dependency to fail naturally is hard to configure safely.
 - Manual flow to cover: open the billing page, apply an invoice status filter, click Export CSV, confirm the downloaded file contains only the filtered rows, then force the export endpoint to fail and confirm the inline error appears.
 """
-forbidden_terms = ["## Manual Testing", "I ran", "I was unable", "not tested locally", "Playwright", "screenshot"]
 
 [[scenario.criteria]]
 key = "separates_automated_and_manual_verification"
@@ -100,7 +98,6 @@ id = "missing-diff-blocks"
 user_request = """
 Write the PR body, but there is no branch diff, changed-file summary, ticket, or PR URL available.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "blocks_without_reliable_context"

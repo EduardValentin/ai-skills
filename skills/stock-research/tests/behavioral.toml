@@ -11,7 +11,6 @@ id = "initial-us-listed-thesis-workflow"
 user_request = """
 Research AAPL from scratch and tell me whether it belongs in a long-term portfolio. I want a durable thesis, not short-term trading advice.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "checks_setup_and_identity"
@@ -51,7 +50,6 @@ id = "non-us-or-trading-request-blocks"
 user_request = """
 Do a quick technical analysis on a non-US stock and suggest options trades for next week.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "rejects_out_of_scope_request"

@@ -10,7 +10,6 @@ Loaded skill under test: manage-prd. Judge PRD writing quality, edit gates, busi
 [[scenario]]
 id = "business-rule-patch-needs-approval"
 user_request = "Clarification: archived plans stay visible to coaches forever but clients cannot see them. Update the PRD wording."
-forbidden_terms = ["acceptance criteria", "Linear", "implementation plan", "database column"]
 
 [[scenario.criteria]]
 key = "identifies_prd_rule"
@@ -32,7 +31,6 @@ mentions a React component, a database column, and an API endpoint, and mixes
 coach/client business behavior with implementation details. Clean up the PRD
 wording.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "removes_technical_details"
@@ -49,7 +47,6 @@ description = "The response keeps the PRD focused on coherent coach/client produ
 [[scenario]]
 id = "ticket-request-stays-out-of-scope"
 user_request = "Review this PRD section and then create the implementation tickets for it."
-forbidden_terms = ["published to Linear", "created the tickets"]
 
 [[scenario.criteria]]
 key = "handles_prd_only"

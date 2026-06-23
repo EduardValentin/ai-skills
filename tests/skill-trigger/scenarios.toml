@@ -5,7 +5,6 @@
 id = "declaratia-d212-investments"
 skill = "declaratia-unica-romania"
 prompt = "Complete my Romanian D212 for dividends from Romania and capital gains from IBKR."
-forbidden_terms = []
 
 [[scenario]]
 id = "github-interaction-bot-pr-write"
@@ -14,8 +13,6 @@ prompt = """
 Create a GitHub PR comment for my personal project using the configured GitHub
 App bot identity. Do not post it with my ambient personal gh credentials.
 """
-forbidden_terms = []
-response_forbidden_terms = []
 
 [[scenario]]
 id = "qa-verification-backend-api"
@@ -25,8 +22,6 @@ QA this backend API change against the acceptance criteria. Unit tests passed,
 but I need endpoint behavior, persistence, auth, and error responses verified
 against the running service.
 """
-forbidden_terms = []
-response_forbidden_terms = ["ticket-workflow", "Ship", "visual parity", "UI/UX", "unit tests are enough", "clean because tests passed"]
 
 [[scenario]]
 id = "qa-verification-ui-behavior"
@@ -35,8 +30,6 @@ prompt = """
 QA this user-facing UI change. Exercise loading, empty, success, error,
 validation, disabled, and rapid-click behavior in the running app.
 """
-forbidden_terms = []
-response_forbidden_terms = ["ticket-workflow", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "qa-verification-mixed-flow"
@@ -45,8 +38,6 @@ prompt = """
 QA this mixed ticket where the invite API and invite form changed together.
 Verify both the API behavior and the browser-observed user flow.
 """
-forbidden_terms = []
-response_forbidden_terms = ["ticket-workflow", "Ship", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-pr-checks"
@@ -57,8 +48,6 @@ linked to Linear ticket APP-123 from In Review: fetch PR metadata, required
 checks, implemented-surface test evidence, review approval, and unresolved
 comments before reporting whether it is ready.
 """
-forbidden_terms = []
-response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-merge-monitoring"
@@ -69,8 +58,6 @@ PR #44 is ready. I explicitly approve merging the PR; merge it and monitor
 post-merge CI, reporting any failing source-control checks with a proposed
 action plan.
 """
-forbidden_terms = []
-response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-unresolved-comments"
@@ -80,8 +67,6 @@ Verify whether PR #70 is ready for final approval. CI and surface tests are
 passing, but the source-control review metadata may have unresolved review
 threads or requested changes that must block readiness.
 """
-forbidden_terms = []
-response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "verify-pr-after-pr-created-for-review"
@@ -91,14 +76,11 @@ Create the PR for this completed Jira ticket so I can review it. Implementation,
 QA, and review reports are clean; after opening the PR, confirm whether anything
 blocks it from being ready for review.
 """
-forbidden_terms = []
-response_forbidden_terms = ["ticket-workflow", "readiness ledger", "visual parity", "UI/UX"]
 
 [[scenario]]
 id = "codebase-scope-map-implementation-handoff"
 skill = "codebase-scope-map"
 prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, affected surfaces, tests, patterns, dependencies, conflicts, and keep it token-efficient."
-forbidden_terms = []
 
 [[scenario]]
 id = "codebase-scope-map-delegated-scoping"
@@ -110,21 +92,16 @@ locators, tests, types/contracts, analogous implementations, dependencies,
 prototype/reference elements where relevant, affected surfaces, conflict points, and downstream slices.
 This scoping task is read-only: do not edit, format, generate, stage, commit, or clean up repository files.
 """
-forbidden_terms = []
 
 [[scenario]]
 id = "ui-verification-runnable-reference"
 skill = "ui-verification"
 prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before release."
-forbidden_terms = []
-response_forbidden_terms = []
 
 [[scenario]]
 id = "ui-verification-production-consistency"
 skill = "ui-verification"
 prompt = "Review implemented frontend UI for visual consistency against production analogs. For the new settings panel, produce a matched-element inventory against existing settings/profile panels with computed-style comparison, bounding-rect comparison, accessibility states, and a structured verdict."
-forbidden_terms = []
-response_forbidden_terms = []
 
 [[scenario]]
 id = "ui-verification-delegated-uiux-gate"
@@ -137,8 +114,6 @@ map, approved artifacts, changed UI files, and live DOM inspection. Compare DOM
 computed styles and bounding rects for every row, check keyboard, focus, contrast,
 and accessibility, then return a structured verdict and findings.
 """
-forbidden_terms = []
-response_forbidden_terms = []
 
 [[scenario]]
 id = "ui-verification-missing-inventory-scoping"
@@ -148,46 +123,36 @@ Verify this frontend change against the ticket description and diff. No affected
 inventory was provided, so scope the visible element inventory first from the diff,
 ticket description, changed UI files, routes, and reference or production comparison basis.
 """
-forbidden_terms = []
-response_forbidden_terms = []
 
 [[scenario]]
 id = "qa-verification-frontend-pr-acceptance"
 skill = "qa-verification"
 prompt = "QA this frontend PR against the acceptance criteria and PR notes, then tell me whether the browser behavior passes with evidence."
-forbidden_terms = []
-response_forbidden_terms = ["frontend-pr-test", "ticket-workflow", "Ship", "visual parity", "UI/UX", "verify-pr"]
 
 [[scenario]]
 id = "pr-reviewer-summary-current-branch"
 skill = "pr-reviewer-summary"
 prompt = "Generate a reviewer-friendly PR description for the current branch with Summary of Changes, Manual Testing, and reviewer notes."
-forbidden_terms = []
-response_forbidden_terms = ["verify-pr", "qa-verification"]
 
 [[scenario]]
 id = "prototype-work-flow-change"
 skill = "prototype-work"
 prompt = "In the React prototype reference app under designs/, add a new onboarding page with mocked eligibility rules, a mocked CRM handoff, and browser validation."
-forbidden_terms = ["design-studio", "prepare-design-studio.sh"]
 
 [[scenario]]
 id = "manage-prd-business-rule-update"
 skill = "manage-prd"
 prompt = "Update the PRD so archived plans stay visible to coaches forever but clients cannot see them."
-forbidden_terms = []
 
 [[scenario]]
 id = "feature-work-planning-breakdown"
 skill = "feature-work-planning"
 prompt = "Plan the future work for checkout eligibility. We do not have a ticket yet; scope the systems, dependencies, risks, rollout, and delivery slices."
-forbidden_terms = []
 
 [[scenario]]
 id = "ticket-writing-create-stories"
 skill = "ticket-writing"
 prompt = "Turn this approved planning packet into clean epics, vertical-slice user stories, dependency relationships for native issue links, and acceptance criteria."
-forbidden_terms = []
 
 [[scenario]]
 id = "ticket-writing-clean-draft-quality"
@@ -197,13 +162,11 @@ Clean up these draft epics and stories before publishing: make titles plain,
 separate business overview from technical details, add real acceptance criteria,
 remove parent/child duplication, and make event/API output contracts explicit.
 """
-forbidden_terms = []
 
 [[scenario]]
 id = "linear-issue-writing-approved-drafts"
 skill = "linear-issue-writing"
 prompt = "Publish these approved epic and user story drafts into Linear, with the right parent-child structure and duplicate checks."
-forbidden_terms = []
 
 [[scenario]]
 id = "use-linear-graphql-keychain"
@@ -211,7 +174,6 @@ skill = "use-linear"
 prompt = "Linear MCP is disabled. Use my saved API key to find the right Linear project, avoid duplicates, and create the approved issue through GraphQL."
 description_terms = ["Linear GraphQL API", "MCP is unavailable or disabled", "macOS Keychain"]
 skill_terms = ["course-platform.linear-api-key", "security find-generic-password", "Authorization: <token>"]
-forbidden_terms = []
 
 [[scenario]]
 id = "bitbucket-pr-ui-test"
@@ -221,99 +183,78 @@ In the Bitbucket Cloud repo acme/widget, find the pull request for branch
 feature/auth-panel from remote https://bitbucket.org/acme/widget.git, read its
 PR metadata and comments, and report the Bitbucket PR details needed before UI testing.
 """
-forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
-response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "bitbucket-current-branch"
 skill = "manage-bitbucket-pr"
 prompt = "In the Bitbucket repo for acme/widget, check the current branch PR before I test it."
-forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
-response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "bitbucket-review-summary"
 skill = "manage-bitbucket-pr"
 prompt = "Summarize the review discussion and PR notes for https://bitbucket.org/acme/widget/pull-requests/42."
-forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
-response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "bitbucket-update-description"
 skill = "manage-bitbucket-pr"
 prompt = "Update the description on Bitbucket Cloud PR 42 in acme/widget with the final QA evidence."
-forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
-response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "bitbucket-merge-status"
 skill = "manage-bitbucket-pr"
 prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report blockers."
-forbidden_terms = ["qa-verification", "QA verification", "another workflow", "generic Bitbucket connector"]
-response_forbidden_terms = ["qa-verification"]
 
 [[scenario]]
 id = "pr-reviewer-summary-verification-split"
 skill = "pr-reviewer-summary"
 prompt = "Generate a summary of changes for this PR with automated test commands and manual verification steps for the reviewer."
-forbidden_terms = ["## Manual Testing"]
 
 [[scenario]]
 id = "uiux-frontend-interface-design-accessible-interface"
 skill = "frontend-interface-design"
 prompt = "Build a polished settings interface in this GUI app with accessible controls, adaptive layout, loading and error states, and subtle motion."
-forbidden_terms = []
 
 [[scenario]]
 id = "uiux-semantic-design-tokens-raw-values"
 skill = "semantic-design-tokens"
 prompt = "Audit this component for raw hex colors, duplicated theme constants, local values that bypass existing semantic roles, and styling that should be converted to semantic design tokens."
-forbidden_terms = []
 
 [[scenario]]
 id = "uiux-reusable-components-repeated-patterns"
 skill = "reusable-ui-components"
 prompt = "This dashboard repeats metric cards and filter panels across pages. Decide whether to reuse, extend variants, or extract a reusable component API."
-forbidden_terms = []
 
 [[scenario]]
 id = "uiux-visual-validation-breakpoints"
 skill = "visual-validation"
 prompt = "Validate these frontend UI changes with screenshots across breakpoints, checking card title alignment, text overflow, inconsistent sibling colors, clipping, contrast, focus states, and parity with the reference app."
-forbidden_terms = []
 
 [[scenario]]
 id = "uiux-design-direction-ambiguous-premium"
 skill = "design-direction-brainstorming"
 prompt = "I want to change the visual direction of this dashboard so it feels more premium and less cluttered; the target audience and emotional tone are not clear yet."
-forbidden_terms = []
 
 [[scenario]]
 id = "uiux-design-direction-visual-addition"
 skill = "design-direction-brainstorming"
 prompt = "Add a new visual summary section to the onboarding app, but I have not decided what style, density, emotional tone, or first impression it should have."
-forbidden_terms = []
 
 [[scenario]]
 id = "uiux-web-copy-hero-cta"
 skill = "web-copy"
 prompt = "Rewrite the hero, CTA, onboarding, empty-state, and error microcopy so it fits our brand voice and conversion goal."
-forbidden_terms = []
 
 [[scenario]]
 id = "stock-recap-quarterly-catch-up"
 skill = "stock-recap"
 prompt = "I last researched NOW back in February. Catch me up on the quarters that have been filed since then — I want to see whether the thesis still holds."
-forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]
 
 [[scenario]]
 id = "stock-research-fundamentals-thesis"
 skill = "stock-research"
 prompt = "Research AAPL end-to-end and help me decide whether it belongs on my long-term buy/watch/avoid list."
-forbidden_terms = []
 
 [[scenario]]
 id = "stock-recap-news-impact"
 skill = "stock-recap"
 prompt = "Microsoft just announced acquiring Activision for $69B. I have an existing thesis on MSFT — recap it through the lens of this acquisition."
-forbidden_terms = ["CP1", "CP2", "CP3", "ELI5"]

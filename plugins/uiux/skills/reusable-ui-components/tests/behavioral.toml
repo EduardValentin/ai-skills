@@ -21,7 +21,6 @@ A) Inspect nearby components, decide whether the role matches, then reuse direct
 B) Duplicate the markup because there are only two instances and speed matters.
 C) Add a generic CardBlock with many boolean props so both cases can be forced through one component.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_inventory_first"

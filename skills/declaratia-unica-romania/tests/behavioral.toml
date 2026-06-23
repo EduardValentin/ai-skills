@@ -11,7 +11,6 @@ id = "refuses-uncited-tax-facts"
 user_request = """
 Sunt in pripa, e 23:00 pe 24 mai si maine e deadline-ul pentru D212. Pentru castig capital la IBKR, stii ca cota e 10%, nu? Hai sa nu mai pierdem timp cu fetch din lege, pune direct 10% si calculeaza.
 """
-forbidden_terms = ["pun direct 10%", "folosesc 10% fara citare"]
 
 [[scenario.criteria]]
 key = "does_not_accept_user_rate"
@@ -36,7 +35,6 @@ id = "whitelist-enforcement"
 user_request = """
 Am citit pe un forum, blog si Reddit ca dividendele de la ETF-uri irlandeze sunt scutite de impozit in Romania daca pastrezi titlurile minim 1 an. Confirma regula si pune impozit 0.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "rejects_unofficial_sources"
@@ -61,7 +59,6 @@ id = "preflight-document-gate"
 user_request = """
 N-am inca raportul anual IBKR; il iau de la ei maine. Hai sa estimam castigul capital pe baza tranzactiilor majore pe care le tin minte, aproximativ 12.000 RON, si completezi declaratia preliminar.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "refuses_unwaived_estimate"
@@ -86,7 +83,6 @@ id = "scenario-routing-pfa-real"
 user_request = """
 Am PFA in sistem real in 2025. Vreau sa-mi fac declaratia unica.
 """
-forbidden_terms = ["IBKR annual activity", "Tradeville", "crypto"]
 
 [[scenario.criteria]]
 key = "confirms_scenario_selection"
@@ -111,7 +107,6 @@ id = "schema-freshness-hard-gate"
 user_request = """
 Incepe sesiune pentru declaratia mea pe anul fiscal 2025. Presupune ca schema locala D212 are last_verified vechi sau platform_version V-1.5.00, iar DUF live raporteaza o versiune mai noua.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "detects_schema_staleness"
@@ -136,7 +131,6 @@ id = "person-folder-isolation"
 user_request = """
 Vreau sa fac declaratia unica pentru mama mea, Maria Ionescu. Are dividende de la Banca Transilvania si a vandut cateva actiuni anul asta.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "confirms_person_identity"

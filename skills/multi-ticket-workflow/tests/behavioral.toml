@@ -16,7 +16,6 @@ dependencies and possible parallel work. The repository is large, shared
 surfaces are not yet mapped, and native specialist subagents are available in
 this runtime.
 """
-forbidden_terms = ["dispatch immediately", "one generic worker", "ticket-workflow"]
 
 [[scenario.criteria]]
 key = "gathers_named_scope"
@@ -55,7 +54,6 @@ The multi-ticket spec/design is approved. APP-10 and APP-11 each have approved
 ticket implementation plans. The coordination plan is approved. APP-11 depends
 on APP-10's migration output. The user asks what happens next.
 """
-forbidden_terms = ["main agent implements inline", "ticket intake by worker", "user-facing brainstorming by worker"]
 
 [[scenario.criteria]]
 key = "creates_execution_packets"

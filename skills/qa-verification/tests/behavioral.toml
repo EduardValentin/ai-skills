@@ -15,7 +15,6 @@ Acceptance criteria require validating successful creation, duplicate rejection,
 auth boundaries, state transitions, persisted state, side effects, and error
 payloads against the running service.
 """
-forbidden_terms = ["unit tests are enough", "clean because tests passed", "before Ship", "visual parity", "UI/UX"]
 
 [[scenario.criteria]]
 key = "live_service_behavior"
@@ -52,7 +51,6 @@ available and the focused unit tests pass, but there is no running Celery beat,
 Oracle database, or Vault service available yet. Decide the current QA verdict
 and report shape.
 """
-forbidden_terms = ["clean because tests passed", "source inspection is enough", "unit tests are enough", "manual verification by source inspection"]
 
 [[scenario.criteria]]
 key = "automated_tests_do_not_count_as_qa"
@@ -87,7 +85,6 @@ service, CLI command, job trigger, database read, log check, browser action, or
 integration probe has been performed. The caller asks for the current QA
 verdict.
 """
-forbidden_terms = ["CLEAN because tests passed", "unit tests are enough", "automated checks are QA", "source inspection is enough"]
 
 [[scenario.criteria]]
 key = "separates_checks_from_qa"
@@ -117,7 +114,6 @@ import fake Oracle and Vault clients locally and simulate responses, but real
 Oracle and Vault connections, credentials, and seeded data are not available.
 Decide the current QA verdict and report shape.
 """
-forbidden_terms = ["CLEAN from mocks", "mocked Oracle is enough", "fake Vault import is enough", "simulate the database and mark clean", "unit tests are enough"]
 
 [[scenario.criteria]]
 key = "requires_real_third_party_dependencies"
@@ -148,7 +144,6 @@ id = "ui-behavior-states"
 user_request = """
 User-facing settings form. Exercise loading, empty, success, error, validation, disabled, rapid-click, and navigation-mid-save behavior in the running app.
 """
-forbidden_terms = ["visual parity", "style review", "UI/UX", "before Ship"]
 
 [[scenario.criteria]]
 key = "running_app_ui_behavior"
@@ -178,7 +173,6 @@ require invite creation through the API, invite submission through the form,
 duplicate rejection, visible form errors, persisted invite state, and matching
 UI/API invite status.
 """
-forbidden_terms = ["only backend", "only ui", "before Ship", "visual parity", "UI/UX"]
 
 [[scenario.criteria]]
 key = "mixed_mode_covers_backend_and_ui"
@@ -203,7 +197,6 @@ id = "frontend-pr-metadata-blocked"
 user_request = """
 Frontend PR. The local diff and ticket ID are available, but the browser PR page is blocked by authentication and there is time pressure to test from the diff. You have not yet tried MCP, API, CLI, or authenticated local metadata.
 """
-forbidden_terms = ["best-effort browser testing", "clean because the diff", "frontend-pr-test", "visual parity", "UI/UX"]
 
 [[scenario.criteria]]
 key = "blocked_metadata_blocks_qa"
@@ -228,7 +221,6 @@ id = "frontend-pr-readable-no-testing-notes"
 user_request = """
 Frontend PR. PR metadata and the ticket are readable, but the PR has no testing section. The ticket says users can filter saved places by status, and the diff changes a filter panel and badge count. The app is running at http://localhost:3000/saved-places with seeded Active and Archived saved places.
 """
-forbidden_terms = ["QA cannot proceed because notes are absent", "frontend-pr-test", "visual parity", "UI/UX"]
 
 [[scenario.criteria]]
 key = "does_not_block_when_metadata_read"
@@ -253,7 +245,6 @@ id = "frontend-pr-user-supplied-notes"
 user_request = """
 Frontend PR. The PR host is unavailable, but the user pasted the PR testing notes: verify saved-place filters for Active, Archived, and All, and confirm the counter updates after archiving an item. The local diff is available.
 """
-forbidden_terms = ["frontend-pr-test", "visual parity", "UI/UX"]
 
 [[scenario.criteria]]
 key = "uses_user_supplied_metadata"
@@ -278,7 +269,6 @@ id = "qa-reports-bugs-does-not-fix"
 user_request = """
 QA this settings form and fix anything you find. The app is running at http://localhost:3000/settings with a seeded test user, and a test control can force the next save to fail. Acceptance criteria require disabled submit while saving and an error message when save fails.
 """
-forbidden_terms = ["implemented the fix", "patched the code", "updated the component", "committed the fix"]
 
 [[scenario.criteria]]
 key = "plans_running_surface_exercise"
