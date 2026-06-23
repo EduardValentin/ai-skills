@@ -98,7 +98,7 @@ forbidden_terms = ["define detailed review mechanics", "skip implementation tran
 [[scenario.criteria]]
 key = "states_execution_approach"
 description = """
-The response states the intended execution approach before editing, choosing inline, delegated, or hybrid based on the approved plan's size, coupling, risk, separability, and implementation context.
+The response states the recommended execution approach before editing, choosing inline, subagent-driven delegated execution, or hybrid based on the approved plan's size, coupling, risk, separability, and implementation context.
 """
 
 [[scenario.criteria]]
@@ -110,7 +110,7 @@ The response treats ticket-workflow as the parent transition and moves the appro
 [[scenario.criteria]]
 key = "hands_to_implementation_workflow"
 description = """
-The response invokes `implementation-workflow` for the approved unit and names `implementation-coordinator` when delegated or hybrid execution is selected.
+The response invokes `/implementation-workflow` for the approved implementation unit before editing.
 """
 
 [[scenario.criteria]]
@@ -129,14 +129,21 @@ The response says that if implementation reveals the approved spec/design or imp
 id = "post-implementation-pr-readiness"
 user_request = """
 Implementation for the approved ticket plan is complete and the PR exists. The
-user asks whether the ticket is ready for review.
+PR pipeline currently has one failing CI check. The user asks whether the ticket
+is ready for review.
 """
 forbidden_terms = ["merge it", "mark done", "skip PR readiness"]
 
 [[scenario.criteria]]
 key = "checks_pr_readiness"
 description = """
-The response treats ticket-workflow as responsible for PR readiness after implementation, checking PR existence or blocker, target, title, description, linked ticket, scope vs approved plan, evidence, blockers, follow-ups, and ticket state.
+The response treats ticket-workflow as responsible for PR readiness after implementation, checking PR existence or blocker, target, title, description, linked ticket, scope vs approved plan, implementation evidence, review evidence, manual QA verification report, UI/UX prototype parity report when applicable, test evidence, blockers, follow-ups, ticket state, and PR pipeline CI status.
+"""
+
+[[scenario.criteria]]
+key = "fixes_failed_ci"
+description = """
+Because the scenario says a PR pipeline CI check is failing, the response does not declare the ticket ready. It requires delivering the appropriate fix and including the CI failure and fix evidence in the final report.
 """
 
 [[scenario.criteria]]

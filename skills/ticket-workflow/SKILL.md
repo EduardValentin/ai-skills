@@ -47,17 +47,9 @@ After spec/design approval, write an implementation plan that takes into conside
 
 ## Implementation
 
-After plan approval, invoke `implementation-workflow` for the approved implementation unit before editing. Every post-approval transition response must say that `ticket-workflow` is handing the approved unit to `implementation-workflow`. State the intended execution approach: inline, delegated, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context. For delegated or hybrid execution, use the literal name `implementation-coordinator` in that same response and hand it the approved plan and relevant context; for inline execution, state why inline work is the better fit. In the same handoff, state that implementation must return to the relevant approval gate if the approved spec/design or plan needs to change. Do not define detailed execution mechanics here.
+After plan approval, invoke `/implementation-workflow` for the approved implementation unit before editing. State the recommended execution approach: inline, subagent-driven delegated execution, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context.
 
-Use this compact handoff shape:
-
-- parent workflow: `ticket-workflow`
-- implementation workflow: `implementation-workflow`
-- execution shape: <inline | delegated | hybrid>
-- implementation delegate for delegated or hybrid execution: `implementation-coordinator`
-- approval fallback: return to spec/design or plan approval if either artifact must change
-
-Implement the approved plan using that approach. Prefer quality code over time to complete the task. Make sure the solution is well tested. If implementation reveals that the approved spec/design or plan should change, return to the relevant approval gate before continuing.
+Prefer quality code over time to complete the task. Make sure the solution is well tested. If implementation reveals that the approved spec/design or plan should change, return to the relevant approval gate before continuing.
 
 ## PR Readiness
 
@@ -69,7 +61,8 @@ Check:
 
 - implementation produced a PR or a concrete blocker explaining why no PR exists
 - PR target, title, description, linked ticket, and changed scope match the approved plan
-- implementation, review, security, QA, UI, test, and blocker evidence is present when applicable
+- implementation, review, manual QA verification report, UI/UX prototype parity report, test, and blocker evidence is present when applicable
+- PR pipeline CI checks are green; if anything fails, deliver the appropriate fix and include it in the final report
 - unresolved findings, blockers, assumptions, and follow-ups are clearly reported
 - ticket state is appropriate for the user's process
 - no merge, completion, ticket closure, comment dismissal, or final source-control/tracker mutation happens without explicit user approval
@@ -81,7 +74,8 @@ Use this compact readiness shape:
 - PR exists or blocker:
 - target, title, description, and linked ticket:
 - changed scope vs approved plan:
-- implementation, review, QA, UI, test, and blocker evidence:
+- implementation, review, manual QA verification report, UI/UX prototype parity report, test, and blocker evidence:
+- PR pipeline CI status and fixes:
 - unresolved findings, assumptions, follow-ups:
 - ticket state:
 - prohibited mutations without approval:
