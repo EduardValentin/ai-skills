@@ -31,8 +31,6 @@ Expect enough context to implement safely:
 - current branch/worktree state
 - dependencies, sequencing constraints, and known risks
 
-Require the approved spec/design when applicable and an approved implementation plan or approved plan slice for every implementation unit. Do not infer missing boundaries or proceed without the required approval.
-
 If required inputs are missing, stale, or contradictory in a way that affects safe implementation, stop with `IMPLEMENTATION BLOCKED` and name the missing input or conflict.
 
 ## Implementation Workflow
@@ -58,7 +56,7 @@ If required inputs are missing, stale, or contradictory in a way that affects sa
 - Keep changes traceable to the unit goal and acceptance criteria.
 - Keep security implications in mind while implementing or delegating work, especially auth/session, authorization, user input, data exposure, persistence, redirects, file handling, external requests, privileged actions, dependencies, sensitive logging, and changes to what users can see or do.
 
-When summarizing the implementation loop before or during edits, name the chosen execution shape, the TDD loop, the existing-patterns check, and the quality, readability, maintainability, and performance preference explicitly.
+Before edits or handoff, summarize the implementation loop by naming the chosen execution shape, stale or contradictory context check, approved-boundary check, concrete TDD loop, existing-patterns check, and quality, readability, maintainability, and performance preference. State the TDD loop as failing behavior test first, implement, then rerun that test and relevant checks.
 
 ## Review
 
@@ -66,7 +64,7 @@ Request independent review before treating implementation as complete.
 
 Use every configured review channel available for the repository:
 
-- start a fresh-context review session with `code-reviewer`; if `code-reviewer` is unavailable, use a generic read-only review subagent. Ask it to review the PR against the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context
+- start a fresh-context review session with `code-reviewer`; if `code-reviewer` is unavailable, use a generic read-only review subagent. Ask it to review the PR against the approved goal, acceptance criteria, approved plan, repository instructions, relevant codebase context, and concrete security focus areas when the change touches authorization, user input, data exposure, persistence, visibility, or privileged behavior
 - request an external frontier-model review when a separate model/runtime is available
 - request automated PR review when the repository has an automated review service configured
 
@@ -92,7 +90,7 @@ For UI-facing or mixed work, verify visual consistency, accessibility, relevant 
 
 Record anything not run and why. A missing check is acceptable only when the reason is explicit and the residual risk is reported.
 
-When executable behavior changed and manual QA evidence is missing, state the exact manual QA verification to run against the running application and acceptance criteria. Keep automated tests separate from manual QA evidence.
+When executable behavior changed and manual QA evidence is missing, state the exact manual QA verification to run against the running application, acceptance criteria, and real dependencies when feasible. Keep automated tests separate from manual QA evidence.
 
 Incomplete verification reports must name the `qa-verifier` delegation or fallback and the evidence still needed.
 
