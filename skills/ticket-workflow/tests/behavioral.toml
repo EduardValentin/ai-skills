@@ -60,21 +60,20 @@ The response does not write the implementation plan until the user approves the 
 id = "delegates-code-scoping-before-brainstorm"
 user_request = """
 Start one standalone ticket with broad repository impact. The ticket goal is
-clear, but the relevant code surfaces are unknown. Native subagents capable of
-read-only code scoping are available in this runtime. Because this is a
-pressure test with no file edits, state the next workflow move.
+clear, but the relevant code surfaces are unknown. Because this is a pressure
+test with no file edits, state the next workflow move.
 """
 
 [[scenario.criteria]]
 key = "delegates_code_scoping"
 description = """
-The response treats read-only code scoping as the next setup move before brainstorming and delegates it to `code-mapper`, with a generic read-only subagent or inline fallback only if `code-mapper` or delegation is unavailable or unsafe.
+The response treats read-only code scoping as the next setup move before brainstorming and intends to dispatch a native specialized scoping subagent when one is available.
 """
 
 [[scenario.criteria]]
-key = "names_code_mapper"
+key = "discovers_available_scoping_delegate"
 description = """
-The response names `code-mapper` as the intended read-only code scoping agent, with a generic read-only subagent or inline fallback only if `code-mapper` or delegation is unavailable or unsafe.
+The response says it will check or discover whether a native specialized subagent such as `code-mapper` is available for read-only code scoping, use a generic read-only subagent if no specialized delegate is available, or map inline only when delegation is unavailable or unsafe.
 """
 
 [[scenario.criteria]]
