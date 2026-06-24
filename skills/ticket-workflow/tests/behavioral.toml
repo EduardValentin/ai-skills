@@ -97,15 +97,15 @@ The response states the recommended execution approach before editing, choosing 
 """
 
 [[scenario.criteria]]
-key = "transitions_approved_implementation_unit"
+key = "transitions_approved_ticket_to_in_progress"
 description = """
-The response treats ticket-workflow as the parent transition and moves the approved implementation unit into implementation before code or test edits.
+The response treats ticket-workflow as the parent transition for the associated ticket and moves the ticket into a status that correctly marks it as in progress before code or test edits.
 """
 
 [[scenario.criteria]]
 key = "hands_to_implementation_workflow"
 description = """
-The response invokes `/implementation-workflow` for the approved implementation unit before editing.
+The response invokes `/implementation-workflow` for the approved ticket before editing.
 """
 
 [[scenario.criteria]]

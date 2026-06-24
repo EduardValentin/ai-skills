@@ -47,7 +47,7 @@ After spec/design approval, write an implementation plan that takes into conside
 
 ## Implementation
 
-After plan approval, invoke `/implementation-workflow` for the approved implementation unit before editing. State the recommended execution approach: inline, subagent-driven delegated execution, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context.
+After plan approval, invoke `/implementation-workflow` for the approved ticket before editing. State the recommended execution approach: inline, subagent-driven delegated execution, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context.
 
 Prefer quality code over time to complete the task. Make sure the solution is well tested. If implementation reveals that the approved spec/design or plan should change, return to the relevant approval gate before continuing.
 
