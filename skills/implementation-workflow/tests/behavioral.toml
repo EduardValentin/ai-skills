@@ -34,9 +34,8 @@ Approved implementation packet: add billing retry behavior across the billing
 service, notification job, and admin retry UI. The packet includes acceptance
 criteria, approved spec/design, approved implementation plan, branch state,
 dependencies, risks, and non-goals. The repository is large, the affected
-surfaces are only described at a high level, and native specialist subagents are
-available in this runtime. Because this is a pressure test and no files may be
-edited, describe how you would proceed.
+surfaces are only described at a high level. Because this is a pressure test
+and no files may be edited, describe how you would proceed.
 """
 
 [[scenario.criteria]]
@@ -64,15 +63,15 @@ The response states an execution shape for the approved unit, such as inline, de
 """
 
 [[scenario.criteria]]
-key = "delegates_codebase_mapping_when_material"
+key = "chooses_code_scanning_depth"
 description = """
-Because the repository is large, the affected surfaces are high level, and native specialist subagents are available, the response delegates a read-only codebase mapping pass before implementation. If the response would not delegate, it must give a safety or availability reason and still preserve the read-only mapping boundary.
+The response decides the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence.
 """
 
 [[scenario.criteria]]
-key = "names_code_mapper"
+key = "blocks_if_context_is_insufficient"
 description = """
-The response names `code-mapper` for the read-only codebase mapping pass, with a generic read-only subagent or inline fallback only if `code-mapper` or delegation is unavailable or unsafe.
+The response gathers enough code or repository context to proceed safely, or says it will stop with `IMPLEMENTATION BLOCKED` and name the missing context if safe implementation is not possible.
 """
 
 [[scenario]]

@@ -36,8 +36,8 @@ If required inputs are missing, stale, or contradictory in a way that affects sa
 ## Implementation Workflow
 
 1. Start from the approved spec/design and implementation plan. Resolve missing, stale, or contradictory context before editing.
-2. Inspect enough code to avoid blind edits, including nearby callers/callees, shared types/contracts, analogous implementations, tests, configuration, and affected architecture surfaces when they could affect the change. When codebase mapping materially improves confidence or context management, delegate a read-only mapping pass to `code-mapper` and name `code-mapper` explicitly in the next action, handoff, or report. If `code-mapper` is unavailable, use a generic read-only subagent. If delegation is unavailable or unsafe, perform the mapping inline and state why.
-3. Choose and state the execution shape before editing: inline, delegated, or hybrid. Use delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management.
+2. Decide the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence. Gather enough context to proceed safely, or stop with `IMPLEMENTATION BLOCKED` and name the missing context.
+3. Choose and state the execution shape before editing: inline, delegated, or hybrid. Explain why that shape fits the approved unit. Use delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management, and name how the slices stay coordinated.
 4. Implement the approved plan using the chosen execution shape.
 5. Run the review phase.
 6. Run the verification phase.
@@ -136,7 +136,7 @@ Include every section even when the work is blocked or incomplete. If a section'
 
 ## Engineering notes
 - Input freshness/conflicts: <resolved, none found, unresolved, or blocker>
-- Codebase mapping: <`code-mapper`, generic read-only subagent, inline, unnecessary, unavailable, or blocker>
+- Code/repository context: <what was inspected, delegated, unnecessary, unavailable, or blocked>
 - Architecture/context considered: <callers, contracts, shared surfaces, analogous code>
 - Maintainability/performance notes: <notes or exceptions>
 
