@@ -20,7 +20,7 @@ from behavioral_harness import (  # noqa: E402
     resolve_behavioral_agent_command,
     select_scenarios,
 )
-from semantic_judge import SemanticCriterion  # noqa: E402
+from semantic_judge import SemanticCriterion, make_judge_prompt  # noqa: E402
 
 
 def main() -> int:
@@ -49,6 +49,18 @@ def check_behavioral_harness_contract() -> None:
 
     if not isinstance(prompt, str) or not prompt.strip():
         raise AssertionError("loaded-skill prompt must be non-empty text")
+    if "Do not perform external tool calls" not in prompt:
+        raise AssertionError("loaded-skill prompt must forbid external tool calls")
+
+    judge_prompt = make_judge_prompt(
+        "demo-scenario",
+        scenario.user_request,
+        "I would inspect the remote system next.",
+        scenario.criteria,
+        "Judge demo behavior.",
+    )
+    if "external tool calls are unavailable" not in judge_prompt:
+        raise AssertionError("judge prompt must explain pressure-test external-call constraints")
 
     selected = select_scenarios((scenario,), "demo-scenario")
     if selected != (scenario,):

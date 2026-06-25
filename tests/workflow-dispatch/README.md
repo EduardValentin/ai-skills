@@ -51,7 +51,7 @@ from the delegated request, the test fails.
 Behavioral checks use a hybrid model:
 
 - deterministic hard gates for `ACTION:` shape, required machine tokens,
-  forbidden downstream skill IDs, ordering invariants, and black-box downstream
+  ordering invariants, configured response checks, and black-box downstream
   discovery;
 - semantic judge rubrics for workflow quality, such as whether the parent stayed
   an orchestrator and whether delegated requests are self-contained.

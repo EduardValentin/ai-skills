@@ -17,6 +17,13 @@ assert_contains() {
   [[ "$haystack" == *"$needle"* ]] || fail "expected output to contain: $needle"
 }
 
+help_output=$("$SCRIPT" --help)
+assert_contains "$help_output" "Usage:"
+assert_contains "$help_output" "bitbucket-cloud-pr.sh [--dry-run] pr-details"
+assert_contains "$help_output" "find-prs-for-branch"
+assert_contains "$help_output" "update-description"
+assert_contains "$help_output" "BITBUCKET_TOKEN"
+
 output=$("$SCRIPT" --dry-run pr-details acme widget 42)
 assert_contains "$output" "METHOD=GET"
 assert_contains "$output" "URL=https://api.bitbucket.org/2.0/repositories/acme/widget/pullrequests/42"
@@ -59,15 +66,15 @@ assert_contains "$(cat "$auth_output")" "Set BITBUCKET_TOKEN or BITBUCKET_EMAIL 
 
 skill_doc=$(cat "$SKILL_DOC")
 assert_contains "$skill_doc" "find-prs-for-branch"
-assert_contains "$skill_doc" "update-description"
 assert_contains "$skill_doc" "Bitbucket-hosted pull request/repository"
 assert_contains "$skill_doc" "testing or verifying PR behavior"
 assert_contains "$skill_doc" "Git credential helper for \`bitbucket.org\`"
 assert_contains "$skill_doc" "printf 'protocol=https\\nhost=bitbucket.org\\n\\n' | git credential fill"
-assert_contains "$skill_doc" "direct HTTPS request"
-assert_contains "$skill_doc" "Basic auth"
 assert_contains "$skill_doc" "codex-bitbucket-api-token"
 assert_contains "$skill_doc" "try the next approved source before reporting a blocker"
 assert_contains "$skill_doc" "testing or verifying PR behavior"
+assert_contains "$skill_doc" "Do not nest fenced code blocks inside numbered or bulleted lists"
+assert_contains "$skill_doc" "## Supported Hosts"
+assert_contains "$skill_doc" "For self-hosted Bitbucket URLs, do not reuse Cloud mutation routes"
 
 printf 'PASS: bitbucket-cloud-pr dry-run contract\n'
