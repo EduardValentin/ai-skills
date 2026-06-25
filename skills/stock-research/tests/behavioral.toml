@@ -15,8 +15,7 @@ Research AAPL from scratch and tell me whether it belongs in a long-term portfol
 [[scenario.criteria]]
 key = "checks_setup_and_identity"
 description = """
-Because the pressure prompt forbids external calls and commands, the response
-requires resolving ticker identity and checking the SEC user-agent, script
+The response requires resolving ticker identity and checking the SEC user-agent, script
 environment, research repo, and existing ticker folder before durable work
 starts.
 """
