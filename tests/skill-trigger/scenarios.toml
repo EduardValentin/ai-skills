@@ -207,7 +207,12 @@ prompt = "Check whether Bitbucket PR 42 in acme/widget can be merged and report 
 [[scenario]]
 id = "pr-reviewer-summary-verification-split"
 skill = "pr-reviewer-summary"
-prompt = "Generate a summary of changes for this PR with automated test commands and manual verification steps for the reviewer."
+prompt = "Update the PR description with a summary of changes, automated test commands, and manual verification steps for the reviewer."
+
+[[scenario]]
+id = "pr-reviewer-summary-entry-point-manual-verification"
+skill = "pr-reviewer-summary"
+prompt = "Write the PR description and make Manual Verification show concise terminal steps that exercise only the changed top-level entry point, mocking only external ISO or I/O calls. Use fenced code blocks for every command or code-like value, even single-line commands."
 
 [[scenario]]
 id = "uiux-frontend-interface-design-accessible-interface"

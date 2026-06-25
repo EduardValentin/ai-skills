@@ -4,83 +4,148 @@ skill = "pr-reviewer-summary"
 skill_path = "skills/pr-reviewer-summary/SKILL.md"
 scenario_env = "PR_REVIEWER_SUMMARY_SCENARIO"
 judge_context = """
-Loaded skill under test: pr-reviewer-summary. Judge reviewer usefulness, final-state summarization, context requirements, automated-test formatting, complete real-world manual verification, manual command inclusion, and absence of agent-process testing notes.
+Loaded skill under test: pr-reviewer-summary. Judge reviewer usefulness, final-state summarization, context requirements, automated-test formatting, complete entry-point-based manual verification, manual command inclusion, fenced-block formatting for all code-like values, external boundary labeling, and paste-ready PR-body quality.
 """
 
 [[scenario]]
-id = "final-state-pr-body"
+id = "mvc-filter-pr-body"
 user_request = """
-Generate a PR description for a branch that added saved-place filtering.
+Generate a PR description for a branch that added more filters to an MVC app table.
 
 Mocked review context:
-- Branch diff summary: final diff changes the filter panel, API query parameter, and active filter badge count behavior.
-- Changed files: `FilterPanel`, results query serialization, and active filter badge count logic.
-- Recent commits: saved-place filter control, query parameter wiring, badge count update.
-- Ticket/conversation context: users need to narrow results to saved places; the work had several iterations and a false start, but the PR description should describe only the final shipped state.
-- Automated test command: `npm test -- FilterPanel saved-place`
-- Manual setup command: `npm run dev`
-"""
-
-[[scenario.criteria]]
-key = "uses_reliable_context_and_final_state"
-description = """
-The response uses the mocked diff, changed files, recent commits, and ticket context, and describes final shipped behavior instead of iteration history.
-"""
-
-[[scenario.criteria]]
-key = "uses_required_sections"
-description = """
-The PR body uses Summary of Changes, Automated Tests, and Manual Verification, adding Technical Details only when warranted.
-"""
-
-[[scenario.criteria]]
-key = "automated_tests_are_formatted"
-description = """
-Automated Tests contains the automated test command in a fenced code block and preserves command line breaks when commands span multiple lines.
-"""
-
-[[scenario.criteria]]
-key = "manual_verification_is_complete_real_world_and_command_backed"
-description = """
-Manual Verification includes as many steps as needed, uses reviewer-run commands in fenced code blocks, expects real app/system behavior with real dependencies where practical, and keeps automated test runner commands out.
-"""
-
-[[scenario]]
-id = "separates-automated-tests-from-manual-verification"
-user_request = """
-Generate a PR description for a branch that added a billing export CSV download.
-
-Mocked review context:
-- Branch diff summary: final diff adds an Export CSV button to the billing page, calls the new `/api/billing/export` endpoint, and shows an inline error when the export fails.
-- Changed files: billing page toolbar, export API route, toast/error messaging, and billing route tests.
-- Recent commits: export endpoint, toolbar button, error state, tests.
-- Ticket/conversation context: finance admins need to download filtered invoice rows from the billing page.
+- App shape: React Router v7 in server-side rendering mode, using route loaders as the MVC controller boundary.
+- Branch diff summary: final diff adds customer status, account tier, and created-date range filters to the Accounts table, serializes those filters into the URL, parses the filter query params in the route loader, and applies them to the database query.
+- Changed files: Accounts table filter controls, route loader query parsing, database query builder, loading/empty state copy, and route tests.
+- Recent commits: table filter UI, URL query serialization, loader parser, database filtering, empty state, tests.
+- Ticket/conversation context: account managers need to narrow the Accounts table by lifecycle status, account tier, and creation date without leaving the table view. The work had several iterations and a false start.
 - Automated test commands:
-  npm test -- billing-export
-  npm run test:e2e -- billing-export.spec.ts
-- Manual setup command: npm run dev
-- Manual failure command:
-  curl -X POST http://localhost:3000/test-support/billing-export-failure --data '{"enabled":true}' -H 'content-type: application/json'
-- Real-world verification expectation: use the running app and real billing export path. Use the test-support failure toggle only because causing the export dependency to fail naturally is hard to configure safely.
-- Manual flow to cover: open the billing page, apply an invoice status filter, click Export CSV, confirm the downloaded file contains only the filtered rows, then force the export endpoint to fail and confirm the inline error appears.
+  npm test -- accounts-filter-loader
+  npm test -- accounts-table-filters
+  npm run test:e2e -- accounts-table-filters.spec.ts
+- Manual QA evidence available from the implementation session:
+  - Start command used a local Vault mock because real Vault is unavailable in local development.
+  - Browser route used for manual QA was `http://localhost:3000/accounts`.
+  - Changing Customer status to Active narrowed the table to active accounts and updated the result count.
+  - Changing Account tier to Enterprise narrowed the table and persisted `tier=enterprise` in the URL.
+  - Setting Created after to `2026-01-01` and Created before to `2026-06-01` narrowed the result set and survived a browser refresh.
+  - Combining all three filters showed the matching rows; clearing filters restored the default table.
+  - A filter combination with no results rendered the empty state.
+- Manual setup command:
+  VAULT_ADDR=http://localhost:8201 VAULT_TOKEN=dev-token npm run dev
+- Vault mock command:
+  npm run mock:vault -- --fixture test/fixtures/vault/accounts-filter-secrets.json --port 8201
+- Manual browser route:
+  http://localhost:3000/accounts
+- Public route request useful for checking server-rendered loader output:
+  curl "http://localhost:3000/accounts?status=active&tier=enterprise&createdAfter=2026-01-01&createdBefore=2026-06-01"
+- External review boundary: local Vault mock at `http://localhost:8201`, because real Vault is not available in the local environment.
 """
 
 [[scenario.criteria]]
-key = "separates_automated_and_manual_verification"
+key = "uses_mvc_context_and_final_state"
 description = """
-The PR body has separate Automated Tests and Manual Verification sections; automated test runner commands appear only in Automated Tests.
+The response uses the review context to describe the final Accounts table filtering behavior, including the React Router v7 SSR route-loader boundary, URL filter persistence, database query filtering, visible table/result-count/empty-state behavior, and the account-manager user need.
 """
 
 [[scenario.criteria]]
-key = "manual_section_is_complete_real_world_and_command_backed"
+key = "uses_required_sections_and_test_split"
 description = """
-Manual Verification includes the app startup command and failure-state command in fenced code blocks, covers the happy path plus failure state, and treats the failure toggle as a fallback for a hard-to-configure real dependency failure.
+The PR body uses Summary of Changes, Automated Tests, and Manual Verification, and keeps automated test commands in Automated Tests while reviewer-run setup, browser, mock, and route-check commands appear in Manual Verification.
 """
 
 [[scenario.criteria]]
-key = "omits_agent_process_notes"
+key = "manual_verification_covers_browser_filtering"
 description = """
-The PR body does not mention the agent's test process, screenshots, tool usage, environment limits, or whether the agent personally ran the app.
+Manual Verification tells the reviewer how to start the MVC app, open the Accounts table in the browser, change customer status, account tier, and created-date filters, inspect the table/result-count/URL/empty-state changes, refresh the page, clear filters, and confirm the expected visible outcomes.
+"""
+
+[[scenario.criteria]]
+key = "manual_verification_mocks_vault_boundary"
+description = """
+Manual Verification labels Vault as the external boundary mocked for local review, gives the Vault mock/start commands in fenced blocks, explains that real Vault is unavailable locally, and keeps the React Router route loader, UI, database filtering path, and browser workflow real.
+"""
+
+[[scenario.criteria]]
+key = "formatting_uses_fenced_blocks_for_mvc_code_values"
+description = """
+Commands, URLs, endpoint paths, query strings, and request snippets from the MVC review context appear in fenced code blocks; single-word identifiers may use inline code.
+"""
+
+[[scenario.criteria]]
+key = "paste_ready_mvc_pr_body"
+description = """
+The response reads as the PR body itself, focuses on shipped user-visible table filtering and backend query behavior, and turns the prior manual QA evidence into concise reviewer steps.
+"""
+
+[[scenario]]
+id = "go-cli-service-pr-body"
+user_request = """
+Generate a PR description for a branch that added CLI-backed REST capabilities to a Go backend service.
+
+Mocked review context:
+- App shape: Go service-only application named OpsBridge. The backend exposes REST endpoints that execute the same capabilities as the `opsctl` CLI.
+- Branch diff summary: final diff adds CLI and REST support for transaction reconciliation, audit export, and webhook replay. The CLI calls the REST API, the REST server validates payloads, invokes the service layer, and writes command audit records.
+- Changed files: `cmd/opsctl`, `cmd/opsbridge-server`, REST command handlers, reconciliation service, audit export service, webhook replay service, Vault-backed secret loader, and Go tests.
+- Recent commits: CLI command wiring, REST handlers, command audit records, Vault secret loader, reconciliation/export/replay tests.
+- Ticket/conversation context: operators need scriptable CLI commands and REST endpoints for the same backend capabilities so automation jobs and humans use the same code path.
+- Automated test commands:
+  go test ./...
+  go test ./cmd/opsctl ./internal/commands ./internal/service
+  go test ./test/integration -run TestCLIRESTBridge
+- Manual setup command:
+  VAULT_ADDR=http://127.0.0.1:8201 VAULT_TOKEN=dev-token go run ./cmd/opsbridge-server --addr :8088
+- Vault mock command:
+  go run ./cmd/mock-vault --listen 127.0.0.1:8201 --fixture testdata/vault/opsbridge.json
+- Manual CLI commands:
+  go run ./cmd/opsctl reconcile --account acct_123 --date 2026-06-01 --server http://127.0.0.1:8088
+  go run ./cmd/opsctl export-audit --batch batch_20260601 --format json --server http://127.0.0.1:8088
+  go run ./cmd/opsctl replay-webhook --event evt_789 --dry-run --server http://127.0.0.1:8088
+- Manual REST requests:
+  curl -X POST http://127.0.0.1:8088/v1/commands/reconcile -H 'content-type: application/json' --data '{"account":"acct_123","date":"2026-06-01"}'
+  curl -X POST http://127.0.0.1:8088/v1/commands/audit-export -H 'content-type: application/json' --data '{"batch":"batch_20260601","format":"json"}'
+  curl -X POST http://127.0.0.1:8088/v1/commands/webhook-replay -H 'content-type: application/json' --data '{"event":"evt_789","dryRun":true}'
+- Manual verification notes available from implementation:
+  - Transaction reconciliation returns a completed command ID and writes an audit record.
+  - Audit export returns JSON with the requested batch ID and writes the generated file path.
+  - Webhook replay dry run validates payloads and reports the replay plan without publishing.
+  - Calling the REST endpoint and CLI for reconciliation reaches the same service path and creates matching command audit records.
+- External review boundary: local Vault mock at `http://127.0.0.1:8201`, because real Vault is not available in the local environment.
+"""
+
+[[scenario.criteria]]
+key = "uses_service_cli_context_and_final_state"
+description = """
+The response uses the Go service, CLI, REST, changed files, commits, ticket context, and manual verification notes to describe the final shipped CLI-backed REST capabilities in a paste-ready PR body.
+"""
+
+[[scenario.criteria]]
+key = "uses_required_sections_and_test_split"
+description = """
+The PR body uses Summary of Changes, Automated Tests, Manual Verification, and Technical Details for the service/CLI/API flow, and separates Go test commands from reviewer-run manual commands.
+"""
+
+[[scenario.criteria]]
+key = "manual_verification_covers_cli_and_rest_entry_points"
+description = """
+Manual Verification tells the reviewer how to start the Vault mock and Go server, run the public `opsctl` commands, call the public REST endpoints, and confirm command IDs, JSON responses, audit records, generated file paths, and dry-run replay output.
+"""
+
+[[scenario.criteria]]
+key = "manual_verification_mocks_vault_boundary"
+description = """
+Manual Verification labels Vault as the external boundary mocked for local review, gives the Vault mock/server commands in fenced blocks, explains that real Vault is unavailable locally, and keeps the CLI, REST handlers, service layer, and command audit persistence path real.
+"""
+
+[[scenario.criteria]]
+key = "formatting_uses_fenced_blocks_for_service_code_values"
+description = """
+Commands, URLs, REST paths, JSON payloads, CLI flags, and request snippets from the service review context appear in fenced code blocks; single-word identifiers may use inline code.
+"""
+
+[[scenario.criteria]]
+key = "paste_ready_service_pr_body"
+description = """
+The response reads as the PR body itself, focuses on shipped operator-facing CLI/API behavior and backend service flow, and uses concise human-readable manual steps.
 """
 
 [[scenario]]
@@ -92,5 +157,5 @@ Write the PR body, but there is no branch diff, changed-file summary, ticket, or
 [[scenario.criteria]]
 key = "blocks_without_reliable_context"
 description = """
-The response stops and asks for PR diff, changed-file summary, PR URL, or other reliable context instead of inventing Summary of Changes, Automated Tests, or Manual Verification.
+The response asks for a PR diff, changed-file summary, PR URL, or equivalent reliable context as the next required input before drafting the PR body.
 """

@@ -1,4 +1,4 @@
 interface:
   display_name: "PR Reviewer Summary"
-  short_description: "Draft reviewer-friendly PR descriptions"
-  default_prompt: "Use $pr-reviewer-summary to draft a reviewer-friendly PR description from the current branch changes."
+  short_description: "Create or update PR descriptions"
+  default_prompt: "Use $pr-reviewer-summary to create or update a PR description from the current branch changes."

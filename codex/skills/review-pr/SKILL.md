@@ -1,6 +1,10 @@
 ---
 name: review-pr
 description: Review pull requests and branch diffs against a ticket, acceptance criteria, branch naming, changed files, tests, and risk areas. Use when Codex is asked to help review a PR, audit a diff before merge, verify a branch satisfies a ticket such as ABC-123, find blockers before approval, check checklist coverage, or identify missing tests and security/performance/maintainability issues with findings-first output and proposed fixes.
+disable-model-invocation: true
+metadata:
+  ai-skills-category: procedural
+  ai-skills-invocation: manual
 ---
 
 # Review PR
