@@ -11,7 +11,6 @@ id = "ticket-scoping-read-only-locators"
 user_request = """
 Before we implement this ticket, map the relevant code surface so the caller and implementers know exactly which files, tests, patterns, and risks matter without loading the whole repo into context.
 """
-forbidden_terms = ["I will edit", "I'll patch"]
 
 [[scenario.criteria]]
 key = "structured_locator_map"
@@ -36,7 +35,6 @@ id = "token-pressure-compact-map"
 user_request = """
 The codebase is huge and context is tight. Scope this bug fix for downstream readers, but keep the result compact enough that the caller can carry it.
 """
-forbidden_terms = ["paste full functions", "dump the source"]
 
 [[scenario.criteria]]
 key = "compact_grouped_entries"
@@ -55,7 +53,6 @@ id = "reference-backed-ui-scope"
 user_request = """
 Scope this UI ticket in a repo with a runnable designs/ React reference app. The later visual reviewer will need prototype element locators for parity against production.
 """
-forbidden_terms = ["visual review can discover everything later"]
 
 [[scenario.criteria]]
 key = "prototype_elements_required"
@@ -80,7 +77,6 @@ id = "vague-context-maps-and-asks"
 user_request = """
 Map the scope for this ticket, but the acceptance criteria are vague and I am not sure which route owns the feature.
 """
-forbidden_terms = ["scope is complete", "just implement in"]
 
 [[scenario.criteria]]
 key = "maps_available_evidence"

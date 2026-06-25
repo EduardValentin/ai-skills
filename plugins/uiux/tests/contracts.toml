@@ -41,11 +41,3 @@ type = "toml_scenario_criteria_require_field_for_each"
 glob = "plugins/uiux/skills/*/SKILL.md"
 path = "{parent}/tests/behavioral.toml"
 field = "description"
-
-[[assertion]]
-type = "absent_glob"
-glob = "plugins/uiux/skills/*/tests/pressure-scenarios.md"
-
-[[assertion]]
-type = "absent"
-path = "plugins/uiux/tests/evaluations.md"

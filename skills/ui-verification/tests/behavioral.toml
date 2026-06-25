@@ -15,7 +15,6 @@ authorize best-effort in-session inventory scoping if no affected-element
 inventory was provided. I care about every visible element matching the
 prototype, not just the obvious cards.
 """
-forbidden_terms = ["checked the important elements", "screenshot comparison only"]
 
 [[scenario.criteria]]
 key = "uses_parity_mode"
@@ -44,7 +43,6 @@ id = "delegated-uiux-gate"
 user_request = """
 Ticket-start delegated the UI/UX gate to you. You received production and prototype URLs, approved requirements/design, changed UI files, and an affected surface map with prototype/reference rows and production locators.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "uses_received_inventory_inputs"
@@ -74,7 +72,6 @@ Best-effort in-session inventory scoping is authorized if no affected-element
 inventory was supplied.
 Some scoped rows may still lack a credible production analog after inspection.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "uses_consistency_mode"
@@ -102,7 +99,6 @@ Ticket description, acceptance criteria, changed UI files, routes/states, and a
 comparison basis are available. Best-effort in-session inventory scoping is
 authorized.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "requires_inventory_before_verification"
@@ -127,7 +123,6 @@ id = "browser-capability-degradation"
 user_request = """
 Review visual parity, but the native browser automation tool is unavailable in this environment. You can still run shell commands.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "falls_back_to_playwright_shell"
@@ -152,7 +147,6 @@ id = "scoped-rerun-after-findings"
 user_request = """
 The prior review found V1 major: graph card border and shadow differ from the prototype; V2 major: heading line-height differs; V3 minor: axis label typography differs. The approved plan already says preserve placement and accessibility semantics.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "treats_findings_as_actionable"

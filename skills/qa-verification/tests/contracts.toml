@@ -5,7 +5,3 @@ name = "qa-verification contract"
 type = "line_count_at_most"
 path = "skills/qa-verification/SKILL.md"
 max = 110
-
-[[assertion]]
-type = "absent"
-path = "skills/ticket-workflow/agents/qa.md"

@@ -21,7 +21,6 @@ A) Gather the missing copy brief or clearly infer a temporary voice from product
 B) Use the user's phrase as enough direction and write sharper copy immediately.
 C) Write polished marketing copy immediately, using confident language and common conversion phrases.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_brief_first"

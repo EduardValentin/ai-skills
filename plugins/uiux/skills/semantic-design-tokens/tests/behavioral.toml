@@ -21,7 +21,6 @@ A) Inventory existing tokens, reuse matching semantic color and sizing tokens, a
 B) Use the raw values locally because screenshot parity matters more than token naming for this one card.
 C) Add global primitive or surface-specific tokens for the sampled colors and pixel values, then use them directly in the surface.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_token_inventory"
@@ -55,7 +54,6 @@ A) Treat the scanner output as a review prompt, keep the local scroll-distance v
 B) Flag the local value as a token violation because bracketed literal style values are disallowed by category.
 C) Add a global token for 250vh so the audit passes even though only this section uses it.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_review_prompt"

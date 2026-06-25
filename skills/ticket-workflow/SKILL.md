@@ -1,6 +1,10 @@
 ---
 name: ticket-workflow
-description: Use when the user asks to start or work through one standalone ticket or issue from intake through approved spec/design, approved implementation plan, implementation, and PR readiness. Use for standalone ticket starts even when the ticket mentions implementation, review, testing, UI checks, or verification. Also use for follow-up status or progress questions about a ticket already in this workflow. Do not use for multi-ticket scopes, code review only, QA only, PR verification only, PR summary only, debugging only, or ticket lookup tasks.
+description: Manual workflow for one standalone ticket from intake through approved plan, implementation, and PR readiness.
+disable-model-invocation: true
+metadata:
+  ai-skills-category: procedural
+  ai-skills-invocation: manual
 ---
 
 # Ticket Workflow
@@ -9,7 +13,7 @@ description: Use when the user asks to start or work through one standalone tick
 
 Coordinate one standalone ticket from intake to approved implementation plan, then confirm PR readiness after implementation completes.
 
-This workflow owns requirements intake, context gathering, shared understanding, spec/design approval, implementation-plan approval, implementation transition, and final PR readiness. It does not define detailed review, security review, QA, UI verification, or fix-loop mechanics.
+This workflow owns requirements intake, context gathering, shared understanding, spec/design approval, implementation-plan approval, implementation transition, and final PR readiness. It does not define detailed implementation, review, QA, UI verification, or fix-loop mechanics.
 
 Mandatory lifecycle:
 
@@ -17,21 +21,29 @@ Setup -> Brainstorm -> Spec/design approval -> Plan approval -> Implementation -
 
 Approval is artifact-specific. The user can only approve an artifact they have actually seen. Approval of decisions, assumptions, recommendations, authorization, branch/worktree setup, investigation progress, or "good to go" is not approval of an unwritten spec/design or implementation plan.
 
+## Delegation
+
+For delegation requests, prefer a native available subagent when one is defined for the required task. Otherwise spawn the most capable generic subagent, with capability and scope automatically determined from the task complexity, risk, and evidence needed. If delegation is unavailable or unsafe, perform the work inline and state why.
+
 ## Setup
 
 1. Confirm the ticket is standalone and intended for implementation. If unclear, ask before continuing.
 2. Read the ticket to understand the goal, stakeholder implications, acceptance criteria, dependencies, and ambiguity. If the ticket has a parent Epic, parent story, or parent ticket, read that parent too.
 3. Read repo instructions and only the relevant product, design, reference, and code slices needed to understand the ticket and prepare the implementation plan.
 4. Inspect relevant repository state, existing PRs, and draft work only as needed to understand current status and avoid planning against stale assumptions.
-5. Map the relevant codebase surface before brainstorming. Include affected files/surfaces, entry points, analogous implementations, tests, risks, and verification surfaces with locators.
+5. Map the relevant codebase surface before brainstorming by delegating a read-only scoping pass to `code-mapper`. Require the scoping report to include affected files/surfaces, entry points, analogous implementations, tests, risks, and verification surfaces with locators.
 
 ## Brainstorm
 
-Run a relentless brainstorming interview with the user, grounded in the ticket, parent context, repo facts, relevant docs, and codebase scope. Identify and resolve unknowns, low-confidence assumptions, stakeholder implications, constraints, edge cases, risks, non-goals, alternatives, and any detail that could even slightly affect implementation.
+Run a relentless brainstorming interview with the user, grounded in the ticket, parent context, repo facts, relevant docs, and codebase scope.
 
-Treat brainstorming as an active interview loop, not a one-time question list. When material unknowns remain, ask the next highest-value questions, explicitly state that the interview will continue after the answers, and keep going until each impactful unknown is resolved or explicitly accepted as a risk. Do not move to spec/design after one unanswered batch of questions.
+Identify and resolve unknowns, low-confidence assumptions, stakeholder implications, constraints, edge cases, risks, non-goals, alternatives, and any detail that could even slightly affect implementation.
 
-Continue until there is shared understanding of what needs to be done and every material aspect of the work. Then write a concise spec/design that captures the agreed scope, decisions, acceptance criteria, risks, alternatives considered, and open questions. Ask the user to approve the spec/design itself. Do not write the implementation plan before spec/design approval.
+Treat brainstorming as an active interview loop, not a one-time question list. Ask one question at a time until you and the user reach a common understanding of the problem.
+
+After a shared common understanding has been achieved, write a concise spec/design that captures the agreed scope, decisions, acceptance criteria, risks, alternatives considered, and open questions. Ask the user to approve the spec/design itself.
+
+Do not write the implementation plan before spec/design approval.
 
 ## Plan
 
@@ -39,9 +51,9 @@ After spec/design approval, write an implementation plan that takes into conside
 
 ## Implementation
 
-After plan approval, explicitly name `implementation-workflow` as the workflow that now owns the approved implementation unit before editing. State the intended execution approach inside that workflow: inline, delegated, or hybrid. Base it on the approved plan's size, coupling, risk, separability, and implementation context. In the same handoff, state that implementation must return to the relevant approval gate if the approved spec/design or plan needs to change. Do not define detailed execution mechanics here.
+After plan approval, move the associated ticket into a status that correctly marks it as in progress before code or test edits. Recommend an execution mode before editing: inline, subagent-driven delegated execution, or hybrid. Base the recommendation on the approved plan's size, coupling, risk, separability, and implementation context. Ask the user to select or approve the execution mode before invoking `/implementation-workflow` for the approved ticket.
 
-Implement the approved plan using that approach. Prefer quality code over time to complete the task. Make sure the solution is well tested. If implementation reveals that the approved spec/design or plan should change, return to the relevant approval gate before continuing.
+Prefer quality code over time to complete the task. Make sure the solution is well tested.
 
 ## PR Readiness
 
@@ -53,12 +65,28 @@ Check:
 
 - implementation produced a PR or a concrete blocker explaining why no PR exists
 - PR target, title, description, linked ticket, and changed scope match the approved plan
-- implementation, review, security, QA, UI, test, and blocker evidence is present when applicable
+- implementation, review, manual QA verification report, UI/UX prototype parity report, test, and blocker evidence is present when applicable
+- PR pipeline CI checks are green; if checks are pending, wait for them; if anything fails, investigate, deliver the appropriate fix, rerun or wait for the pipeline, and include the evidence before the final report
+- PR comments and review threads have no unresolved or unaddressed items; if they do, address them before the final report
 - unresolved findings, blockers, assumptions, and follow-ups are clearly reported
 - ticket state is appropriate for the user's process
 - no merge, completion, ticket closure, comment dismissal, or final source-control/tracker mutation happens without explicit user approval
 
 If readiness is blocked, report the exact blocker and what needs to happen next.
+
+When PR pipeline CI status is missing, do not only mark it missing. State that the PR pipeline must be checked, pending checks must be waited on, and failed checks must be investigated, fixed, and rerun or waited on before the final PR-readiness report.
+
+Use this compact readiness shape:
+
+- PR exists or blocker:
+- target, title, description, and linked ticket:
+- changed scope vs approved plan:
+- implementation, review, manual QA verification report, UI/UX prototype parity report, test, and blocker evidence:
+- PR pipeline CI status and fixes:
+- PR comments and review threads:
+- unresolved findings, assumptions, follow-ups:
+- ticket state:
+- prohibited mutations without approval:
 
 ## Final Report
 

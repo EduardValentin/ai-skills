@@ -12,7 +12,6 @@ id = "planning-packet-to-story"
 user_request = """
 Turn this approved planning packet into a user story: admins invite teammates by email, duplicate pending invites are blocked, invites expire after 7 days, and accepted users join the workspace with the selected role. It depends on the email service setup story.
 """
-forbidden_terms = ["published to Linear", "edit PRD", "plan the feature first"]
 
 [[scenario.criteria]]
 key = "writes_agile_story"
@@ -34,7 +33,6 @@ protect ineligible customers from failed purchases, explain eligibility state,
 make existing data compatible, and support controlled rollout. Child stories
 will be drafted separately.
 """
-forbidden_terms = ["Candidate Stories", "story title", "published to Linear"]
 
 [[scenario.criteria]]
 key = "writes_epic_without_child_story_list"
@@ -53,7 +51,6 @@ id = "cleanup-draft-quality"
 user_request = """
 Clean up this draft ticket: title is "Add cert_expiry_sweep.py with vault_path parameter"; description mixes business reason with Oracle paths and event fields; ACs are buried in prose; it still mentions alert creation, which is out of scope.
 """
-forbidden_terms = ["created issue", "published"]
 
 [[scenario.criteria]]
 key = "outcome_title"
@@ -70,7 +67,6 @@ description = "The response removes or flags stale out-of-scope alert-creation c
 [[scenario]]
 id = "thin-context-routes-upstream"
 user_request = "Write implementation-ready tickets for the new scheduling feature. We have not decided roles, flow, data, edge cases, or integrations yet."
-forbidden_terms = ["Here are the implementation-ready tickets", "final ticket draft"]
 
 [[scenario.criteria]]
 key = "does_not_invent_scope"

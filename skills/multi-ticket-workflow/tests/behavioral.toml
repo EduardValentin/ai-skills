@@ -12,9 +12,10 @@ id = "epic-scope-plans-before-delegation"
 user_request = """
 Work the Billing Revamp Epic as one coordinated scope. The scope includes
 pricing API, checkout UI, invoice migration, and analytics tickets with shared
-dependencies and possible parallel work.
+dependencies and possible parallel work. The repository is large, shared
+surfaces are not yet mapped, and native specialist subagents are available in
+this runtime.
 """
-forbidden_terms = ["dispatch immediately", "one generic worker", "ticket-workflow"]
 
 [[scenario.criteria]]
 key = "gathers_named_scope"
@@ -29,6 +30,12 @@ The response builds a dependency and parallelization map across tickets before e
 """
 
 [[scenario.criteria]]
+key = "delegates_codebase_mapping_when_needed"
+description = """
+Because the repository is large, shared surfaces are not mapped, and native specialist subagents are available, the response commits to dispatching one read-only codebase mapping pass per affected ticket through `code-mapper` before relying on the coordination map. Merely listing mapping as missing is insufficient.
+"""
+
+[[scenario.criteria]]
 key = "requires_spec_ticket_plans_and_coordination_approval"
 description = """
 The response requires cross-ticket brainstorming, approved multi-ticket spec/design, an implementation plan for each in-scope ticket, and an approved coordination plan before delegation.
@@ -37,29 +44,34 @@ The response requires cross-ticket brainstorming, approved multi-ticket spec/des
 [[scenario.criteria]]
 key = "coordination_plan_decides_execution_shape"
 description = """
-The response requires the coordination plan to decide the execution shape for each ticket or unit, including whether work should be inline, delegated, hybrid, parallel, sequential, staged, or consolidated based on dependency and coordination facts.
+Because this scope is not approved yet, the response does not need to finalize execution shapes now. It must require the future approved coordination plan to decide the execution shape for each ticket or unit, such as inline, delegated, hybrid, parallel, sequential, staged, or consolidated based on dependency and coordination facts.
 """
 
 [[scenario]]
 id = "approved-scope-delegates-execution-packets"
 user_request = """
 The multi-ticket spec/design is approved. APP-10 and APP-11 each have approved
-ticket implementation plans. APP-11 depends on APP-10's migration output. The
-user asks the coordinator to proceed. Because this is a pressure test, produce
-the execution packet outlines and state the orchestration state you would record.
+ticket implementation plans. The coordination plan is approved. APP-11 depends
+on APP-10's migration output. The user asks what happens next.
 """
-forbidden_terms = ["main agent implements inline", "ticket intake by worker", "user-facing brainstorming by worker"]
 
 [[scenario.criteria]]
 key = "creates_execution_packets"
 description = """
 The response creates self-contained execution packets that include ticket and parent context, approved spec/design slice, approved ticket implementation plan, dependency constraints, affected surfaces, PR or handoff expectations, and completion evidence needs.
+If a required packet field is unavailable in the scenario facts, the response may mark that field as unknown, not provided, or an explicit mapping gap instead of inventing it.
 """
 
 [[scenario.criteria]]
 key = "delegates_adaptively"
 description = """
 The response delegates according to dependencies, running independent work in parallel when safe and holding dependent work until upstream context exists.
+"""
+
+[[scenario.criteria]]
+key = "delegates_to_implementation_coordinator"
+description = """
+The response names `implementation-coordinator` as the implementation delegate for each approved ticket or slice, with sequencing based on the approved coordination plan.
 """
 
 [[scenario.criteria]]

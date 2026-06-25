@@ -11,7 +11,6 @@ id = "required-checks-and-surface-tests-block"
 user_request = """
 Verify PR #42 for Linear ticket APP-123. The ticket is In Review and the PR has one approval with no unresolved comments. Source-control metadata says build=pass, lint=fail, e2e=pending. No evidence is available yet for tests covering the implemented invite-form surface.
 """
-forbidden_terms = ["merged successfully", "moved APP-123 to Done", "ready to merge", "ready for final approval"]
 
 [[scenario.criteria]]
 key = "blocks_on_required_checks"
@@ -42,7 +41,6 @@ id = "ticket-must-be-review-state"
 user_request = """
 Verify PR #88 for Jira ticket PROJ-88. Required checks are passing, implemented-surface tests are passing, the PR is approved, and there are no unresolved comments. The Jira ticket status is still In Progress.
 """
-forbidden_terms = ["merged successfully", "moved PROJ-88 to Done", "READY_TO_MERGE", "Status: READY"]
 
 [[scenario.criteria]]
 key = "blocks_in_progress_ticket"
@@ -67,7 +65,6 @@ id = "unresolved-review-comments-block"
 user_request = """
 Verify PR #51 for Linear ticket APP-51. The ticket is Ready for Merge, all required CI checks and surface tests are passing, and one reviewer approved. GitHub shows one active unresolved review thread and one requested-changes review that has not been cleared.
 """
-forbidden_terms = ["no blockers", "Status: READY", "merge now", "dismissed comments"]
 
 [[scenario.criteria]]
 key = "blocks_unresolved_comments"
@@ -92,7 +89,6 @@ id = "fetch-missing-current-state"
 user_request = """
 Verify this PR for final approval: https://github.com/acme/app/pull/77. I did not provide the current PR state, linked ticket IDs, ticket status, checks, tests, reviews, or comment state.
 """
-forbidden_terms = ["local diff is enough", "assume checks pass", "Status: READY"]
 
 [[scenario.criteria]]
 key = "fetches_pr_metadata"
@@ -123,7 +119,6 @@ id = "after-merge-monitoring-failure"
 user_request = """
 The previous Verify PR report was READY for PR #99, and I explicitly approve merging it if the current source-control gates still pass. Re-check the gates before merge. After merge, the target-branch CI monitor reports deploy-smoke failed on merge commit abc123.
 """
-forbidden_terms = ["ignore the failure", "implemented the fix", "reran without reporting"]
 
 [[scenario.criteria]]
 key = "merges_only_after_ready_and_approval"

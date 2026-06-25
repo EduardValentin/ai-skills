@@ -67,19 +67,12 @@ def load_scenarios(path: Path) -> list[dict[str, Any]]:
 
 def _normalize_scenario(path: Path, scenario: dict[str, Any]) -> dict[str, Any]:
     required_strings = ("id", "skill", "prompt")
-    optional_lists = ("forbidden_terms", "response_forbidden_terms")
 
     for key in required_strings:
         value = scenario.get(key)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{path}: scenario is missing non-empty string field {key!r}")
         scenario[key] = value.strip()
-
-    for key in optional_lists:
-        value = scenario.get(key, [])
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-            raise ValueError(f"{path}: scenario {scenario['id']} field {key!r} must be a string list")
-        scenario[key] = value
 
     return scenario
 

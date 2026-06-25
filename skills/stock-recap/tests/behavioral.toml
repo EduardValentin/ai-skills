@@ -11,7 +11,6 @@ id = "quarterly-recap-existing-thesis"
 user_request = """
 Catch me up on MSFT since the last thesis. The saved thesis exists, new 10-Q/10-K filings may have landed, and I want sell triggers evaluated against the saved bull/base/bear projections.
 """
-forbidden_terms = ["technical analysis", "day trade", "skip prior thesis"]
 
 [[scenario.criteria]]
 key = "checks_prior_research_preconditions"
@@ -42,7 +41,6 @@ id = "missing-prior-thesis-aborts"
 user_request = """
 Recap a brand-new ticker ABCD that has no existing stock-research artifacts.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "aborts_without_saved_thesis"

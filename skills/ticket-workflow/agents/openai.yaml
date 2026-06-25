@@ -1,4 +1,4 @@
 interface:
   display_name: "Ticket Workflow"
-  short_description: "Run one standalone ticket through intake, approved plan, implementation, and PR readiness."
-  default_prompt: "Use $ticket-workflow to run one standalone ticket through intake, shared understanding, approved spec/design, approved implementation plan, transition to $implementation-workflow for implementation, and PR readiness."
+  short_description: "Manual workflow for one standalone ticket."
+  default_prompt: "Use $ticket-workflow to run one standalone ticket through intake, shared understanding, approved spec/design, approved implementation plan, implementation, and PR readiness."

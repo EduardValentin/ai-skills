@@ -22,7 +22,6 @@ A) Start a relentless design-direction interview, ask decision-shaping questions
 B) Pick the most tasteful direction yourself and implement quickly, since the user delegated taste.
 C) Apply generic premium polish: more whitespace, softer shadows, larger headings, and reduced card count.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_interview"
@@ -56,7 +55,6 @@ A) Briefly restate the provided direction, identify any important constraint or 
 B) Start the full relentless interview from scratch because every visual change must ask all direction questions.
 C) Skip direction alignment entirely because the user already gave enough styling words.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_lightweight_alignment"

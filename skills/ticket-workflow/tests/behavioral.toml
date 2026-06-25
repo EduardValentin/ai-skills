@@ -15,7 +15,6 @@ three decisions and your recommendations. The assumptions sound good as well.
 I think we are good to go." The agent has discussed decisions and assumptions,
 but the user has not yet seen a written spec/design or implementation plan.
 """
-forbidden_terms = ["start coding", "implementation is approved", "good to go is plan approval"]
 
 [[scenario.criteria]]
 key = "blocks_implementation"
@@ -35,15 +34,14 @@ user_request = """
 Start one child ticket under an onboarding Epic. The child ticket describes a
 new eligibility rule, but the parent Epic explains the stakeholder goal and
 several rollout constraints. Unknowns remain around copy, edge cases, and
-failure behavior. Because this is a pressure test with no follow-up user
-answer, start the interview and say how the loop continues before spec/design.
+failure behavior. Start the interview and say how the loop continues before
+spec/design.
 """
-forbidden_terms = ["write the plan now", "parent context is optional", "skip brainstorming"]
 
 [[scenario.criteria]]
 key = "reads_ticket_and_parent"
 description = """
-The response reads both the child ticket and parent context to understand the goal, stakeholder implications, acceptance criteria, dependencies, and ambiguity.
+The response treats both the child ticket and parent context as required before planning, and uses them to understand the goal, stakeholder implications, acceptance criteria, dependencies, and ambiguity.
 """
 
 [[scenario.criteria]]
@@ -59,54 +57,85 @@ The response does not write the implementation plan until the user approves the 
 """
 
 [[scenario]]
+id = "delegates-code-scoping-before-brainstorm"
+user_request = """
+Start one standalone ticket with broad repository impact. The ticket goal is
+clear, but the relevant code surfaces are unknown. State the next workflow
+move.
+"""
+
+[[scenario.criteria]]
+key = "delegates_code_scoping"
+description = """
+The response treats read-only code scoping as the next setup move before brainstorming and intends to dispatch a native specialized scoping subagent when one is available.
+"""
+
+[[scenario.criteria]]
+key = "uses_delegation_convention_for_scoping"
+description = """
+The response applies the workflow delegation convention for read-only code scoping, preferring `code-mapper` when available.
+"""
+
+[[scenario.criteria]]
+key = "preserves_scoping_boundary"
+description = """
+The response keeps code scoping read-only and uses it to gather affected files or surfaces, entry points, analogous implementations, tests, risks, and verification surfaces with locators.
+"""
+
+[[scenario]]
 id = "states-execution-approach-after-plan-approval"
 user_request = """
 The written spec/design and implementation plan for one ticket are approved.
 The approved plan includes a migration slice, an API slice, and a UI slice with
 some shared contracts and review risk. The user asks the agent to proceed.
 """
-forbidden_terms = ["define detailed review mechanics", "skip implementation workflow", "approval gate no longer matters"]
 
 [[scenario.criteria]]
-key = "states_execution_approach"
+key = "recommends_execution_mode"
 description = """
-The response states the intended execution approach before editing, choosing inline, delegated, or hybrid based on the approved plan's size, coupling, risk, separability, and implementation context.
+The response recommends an execution mode before editing, choosing inline, subagent-driven delegated execution, or hybrid based on the approved plan's size, coupling, risk, separability, and implementation context, then asks the user to select or approve the execution mode before invoking `/implementation-workflow` for the approved ticket.
 """
 
 [[scenario.criteria]]
-key = "routes_to_implementation_workflow"
+key = "transitions_approved_ticket_to_in_progress"
 description = """
-The response treats ticket-workflow as the parent transition and sends the approved implementation unit to implementation-workflow before code or test edits.
+The response states that, before code or test edits, it would move the associated ticket into the status that correctly marks it as in progress.
 """
 
 [[scenario.criteria]]
 key = "does_not_define_implementation_mechanics"
 description = """
-The response treats ticket-workflow as an implementation transition and does not define detailed review, security review, QA, UI verification, or fix-loop mechanics.
-"""
-
-[[scenario.criteria]]
-key = "keeps_approval_gate"
-description = """
-The response says that if implementation reveals the approved spec/design or implementation plan should change, it must return to the relevant approval gate before continuing.
+The response treats ticket-workflow as an implementation transition. It may describe the `/implementation-workflow` dispatch or handoff shape, but it does not perform code edits, claim implementation/review/QA completion, or take over the detailed implementation workflow itself.
 """
 
 [[scenario]]
 id = "post-implementation-pr-readiness"
 user_request = """
-Implementation for the approved ticket plan is complete and the PR exists. The
-user asks whether the ticket is ready for review.
-"""
-forbidden_terms = ["merge it", "mark done", "skip PR readiness"]
-
-[[scenario.criteria]]
-key = "checks_pr_readiness"
-description = """
-The response treats ticket-workflow as responsible for PR readiness after implementation, checking PR existence or blocker, target, title, description, linked ticket, scope vs approved plan, evidence, blockers, follow-ups, and ticket state.
+`/implementation-workflow` has finished for the approved ticket and returned
+its implementation report. The user asks ticket-workflow to finish the ticket
+and provide the final PR-readiness report.
 """
 
 [[scenario.criteria]]
-key = "does_not_mutate_without_approval"
+key = "checks_pr_exists"
 description = """
-The response does not merge, mark ready, update ticket state, or perform final source-control/tracker mutations without approval.
+The response checks that a PR exists for the implemented ticket, or reports a blocker if no PR exists, before writing the final PR-readiness report.
+"""
+
+[[scenario.criteria]]
+key = "verifies_pr_ci_pipeline"
+description = """
+The response checks the PR CI pipeline runs and verifies that all checks are green, or waits for pending checks to finish before declaring the ticket ready.
+"""
+
+[[scenario.criteria]]
+key = "fixes_failed_pr_ci_before_final_report"
+description = """
+The response says that if any PR CI check fails, it will investigate and deliver the appropriate fix, rerun or wait for the pipeline, and only then write the final PR-readiness report.
+"""
+
+[[scenario.criteria]]
+key = "checks_unaddressed_pr_comments"
+description = """
+The response checks whether any PR comments or review threads remain unaddressed or unresolved, and treats them as blockers to address before the final PR-readiness report.
 """

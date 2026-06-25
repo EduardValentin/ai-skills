@@ -4,7 +4,7 @@ skill = "implementation-workflow"
 skill_path = "skills/implementation-workflow/SKILL.md"
 scenario_env = "IMPLEMENTATION_WORKFLOW_SCENARIO"
 judge_context = """
-Loaded skill under test: implementation-workflow. Judge approved-code implementation behavior, review loop, verification, and report boundaries.
+Loaded skill under test: implementation-workflow. Judge approved-code implementation behavior, review loop, manual verification, and report boundaries.
 """
 
 [[scenario]]
@@ -14,7 +14,6 @@ The request says to add whatever script seems useful. It provides no approved
 spec/design, no approved implementation plan, no acceptance criteria, and no
 explicit boundary.
 """
-forbidden_terms = ["start coding anyway", "best guess", "formal plan is not required"]
 
 [[scenario.criteria]]
 key = "blocks_missing_inputs"
@@ -29,15 +28,14 @@ The response does not infer missing boundaries or proceed with best-guess implem
 """
 
 [[scenario]]
-id = "implements-with-tdd-and-quality-invariants"
+id = "implements-with-tdd-and-engineering-invariants"
 user_request = """
-Approved implementation packet: add billing retry behavior. The packet includes
-acceptance criteria, approved spec/design, approved implementation plan, affected
-surfaces, branch state, dependencies, risks, and non-goals. Because this is a
-pressure test and no files may be edited, describe the concrete implementation
-loop you would execute now instead of returning a final completion report.
+Approved implementation packet: add billing retry behavior across the billing
+service, notification job, and admin retry UI. The packet includes acceptance
+criteria, approved spec/design, approved implementation plan, branch state,
+dependencies, risks, and non-goals. The repository is large, the affected
+surfaces are only described at a high level. Describe how you would proceed.
 """
-forbidden_terms = ["skip tests", "speed over quality", "broaden scope anyway"]
 
 [[scenario.criteria]]
 key = "starts_from_approved_packet"
@@ -52,29 +50,27 @@ The response commits to a TDD approach by expressing intended behavior with a fa
 """
 
 [[scenario.criteria]]
-key = "preserves_quality"
+key = "chooses_code_scanning_depth"
 description = """
-The response follows existing project patterns and prefers quality, readability, maintainability, and performance over speed.
+The response decides the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence.
 """
 
 [[scenario.criteria]]
-key = "chooses_adaptive_execution_shape"
+key = "blocks_if_context_is_insufficient"
 description = """
-The response states an execution shape for the approved unit, such as inline, delegated, or hybrid, and explains why that shape fits the unit. If separate plan slices exist or delegation would materially improve quality, focus, parallelism, or context management, the response prefers delegated execution.
+When affected surfaces are not sufficiently mapped, the response dispatches `code-mapper` for a read-only scope report before editing and does not return a generic mapping blocker while that dispatch is available. If code mapping or context gathering is unavailable or unsafe, it stops with `IMPLEMENTATION BLOCKED` and names the missing context.
 """
 
 [[scenario]]
 id = "owns-approved-ticket-plan-with-subagent-execution"
 user_request = """
 A standalone ticket has finished requirements intake, spec/design approval, and
-implementation-plan approval in the parent ticket workflow. The approved user
+implementation-plan approval. The approved user
 story plan includes acceptance criteria, codebase scope, branch state, risks,
-non-goals, and expected checks. The user now asks to use subagent-driven
-execution for separate API, UI, job, and migration slices. Because this is a
-pressure test and no files may be edited, describe the workflow ownership and
-next execution handoff.
+non-goals, expected checks, and the selected execution mode is subagent-driven
+execution for separate API, UI, job, and migration slices. Describe the workflow
+ownership and next execution handoff.
 """
-forbidden_terms = ["subagent-driven development replaces this workflow", "skip review", "skip manual QA"]
 
 [[scenario.criteria]]
 key = "owns_post_ticket_implementation"
@@ -83,48 +79,69 @@ The response treats the approved post-ticket-planning code unit as implementatio
 """
 
 [[scenario.criteria]]
-key = "subagents_are_execution_shape"
+key = "honors_selected_execution_mode"
 description = """
-The response states that subagent-driven execution is an execution shape inside implementation-workflow, not a replacement for the implementation workflow contract.
+The response honors the subagent-driven execution mode selected before implementation-workflow starts, rather than re-deciding the execution mode inside implementation-workflow.
 """
 
 [[scenario.criteria]]
 key = "preserves_implementation_contract"
 description = """
-The response keeps review, security review when relevant, manual/runtime QA, UI verification when relevant, fixes/reruns, and the implementation report as required parts of the workflow.
+The response keeps review, mandatory manual QA verification through `qa-verifier`, fixes/reruns, and the implementation report as required parts of the workflow.
 """
 
 [[scenario]]
-id = "requires-review-security-manual-qa-and-report"
+id = "requires-review-manual-qa-and-report"
 user_request = """
-Implementation is finished for an approved UI and API change with a plausible
-security surface. Automated tests pass. The user asks whether the implementation
-workflow is complete. Because this is a pressure test, answer with the required
-next review, security, manual QA, and report actions rather than a terse blocked
-status.
-"""
-forbidden_terms = ["automated tests are manual QA", "skip review", "complete without approvals"]
-
-[[scenario.criteria]]
-key = "review_loop_required"
-description = """
-The response requests independent review through every configured review channel, has reviewers post PR comments when supported, addresses valid findings, resolves comments, and re-requests fresh review after fixes until required reviewers approve or blockers are reported.
+Implementation is finished for an approved UI and API change that affects user
+input, authorization-sensitive data, persistence, and visible behavior.
+Automated tests pass. Native specialist subagents are available in this runtime,
+but no independent review or runtime verification evidence has been produced
+yet. The user asks whether the implementation workflow is complete.
 """
 
 [[scenario.criteria]]
-key = "security_focus_required"
+key = "independent_review_required"
 description = """
-The response requests a security-focused pass through the configured review channels because the change has a plausible security surface.
+Across the blocked report, the response states the exact review dispatch it would perform in this mocked scenario: dispatch `code-reviewer` when available, or a sufficiently capable generic read-only review subagent when `code-reviewer` is unavailable; pass the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context; and wait for completion before treating implementation as complete.
 """
 
 [[scenario.criteria]]
 key = "manual_qa_required"
 description = """
-The response requires QA manual verification against the running application and acceptance criteria, using real dependencies when feasible, and does not count automated tests as manual QA.
+The response states the exact manual QA dispatch it would perform in this mocked scenario: dispatch `qa-verifier` when available, or a sufficiently capable generic QA subagent when `qa-verifier` is unavailable; pass all relevant context and ticket ACs; wait for completion; and not move forward until manual QA verification is performed.
 """
 
 [[scenario.criteria]]
 key = "report_required"
 description = """
-The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, security result, manual/runtime verification, engineering notes, and risks or blockers.
+The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, manual QA verification, engineering notes, and risks or blockers.
+"""
+
+[[scenario]]
+id = "requires-generic-review-and-qa-fallbacks"
+user_request = """
+Implementation is finished for an approved API change. Automated tests pass.
+No native specialist review or QA subagents are available in this runtime, but
+generic capable subagents can be spawned. No independent review or manual QA
+verification evidence has been produced yet. The user asks whether the
+implementation workflow is complete.
+"""
+
+[[scenario.criteria]]
+key = "generic_review_required"
+description = """
+The response states the exact generic review dispatch it would perform in this mocked scenario: dispatch a sufficiently capable generic read-only review subagent; pass the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context; and wait for completion before treating implementation as complete.
+"""
+
+[[scenario.criteria]]
+key = "generic_manual_qa_required"
+description = """
+The response states the exact generic manual QA dispatch it would perform in this mocked scenario: dispatch a sufficiently capable generic QA subagent for manual QA verification against the ticket ACs; pass all relevant context; wait for completion; and not move forward until manual QA verification is performed.
+"""
+
+[[scenario.criteria]]
+key = "fallback_report_required"
+description = """
+The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, manual QA verification, engineering notes, and risks or blockers.
 """

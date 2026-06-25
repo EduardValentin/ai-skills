@@ -1,7 +1,11 @@
 # Skill Trigger Tests
 
-This directory keeps global trigger coverage for canonical skills under `skills/`
+This directory keeps global trigger coverage for ability skills under `skills/`
 and plugin-packaged skills under `plugins/*/skills/`.
+
+Procedural skills are manually invoked workflows. Mark them with
+`metadata.ai-skills-invocation: manual` and `disable-model-invocation: true`;
+they must not have trigger scenarios.
 
 ## Static Contract
 
@@ -13,11 +17,10 @@ python3 tests/skill-trigger/static_contract.py
 
 The static contract is deterministic. It verifies:
 
-- every `skills/*/SKILL.md` and `plugins/*/skills/*/SKILL.md` has at least one trigger scenario;
+- every ability skill has at least one trigger scenario;
+- procedural/manual-invocation skills have no trigger scenarios;
 - every scenario references an existing skill;
-- the declared skill name matches its folder;
-- descriptions start with `Use when`;
-- forbidden stale wording is absent.
+- the declared skill name matches its folder.
 
 ## Installed-Harness Behavioral Trigger
 
@@ -34,8 +37,7 @@ does not inject `SKILL.md` content, an `Available skills` list, or any repo-buil
 skill index.
 
 This test fails if the installed harness cannot pick up the expected skill from
-its real skill discovery mechanism. It also fails if the response repeats a
-phrase listed in `response_forbidden_terms`.
+its real skill discovery mechanism.
 
 The expected skill check is deterministic. The response is also evaluated by the
 shared semantic judge to confirm the selected skill is relevant to the prompt,
@@ -60,5 +62,8 @@ SKILL_TRIGGER_AGENT_COMMAND='python3 tests/codex_agent_command.py' \
 1. RED: add or update a `[[scenario]]` table in `scenarios.toml` that captures the missed trigger.
 2. GREEN: update the skill description/body until the static contract passes.
 3. REFACTOR: run the installed-harness behavioral trigger against an agent and
-   tighten forbidden terms or prompt coverage if the agent still rationalizes
-   past the skill.
+   tighten the positive semantic criteria if the agent still rationalizes past
+   the skill.
+
+Do this only for ability skills. For procedural skills, prove behavior with the
+loaded-skill behavioral suites instead of installed-harness trigger tests.

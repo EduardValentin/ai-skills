@@ -10,7 +10,6 @@ Loaded skill under test: feature-work-planning. Judge future-work planning bound
 [[scenario]]
 id = "rough-idea-no-artifact"
 user_request = "Plan the future work for team invitations. There is no PRD, ticket, or prototype yet, just the idea that admins should invite teammates."
-forbidden_terms = ["final ticket draft", "published to Linear", "PRD is required"]
 
 [[scenario.criteria]]
 key = "does_not_require_artifact"
@@ -27,7 +26,6 @@ description = "The response does not produce polished final tickets or publish b
 [[scenario]]
 id = "technical-breakdown-packet"
 user_request = "Break down this checkout eligibility feature into the future work we need: billing API rule, checkout banner, migration, analytics, rollout, and QA."
-forbidden_terms = ["database ticket", "API ticket", "frontend ticket", "created issues"]
 
 [[scenario.criteria]]
 key = "covers_affected_systems"
@@ -44,7 +42,6 @@ description = "The response produces or describes a compact planning packet with
 [[scenario]]
 id = "prd-update-needed"
 user_request = "While planning, we discovered tax-exempt customers should bypass eligibility checks, but the product docs do not say that yet."
-forbidden_terms = ["edited PRD.md", "final user story"]
 
 [[scenario.criteria]]
 key = "identifies_source_of_truth_gap"

@@ -1,6 +1,10 @@
 ---
 name: multi-ticket-workflow
-description: Use when the user asks to work a set of related tickets, an Epic, a parent ticket with children, or any multi-ticket scope that requires shared intake, dependency mapping, coordinated planning, and delegated execution. Do not use for one standalone ticket.
+description: Manual workflow for coordinating related tickets through shared planning, per-ticket plans, delegated execution, and handoff.
+disable-model-invocation: true
+metadata:
+  ai-skills-category: procedural
+  ai-skills-invocation: manual
 ---
 
 # Multi Ticket Workflow
@@ -9,7 +13,7 @@ description: Use when the user asks to work a set of related tickets, an Epic, a
 
 Coordinate a multi-ticket scope from requirements intake through delegated execution and dependency-aware handoff.
 
-This workflow owns full-scope intake, cross-ticket brainstorming, approved coordination planning, adaptive delegation, blocker handling, dependency order, and final handoff. It does not define the detailed implementation, review, security, QA, or UI verification mechanics for each delegated unit.
+This workflow owns full-scope intake, cross-ticket brainstorming, approved coordination planning, adaptive delegation, blocker handling, dependency order, and final handoff. It does not define the detailed implementation, review, QA, or UI verification mechanics for each delegated unit.
 
 ## Coordinator Role
 
@@ -27,6 +31,10 @@ The main agent owns:
 
 The main agent should prefer delegation for ticket implementation and keep the main context focused on coordination. It may keep very small coordination-only work inline when that does not undermine orchestration.
 
+## Delegation
+
+For delegation requests, prefer a native available subagent when one is defined for the required task. Otherwise spawn the most capable generic subagent, with capability and scope automatically determined from the task complexity, risk, and evidence needed. If delegation is unavailable or unsafe, perform the work inline and state why.
+
 ## Gather Scope
 
 1. Read every ticket the user named.
@@ -35,19 +43,27 @@ The main agent should prefer delegation for ticket implementation and keep the m
 4. Mark missing details as unknowns or blockers instead of smoothing them over.
 5. Treat every named unit as an in-scope candidate. If exact identifiers or details are missing, list the candidate units, mark what is unknown, and confirm the scope before execution.
 
+## Inspect current code
+
+Before brainstorming, dispatch one read-only code mapping pass per affected ticket to the native `code-mapper` agent. This mapping is a planning action and is not gated by spec/design or coordination-plan approval. Do not postpone this scoping until after brainstorming or approval.
+
+Ask each mapper to return affected files/surfaces, entry points, shared contracts, dependencies, analogous implementations, tests, risks, and verification surfaces with locators.
+
 ## Build The Coordination Map
 
-Create a map from known facts:
+1. Create and return a provisional map from known facts before mapping results are complete, with one entry per unit covering known dependencies, unknown dependencies, likely parallel/sequential status, and next mapping action; mark unknown or uncertain edges instead of saying the map is missing or offering it later.
 
-- in-scope tickets or units
-- dependencies and order constraints
-- shared files, shared data, shared UI, shared services, migrations, feature flags, or integration risks
-- tickets that can run in parallel
-- tickets that should be split, merged, sequenced, or delegated together
-- likely PR boundaries
-- evidence needed to know when delegated work is ready for handoff
+   Include:
 
-Build the best provisional dependency and parallelization map from available facts before execution. Mark uncertain edges instead of waiting for perfect inventory.
+   - in-scope tickets or units
+   - dependencies and order constraints
+   - shared files, shared data, shared UI, shared services, migrations, feature flags, or integration risks
+   - tickets that can run in parallel
+   - tickets that should be split, merged, sequenced, or delegated together
+   - likely PR boundaries
+   - evidence needed to know when delegated work is ready for handoff
+
+2. Use the mapper reports and known ticket facts to refine the dependency and parallelization map.
 
 ## Plan Before Implementation
 
@@ -61,11 +77,19 @@ Then produce a coordination plan that decides the execution shape for each ticke
 
 Ask the user to approve the coordination plan itself. Do not dispatch or implement before both approvals.
 
-When the user asks to work, proceed from, or get started on an unapproved multi-ticket scope, state the gates explicitly before any delegation or implementation: cross-ticket brainstorming, approved multi-ticket spec/design, one implementation plan per in-scope ticket, and approved coordination plan. Every gate summary must name all four preconditions.
+When the user asks to work, proceed from, or get started on an unapproved multi-ticket scope, state the gates explicitly before any delegation or implementation: cross-ticket brainstorming, approved multi-ticket spec/design, one implementation plan per in-scope ticket, and approved coordination plan with an execution-shape decision for each ticket or unit. Every gate summary must name all four preconditions.
 
 ## Execution Packets
 
-Prepare one execution packet per ticket or approved unit.
+Prepare one execution packet per ticket or approved unit for `implementation-coordinator`; each packet and dispatch line must name that delegate.
+
+When the multi-ticket spec/design, per-ticket implementation plans, and coordination plan are already approved, do not stop at describing the sequence. Return the execution packet outlines and orchestration-state update immediately before dispatch or handoff. Include required fields even when evidence is unavailable; mark the gap instead of omitting the field. Do not collapse packets into a short sequence summary or offer packet formatting as an optional next step.
+
+For approved scopes, respond in this order:
+
+1. Orchestration state: inventory, approvals, dependencies, assignments, PR state, blockers, and review order.
+2. One execution packet per unit: delegate `implementation-coordinator`, ticket/parent context, approved spec/design slice, approved ticket plan, dependency constraints, affected surfaces or explicit gap, PR/handoff expectations, and completion evidence.
+3. Dispatch or handoff action.
 
 Each packet should include:
 
@@ -74,13 +98,13 @@ Each packet should include:
 - approved ticket implementation plan
 - approved coordination-plan slice
 - dependency constraints and upstream/downstream notes
-- known affected files or surfaces
+- known affected files or surfaces, including mapping evidence or unresolved mapping gaps
 - expected PR or handoff expectations
 - what completion evidence the coordinator needs back
 
-Packets must be self-contained enough that a worker can execute without redoing ticket intake or user-facing planning.
+Use a compact packet outline per unit with those fields. For unavailable facts, write `unknown` or `not provided`; do not omit the field.
 
-When scope and plans are already approved and the user asks to proceed, create the execution packet outlines immediately and record the orchestration state. Do not offer packet creation as an optional next step.
+Packets must be self-contained enough that a worker can execute without redoing ticket intake or user-facing planning.
 
 ## Keep Durable Orchestration State
 
@@ -97,13 +121,15 @@ Record:
 - status, PR links, blockers, decisions, next actions
 - re-read checkpoints after compaction or resume
 
-Every orchestration state update should explicitly include assignment state and PR state for each ticket, even when the value is pending, unassigned, blocked, or no PR yet.
+Every orchestration state update should explicitly include assignment state and PR state for each ticket, even when the value is pending, unassigned, blocked, or no PR yet. Post-approval coordination updates must include current inventory, approvals, dependency status, assignment or dispatch status, PR or handoff status, blockers, packet lifecycle, and final review order when known.
 
 Update it after scope gathering, execution mapping, approval, dispatch, blocker reports, completion reports, and PR creation. Re-read it at the start of work, after context compaction or resume, before dependent work, and before final reporting.
 
 ## Delegate The Plan
 
-Delegate each approved ticket or slice according to the coordination plan. Prefer the most efficient safe delegation pattern rather than one fixed structure.
+Delegate each approved ticket or slice to `implementation-coordinator` according to the coordination plan. Prefer the most efficient safe delegation pattern rather than one fixed structure.
+
+When dependency facts leave no safe parallel work, say that explicitly and use sequential or staged delegation instead of implying parallelism is always required.
 
 For each unit, provide its approved execution packet and make clear what is in scope, what is out of scope, what dependency constraints apply, and what completion evidence must come back. Do not ask an execution worker to gather user-facing approval or redesign the ticket set.
 
@@ -133,6 +159,7 @@ Stop and recover when:
 - dependencies and parallelization were not mapped
 - the main agent silently implements a broad ticket set without preserving coordination state
 - execution packets are not self-contained
+- approved execution packets are offered as an optional follow-up instead of returned immediately
 - a worker is asked to perform user-facing planning or approval gathering
 - completion is accepted without the handoff evidence needed for sequencing or review order
 - the durable orchestration note is missing, stale, or not re-read after compaction or resume

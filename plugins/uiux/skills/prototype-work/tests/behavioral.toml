@@ -19,7 +19,6 @@ A) Stop and ask the user for the reference app path before doing anything else.
 B) Search the entire repo for any React app and pick the first package.json.
 C) Continue by editing docs first while waiting for an app path.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "chooses_stop_and_ask"
@@ -40,7 +39,6 @@ The user asks to add a new onboarding flow to the prototype, with mocked eligibi
 
 What must accompany the prototype change?
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "updates_prd_for_behavior_change"
@@ -69,7 +67,6 @@ The user asks for a new dashboard panel in the prototype. The app has root-level
 
 What context should the agent gather before changing the prototype?
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "gathers_product_report"

@@ -13,7 +13,6 @@ sys.path.append(str(REPO_ROOT / "tests"))
 
 from semantic_judge import (  # noqa: E402
     SemanticCriterion,
-    assert_forbidden_terms,
     judge_response,
     resolve_judge_command,
     run_command,

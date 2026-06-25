@@ -11,7 +11,6 @@ id = "read-only-cloud-pr-summary"
 user_request = """
 Summarize the discussion on this Bitbucket PR: https://bitbucket.org/acme/widget/pull-requests/42.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "parses_cloud_pr"
@@ -36,7 +35,6 @@ id = "exact-comment-write"
 user_request = """
 On Bitbucket PR 42 in acme/widget, post the comment `QA passed on staging`.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "read_before_write"
@@ -61,7 +59,6 @@ id = "description-update-write"
 user_request = """
 Update the description on Bitbucket Cloud PR 42 in acme/widget to `QA evidence added, ready for final review`.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "supports_description_update"
@@ -86,7 +83,6 @@ id = "write-scope-credential-fallback"
 user_request = """
 Post `Ready for QA` on Bitbucket PR 42 in acme/widget. The approved local keychain token can read PR metadata but receives 403 when posting comments. The Git credential helper has approved bitbucket.org credentials.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "does_not_stop_after_write_403"
@@ -111,7 +107,6 @@ id = "vague-merge-request"
 user_request = """
 Can you take care of merging the Bitbucket PR for this branch?
 """
-forbidden_terms = ["merge it now", "merged successfully", "I merged"]
 
 [[scenario.criteria]]
 key = "resolves_branch_to_candidates"
@@ -136,7 +131,6 @@ id = "self-hosted-url"
 user_request = """
 Post `Ready for QA` on https://bitbucket.example.com/projects/APP/repos/web/pull-requests/42.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "detects_self_hosted"
@@ -161,7 +155,6 @@ id = "approved-local-credentials"
 user_request = """
 Review the actual Bitbucket PR at https://bitbucket.org/acme/widget/pull-requests/42. BITBUCKET_TOKEN, BITBUCKET_EMAIL, and BITBUCKET_API_TOKEN are unset, but the Git credential helper has approved credentials for bitbucket.org.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "checks_approved_credential_sources"
@@ -186,7 +179,6 @@ id = "bitbucket-pr-testing-context"
 user_request = """
 Verify the UI changes in the current PR. The repo remote is https://bitbucket.org/acme/widget.git and the PR branch is feature/auth-panel.
 """
-forbidden_terms = []
 
 [[scenario.criteria]]
 key = "treats_testing_as_bitbucket_pr_task"

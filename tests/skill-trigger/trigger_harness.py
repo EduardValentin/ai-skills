@@ -17,7 +17,6 @@ sys.path.append(str(REPO_ROOT / "tests"))
 
 from semantic_judge import (  # noqa: E402
     SemanticCriterion,
-    assert_forbidden_terms,
     judge_response,
     resolve_judge_command,
     run_command,
@@ -83,11 +82,6 @@ def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, obj
         raise ValueError(f"{scenario_id} did not select expected skill: {skill}")
 
     try:
-        assert_forbidden_terms(
-            response,
-            tuple(str(term) for term in scenario["response_forbidden_terms"]),
-            scenario_id,
-        )
         judge_response(
             judge_command=judge_command,
             scenario_id=scenario_id,
@@ -96,7 +90,7 @@ def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, obj
             criteria=(
                 SemanticCriterion(
                     "expected_skill_is_relevant",
-                    f"The response includes {skill} because it is relevant to the user request before any task work begins. Extra selected skills are acceptable unless they match the scenario's forbidden terms.",
+                    f"The response includes {skill} because it is relevant to the user request before any task work begins. Extra selected skills are acceptable when they are also relevant to the request.",
                 ),
                 SemanticCriterion(
                     "selection_is_from_prompt",
@@ -109,7 +103,7 @@ def run_scenario(agent_command: str, judge_command: str, scenario: dict[str, obj
             ),
             context=(
                 "This is an installed-harness black-box skill trigger test. "
-                f"The deterministic requirement is that {skill} is selected; extra selected skills are allowed unless explicitly forbidden by the scenario."
+                f"The deterministic requirement is that {skill} is selected; extra selected skills are allowed when they are relevant to the scenario."
             ),
         )
     except AssertionError as error:

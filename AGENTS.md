@@ -163,15 +163,33 @@ Use Python stdlib for repo-level automation with branching logic, validation, or
 
 All skills authored or modified in this repository must follow the [Rules for Writing Cross-Agent Skills](#rules-for-writing-cross-agent-skills) below.
 
-### 7. Trigger scenarios for every skill change
+### 6a. Procedural and ability skills
 
-Every new skill and every update to an existing skill must add or update trigger coverage in `tests/skill-trigger/scenarios.toml`. The scenario should capture the real user phrasing, repository context, provider/tool context, or failure mode that should make the skill get picked up.
+Classify each skill as one of two categories:
 
-Do not treat trigger testing as optional documentation. If a skill's `description`, "When to Use" section, scope, or invocation behavior changes, update the trigger scenario registry in the same change.
+- **Procedural skills** are manually invoked workflows. They define a workflow the agent should closely follow after explicit invocation. They may directly name other skills or native agents when the workflow intentionally delegates, spawns, or hands off work. Mark them in `SKILL.md` frontmatter with `disable-model-invocation: true` and:
 
-### 8. Run trigger tests before PR creation
+  ```yaml
+  metadata:
+    ai-skills-category: procedural
+    ai-skills-invocation: manual
+  ```
 
-Before creating a PR for any skill addition or skill update, run the deterministic trigger contract and the behavioral trigger pressure suite:
+- **Ability skills** are small, generic capabilities meant to be picked up automatically when context demands them. Their descriptions should be trigger-oriented, and they must not directly name other skills or native agents to invoke or delegate to. They should describe the needed capability and let the active harness choose the concrete mechanism.
+
+Procedural skills must keep descriptions short and non-triggering so they do not compete with ability skills. Ability skills remain responsible for automatic discovery and trigger coverage.
+
+### 7. Trigger scenarios for ability skill changes
+
+Every new ability skill and every update to an existing ability skill must add or update trigger coverage in `tests/skill-trigger/scenarios.toml`. The scenario should capture the real user phrasing, repository context, provider/tool context, or failure mode that should make the skill get picked up.
+
+Do not treat trigger testing as optional documentation for ability skills. If an ability skill's `description`, scope, or invocation behavior changes, update the trigger scenario registry in the same change.
+
+Procedural skills do not have trigger scenarios. Prove their behavior with loaded-skill behavioral tests instead.
+
+### 8. Run trigger tests before PR creation for ability skills
+
+Before creating a PR for any ability skill addition or ability skill update, run the deterministic trigger contract and the behavioral trigger pressure suite:
 
 ```bash
 python3 tests/skill-trigger/static_contract.py
@@ -181,6 +199,8 @@ SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
 
 The behavioral command should use the target agent/runtime whose skill selection matters for the PR. If the behavioral suite cannot be run, do not silently proceed; report the exact blocker and get explicit user approval before creating the PR.
 
+For procedural-only changes, still run the deterministic trigger contract to confirm procedural skills are excluded from trigger coverage, then run the relevant loaded-skill behavioral and contract suites.
+
 ### 9. Keep agent-driven test prompts neutral
 
 Behavioral tests and any other agent-driven tests must not nudge the tested agent toward the expected answer. Actor-facing prompts may set test boundaries, such as no external tool calls, no file edits, no PR creation, response format, and the scenario facts. They must not include checklists of expected workflow steps, required conclusions, required agent names, or rubric items.
@@ -188,6 +208,10 @@ Behavioral tests and any other agent-driven tests must not nudge the tested agen
 Treat actor-facing `prompt_instructions` like mocks or stubs in classic unit tests: they constrain unavailable side effects and injected facts, while assertions and judge criteria verify the behavior.
 
 Put expected behavior in `[[scenario.criteria]]`, `judge_context`, deterministic assertions, or the test harness, not in actor-facing `prompt_instructions` or user prompts unless the user prompt is intentionally modeling real user wording. If a behavioral prompt tells the actor what it "must explain", "must mention", or "must state" about the behavior under test, treat that test as invalid and rewrite it before trusting the result.
+
+### 10. Test positive behavior, not absence
+
+Do not add or preserve tests whose assertion is that something is absent. This includes absent files, absent folders, absent generated artifacts, forbidden phrases, forbidden wording, or forbidden response text. Replace absence checks with positive assertions about expected behavior, structure, outcomes, state transitions, evidence, or lifecycle gates. When touching existing tests, remove absence checks from that test surface instead of carrying them forward.
 
 ---
 
@@ -200,6 +224,8 @@ These rules apply when authoring a skill (instructions, recipes, or workflows) i
 The agent figures out the tools. The skill teaches the craft.
 
 Keep the skill's center of gravity on the part that's actually hard — domain expertise, gotchas, output quality — and push agent-specific glue out to the thinnest possible edge.
+
+Procedural skills are the exception for explicit workflow orchestration: they may name the exact skills or native agents they expect to invoke, delegate to, or spawn. Ability skills must stay portable and capability-oriented.
 
 ## Rules
 
@@ -214,7 +240,7 @@ Spend your effort on domain knowledge. Keep the delivery layer minimal and repla
 
 ### 2. Write at the level of intent, not tool names
 
-Describe what to do, not which tool to call.
+For ability skills, describe what to do, not which tool to call.
 
 - ❌ "Use the `Read` tool to open the file."
 - ✅ "Open and inspect the file."
@@ -224,6 +250,8 @@ Describe what to do, not which tool to call.
 - ✅ "Update the import statement in place."
 
 Any reasonable agent maps intent to its native capability. This also future-proofs against tool renames within a single agent.
+
+For procedural skills, direct skill or native-agent names are allowed when they are part of the workflow contract. Keep those references intentional and limited to orchestration points.
 
 ### 3. Default to the shell/filesystem substrate
 
@@ -270,12 +298,14 @@ Maintaining three full copies of a skill is the trap this whole document exists 
 
 ### 7. Name capabilities, not products
 
-When you must reference an external capability, name the category, not the specific product or tool:
+In ability skills, name the category, not the specific product or tool:
 
 - ❌ "Open Chrome DevTools and inspect the network tab."
 - ✅ "Inspect the page's network requests."
 - ❌ "Run `pytest` to verify the changes."
 - ✅ "Run the project's test suite to verify the changes." (then check `package.json`, `pyproject.toml`, etc.)
+
+In procedural skills, product, skill, or agent names may appear when the workflow intentionally requires that named handoff or integration.
 
 ### 8. Encode assumptions as preconditions, not silent expectations
 
@@ -311,14 +341,14 @@ When in doubt, ask:
 
 Before committing a skill, walk through this list:
 
-- [ ] No specific tool names from any agent appear in the prose (`Read`, `Write`, `Edit`, `str_replace`, `ask_user_input_v0`, etc.).
+- [ ] No specific tool names from any agent appear in ability-skill prose (`Read`, `Write`, `Edit`, `str_replace`, `ask_user_input_v0`, etc.); procedural skills only name skills or native agents at intentional workflow orchestration points.
 - [ ] Non-trivial logic lives in scripts under the skill folder, not in the prose.
 - [ ] Every capability that might not exist (screenshots, browser, network, MCP) has a fallback chain.
 - [ ] Required capabilities are declared at the top.
 - [ ] The skill has been run end-to-end on at least one target agent.
-- [ ] Trigger scenarios were added or updated in `tests/skill-trigger/scenarios.toml`.
+- [ ] Ability skill trigger scenarios were added or updated in `tests/skill-trigger/scenarios.toml`; procedural skills have no trigger scenarios.
 - [ ] The static trigger contract passed.
-- [ ] The behavioral trigger pressure suite passed for the target agent/runtime, or the user explicitly approved the documented blocker before PR creation.
+- [ ] For ability skills, the behavioral trigger pressure suite passed for the target agent/runtime, or the user explicitly approved the documented blocker before PR creation.
 - [ ] No copy of this skill exists for a different agent. (If it does, merge them.)
 - [ ] Adapter files, if any, are under ~30 lines each.
 - [ ] Standalone skill changes have been synced to both direct skill install dirs; plugin-packaged skill changes have been refreshed through the plugin install only, with no duplicate direct skill copies.

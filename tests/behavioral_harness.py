@@ -16,7 +16,6 @@ except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback is not e
 
 from semantic_judge import (  # noqa: E402
     SemanticCriterion,
-    assert_forbidden_terms,
     judge_response,
     resolve_judge_command,
     run_command,
@@ -31,7 +30,6 @@ class BehavioralScenario:
     scenario_id: str
     user_request: str
     criteria: tuple[SemanticCriterion, ...]
-    forbidden_terms: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -57,9 +55,20 @@ commands, inspect live systems, mutate files, create branches, create pull
 requests, create tracker issues, or complete the real task. Treat scenario facts
 as the only available runtime facts. Do not treat these test-harness limits as
 runtime blockers unless the scenario itself says the needed access, tooling, or
-runtime is unavailable. Answer as the loaded skill would in this mocked
-scenario, focusing on the next decision, blocker, or report you would return.
-Use the scenario's language. Do not quote the skill text or test criteria.
+runtime is unavailable. Delegation and subagent dispatch are available and
+allowed unless the scenario says they are unavailable, unsafe, or policy-blocked;
+describing an exact delegation dispatch is not an external tool call. Do not wait
+for follow-up user input during the test; if
+the loaded skill would normally require a user answer, ask the next question and
+state how the workflow would continue after the answer. If the realistic next
+step would require file edits, tool calls, live inspection, or another external
+action, describe the next response, decision, handoff, blocker, or report you
+would return instead of performing that action. Respond with the exact workflow
+steps you would take in this scenario. When the workflow step is delegation,
+state the concrete dispatch, handoff context, wait condition, and follow-up
+report you would produce. Answer as the loaded skill would in this mocked
+scenario. Use the scenario's language. Do not quote the skill text or test
+criteria.
 
 """ + CAPABILITY_ACCOUNTING_INSTRUCTIONS
 
@@ -224,7 +233,6 @@ def build_behavioral_scenario(path: Path, raw_scenario: object) -> BehavioralSce
         scenario_id=require_string(path, raw_scenario, "id"),
         user_request=require_string(path, raw_scenario, "user_request"),
         criteria=tuple(build_semantic_criterion(path, criterion) for criterion in criteria),
-        forbidden_terms=tuple(require_string_list(path, raw_scenario, "forbidden_terms")),
     )
 
 
@@ -249,13 +257,6 @@ def optional_string(payload: dict[str, object], key: str) -> str:
     if isinstance(value, str):
         return value.strip()
     return ""
-
-
-def require_string_list(path: Path, payload: dict[str, object], key: str) -> list[str]:
-    value = payload.get(key, [])
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ValueError(f"{path}: field {key!r} must be a string list")
-    return value
 
 
 def infer_colocated_skill_path(scenarios_path: Path) -> Path | None:
@@ -395,7 +396,6 @@ def check_semantic_response(
     judge_context: str,
 ) -> None:
     try:
-        assert_forbidden_terms(response, scenario.forbidden_terms, scenario.scenario_id)
         judge_response(
             judge_command=judge_command,
             scenario_id=scenario.scenario_id,

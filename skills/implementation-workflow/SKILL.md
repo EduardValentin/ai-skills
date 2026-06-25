@@ -1,6 +1,10 @@
 ---
 name: implementation-workflow
-description: Use when the context already includes an approved implementation plan, approved plan slice, or approved implementation packet and the user or parent workflow asks to implement that approved code unit. Trigger after ticket-workflow or multi-ticket planning once a ticket requirement, user story, or implementation packet is approved. This remains the parent implementation workflow even when the user asks for delegated, hybrid, subagent-driven, parallel-agent, or plan-execution work; those are execution shapes, not replacements. Do not use for ticket or issue start, coding-scope setup, feature-branch ticket setup, ticket intake, user-facing requirements approval, spec/design approval, implementation-plan approval, PR readiness only, or ticket-set coordination.
+description: Manual workflow for approved code work through implementation, review, verification, fixes, and reporting.
+disable-model-invocation: true
+metadata:
+  ai-skills-category: procedural
+  ai-skills-invocation: manual
 ---
 
 # Implementation Workflow
@@ -9,11 +13,11 @@ description: Use when the context already includes an approved implementation pl
 
 Implement approved code work with strong engineering judgment, review, verification, and reporting.
 
-This workflow owns implementation, code quality, code review, security review when relevant, QA/runtime verification, UI verification when relevant, fixes, reruns, and the implementation report.
+This workflow owns implementation, code quality, code review, manual QA verification, fixes, reruns, and the implementation report.
 
 It does not own user-facing ticket intake, requirements approval, spec/design approval, implementation-plan approval, PR readiness, release, merge, or tracker-state changes.
 
-Layering rule: use this workflow as soon as ticket-workflow, multi-ticket planning, or another parent planning workflow has an approved implementation plan and the next action is coding that plan. Subagent-driven development, delegated workers, parallel agents, or hybrid execution are execution shapes inside this workflow; they do not replace this workflow's review, security, verification, fix/rerun, or reporting contract.
+Once an approved implementation plan exists and the next action is coding that plan, the selected execution mode follows this workflow's review, verification, fix/rerun, and reporting contract.
 
 ## Required Inputs
 
@@ -27,76 +31,54 @@ Expect enough context to implement safely:
 - current branch/worktree state
 - dependencies, sequencing constraints, and known risks
 
-Require the approved spec/design when applicable and an approved implementation plan or approved plan slice for every implementation unit. Do not infer missing boundaries or proceed without the required approval.
-
 If required inputs are missing, stale, or contradictory in a way that affects safe implementation, stop with `IMPLEMENTATION BLOCKED` and name the missing input or conflict.
+
+## Delegation
+
+For delegation requests, prefer a native available subagent when one is defined for the required task. Otherwise spawn the most capable generic subagent, with capability and scope automatically determined from the task complexity, risk, and evidence needed. If delegation is unavailable or unsafe, perform the work inline and state why.
 
 ## Implementation Workflow
 
 1. Start from the approved spec/design and implementation plan. Resolve missing, stale, or contradictory context before editing.
-2. Inspect enough code to avoid blind edits, including nearby callers/callees, shared types/contracts, analogous implementations, tests, configuration, and affected architecture surfaces when they could affect the change.
-3. Choose and state the execution shape before editing: inline, delegated, or hybrid. Use delegated execution for separate plan slices when it materially improves quality, focus, parallelism, or context management.
-4. Implement the approved plan using the chosen execution shape.
-5. Run the review phase.
-6. Run the security phase, or record why there is no plausible security surface.
-7. Run the verification phase.
-8. Return the implementation report.
+2. Decide the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence. If affected surfaces are not sufficiently mapped, dispatch `code-mapper` for a read-only scope report before editing; name that dispatch explicitly instead of returning a generic mapping blocker. If code mapping or context gathering is unavailable or unsafe, stop with `IMPLEMENTATION BLOCKED` and name the missing context.
+3. Implement the approved plan using the execution mode selected before this workflow starts.
+4. Run the review phase.
+5. Run the verification phase.
+6. Return the implementation report.
 
 ## Engineering Invariants
 
 - Stay inside the approved boundary; do not broaden scope or change the approved plan without approval.
-- If implementation reveals that the approved plan should change, return to the relevant approval gate before continuing.
+- If implementation reveals that the approved plan should change, stop with `IMPLEMENTATION BLOCKED`, state how the plan should change and why, and do not continue until the plan change is approved.
 - Adopt a TDD approach when making changes: express the intended behavior with a failing test first, implement the change, then rerun the test and relevant checks.
 - Follow existing project patterns unless the approved plan requires a justified deviation.
 - Do not patch narrowly when the change affects contracts, shared state, dependency flow, error handling, performance, or public behavior.
 - Prefer clear names that expose purpose, domain invariants, and side effects.
 - Avoid duplicating logic, hiding side effects, or adding abstractions that do not reduce real complexity.
-- Prefer quality, readability, maintainability, and performance over speed.
 - Keep changes traceable to the unit goal and acceptance criteria.
-
-When summarizing the implementation loop before or during edits, name the chosen execution shape, the existing-patterns check, and the quality, readability, maintainability, and performance preference explicitly.
+- Keep security implications in mind while implementing or delegating work, especially auth/session, authorization, user input, data exposure, persistence, redirects, file handling, external requests, privileged actions, dependencies, sensitive logging, and changes to what users can see or do.
 
 ## Review
 
 Request independent review before treating implementation as complete.
 
-Use every configured review channel available for the repository:
+Start a fresh-context review session with `code-reviewer` when available; otherwise dispatch a sufficiently capable generic read-only review subagent. Ask it to review the PR against the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context.
 
-- start a fresh-context review session with another capable agent and ask it to review the PR against the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context
-- request an external frontier-model review when a separate model/runtime is available
-- request automated PR review when the repository has an automated review service configured
+Wait for the reviewer to finish.
 
-Have reviewers post findings on the PR whenever the review channel supports PR comments. The implementing agent owns the review loop: address valid findings, rerun affected checks, reply with the fix evidence, and mark the addressed comments resolved.
-
-After each batch of fixes, request a fresh review from every configured review channel again. Do not stop the implementation workflow until every available required reviewer has approved the PR, or until a reviewer is unavailable or blocked and the blocker is reported explicitly.
-
-When implementation exists but review evidence is missing, state the exact review requests to make next for every configured review channel, including the review focus, PR-comment expectation when supported, fix ownership, comment resolution, and fresh-review loop after each fix batch until every required reviewer approves or an explicit blocker is reported.
-
-When asked whether implementation is complete, treat missing review-loop evidence as incomplete unless the report covers every configured review channel, PR comments when supported, valid findings addressed, comments resolved, affected checks rerun, and fresh approval or explicit blocker from each required reviewer.
-
-## Security
-
-When the change has a plausible security surface, request a security-focused pass through the same configured review channels. Ask reviewers to focus on auth/session, authorization, user input, data exposure, persistence, redirects, file handling, external requests, privileged actions, dependencies, sensitive logging, and changes to what users can see or do.
-
-Address valid security findings through the normal review loop. If security review is skipped, record why there is no plausible security surface.
-
-When a plausible security surface exists and security evidence is missing, state the exact security-focused review request to make next through the configured review channels.
+Filter the reviewer findings and discard any irrelevant findings given the approved goals.
 
 ## Verification
 
-Run QA manual verification against the running application and confirm the acceptance criteria received as input are met. Do not mock third-party dependencies such as services and databases unless starting the real app and testing against real dependencies is not feasible.
-
-Running automated tests does not count as manual QA verification.
-
-For UI-facing or mixed work, verify visual consistency, accessibility, relevant states, and responsive behavior. Use DOM/computed-style/bounding-rect evidence where possible; screenshots alone are not enough for visual parity claims.
-
-Record anything not run and why. A missing check is acceptable only when the reason is explicit and the residual risk is reported.
-
-When executable behavior changed and manual QA evidence is missing, state the exact manual QA verification to run against the running application and acceptance criteria. Keep automated tests separate from manual QA evidence.
+Dispatch the `qa-verifier` subagent when available; otherwise dispatch a sufficiently capable generic QA subagent to perform manual QA verification against the ACs from the ticket. Pass all relevant context to the subagent. This verification is mandatory and the flow cannot move forward until manual QA verification is performed.
 
 ## Report Format
 
 Return a compact report:
+
+Include every section even when the work is blocked or incomplete. If a section's evidence is unavailable, say that explicitly and name the blocker instead of omitting the section.
+
+When the user asks whether implementation is complete and independent review or manual QA verification is missing, do not answer with only next steps. Return `IMPLEMENTATION BLOCKED` using this report format, with the Review and Manual QA verification sections naming the required dispatch, wait condition, and missing evidence.
 
 ```markdown
 # Implementation report - <unit>
@@ -121,15 +103,16 @@ Return a compact report:
 - <test-first evidence, test update, or why another verification path was used>
 
 ## Review
-- <review channels requested, approval status, findings addressed, unresolved blockers>
+- Reviewer delegation: <delegate used, inline reason, unavailable reason, or blocker>
+- Reviewer completion: <finished, unavailable, blocked, or not run and why>
+- Findings: <relevant findings, discarded irrelevant findings with rationale, fixed findings, or none>
 
-## Security
-- <security result or skip rationale>
-
-## Runtime or manual verification
-- <verification performed, evidence, or blocker>
+## Manual QA verification
+- Manual QA: <delegate used, ticket ACs verified, evidence, or blocker>
 
 ## Engineering notes
+- Input freshness/conflicts: <resolved, none found, unresolved, or blocker>
+- Code/repository context: <what was inspected, delegated, unnecessary, unavailable, or blocked>
 - Architecture/context considered: <callers, contracts, shared surfaces, analogous code>
 - Maintainability/performance notes: <notes or exceptions>
 
@@ -149,9 +132,8 @@ Stop and recover when:
 - claiming TDD was followed without first adding or updating a meaningful failing test, or skipping tests without a reason
 - treating developer checks as acceptance, visual, or PR-verdict verification
 - skipping review entirely
-- skipping runtime/manual verification when executable behavior changed
-- skipping UI verification for UI-facing work
-- skipping security review when there is a plausible security surface
-- stopping before required review channels approve, unless an unavailable or blocked reviewer is reported explicitly
+- treating implementation as complete before the independent reviewer finishes
+- moving forward before mandatory manual QA verification is performed
+- answering a completion question with review or manual QA next steps but no blocked implementation report
 - returning only a prose summary with no changed files, checks, review result, or risks
 - broadening beyond the approved unit without approval
