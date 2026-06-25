@@ -31,6 +31,10 @@ The main agent owns:
 
 The main agent should prefer delegation for ticket implementation and keep the main context focused on coordination. It may keep very small coordination-only work inline when that does not undermine orchestration.
 
+## Delegation
+
+For delegation requests, prefer a native available subagent when one is defined for the required task. Otherwise spawn the most capable generic subagent, with capability and scope automatically determined from the task complexity, risk, and evidence needed. If delegation is unavailable or unsafe, perform the work inline and state why.
+
 ## Gather Scope
 
 1. Read every ticket the user named.
@@ -39,21 +43,27 @@ The main agent should prefer delegation for ticket implementation and keep the m
 4. Mark missing details as unknowns or blockers instead of smoothing them over.
 5. Treat every named unit as an in-scope candidate. If exact identifiers or details are missing, list the candidate units, mark what is unknown, and confirm the scope before execution.
 
+## Inspect current code
+
+Before brainstorming, dispatch one read-only code mapping pass per affected ticket to the native `code-mapper` agent. This mapping is a planning action and is not gated by spec/design or coordination-plan approval. Do not postpone this scoping until after brainstorming or approval.
+
+Ask each mapper to return affected files/surfaces, entry points, shared contracts, dependencies, analogous implementations, tests, risks, and verification surfaces with locators.
+
 ## Build The Coordination Map
 
-Create and return a provisional map from known facts before mapping results are complete, with one entry per unit covering known dependencies, unknown dependencies, likely parallel/sequential status, and next mapping action; mark unknown or uncertain edges instead of saying the map is missing or offering it later:
+1. Create and return a provisional map from known facts before mapping results are complete, with one entry per unit covering known dependencies, unknown dependencies, likely parallel/sequential status, and next mapping action; mark unknown or uncertain edges instead of saying the map is missing or offering it later.
 
-- in-scope tickets or units
-- dependencies and order constraints
-- shared files, shared data, shared UI, shared services, migrations, feature flags, or integration risks
-- tickets that can run in parallel
-- tickets that should be split, merged, sequenced, or delegated together
-- likely PR boundaries
-- evidence needed to know when delegated work is ready for handoff
+   Include:
 
-Before brainstorming, dispatch one read-only code mapping pass per affected ticket to `code-mapper` and use the literal name `code-mapper` in planning responses, not generic labels. This mapping is a planning action and is not gated by spec/design or coordination-plan approval. If `code-mapper` is unavailable, use a generic read-only subagent. Only map inline if delegation is unavailable or unsafe. Do not postpone this scoping until after brainstorming or approval.
+   - in-scope tickets or units
+   - dependencies and order constraints
+   - shared files, shared data, shared UI, shared services, migrations, feature flags, or integration risks
+   - tickets that can run in parallel
+   - tickets that should be split, merged, sequenced, or delegated together
+   - likely PR boundaries
+   - evidence needed to know when delegated work is ready for handoff
 
-Ask each mapper to return affected files/surfaces, entry points, shared contracts, dependencies, analogous implementations, tests, risks, and verification surfaces with locators. Use those reports and known ticket facts to build a provisional dependency and parallelization map.
+2. Use the mapper reports and known ticket facts to refine the dependency and parallelization map.
 
 ## Plan Before Implementation
 

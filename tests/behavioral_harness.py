@@ -55,9 +55,20 @@ commands, inspect live systems, mutate files, create branches, create pull
 requests, create tracker issues, or complete the real task. Treat scenario facts
 as the only available runtime facts. Do not treat these test-harness limits as
 runtime blockers unless the scenario itself says the needed access, tooling, or
-runtime is unavailable. Answer as the loaded skill would in this mocked
-scenario, focusing on the next decision, blocker, or report you would return.
-Use the scenario's language. Do not quote the skill text or test criteria.
+runtime is unavailable. Delegation and subagent dispatch are available and
+allowed unless the scenario says they are unavailable, unsafe, or policy-blocked;
+describing an exact delegation dispatch is not an external tool call. Do not wait
+for follow-up user input during the test; if
+the loaded skill would normally require a user answer, ask the next question and
+state how the workflow would continue after the answer. If the realistic next
+step would require file edits, tool calls, live inspection, or another external
+action, describe the next response, decision, handoff, blocker, or report you
+would return instead of performing that action. Respond with the exact workflow
+steps you would take in this scenario. When the workflow step is delegation,
+state the concrete dispatch, handoff context, wait condition, and follow-up
+report you would produce. Answer as the loaded skill would in this mocked
+scenario. Use the scenario's language. Do not quote the skill text or test
+criteria.
 
 """ + CAPABILITY_ACCOUNTING_INSTRUCTIONS
 

@@ -32,7 +32,7 @@ The response builds a dependency and parallelization map across tickets before e
 [[scenario.criteria]]
 key = "delegates_codebase_mapping_when_needed"
 description = """
-Because the repository is large, shared surfaces are not mapped, and native specialist subagents are available, the response commits to dispatching one read-only codebase mapping pass per affected ticket through `code-mapper` before relying on the coordination map. A generic read-only subagent fallback is required only if the response says `code-mapper` is unavailable. Merely listing mapping as missing is insufficient.
+Because the repository is large, shared surfaces are not mapped, and native specialist subagents are available, the response commits to dispatching one read-only codebase mapping pass per affected ticket through `code-mapper` before relying on the coordination map. Merely listing mapping as missing is insufficient.
 """
 
 [[scenario.criteria]]

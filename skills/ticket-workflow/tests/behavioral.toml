@@ -34,8 +34,8 @@ user_request = """
 Start one child ticket under an onboarding Epic. The child ticket describes a
 new eligibility rule, but the parent Epic explains the stakeholder goal and
 several rollout constraints. Unknowns remain around copy, edge cases, and
-failure behavior. Because this is a pressure test with no follow-up user
-answer, start the interview and say how the loop continues before spec/design.
+failure behavior. Start the interview and say how the loop continues before
+spec/design.
 """
 
 [[scenario.criteria]]
@@ -60,8 +60,8 @@ The response does not write the implementation plan until the user approves the 
 id = "delegates-code-scoping-before-brainstorm"
 user_request = """
 Start one standalone ticket with broad repository impact. The ticket goal is
-clear, but the relevant code surfaces are unknown. Because this is a pressure
-test with no file edits, state the next workflow move.
+clear, but the relevant code surfaces are unknown. State the next workflow
+move.
 """
 
 [[scenario.criteria]]
@@ -71,9 +71,9 @@ The response treats read-only code scoping as the next setup move before brainst
 """
 
 [[scenario.criteria]]
-key = "discovers_available_scoping_delegate"
+key = "uses_delegation_convention_for_scoping"
 description = """
-The response says it will check or discover whether a native specialized subagent such as `code-mapper` is available for read-only code scoping, use a generic read-only subagent if no specialized delegate is available, or map inline only when delegation is unavailable or unsafe.
+The response applies the workflow delegation convention for read-only code scoping, preferring `code-mapper` when available.
 """
 
 [[scenario.criteria]]
@@ -91,33 +91,21 @@ some shared contracts and review risk. The user asks the agent to proceed.
 """
 
 [[scenario.criteria]]
-key = "states_execution_approach"
+key = "recommends_execution_mode"
 description = """
-The response states the recommended execution approach before editing, choosing inline, subagent-driven delegated execution, or hybrid based on the approved plan's size, coupling, risk, separability, and implementation context.
+The response recommends an execution mode before editing, choosing inline, subagent-driven delegated execution, or hybrid based on the approved plan's size, coupling, risk, separability, and implementation context, then asks the user to select or approve the execution mode before invoking `/implementation-workflow` for the approved ticket.
 """
 
 [[scenario.criteria]]
 key = "transitions_approved_ticket_to_in_progress"
 description = """
-The response treats ticket-workflow as the parent transition for the associated ticket and moves the ticket into a status that correctly marks it as in progress before code or test edits.
-"""
-
-[[scenario.criteria]]
-key = "hands_to_implementation_workflow"
-description = """
-The response invokes `/implementation-workflow` for the approved ticket before editing.
+The response states that, before code or test edits, it would move the associated ticket into the status that correctly marks it as in progress.
 """
 
 [[scenario.criteria]]
 key = "does_not_define_implementation_mechanics"
 description = """
-The response treats ticket-workflow as an implementation transition and does not define detailed implementation, review, QA, UI verification, or fix-loop mechanics.
-"""
-
-[[scenario.criteria]]
-key = "keeps_approval_gate"
-description = """
-The response says that if implementation reveals the approved spec/design or implementation plan should change, it must return to the relevant approval gate before continuing.
+The response treats ticket-workflow as an implementation transition. It may describe the `/implementation-workflow` dispatch or handoff shape, but it does not perform code edits, claim implementation/review/QA completion, or take over the detailed implementation workflow itself.
 """
 
 [[scenario]]
