@@ -26,21 +26,23 @@ Expect enough context to implement safely:
 - unit goal and acceptance criteria, or a clear user-observable outcome
 - approved boundary, including explicit non-goals
 - approved implementation plan or approved plan slice
-- known affected files/surfaces or permission to inspect and discover them
+- affected files/surfaces, if already known
 - repository instructions and ownership constraints
 - current branch/worktree state
 - dependencies, sequencing constraints, and known risks
 
 If required inputs are missing, stale, or contradictory in a way that affects safe implementation, stop with `IMPLEMENTATION BLOCKED` and name the missing input or conflict.
 
-## Delegation
+## Delegation checkpoint
 
-For delegation requests, prefer a native available subagent when one is defined for the required task. Otherwise spawn the most capable generic subagent, with capability and scope automatically determined from the task complexity, risk, and evidence needed. If delegation is unavailable or unsafe, perform the work inline and state why.
+Before broad searches or large file reads, consider dispatching read-only subagents for independent, compressible discovery such as repo-wide reference inventories, external API research, test-surface mapping, docs/env/deploy sweeps, or PR/status checks.
+Keep the main agent responsible for the approved plan, repo instructions, workflow interpretation, core code path, implementation decisions, and approval-sensitive artifacts. Subagent outputs must be concise, locator-backed, and categorized; avoid raw dumps.
+Delegated and inline discovery together must still populate the implementation scope map: affected files/surfaces, entry points, tests, risks, and verification surfaces with locators. If choosing not to delegate a plausible broad discovery task, briefly state why.
 
 ## Implementation Workflow
 
 1. Start from the approved spec/design and implementation plan. Resolve missing, stale, or contradictory context before editing.
-2. Decide the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence. If affected surfaces are not sufficiently mapped, dispatch `code-mapper` for a read-only scope report before editing; name that dispatch explicitly instead of returning a generic mapping blocker. If code mapping or context gathering is unavailable or unsafe, stop with `IMPLEMENTATION BLOCKED` and name the missing context.
+2. Decide the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence. Map the relevant codebase surface before editing, using the delegation checkpoint for broad independent discovery when it preserves output quality and saves main-context load. Capture affected files/surfaces, entry points, tests, risks, and verification surfaces with locators.
 3. Implement the approved plan using the execution mode selected before this workflow starts.
 4. Run the review phase.
 5. Run the verification phase.
