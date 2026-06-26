@@ -57,29 +57,38 @@ The response does not write the implementation plan until the user approves the 
 """
 
 [[scenario]]
-id = "delegates-code-scoping-before-brainstorm"
+id = "adapts-code-scoping-delegation-before-brainstorm"
 user_request = """
-Start one standalone ticket with broad repository impact. The ticket goal is
-clear, but the relevant code surfaces are unknown. State the next workflow
-move.
+Start one standalone ticket whose core path is a settings form and save API, but
+the ticket may interact with billing entitlements and a migration that were
+changed by other recent tickets. The repository is large. The main agent can
+inspect the likely settings route/controller directly, while cross-ticket billing
+and migration history would require broader discovery. State the next workflow
+move before brainstorming.
 """
 
 [[scenario.criteria]]
-key = "delegates_code_scoping"
+key = "maps_surface_before_brainstorm"
 description = """
-The response treats read-only code scoping as the next setup move before brainstorming and intends to dispatch a native specialized scoping subagent when one is available.
+The response keeps codebase surface mapping as a setup requirement before brainstorming, including affected files or surfaces, entry points, tests, risks, and verification surfaces with locators.
 """
 
 [[scenario.criteria]]
-key = "uses_delegation_convention_for_scoping"
+key = "delegates_selectively"
 description = """
-The response applies the workflow delegation convention for read-only code scoping, preferring `code-mapper` when available.
+The response treats delegation as an adaptive choice, not a mandatory whole-scope handoff: it keeps the main agent responsible for the ticket, workflow interpretation, core settings path, and user-facing decisions while considering read-only delegation for broad independent discovery such as the cross-ticket billing and migration areas.
 """
 
 [[scenario.criteria]]
-key = "preserves_scoping_boundary"
+key = "requires_concise_subagent_output"
 description = """
-The response keeps code scoping read-only and uses it to gather affected files or surfaces, entry points, analogous implementations, tests, risks, and verification surfaces with locators.
+When it delegates broad discovery, the response requires concise, locator-backed, categorized subagent output rather than raw dumps.
+"""
+
+[[scenario.criteria]]
+key = "explains_inline_choice"
+description = """
+If the response chooses not to delegate a plausible broad discovery task, it briefly states why that inline choice preserves quality or saves coordination overhead.
 """
 
 [[scenario]]

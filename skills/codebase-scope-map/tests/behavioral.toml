@@ -4,7 +4,7 @@ skill = "codebase-scope-map"
 skill_path = "skills/codebase-scope-map/SKILL.md"
 scenario_env = "CODEBASE_SCOPE_MAP_SCENARIO"
 judge_context = """
-Loaded skill under test: codebase-scope-map. Judge scope-map behavior, read-only boundaries, locator discipline, and compactness. These scenarios ask for the behavior and report contract only; do not require actual repository file paths when the prompt says not to inspect a real repo.
+Loaded skill under test: codebase-scope-map. Judge scope-map behavior, read-only boundaries, locator discipline, and compactness. These scenarios ask for behavior and report content only; do not require actual repository file paths when the prompt says not to inspect a real repo.
 """
 [[scenario]]
 id = "ticket-scoping-read-only-locators"
@@ -15,7 +15,7 @@ Before we implement this ticket, map the relevant code surface so the caller and
 [[scenario.criteria]]
 key = "structured_locator_map"
 description = """
-Because this pressure prompt forbids real repo inspection, the response should state that an actual scope map must use compact file:line locators and include entry points, target modules, analogous implementations, tests, contracts, dependencies, affected surfaces, and conflict points.
+Because this pressure prompt forbids real repo inspection, the response should state that an actual scope map must use compact file:line locators and include entry points, target modules, tests, contracts, dependencies, affected surfaces, and conflict points.
 """
 
 [[scenario.criteria]]
@@ -49,27 +49,28 @@ Because this pressure prompt forbids real repo inspection, the response should s
 """
 
 [[scenario]]
-id = "reference-backed-ui-scope"
+id = "ui-scope-affected-surfaces"
 user_request = """
-Scope this UI ticket in a repo with a runnable designs/ React reference app. The later visual reviewer will need prototype element locators for parity against production.
+Scope this UI ticket so later implementation and verification know which
+production routes, components, state paths, tests, and contracts are affected.
 """
 
 [[scenario.criteria]]
-key = "prototype_elements_required"
+key = "ui_entry_points_required"
 description = """
-The response treats prototype/reference elements as mandatory for a reference-backed UI task and requires visible relevant declarations with locators.
+Because this pressure prompt forbids real repo inspection, the response identifies production UI routes or entry points and changed or likely affected components as required locator categories, marking current locators unknown instead of inventing them.
 """
 
 [[scenario.criteria]]
-key = "affected_surface_map_for_visual_review"
+key = "affected_surface_map_for_verification"
 description = """
-The response requires an affected surface map pairing production locators, routes/states/selectors, and prototype counterparts where relevant.
+Because this pressure prompt forbids real repo inspection, the response describes an affected surface map with route, component, state, test, and contract categories, and states why those surfaces matter for implementation or verification once current locators are available.
 """
 
 [[scenario.criteria]]
-key = "surfaces_inventory_gap"
+key = "surfaces_gap"
 description = """
-If prototype enumeration cannot be completed, the response reports a conflict or input gap instead of returning none or deferring everything to visual review.
+If UI surface enumeration cannot be completed, the response reports a conflict or input gap instead of silently dropping the surface.
 """
 
 [[scenario]]
@@ -85,9 +86,9 @@ Because this pressure prompt provides no repository to inspect, the response sho
 """
 
 [[scenario.criteria]]
-key = "needs_clarification_section"
+key = "marks_clarification_needs"
 description = """
-The response uses the Needs clarification or input section for missing acceptance criteria, route ownership, and why each input matters.
+The response clearly marks missing acceptance criteria, route ownership, and why each input matters as clarification or input needs.
 """
 
 [[scenario.criteria]]

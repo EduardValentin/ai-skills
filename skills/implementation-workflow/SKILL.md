@@ -26,21 +26,23 @@ Expect enough context to implement safely:
 - unit goal and acceptance criteria, or a clear user-observable outcome
 - approved boundary, including explicit non-goals
 - approved implementation plan or approved plan slice
-- known affected files/surfaces or permission to inspect and discover them
+- affected files/surfaces, if already known
 - repository instructions and ownership constraints
 - current branch/worktree state
 - dependencies, sequencing constraints, and known risks
 
 If required inputs are missing, stale, or contradictory in a way that affects safe implementation, stop with `IMPLEMENTATION BLOCKED` and name the missing input or conflict.
 
-## Delegation
+## Delegation checkpoint
 
-For delegation requests, prefer a native available subagent when one is defined for the required task. Otherwise spawn the most capable generic subagent, with capability and scope automatically determined from the task complexity, risk, and evidence needed. If delegation is unavailable or unsafe, perform the work inline and state why.
+Before broad searches or large file reads, consider dispatching read-only subagents for independent, compressible discovery such as repo-wide reference inventories, external API research, test-surface mapping, docs/env/deploy sweeps, or PR/status checks.
+Keep the main agent responsible for the approved plan, repo instructions, workflow interpretation, core code path, implementation decisions, and approval-sensitive artifacts. Subagent outputs must be concise, locator-backed, and categorized; avoid raw dumps.
+Delegated and inline discovery together must still populate the implementation scope map: affected files/surfaces, entry points, tests, risks, and verification surfaces with locators. If choosing not to delegate a plausible broad discovery task, briefly state why.
 
 ## Implementation Workflow
 
 1. Start from the approved spec/design and implementation plan. Resolve missing, stale, or contradictory context before editing.
-2. Decide the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence. If affected surfaces are not sufficiently mapped, dispatch `code-mapper` for a read-only scope report before editing; name that dispatch explicitly instead of returning a generic mapping blocker. If code mapping or context gathering is unavailable or unsafe, stop with `IMPLEMENTATION BLOCKED` and name the missing context.
+2. Decide the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence. Map the relevant codebase surface before editing, using the delegation checkpoint for broad independent discovery when it preserves output quality and saves main-context load. Capture affected files/surfaces, entry points, tests, risks, and verification surfaces with locators.
 3. Implement the approved plan using the execution mode selected before this workflow starts.
 4. Run the review phase.
 5. Run the verification phase.
@@ -63,6 +65,7 @@ For delegation requests, prefer a native available subagent when one is defined 
 Request independent review before treating implementation as complete.
 
 Start a fresh-context review session with `code-reviewer` when available; otherwise dispatch a sufficiently capable generic read-only review subagent. Ask it to review the PR against the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context.
+Include those same items in the review handoff, plus the changed files or diff when available.
 
 Wait for the reviewer to finish.
 
@@ -71,56 +74,7 @@ Filter the reviewer findings and discard any irrelevant findings given the appro
 ## Verification
 
 Dispatch the `qa-verifier` subagent when available; otherwise dispatch a sufficiently capable generic QA subagent to perform manual QA verification against the ACs from the ticket. Pass all relevant context to the subagent. This verification is mandatory and the flow cannot move forward until manual QA verification is performed.
-
-## Report Format
-
-Return a compact report:
-
-Include every section even when the work is blocked or incomplete. If a section's evidence is unavailable, say that explicitly and name the blocker instead of omitting the section.
-
-When the user asks whether implementation is complete and independent review or manual QA verification is missing, do not answer with only next steps. Return `IMPLEMENTATION BLOCKED` using this report format, with the Review and Manual QA verification sections naming the required dispatch, wait condition, and missing evidence.
-
-```markdown
-# Implementation report - <unit>
-
-## Status
-- <IMPLEMENTED | IMPLEMENTATION BLOCKED>
-
-## Boundary
-- In scope: <summary>
-- Out of scope: <summary>
-
-## Summary
-- <what changed and why>
-
-## Files changed
-- `path` - <purpose>
-
-## Checks and verification
-- `<command or check>` - <pass/fail/not run and reason>
-
-## Test strategy
-- <test-first evidence, test update, or why another verification path was used>
-
-## Review
-- Reviewer delegation: <delegate used, inline reason, unavailable reason, or blocker>
-- Reviewer completion: <finished, unavailable, blocked, or not run and why>
-- Findings: <relevant findings, discarded irrelevant findings with rationale, fixed findings, or none>
-
-## Manual QA verification
-- Manual QA: <delegate used, ticket ACs verified, evidence, or blocker>
-
-## Engineering notes
-- Input freshness/conflicts: <resolved, none found, unresolved, or blocker>
-- Code/repository context: <what was inspected, delegated, unnecessary, unavailable, or blocked>
-- Architecture/context considered: <callers, contracts, shared surfaces, analogous code>
-- Maintainability/performance notes: <notes or exceptions>
-
-## Risks or blockers
-- <risk, blocker, or explicitly empty>
-```
-
-If blocked, do not fill a success report. Return `IMPLEMENTATION BLOCKED` with the missing input, failing command, architectural conflict, dependency, approval gap, or unsafe ambiguity.
+Include the acceptance criteria, implemented surface, setup/runtime details, affected files or surfaces, changed behavior, known risks, and any review/fix context in the QA handoff.
 
 ## Red Flags
 

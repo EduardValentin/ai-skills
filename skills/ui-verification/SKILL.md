@@ -58,52 +58,6 @@ If the caller does not name a mode, choose parity when a runnable reference URL/
 
 Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the evidence status **degraded manual evidence**. CLEAN requires complete DOM evidence; degraded evidence returns BLOCKED unless the caller explicitly requested best-effort. If even that fallback cannot run, return `UI verification cannot proceed` with the blocker and required input.
 
-## Output Format
-
-Return Markdown:
-
-```markdown
-# UI verification — <task or surface>
-
-## Verdict
-- [ ] CLEAN — no visual or accessibility findings
-- [ ] FINDINGS — at least one visual or accessibility finding
-- [ ] BLOCKED — review could not proceed
-
-## Review mode
-- <parity | consistency>
-
-## Evidence status
-- <complete DOM evidence | degraded manual evidence | blocked>
-
-## Comparison basis
-- <reference URL/route and source-of-truth notes, or production analog routes/elements and why they are credible>
-
-## States covered
-- <state> | viewport widths: <list, including pre/post-breakpoint widths> | evidence: <DOM extraction / screenshot / keyboard path>
-
-## Matched-element inventory
-| Pair | Basis selector | Production selector | font-* | color/bg | box | layout | size | verdict |
-|---|---|---|---|---|---|---|---|---|
-| <basis locator> <-> <production locator> | <reference or analog selector> | <implemented selector> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <actual extracted values> | <MATCH / DRIFT / MISSING> |
-
-### Inventory provenance gaps
-_(list visible in-scope elements observed during verification that were missing from caller-supplied affected surfaces or approved artifacts)_
-- `<locator>` | <element type> | <one-line description> | suggested provenance gap: <scope map / plan / rendered conditional state>
-
-## Visual findings
-- **V1** | severity: <blocker / major / minor> | `<production selector>` <-> `<basis selector>` | <property or measurement diff> | evidence: <computed-style snippet or bounding-rect numbers> | suggested fix
-
-## Accessibility findings
-- **A1** | severity: <blocker / major / minor> | `<selector>` | <semantic structure / ARIA / focus order / keyboard reach / contrast / alt text> | WCAG criterion | suggested fix
-
-## Out-of-scope flags
-- **O1** | `<path:line>` | <suspected behavior or implementation-quality issue> | flagged for: <caller follow-up / behavior verification / implementation review>
-
-## Patterns to codify next time
-- <one-line declarative candidate rule> | rationale: <one sentence>
-```
-
 Any visual finding flips the verdict to FINDINGS. Do not create a "recommendations only" bucket for visual drift.
 
 ## Parity Mode
@@ -166,4 +120,4 @@ After fixes, rerun only the affected rows and affected states unless the fix tou
 
 ## Stop Conditions
 
-Stop when the report has a verdict, review mode, evidence status, comparison basis, states covered, completed inventory rows, findings or explicit empty findings, accessibility result, out-of-scope flags or explicit empty flags, and patterns-to-codify or explicit empty patterns.
+Stop when the result has a verdict, review mode, evidence status, comparison basis, states covered, completed inventory rows, findings or explicit empty findings, accessibility result, out-of-scope flags or explicit empty flags, and patterns-to-codify or explicit empty patterns.
