@@ -21,9 +21,10 @@ Setup -> Brainstorm -> Spec/design approval -> Plan approval -> Implementation -
 
 Approval is artifact-specific. The user can only approve an artifact they have actually seen. Approval of decisions, assumptions, recommendations, authorization, branch/worktree setup, investigation progress, or "good to go" is not approval of an unwritten spec/design or implementation plan.
 
-## Delegation
-
-For delegation requests, prefer a native available subagent when one is defined for the required task. Otherwise spawn the most capable generic subagent, with capability and scope automatically determined from the task complexity, risk, and evidence needed. If delegation is unavailable or unsafe, perform the work inline and state why.
+## Delegation checkpoint
+Before broad searches or large file reads, consider dispatching read-only subagents for independent, compressible discovery such as repo-wide reference inventories, external API research, test-surface mapping, docs/env/deploy sweeps, or PR/status checks.
+Keep the main agent responsible for the ticket, repo instructions, workflow interpretation, core code path, user-facing decisions, and approval artifacts. Subagent outputs must be concise, locator-backed, and categorized; avoid raw dumps.
+Delegated and inline discovery together must still populate the setup map: affected files/surfaces, entry points, tests, risks, and verification surfaces with locators. If choosing not to delegate a plausible broad discovery task, briefly state why.
 
 ## Setup
 
@@ -31,7 +32,7 @@ For delegation requests, prefer a native available subagent when one is defined 
 2. Read the ticket to understand the goal, stakeholder implications, acceptance criteria, dependencies, and ambiguity. If the ticket has a parent Epic, parent story, or parent ticket, read that parent too.
 3. Read repo instructions and only the relevant product, design, reference, and code slices needed to understand the ticket and prepare the implementation plan.
 4. Inspect relevant repository state, existing PRs, and draft work only as needed to understand current status and avoid planning against stale assumptions.
-5. Map the relevant codebase surface before brainstorming by delegating a read-only scoping pass to `code-mapper`. Require the scoping report to include affected files/surfaces, entry points, analogous implementations, tests, risks, and verification surfaces with locators.
+5. Map the relevant codebase surface before brainstorming, using the delegation checkpoint for broad independent discovery when it preserves output quality and saves main-context load. Capture affected files/surfaces, entry points, tests, risks, and verification surfaces with locators.
 
 ## Brainstorm
 

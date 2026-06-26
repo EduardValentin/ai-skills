@@ -4,7 +4,7 @@ skill = "qa-verification"
 skill_path = "skills/qa-verification/SKILL.md"
 scenario_env = "QA_VERIFICATION_SCENARIO"
 judge_context = """
-Loaded skill under test: qa-verification. Judge QA behavior, scope, and report boundaries. The pressure prompt asks for the approach/report shape only; do not require proof that QA was actually executed.
+Loaded skill under test: qa-verification. Judge QA behavior, scope, and report boundaries. The pressure prompt asks for approach and report content only; do not require proof that QA was actually executed.
 """
 [[scenario]]
 id = "backend-api-live-behavior"
@@ -49,7 +49,7 @@ off-switch, success and failure event emission, continue-after-failure behavior,
 Vault path redaction, and no alert-creation side effects. The source diff is
 available and the focused unit tests pass, but there is no running Celery beat,
 Oracle database, or Vault service available yet. Decide the current QA verdict
-and report shape.
+and required evidence.
 """
 
 [[scenario.criteria]]
@@ -112,7 +112,7 @@ Vault, emits success/failure events, and updates observable job logs. The
 focused unit tests pass. The QA agent can
 import fake Oracle and Vault clients locally and simulate responses, but real
 Oracle and Vault connections, credentials, and seeded data are not available.
-Decide the current QA verdict and report shape.
+Decide the current QA verdict and required evidence.
 """
 
 [[scenario.criteria]]

@@ -91,7 +91,7 @@ The response keeps review, mandatory manual QA verification through `qa-verifier
 """
 
 [[scenario]]
-id = "requires-review-manual-qa-and-report"
+id = "requires-review-and-manual-qa-before-completion"
 user_request = """
 Implementation is finished for an approved UI and API change that affects user
 input, authorization-sensitive data, persistence, and visible behavior.
@@ -103,19 +103,19 @@ yet. The user asks whether the implementation workflow is complete.
 [[scenario.criteria]]
 key = "independent_review_required"
 description = """
-Across the blocked report, the response states the exact review dispatch it would perform in this mocked scenario: dispatch `code-reviewer` when available, or a sufficiently capable generic read-only review subagent when `code-reviewer` is unavailable; pass the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context; and wait for completion before treating implementation as complete.
+The response blocks completion and states the review dispatch it would perform in this mocked scenario: dispatch `code-reviewer`, pass the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context, and wait for completion before treating implementation as complete.
 """
 
 [[scenario.criteria]]
 key = "manual_qa_required"
 description = """
-The response states the exact manual QA dispatch it would perform in this mocked scenario: dispatch `qa-verifier` when available, or a sufficiently capable generic QA subagent when `qa-verifier` is unavailable; pass all relevant context and ticket ACs; wait for completion; and not move forward until manual QA verification is performed.
+The response blocks completion and states the manual QA dispatch it would perform in this mocked scenario: dispatch `qa-verifier`, pass all relevant context and ticket ACs, wait for completion, and not move forward until manual QA verification is performed.
 """
 
 [[scenario.criteria]]
-key = "report_required"
+key = "missing_evidence_named"
 description = """
-The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, manual QA verification, engineering notes, and risks or blockers.
+The response names the missing independent review evidence and missing runtime/manual QA evidence as the blockers to completion without imposing a fixed report shape.
 """
 
 [[scenario]]
@@ -141,7 +141,7 @@ The response states the exact generic manual QA dispatch it would perform in thi
 """
 
 [[scenario.criteria]]
-key = "fallback_report_required"
+key = "fallback_missing_evidence_named"
 description = """
-The response ends with an implementation report covering boundary, summary, files changed, checks, test strategy, review status, manual QA verification, engineering notes, and risks or blockers.
+The response names the missing independent review evidence and missing runtime/manual QA evidence as the blockers to completion without imposing a fixed report shape.
 """

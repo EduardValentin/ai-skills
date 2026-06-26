@@ -27,11 +27,11 @@ Use PR/ticket metadata only to derive QA scope, setup, acceptance criteria, and 
 
 When caller-supplied PR/ticket notes are available and the local diff is available, use the notes as QA scope and the diff to identify affected routes, setup, implemented surfaces, and regression risks.
 
-When metadata is available but testing instructions are absent or vague, scope before verification from the PR/ticket details, acceptance criteria, diff/changed files, entry points, setup/data needs, implemented surface, and regression risks. The report must explicitly name those scope inputs, using `missing` or `not applicable` rather than omitting them.
+When metadata is available but testing instructions are absent or vague, scope before verification from the PR/ticket details, acceptance criteria, diff/changed files, entry points, setup/data needs, implemented surface, and regression risks. The response must explicitly name those scope inputs, using `missing` or `not applicable` rather than omitting them.
 
 ## Verification Modes
 
-- `ui`: start the application, use browser tooling, manually click through the implemented surface, and inspect behavior after each action: copy/data changes, navigation, validation, disabled/submitting behavior, persistence, and errors. The report must name the app start command or URL, browser actions, and rendered outcomes. Cover happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior when relevant.
+- `ui`: start the application, use browser tooling, manually click through the implemented surface, and inspect behavior after each action: copy/data changes, navigation, validation, disabled/submitting behavior, persistence, and errors. Name the app start command or URL, browser actions, and rendered outcomes. Cover happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior when relevant.
 - `backend`: use programmatic probes against the running implemented surface, such as HTTP requests, CLI invocations, job triggers, database reads, logs, queues, emitted events, or cache checks. Validate outputs, state transitions, persistence, side effects, auth, validation, error handling, idempotency, retries, and third-party/state propagation when relevant. Keep state-transition checks explicit in the approach and report; do not collapse them into persistence or side effects.
 - `mixed`: prefer running the GUI and backend/service together and verifying the flow end to end. The approach and report must explicitly name browser-observed behavior and programmatic backend/API/service probes, then tie them through the integration contract and propagated state. If running them together is not possible, verify each surface separately, state the limitation, and still validate the integration contract and propagated state.
 - `other`: exercise scripts, scheduled tasks, data jobs, migrations, or integrations through their real command/trigger path. Check inputs, outputs, logs, external calls, exit codes, reruns, failure modes, cleanup, and state changes.
@@ -49,49 +49,6 @@ Every acceptance criterion must map to a concrete observation:
 Any observed bug changes the verdict to `BUGS FOUND`.
 
 When provided runtime facts show QA can proceed but verification has not yet been run, do not return `QA cannot proceed`; state the manual/runtime probes and that the final report will map each acceptance criterion to concrete evidence. Any failed behavior becomes `BUGS FOUND` with reproduction steps, expected behavior, actual behavior, and evidence.
-
-## Report Format
-
-Every QA response that returns or describes a report must include verdict, mode, metadata source, scope basis, coverage, evidence, bugs, blockers, and notes. Use `explicitly empty` for sections without content instead of omitting them.
-
-```markdown
-# QA report - <work item>
-## Verdict
-- <CLEAN | BUGS FOUND | QA cannot proceed>
-## Mode
-- <ui | backend | mixed | other>
-## Metadata source
-- <PR/ticket/user-supplied/inferred-from-diff/none, plus blockers if any>
-## Metadata access sequence
-- Tooling attempted: <MCP/API/CLI/local metadata or not applicable>
-- Caller details requested: <yes/no/not needed>
-- Diff fallback used: <no | yes, only after details unavailable>
-## Scope basis
-- <acceptance criteria, testing instructions, implemented surface, diff, entry points, setup/data needs, regression risks>
-## Coverage
-- Acceptance criteria: <AC1 observed | AC2 observed | AC3 failed -> B1>
-- Manual/programmatic verification performed: <browser actions, requests, commands, job triggers, integrations>
-- Running surface: <app start command or URL, API base, CLI command, job trigger, or integration endpoint>
-- State and propagation checks: <database, queues, events, files, external systems, logs, cache, UI state>
-- Regression/adversarial checks: <list>
-- Evidence: <browser observations, responses, command output, persisted state, traces, screenshots, files>
-
-## Bugs found
-- **B1** | severity: <blocker | major | minor> | reproduction steps:
-  1. <step>
-  2. <step>
-  3. <step>
-  Expected: <expected behavior>
-  Actual: <actual behavior>
-  Evidence: <observation>
-
-## Blockers
-- <blocker or explicitly empty>
-- Required next input: <ticket/PR details, acceptance criteria, testing instructions, credentials, runnable surface, or explicitly empty>
-
-## Notes
-- <coverage limits, inferred scope, degraded checks, or explicitly empty>
-```
 
 ## Forbidden Behaviors
 

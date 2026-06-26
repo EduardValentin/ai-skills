@@ -63,6 +63,7 @@ For delegation requests, prefer a native available subagent when one is defined 
 Request independent review before treating implementation as complete.
 
 Start a fresh-context review session with `code-reviewer` when available; otherwise dispatch a sufficiently capable generic read-only review subagent. Ask it to review the PR against the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context.
+Include those same items in the review handoff, plus the changed files or diff when available.
 
 Wait for the reviewer to finish.
 
@@ -71,56 +72,7 @@ Filter the reviewer findings and discard any irrelevant findings given the appro
 ## Verification
 
 Dispatch the `qa-verifier` subagent when available; otherwise dispatch a sufficiently capable generic QA subagent to perform manual QA verification against the ACs from the ticket. Pass all relevant context to the subagent. This verification is mandatory and the flow cannot move forward until manual QA verification is performed.
-
-## Report Format
-
-Return a compact report:
-
-Include every section even when the work is blocked or incomplete. If a section's evidence is unavailable, say that explicitly and name the blocker instead of omitting the section.
-
-When the user asks whether implementation is complete and independent review or manual QA verification is missing, do not answer with only next steps. Return `IMPLEMENTATION BLOCKED` using this report format, with the Review and Manual QA verification sections naming the required dispatch, wait condition, and missing evidence.
-
-```markdown
-# Implementation report - <unit>
-
-## Status
-- <IMPLEMENTED | IMPLEMENTATION BLOCKED>
-
-## Boundary
-- In scope: <summary>
-- Out of scope: <summary>
-
-## Summary
-- <what changed and why>
-
-## Files changed
-- `path` - <purpose>
-
-## Checks and verification
-- `<command or check>` - <pass/fail/not run and reason>
-
-## Test strategy
-- <test-first evidence, test update, or why another verification path was used>
-
-## Review
-- Reviewer delegation: <delegate used, inline reason, unavailable reason, or blocker>
-- Reviewer completion: <finished, unavailable, blocked, or not run and why>
-- Findings: <relevant findings, discarded irrelevant findings with rationale, fixed findings, or none>
-
-## Manual QA verification
-- Manual QA: <delegate used, ticket ACs verified, evidence, or blocker>
-
-## Engineering notes
-- Input freshness/conflicts: <resolved, none found, unresolved, or blocker>
-- Code/repository context: <what was inspected, delegated, unnecessary, unavailable, or blocked>
-- Architecture/context considered: <callers, contracts, shared surfaces, analogous code>
-- Maintainability/performance notes: <notes or exceptions>
-
-## Risks or blockers
-- <risk, blocker, or explicitly empty>
-```
-
-If blocked, do not fill a success report. Return `IMPLEMENTATION BLOCKED` with the missing input, failing command, architectural conflict, dependency, approval gap, or unsafe ambiguity.
+Include the acceptance criteria, implemented surface, setup/runtime details, affected files or surfaces, changed behavior, known risks, and any review/fix context in the QA handoff.
 
 ## Red Flags
 
