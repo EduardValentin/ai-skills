@@ -87,3 +87,29 @@ description = "The response scopes routes, mock boundaries, theme configuration,
 [[scenario.criteria]]
 key = "does_not_dump_raw_docs"
 description = "The response avoids dumping raw companion docs into the main context."
+
+[[scenario]]
+id = "production-port-code-mapping-handoff"
+user_request = """
+The user has a finished designs/ prototype flow and wants production planning
+next. The prototype includes multiple routes, visible states, mocked business
+rules, and mocked integration behavior.
+
+What should the prototype-work response hand off before production code is mapped?
+"""
+
+[[scenario.criteria]]
+key = "prepares_prototype_side_mapping"
+description = "The response prepares prototype-side route, state, visible element, interaction, and mock-boundary context before asking for production code mapping."
+
+[[scenario.criteria]]
+key = "uses_code_mapper_agent"
+description = "The response routes production code mapping to the native code-mapper agent rather than referencing a retired skill or doing production implementation inside prototype-work."
+
+[[scenario.criteria]]
+key = "labels_uncertain_counterparts"
+description = "Known or suspected production route, state, selector, test, or component counterparts are labeled as known or uncertain instead of being invented."
+
+[[scenario.criteria]]
+key = "preserves_prototype_boundary"
+description = "The response treats the handoff as preparation for downstream planning, implementation, verification, or visual parity work, not as permission to edit production code."

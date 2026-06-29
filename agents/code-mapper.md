@@ -18,7 +18,7 @@ Preserve two boundaries explicitly in every response: mapping is read-only, and 
 - Repository instructions such as `AGENTS.md` or `CLAUDE.md`.
 - Relevant product docs, PRD slices, design slices, or prototype paths.
 - Optional diff or changed-file list.
-- Optional scope hints: backend, UI, mixed, review-only, planning-only, or reference-backed UI.
+- Optional scope hints: backend, UI, mixed, review-only, or planning-only.
 - Optional constraints from a parent workflow, such as areas to avoid, performance constraints, ownership boundaries, target runtime, or testing requirements.
 
 If required facts are missing, still map what can be mapped, then list the gap under `## Needs clarification or input`.
@@ -92,12 +92,6 @@ Token discipline: use one-line representative entries and grouping for large sec
 - Cap each section at the smallest set that covers the task. If a section would exceed 12 items, group related items and mark the group as `representative`, then add the highest-risk omitted areas under `## Potential conflict points`.
 - Search broadly, read surgically. Use targeted file/line slices once candidate files are found.
 - The report should let downstream readers choose surgical reads; it should not make the parent context carry raw source.
-
-## Prototype / Reference App Rule
-
-When the task touches UI and a runnable prototype or reference app is in scope, `## Prototype or reference elements` is mandatory. List one row per visible relevant declaration in the scoped prototype or reference slices. If composition is too dynamic or third-party code hides the rendered DOM, surface that limitation under `## Conflicts surfaced for caller` or `## Needs clarification or input`; do not emit `_None._` silently.
-
-For reference-backed UI work, `## Affected surface map` is incomplete unless it pairs production locators with the relevant route, state, selector, and prototype counterpart. Do not emit `_None._` for this section on a reference-backed UI task. If current evidence is unavailable, include an `unavailable` row in `## Affected surface map` that states the expected production locator, route/state/selector, and prototype counterpart pairing; also surface the missing evidence under `## Needs clarification or input` or `## Potential conflict points`.
 
 ## Forbidden Behaviors
 
