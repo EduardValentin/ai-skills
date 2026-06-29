@@ -60,7 +60,7 @@ id = "demo-mapper"
 source = "mapper.md"
 description = "Read-only mapper for implementation scoping."
 groups = ["ticket-workflow"]
-preload_skills = ["codebase-scope-map"]
+preload_skills = ["demo-scope-skill"]
 
 [agent.codex]
 model = "gpt-5.4-mini"
@@ -86,7 +86,7 @@ color = "cyan"
         claude_agent = home / ".claude" / "agents" / "demo-mapper.md"
         assert_file_contains(codex_agent, 'sandbox_mode = "read-only"')
         assert_file_contains(codex_agent, "developer_instructions = ")
-        assert_file_contains(codex_agent, str(home / ".codex" / "skills" / "codebase-scope-map" / "SKILL.md"))
+        assert_file_contains(codex_agent, str(home / ".codex" / "skills" / "demo-scope-skill" / "SKILL.md"))
         assert_file_contains(codex_agent, "enabled = true")
         assert_file_contains(codex_config, "[agents.existing-agent]")
         assert_file_contains(codex_config, "# BEGIN ai-skills native agent registration: demo-mapper")
@@ -95,7 +95,7 @@ color = "cyan"
         assert_file_contains(codex_config, 'config_file = "agents/demo-mapper.toml"')
         assert_file_contains(claude_agent, 'name: "demo-mapper"')
         assert_file_contains(claude_agent, 'permissionMode: "plan"')
-        assert_file_contains(claude_agent, '  - "codebase-scope-map"')
+        assert_file_contains(claude_agent, '  - "demo-scope-skill"')
         assert_file_contains(claude_agent, "Map code precisely.")
 
         check = run_sync(script, repo, home, "check", "--group", "ticket-workflow")

@@ -56,6 +56,23 @@ Preparation is incomplete until those outputs are framed as compact reports: pro
 - When a flow includes a simulated fetch, API boundary, or backend-facing behavior, list and implement an explicit API-like mock for that behavior; do not rely on async states alone to imply the mock.
 - Represent async prototype behavior with appropriate loading, success, empty, and error states.
 
+## Code Mapping
+
+When a production app uses a prototype reference app alongside it, keep these rules in mind during codebase scope mapping for production planning, implementation, visual parity, or review.
+
+The scope map should account for:
+
+- Prototype app root, relevant routes, and stateful flow branches.
+- Prototype component or element locators for visible relevant declarations.
+- Accessible names, roles, visible copy, and interaction states that production must preserve.
+- Mocked business rules, mocked integration boundaries, API-like mocks, and data shapes.
+- PRD/DESIGN/brand-voice facts that are load-bearing for production parity.
+- Known or suspected production route, state, selector, test, or component counterparts, labeled as known or uncertain.
+
+Pair production locators with the relevant prototype route, state, selector, and element counterparts. If the prototype uses dynamic composition or third-party code that hides useful declaration locators, say so instead of inventing locators.
+
+Do not treat codebase scope mapping as permission to edit production code. It is preparation for downstream planning, implementation, verification, or visual parity work.
+
 ## PRD Consolidation
 
 If the change adds or alters a user flow, page, component, business rule, data field, permission, branch, mocked integration, or backend-facing behavior even slightly, update `PRD.md`.

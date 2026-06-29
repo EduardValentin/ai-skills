@@ -87,3 +87,29 @@ description = "The response scopes routes, mock boundaries, theme configuration,
 [[scenario.criteria]]
 key = "does_not_dump_raw_docs"
 description = "The response avoids dumping raw companion docs into the main context."
+
+[[scenario]]
+id = "production-port-code-mapping-rules"
+user_request = """
+The user has a finished designs/ prototype flow and wants production planning
+next. The prototype includes multiple routes, visible states, mocked business
+rules, and mocked integration behavior.
+
+What prototype-reference rules should production codebase scope mapping keep in mind?
+"""
+
+[[scenario.criteria]]
+key = "captures_prototype_reference_context"
+description = "The response captures prototype route, state, visible element, interaction, and mock-boundary context that production codebase scope mapping must account for."
+
+[[scenario.criteria]]
+key = "pairs_prototype_and_production_surfaces"
+description = "The response says production locators should be paired with relevant prototype route, state, selector, and element counterparts."
+
+[[scenario.criteria]]
+key = "labels_uncertain_counterparts"
+description = "Known or suspected production route, state, selector, test, or component counterparts are labeled as known or uncertain instead of being invented."
+
+[[scenario.criteria]]
+key = "preserves_prototype_boundary"
+description = "The response treats codebase scope mapping as preparation for downstream planning, implementation, verification, or visual parity work, not as permission to edit production code."
