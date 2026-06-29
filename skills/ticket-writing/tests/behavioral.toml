@@ -65,6 +65,43 @@ key = "removes_stale_scope"
 description = "The response removes or flags stale out-of-scope alert-creation content."
 
 [[scenario]]
+id = "mixed-deliverables-include-outcomes"
+user_request = """
+Draft a ticket from this approved brief: audit exports need parity across CSV
+and admin views. The assignee should create a short design note comparing
+current exports, implement missing CSV fields, open the implementation PR, and
+attach a rollout checklist for support. It is blocked by the data model cleanup
+ticket.
+"""
+forbidden_terms = ["published", "created issue"]
+
+[[scenario.criteria]]
+key = "includes_outcomes_section"
+description = "The response includes a clearly labeled Outcomes or Outcome section because the work is not implementation-only."
+
+[[scenario.criteria]]
+key = "names_mixed_deliverables"
+description = "The outcomes identify the design note or document, implementation PR or code change, and rollout checklist or support handoff."
+
+[[scenario]]
+id = "unclear-deliverables-asks-first"
+user_request = """
+Draft a ticket from this approved brief: audit exports need parity across CSV
+and admin views. The work might involve a design note, an implementation PR, a
+support handoff, or some other artifact, but the required deliverables have not
+been decided.
+"""
+forbidden_terms = ["## Outcomes", "Title:"]
+
+[[scenario.criteria]]
+key = "asks_about_deliverables"
+description = "The response asks the user to clarify which deliverables or outcomes are required before drafting the final ticket."
+
+[[scenario.criteria]]
+key = "does_not_guess_deliverables"
+description = "The response does not invent an Outcomes section, final title, or final ticket draft by guessing the required deliverables."
+
+[[scenario]]
 id = "thin-context-routes-upstream"
 user_request = "Write implementation-ready tickets for the new scheduling feature. We have not decided roles, flow, data, edge cases, or integrations yet."
 
