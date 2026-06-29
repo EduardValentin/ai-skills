@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run TOML-backed loaded-skill behavioral pressure suites.",
     )
-    parser.add_argument("--skill", help="Run one skill suite, for example codebase-scope-map.")
+    parser.add_argument("--skill", help="Run one skill suite, for example ui-verification.")
     parser.add_argument("--scenario", help="Run one scenario id across matching suites.")
     parser.add_argument("--list", action="store_true", help="List discovered suites and exit.")
     return parser.parse_args()

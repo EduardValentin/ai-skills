@@ -78,22 +78,6 @@ blocks it from being ready for review.
 """
 
 [[scenario]]
-id = "codebase-scope-map-implementation-handoff"
-skill = "codebase-scope-map"
-prompt = "Before implementing this ticket, map the relevant code surface for downstream agents with file:line locators, entry points, modules, affected surfaces, tests, patterns, dependencies, conflicts, and keep it token-efficient."
-
-[[scenario]]
-id = "codebase-scope-map-delegated-scoping"
-skill = "codebase-scope-map"
-prompt = """
-You are a Scoping subagent in a ticket workflow. Map the codebase for this
-implementation task as a token-efficient navigable scope map with file:line
-locators, tests, types/contracts, dependencies,
-affected surfaces, conflict points, and downstream slices.
-This scoping task is read-only: do not edit, format, generate, stage, commit, or clean up repository files.
-"""
-
-[[scenario]]
 id = "ui-verification-runnable-reference"
 skill = "ui-verification"
 prompt = "Compare the implemented React dashboard against the runnable designs/ reference app and make sure every visible element matches the prototype before release."

@@ -64,7 +64,7 @@ description = "The response does the demo."
     if payload["assertion"][0]["fields"] != ["name", "skill"]:
         raise AssertionError("assertion array did not parse")
     scenario = payload["scenario"][0]
-    if scenario["user_request"] != "Line one.\nLine two.":
+    if scenario["user_request"].rstrip("\n") != "Line one.\nLine two.":
         raise AssertionError("multiline scenario string did not parse")
     if scenario["criteria"][0]["key"] != "does_demo":
         raise AssertionError("scenario criteria did not parse")

@@ -4,8 +4,7 @@ version = 1
 id = "code-mapper"
 source = "code-mapper.md"
 description = "Read-only codebase mapper for implementation, review, or planning tasks that need precise file and symbol locators before decisions or edits."
-groups = ["ticket-workflow", "codebase-scope-map"]
-preload_skills = ["codebase-scope-map"]
+groups = ["ticket-workflow", "code-mapper"]
 
 [agent.codex]
 model_reasoning_effort = "medium"
