@@ -124,9 +124,9 @@ skill = "prototype-work"
 prompt = "In the React prototype reference app under designs/, add a new onboarding page with mocked eligibility rules, a mocked CRM handoff, and browser validation."
 
 [[scenario]]
-id = "prototype-work-code-mapping-handoff"
+id = "prototype-work-code-mapping-rules"
 skill = "prototype-work"
-prompt = "Before we port this designs/ prototype flow into production, prepare the prototype-side mapping handoff for code-mapper with routes, visible elements, mocks, and parity-relevant behavior."
+prompt = "Before we port this designs/ prototype flow into production, capture the prototype routes, visible elements, mocks, and parity-relevant behavior that production codebase scope mapping must account for."
 
 [[scenario]]
 id = "manage-prd-business-rule-update"

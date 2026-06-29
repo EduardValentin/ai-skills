@@ -58,9 +58,9 @@ Preparation is incomplete until those outputs are framed as compact reports: pro
 
 ## Code Mapping
 
-When prototype work will feed production planning, implementation, visual parity, or review, prepare a prototype-side mapping handoff before asking the native `code-mapper` agent to map production code.
+When a production app uses a prototype reference app alongside it, keep these rules in mind during codebase scope mapping for production planning, implementation, visual parity, or review.
 
-The handoff should include:
+The scope map should account for:
 
 - Prototype app root, relevant routes, and stateful flow branches.
 - Prototype component or element locators for visible relevant declarations.
@@ -69,9 +69,9 @@ The handoff should include:
 - PRD/DESIGN/brand-voice facts that are load-bearing for production parity.
 - Known or suspected production route, state, selector, test, or component counterparts, labeled as known or uncertain.
 
-Ask `code-mapper` to return a read-only production map that pairs production locators with the relevant prototype route, state, selector, and element counterparts. If the prototype uses dynamic composition or third-party code that hides useful declaration locators, say so in the handoff instead of inventing locators.
+Pair production locators with the relevant prototype route, state, selector, and element counterparts. If the prototype uses dynamic composition or third-party code that hides useful declaration locators, say so instead of inventing locators.
 
-Do not use this code mapping handoff as permission to edit production code. It is preparation for downstream planning, implementation, verification, or visual parity work.
+Do not treat codebase scope mapping as permission to edit production code. It is preparation for downstream planning, implementation, verification, or visual parity work.
 
 ## PRD Consolidation
 
