@@ -1,0 +1,139 @@
+[suite]
+name = "jira-ticket-writing"
+skill = "jira-ticket-writing"
+skill_path = "skills/jira-ticket-writing/SKILL.md"
+scenario_env = "JIRA_TICKET_WRITING_SCENARIO"
+judge_context = """
+Loaded skill under test: jira-ticket-writing. Judge Jira-specific ticket layout, acceptance field or body placement based on field availability, native issue relationships, repository link formatting, sparse labels, and concise practical prose.
+"""
+
+[[scenario]]
+id = "create-jira-story-field-layout"
+user_request = """
+Prepare the Jira API fields for this approved story: support the map replacement on asset detail pages. Users need the map to load saved layers, preserve existing filters, and show a clear fallback when the map provider fails. Technical context: the work is in yes-map and replaces the old map wrapper. Out of scope: editing layer definitions. Jira API fields are available, including a separate Acceptance & Testing Criteria field.
+"""
+
+[[scenario.criteria]]
+key = "clean_summary_and_description_sections"
+description = """
+The response drafts a clean Jira summary without a ticket-key prefix and uses relevant preferred description sections such as User Story, Context, Outcomes, Technical Notes, and Out Of Scope without adding redundant Jira process meta-notes.
+"""
+
+[[scenario.criteria]]
+key = "separates_acceptance_field_with_jira_checkboxes"
+description = """
+Acceptance criteria are kept in Jira's Acceptance & Testing Criteria field rather than the description body, and are represented as Jira task checkboxes or ADF taskList/taskItem nodes because Jira API fields are available.
+"""
+
+[[scenario.criteria]]
+key = "writes_pass_fail_outcomes"
+description = """
+Acceptance criteria are concrete pass/fail outcomes covering saved layers, filter preservation, provider failure fallback, and replacement of the old wrapper.
+"""
+
+[[scenario]]
+id = "clean-existing-jira-draft"
+user_request = """
+Prepare the Jira API field updates to clean up this Jira draft before update.
+
+Existing summary: MKT-123 - mapbox_v3_asset_detail.ts
+Description includes a Source Context section, a dependency block saying blocked by MKT-101 and related to MKT-99, acceptance criteria written as markdown checkbox lines, and a note saying "Acceptance criteria are tracked in the Acceptance & Testing Criteria field."
+Parent epic is MKT-10. Jira API fields are available, including a separate Acceptance & Testing Criteria field, parent field, and issue links.
+"""
+
+[[scenario.criteria]]
+key = "removes_key_prefix_and_bad_sections"
+description = """
+The response rewrites the summary around the outcome without the MKT-123 prefix or file-path-only wording, restructures the body into preferred sections such as Context and Technical Notes, and removes process meta-notes from the ticket body.
+"""
+
+[[scenario.criteria]]
+key = "moves_markdown_ac_to_jira_field"
+description = """
+The response moves the markdown checkbox acceptance criteria out of the description and into the Acceptance & Testing Criteria field using Jira-native task checkboxes or ADF taskList/taskItem nodes.
+"""
+
+[[scenario.criteria]]
+key = "models_relationships_natively"
+description = """
+The response uses Jira's parent field for MKT-10 and native issue links for blocked-by MKT-101 and related MKT-99 instead of keeping a dependency block in the description.
+"""
+
+[[scenario]]
+id = "relationships-repository-links-labels"
+user_request = """
+Prepare a Jira task from approved notes:
+- repository: https://github.com/acme/asset-map
+- parent epic: MAP-12
+- blocked by MAP-8
+- follow-up to MAP-21
+- no label decisions have been made
+
+The task is to wire the asset-detail map to the existing layer selector. Jira API fields and native issue links are available.
+"""
+
+[[scenario.criteria]]
+key = "formats_repository_link"
+description = """
+The response formats the repository URL as a Markdown link with a meaningful label such as acme/asset-map rather than leaving a bare URL.
+"""
+
+[[scenario.criteria]]
+key = "uses_native_jira_relationships"
+description = """
+The response maps MAP-12 to Jira's parent field and maps MAP-8 and MAP-21 to native issue links with the correct relationship meaning.
+"""
+
+[[scenario.criteria]]
+key = "keeps_labels_sparse"
+description = """
+The response does not add labels by default when no label decision has been made; it either omits labels or asks/proposes them separately without treating them as approved metadata.
+"""
+
+[[scenario]]
+id = "no-dedicated-acceptance-field-body-fallback"
+user_request = """
+Prepare the Jira API payload for this approved task: show a warning when archived layers are selected on the asset detail map, keep the selected layer visible, and log an audit event. This Jira project does not have a dedicated Acceptance & Testing Criteria field; the API can set summary and description, and the description field supports ADF taskList/taskItem nodes.
+"""
+
+[[scenario.criteria]]
+key = "uses_body_only_because_field_missing"
+description = """
+Because the scenario says no dedicated Acceptance & Testing Criteria field exists, the response puts acceptance criteria in the Jira description body instead of claiming a separate acceptance field will be used.
+"""
+
+[[scenario.criteria]]
+key = "still_uses_jira_checkboxes"
+description = """
+Even with the body fallback, acceptance criteria are represented as Jira task checkboxes or ADF taskList/taskItem nodes rather than markdown [ ] text.
+"""
+
+[[scenario.criteria]]
+key = "keeps_body_structured"
+description = """
+The description remains concise and structured around preferred sections such as User Story, Context, Outcomes, Technical Notes, and Out Of Scope where relevant.
+"""
+
+[[scenario]]
+id = "investigation-ticket-scope-boundary"
+user_request = """
+Draft an investigation Jira ticket: figure out why saved layers intermittently disappear when reopening the asset detail map. We only need a diagnostic spike; no fix is approved yet. Jira supports a separate Acceptance & Testing Criteria field.
+"""
+
+[[scenario.criteria]]
+key = "allows_investigation_language"
+description = """
+Because the ticket is explicitly an investigation, the response can frame the work as diagnosis or discovery while still writing concrete deliverables and pass/fail acceptance criteria.
+"""
+
+[[scenario.criteria]]
+key = "keeps_fix_out_of_scope"
+description = """
+The response separates the unapproved fix from the diagnostic ticket scope, preferably through Out Of Scope or equivalent explicit scope boundary.
+"""
+
+[[scenario.criteria]]
+key = "keeps_jira_field_structure"
+description = """
+The response still keeps acceptance criteria in the Acceptance & Testing Criteria field and keeps implementation notes in Technical Notes instead of blending all content into one description.
+"""

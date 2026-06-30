@@ -1,31 +1,30 @@
 ---
 name: jira-ticket-writing
-description: Use when drafting, creating, or editing Jira tickets for Edi where formatting preferences matter: acceptance criteria placement, Jira task checkboxes, clean summaries, section layout, native issue relationships, Bitbucket link formatting, and sparse label usage.
+description: Use when drafting, creating, or editing Jira tickets
 ---
 
 # Jira Ticket Writing
 
 ## Overview
 
-Apply these preferences when writing Jira ticket drafts or publishing/editing tickets through Jira tools. Use normal product/backlog judgment for scope; this skill only captures formatting and writing preferences.
+Apply these preferences when writing Jira ticket drafts or publishing/editing tickets through Jira tools. This skill only captures formatting and writing preferences.
 
 ## Ticket Shape
 
-- Keep the Jira summary clean and key-free. Do not prefix summaries with the ticket id, such as `MKT-123 -`.
+- Keep the Jira summary clean and key-free. Do not prefix titles with the ticket id.
 - Use concise, outcome-focused titles. Avoid vague titles and file-path-only titles.
 - Prefer these description sections when relevant:
   - `## User Story`
-  - `## Current Context`
-  - `## Technical Notes`
+  - `## Context`
   - `## Out Of Scope`
-- Make `Technical Notes` its own top-level section.
-- Make `Out Of Scope` its own top-level section.
-- Do not add a `Source Context` section unless the user explicitly asks for one.
+  - `## Outcomes`
+  - `## Technical Notes`
+
 - Do not add meta-notes such as "Acceptance criteria are tracked in the Acceptance & Testing Criteria field."
 
 ## Acceptance Criteria
 
-- Put acceptance criteria in Jira's `Acceptance & Testing Criteria` field, not in the description body.
+- Put acceptance criteria in Jira's `Acceptance & Testing Criteria` field, not in the description body. Only when there is not dedicated field, you are allowed to put it in the body.
 - Use real Jira task checkboxes, not markdown `[ ]` text.
 - When using Jira API fields, represent checkboxes with Atlassian Document Format `taskList` / `taskItem` nodes:
 
@@ -61,15 +60,14 @@ Apply these preferences when writing Jira ticket drafts or publishing/editing ti
 
 ## Links And Labels
 
-- Format Bitbucket repository links as Markdown references with meaningful labels, for example: `[yesenergy/yes-map](https://bitbucket.org/yesenergy/yes-map/src/master/)`.
-- Avoid bare Bitbucket URLs in ticket descriptions.
+- Format repository links as Markdown references with meaningful labels, for example: `[yesenergy/yes-map](https://bitbucket.org/yesenergy/yes-map/src/master/)`.
+- Avoid bare URLs in ticket descriptions.
 - Use labels sparingly. Do not add labels by default.
 - If labels seem useful, propose them to the user or add them only when the user asks.
 
 ## Writing Style
 
-- Use "the new V3 map component" for the Mapbox v3 replacement work unless the user gives a different name.
 - Keep ticket prose concise and practical.
-- Keep implementation details in `Technical Notes`; keep user value in `User Story` and `Current Context`.
+- Keep implementation details in `Technical Notes`; keep user value in `User Story` and `Context`.
 - Separate out-of-scope work instead of mixing it into technical notes.
 - Avoid redundant explanatory text about Jira fields, templates, or process mechanics inside the ticket body.

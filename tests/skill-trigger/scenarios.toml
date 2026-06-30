@@ -367,6 +367,20 @@ remove parent/child duplication, and make event/API output contracts explicit.
 forbidden_terms = []
 
 [[scenario]]
+id = "jira-ticket-writing-draft-preferences"
+skill = "jira-ticket-writing"
+prompt = "Draft a Jira ticket for Edi from this approved scope, with the preferred Acceptance & Testing Criteria field, Jira task checkboxes, clean description layout, and sparse labels."
+
+[[scenario]]
+id = "jira-ticket-writing-clean-existing-draft"
+skill = "jira-ticket-writing"
+prompt = """
+Clean up this Jira draft before updating it: the summary starts with MKT-123,
+acceptance criteria are markdown checkboxes in the description, a Bitbucket URL is
+bare, and blockers are pasted into a dependency block instead of Jira links.
+"""
+
+[[scenario]]
 id = "linear-issue-writing-approved-drafts"
 skill = "linear-issue-writing"
 prompt = "Publish these approved epic and user story drafts into Linear, with the right parent-child structure and duplicate checks."
