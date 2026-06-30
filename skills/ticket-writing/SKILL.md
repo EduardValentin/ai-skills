@@ -1,6 +1,6 @@
 ---
 name: ticket-writing
-description: Use when the user asks to write, draft, refine, or clean up platform-neutral agile backlog prose from approved or sufficiently scoped context, including epics, user stories, tasks, acceptance criteria, titles, descriptions, dependencies, or ticket drafts that should not be published directly to Jira, Linear, or another tracker.
+description: Use when writing tickets, user stories or epics.
 ---
 
 # Ticket Writing
