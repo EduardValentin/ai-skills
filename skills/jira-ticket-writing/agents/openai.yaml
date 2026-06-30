@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jira Ticket Writing"
+  short_description: "Format Jira tickets to user preferences"
+  default_prompt: "Use $jira-ticket-writing to draft or update a Jira ticket with the preferred field layout and formatting."
