@@ -141,7 +141,7 @@ prompt = "Plan the future work for checkout eligibility. We do not have a ticket
 [[scenario]]
 id = "ticket-writing-create-stories"
 skill = "ticket-writing"
-prompt = "Turn this approved planning packet into clean epics, vertical-slice user stories, dependency relationships for native issue links, and acceptance criteria."
+prompt = "Draft platform-neutral ticket prose from this approved planning packet without publishing to a tracker: clean epics, vertical-slice user stories, dependency relationships for native issue links, and acceptance criteria."
 
 [[scenario]]
 id = "ticket-writing-clean-draft-quality"
@@ -151,6 +151,26 @@ Clean up these draft epics and stories before publishing: make titles plain,
 separate business overview from technical details, add real acceptance criteria,
 remove parent/child duplication, and make event/API output contracts explicit.
 """
+
+[[scenario]]
+id = "ticket-writing-mixed-deliverables-outcomes"
+skill = "ticket-writing"
+prompt = """
+Draft a tracker-ready ticket from this approved brief: compare existing audit
+exports in a short design note, implement the missing CSV fields, open the
+implementation PR, and prepare the support rollout checklist.
+"""
+forbidden_terms = []
+
+[[scenario]]
+id = "ticket-writing-unclear-deliverables"
+skill = "ticket-writing"
+prompt = """
+Draft a tracker-ready ticket for audit export parity. The work may need a doc,
+implementation PR, rollout checklist, or another artifact, but the required
+deliverables have not been decided yet.
+"""
+forbidden_terms = []
 
 [[scenario]]
 id = "linear-issue-writing-approved-drafts"
