@@ -17,16 +17,30 @@ Prefer existing approved credentials before asking how to authenticate. Never pr
 
 Use this fallback order:
 
-1. Approved local keychain or CLI credentials, including the local `codex-bitbucket-api-token` convention when present.
-2. Environment auth for the helper: `BITBUCKET_TOKEN`, or `BITBUCKET_EMAIL` plus `BITBUCKET_API_TOKEN`.
-3. Git credential helper for `bitbucket.org`: run `printf 'protocol=https\nhost=bitbucket.org\n\n' | git credential fill`.
+1. Approved local keychain or CLI credentials, including the local `codex-bitbucket-api-token` convention when present. For that keychain item, the working shape may be Basic auth: read the keychain `acct` value as `BITBUCKET_EMAIL` and the `-w` secret as `BITBUCKET_API_TOKEN`. Do not default to treating the `-w` secret as `BITBUCKET_TOKEN`; if Bearer auth returns `401`, retry with the Basic-auth shape before reporting a blocker.
+2. Environment auth for the helper: `BITBUCKET_EMAIL` plus `BITBUCKET_API_TOKEN` for app-password Basic auth, or `BITBUCKET_TOKEN` only when it is explicitly available as a Bearer token.
+3. Git credential helper for `bitbucket.org`: run `printf 'protocol=https\nhost=bitbucket.org\n\n' | git credential fill`, then use the returned `username` and `password` as Basic auth.
 
 Treat each approved source as a credential candidate. A credential that can read PR metadata may still lack write scope; if a write receives `401` or `403`, try the next approved source before reporting a blocker.
 
+When using the local keychain convention, set credentials for a single helper invocation without printing values:
+
+```bash
+BITBUCKET_EMAIL="$(security find-generic-password -s codex-bitbucket-api-token 2>/dev/null | awk -F'"' '/"acct"<blob>=/{print $4; exit}')" \
+BITBUCKET_API_TOKEN="$(security find-generic-password -s codex-bitbucket-api-token -w 2>/dev/null)" \
+"$BITBUCKET_PR_HELPER" pr-details <workspace> <repo_slug> <pull_request_id>
+```
+
+Never echo credential variables, run auth commands under shell tracing, paste token values into chat, place credentials in URLs, or preserve secrets in command output.
+
 ## Bitbucket Cloud Helper
 
-Prefer `scripts/bitbucket-cloud-pr.sh` for Bitbucket Cloud operations.
-Run `scripts/bitbucket-cloud-pr.sh --help` for supported commands and auth environment variables.
+Prefer the helper shipped with this skill for Bitbucket Cloud operations. Resolve it relative to the skill directory, not relative to the target repository:
+
+- Preferred helper path: `<skill-dir>/scripts/bitbucket-cloud-pr.sh`.
+- In this source checkout: `/Users/trocaneduard/Documents/Personal/ai-skills/skills/manage-bitbucket-pr/scripts/bitbucket-cloud-pr.sh`.
+
+Run `"$BITBUCKET_PR_HELPER" --help` for supported commands and auth environment variables. Do not assume every Bitbucket target repository has a root-level `scripts/bitbucket-cloud-pr.sh`. If the skill helper is unavailable in the current runtime, use the same Bitbucket Cloud routes with direct HTTPS requests.
 
 For Cloud PR URLs, parse `workspace`, `repo_slug`, and `pull_request_id` first.
 For discussion, summary, review, or verification requests, read `pr-details` before `read-comments`; follow `next` pagination until the needed comments are complete. If live calls are blocked, still report the parsed PR identity and blocked helper sequence.
@@ -42,3 +56,10 @@ For comments, follow `next` pagination until the needed data is complete.
 Do not nest fenced code blocks inside numbered or bulleted lists. Keep every opening and closing code fence at column 1. When a verification step needs a command block, write the step text as a normal paragraph, not as a numbered or bulleted list item, then start the fenced block on the next line with no indentation.
 
 Prefer this flattened shape: step text paragraph, blank line, code fence at column 1, command lines, closing fence at column 1. Avoid technically valid Markdown that relies on indented fences under list items; Bitbucket can render those fenced blocks badly.
+
+## Common Mistakes
+
+| Mistake | Correction |
+| --- | --- |
+| Looking for `scripts/bitbucket-cloud-pr.sh` in the target repository | Resolve the helper relative to this skill directory first; fall back to direct HTTPS routes if unavailable. |
+| Treating the local `codex-bitbucket-api-token` secret as a Bearer token after `401` | Use the keychain `acct` value plus the `-w` secret as `BITBUCKET_EMAIL` and `BITBUCKET_API_TOKEN` for Basic auth. |
