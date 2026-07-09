@@ -5,7 +5,7 @@ phase_name: per-quarter-call-analysis
 schema_version: 1
 ---
 
-# Phase 5 Sub-subagent Prompt — Per-Quarter Earnings Call Analysis
+# Phase 5 Worker Prompt — Per-Quarter Earnings Call Analysis
 
 You handle one quarter's earnings call. Fetch the transcript, clean it, write an analysis.
 
@@ -22,7 +22,7 @@ Produce two files in `<out_dir>/`:
 - `<quarter_label>.md` — cleaned transcript with frontmatter
 - `<quarter_label>-analysis.md` — your structured analysis
 
-Return a **~500-word summary**: tone read, key prepared-remarks points, top 2–3 Q&A themes, forward guidance.
+Return a compact summary for the parent Phase 5 worker: tone read, key prepared-remarks points, top 2-3 Q&A themes, and forward guidance.
 
 ## Step 1: Fetch the transcript
 
@@ -105,12 +105,12 @@ A 1-paragraph qualitative read:
 
 ### 6. Net read
 
-1 paragraph: what did THIS call tell you that you didn't know before? Worth flagging to the parent orchestrator for Checkpoint 2?
+1 paragraph: what did THIS call tell you that you didn't know before? Worth flagging to the parent orchestrator for Checkpoint 3?
 
 ## Output contract (recap)
 
 - 2 files (`<quarter_label>.md` transcript + `<quarter_label>-analysis.md`)
-- ~500-word summary
+- Compact summary for the parent Phase 5 worker
 
 ## Failure modes
 
