@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from strictyaml import YAMLValidationError, load
+from strictyaml import StrictYAMLError, load
 
 
 _ALLOWED_FIELDS = frozenset(
@@ -19,7 +19,7 @@ def parse_skill_frontmatter(text: str, source: Path) -> dict[str, object]:
     document = _extract_frontmatter_document(text, source)
     try:
         parsed = load(document).data
-    except YAMLValidationError as error:
+    except StrictYAMLError as error:
         raise ValueError(f"{source}: invalid YAML frontmatter: {error}") from error
 
     if not isinstance(parsed, dict):
@@ -34,7 +34,7 @@ def parse_skill_frontmatter(text: str, source: Path) -> dict[str, object]:
     _validate_required_string(parsed, "description", source, maximum_length=1024)
     _validate_optional_string(parsed, "license", source)
     _validate_optional_string(parsed, "compatibility", source, maximum_length=500)
-    _validate_optional_string(parsed, "allowed-tools", source)
+    _validate_optional_scalar_string(parsed, "allowed-tools", source)
     _validate_metadata(parsed, source)
     return parsed
 
@@ -61,7 +61,7 @@ def _validate_required_string(
     frontmatter: dict[str, object], field: str, source: Path, maximum_length: int | None = None
 ) -> None:
     value = frontmatter.get(field)
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{source}: {field} must be a non-empty scalar string")
     if maximum_length is not None and len(value) > maximum_length:
         raise ValueError(f"{source}: {field} must be at most {maximum_length} characters")
@@ -73,6 +73,11 @@ def _validate_optional_string(
     if field not in frontmatter:
         return
     _validate_required_string(frontmatter, field, source, maximum_length)
+
+
+def _validate_optional_scalar_string(frontmatter: dict[str, object], field: str, source: Path) -> None:
+    if field in frontmatter and not isinstance(frontmatter[field], str):
+        raise ValueError(f"{source}: {field} must be a scalar string")
 
 
 def _validate_metadata(frontmatter: dict[str, object], source: Path) -> None:

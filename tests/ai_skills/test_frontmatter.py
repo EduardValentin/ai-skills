@@ -50,6 +50,40 @@ Body
         self.assertEqual(parsed["allowed-tools"], "web__run, finance")
         self.assertEqual(parsed["metadata"]["note"], "Review filings first.\nKeep Unicode punctuation: §.\n")
 
+    def test_converts_strict_yaml_parse_errors_to_source_aware_value_errors(self):
+        source = Path("skills/workflows/ticket-workflow/SKILL.md")
+        malformed_documents = (
+            "---\nname: ticket-workflow\nname: duplicate\ndescription: Valid description.\n---\nBody\n",
+            "---\n{name: ticket-workflow, description: Valid description.}\n---\nBody\n",
+        )
+
+        for text in malformed_documents:
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(ValueError, r"skills/workflows/ticket-workflow/SKILL.md: invalid YAML frontmatter"):
+                    parse_skill_frontmatter(text, source)
+
+    def test_rejects_whitespace_only_description_and_compatibility(self):
+        whitespace_only_prose = (
+            "---\nname: ticket-workflow\ndescription: '   '\n---\nBody\n",
+            "---\nname: ticket-workflow\ndescription: Valid description.\ncompatibility: ' \t '\n---\nBody\n",
+        )
+
+        for text in whitespace_only_prose:
+            with self.subTest(text=text):
+                with self.assertRaisesRegex(ValueError, "must be a non-empty scalar string"):
+                    parse_skill_frontmatter(text, Path("skills/workflows/ticket-workflow/SKILL.md"))
+
+    def test_allows_empty_allowed_tools_scalar(self):
+        text = """---
+name: ticket-workflow
+description: Use when working a ticket end to end.
+allowed-tools: ""
+---
+Body
+"""
+        parsed = parse_skill_frontmatter(text, Path("skills/workflows/ticket-workflow/SKILL.md"))
+        self.assertEqual(parsed["allowed-tools"], "")
+
     def test_rejects_nested_metadata_values(self):
         text = """---
 name: ticket-workflow
