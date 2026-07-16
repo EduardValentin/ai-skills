@@ -311,6 +311,14 @@ class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_no_issues()
 
+    def test_ordinary_prose_does_not_create_a_skill_reference(self):
+        self.repository.add_skill(
+            "alpha",
+            body="Practice a reusable skill through deliberate repetition.",
+        )
+
+        self.assert_no_issues()
+
 
 class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
     def test_rejects_parent_and_missing_local_markdown_references(self):
@@ -333,6 +341,30 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         (references / "guide.md").write_text("Guidance.\n", encoding="utf-8")
 
         self.assert_no_issues()
+
+    def test_accepts_reference_definitions_and_escaped_markdown_destinations(self):
+        skill_root = self.repository.add_skill(
+            "alpha",
+            body=(
+                "Read [the guide][guide].\n\n"
+                "[guide]: references/guide\\ file.md\n"
+                "Read [the appendix](references/appendix\\(v2\\).md)."
+            ),
+        )
+        references = skill_root / "references"
+        references.mkdir()
+        (references / "guide file.md").write_text("Guidance.\n", encoding="utf-8")
+        (references / "appendix(v2).md").write_text("Appendix.\n", encoding="utf-8")
+
+        self.assert_no_issues()
+
+    def test_rejects_missing_reference_definition_destinations(self):
+        self.repository.add_skill(
+            "alpha",
+            body="Read [the missing guide][guide].\n\n[guide]: references/missing\\ file.md",
+        )
+
+        self.assert_issue("referenced local file does not exist: references/missing file.md")
 
     def test_rejects_missing_referenced_scripts(self):
         self.repository.add_skill("alpha", body="Run `scripts/prepare.py`.")
@@ -448,6 +480,57 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_issue("scripts/prepare.sh must be executable")
 
+    def test_follows_contained_directory_symlinks_once_without_cycles(self):
+        skill_root = self.repository.add_skill("alpha")
+        assets = skill_root / "assets"
+        material = assets / "reference-material"
+        material.mkdir(parents=True)
+        credential_shape = "sk" + "-" + ("a" * 32)
+        (material / "guide.md").write_text(credential_shape, encoding="utf-8")
+        references = skill_root / "references"
+        references.mkdir()
+        linked = references / "linked"
+        linked.symlink_to(material, target_is_directory=True)
+        (material / "cycle").symlink_to(linked, target_is_directory=True)
+
+        messages = self.messages()
+
+        self.assertEqual(sum("openai-api-key" in message for message in messages), 1)
+
+    def test_directory_symlinks_keep_directory_specific_content_scans(self):
+        skill_root = self.repository.add_skill("alpha")
+        assets = skill_root / "assets"
+        reference_material = assets / "reference-material"
+        script_material = assets / "script-material"
+        eval_material = assets / "eval-material"
+        for directory in (reference_material, script_material, eval_material):
+            directory.mkdir(parents=True)
+
+        github_shape = "gh" + "p_" + ("a" * 36)
+        slack_shape = "xo" + "xb-" + ("1" * 12) + "-" + ("a" * 24)
+        aws_shape = "AK" + "IA" + ("A" * 16)
+        (reference_material / "ignored.txt").write_text(github_shape, encoding="utf-8")
+        script = script_material / "authored.txt"
+        script.write_text(slack_shape, encoding="utf-8")
+        script.chmod(0o755)
+        (eval_material / "authored.txt").write_text(aws_shape, encoding="utf-8")
+
+        references = skill_root / "references"
+        references.mkdir()
+        (references / "linked").symlink_to(reference_material, target_is_directory=True)
+        scripts = skill_root / "scripts"
+        scripts.mkdir()
+        (scripts / "linked").symlink_to(script_material, target_is_directory=True)
+        (skill_root / "evals" / "linked").symlink_to(
+            eval_material, target_is_directory=True
+        )
+
+        messages = self.messages()
+
+        self.assertFalse(any("github-token" in message for message in messages))
+        self.assertEqual(sum("slack-token" in message for message in messages), 1)
+        self.assertEqual(sum("aws-access-key-id" in message for message in messages), 1)
+
     def test_rejects_duplicate_harness_sources_and_dist(self):
         self.repository.add_skill("alpha")
         duplicate_paths = (
@@ -473,6 +556,29 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         )
 
         self.assert_no_issues()
+
+    def test_personal_paths_ignore_uris_and_documentation_placeholders(self):
+        self.repository.add_skill(
+            "alpha",
+            body=(
+                "See https://example.test/home/alice/setup and "
+                "https://example.test/Users/alice/setup.\n"
+                "Document /home/<username>/config, /Users/${USER}/config, and "
+                r"C:\Users\<username>\config."
+            ),
+        )
+
+        self.assert_no_issues()
+
+    def test_personal_paths_still_reject_concrete_user_directories(self):
+        self.repository.add_skill(
+            "alpha",
+            body="Use /home/alice/config, /Users/alice/config, and C:\\Users\\alice\\config.",
+        )
+
+        issues = run_static_validation(self.repository.root)
+
+        self.assertEqual(sum("personal absolute path" in issue.message for issue in issues), 3)
 
 
 class EvalValidationTests(TemporaryRepositoryTestCase):
@@ -608,6 +714,34 @@ class SecretPatternTests(unittest.TestCase):
                 matches = find_static_secret_issues(line, Path("authored.txt"))
                 self.assertEqual([match.pattern for match in matches], ["sensitive-assignment"])
 
+    def test_compound_shell_expressions_are_not_treated_as_pure_references(self):
+        unsafe_values = (
+            "SERVICE_TOKEN=${OTHER_TOKEN:-" + "authored-value}",
+            "SERVICE_TOKEN=$OTHER_TOKEN-" + "authored-value",
+            "SERVICE_TOKEN=$(printf " + "authored-value)",
+            "SERVICE_TOKEN=FAKE_example$(printf " + "authored-value)",
+        )
+
+        for line in unsafe_values:
+            with self.subTest(line=line):
+                matches = find_static_secret_issues(line, Path("environment.env"))
+                self.assertEqual([match.pattern for match in matches], ["sensitive-assignment"])
+
+    def test_exact_environment_references_remain_allowed_assignment_values(self):
+        safe_values = (
+            "SERVICE_TOKEN=$OTHER_TOKEN",
+            "SERVICE_TOKEN=${OTHER_TOKEN}",
+            'SERVICE_TOKEN=os.environ["OTHER_TOKEN"]',
+            "SERVICE_TOKEN=process.env.OTHER_TOKEN",
+            "SERVICE_TOKEN={{ OTHER_TOKEN }}",
+        )
+
+        for line in safe_values:
+            with self.subTest(line=line):
+                self.assertEqual(
+                    find_static_secret_issues(line, Path("authored.txt")), []
+                )
+
     def test_encrypted_private_key_blocks_always_fail_redacted(self):
         private_key = (
             "-----BEGIN "
@@ -632,7 +766,7 @@ class ReferenceConformanceTests(TemporaryRepositoryTestCase):
         reference_message = "Reference validator detail is preserved."
 
         with patch(
-            "scripts.ai_skills_lib.static_validation.skills_ref.validate",
+            "scripts.ai_skills_lib.static_checks.conformance.skills_ref.validate",
             return_value=[reference_message],
         ) as validate:
             issues = run_reference_conformance(self.repository.root)
@@ -669,44 +803,74 @@ class CliValidationTests(TemporaryRepositoryTestCase):
 
         with (
             patch.object(cli, "REPOSITORY_ROOT", self.repository.root),
+            patch.object(
+                cli,
+                "preflight_reference_conformance",
+                side_effect=lambda: order.append("preflight"),
+                create=True,
+            ),
             patch.object(cli, "run_unit_tests", side_effect=lambda root: order.append("unit") or 0),
             patch.object(
                 cli,
-                "run_static_validation",
-                side_effect=lambda root: order.append("static") or [],
-            ),
-            patch.object(
-                cli,
-                "run_reference_conformance",
-                side_effect=lambda root: order.append("reference") or [],
+                "run_ci_validation",
+                side_effect=lambda root: order.append("validation") or [],
+                create=True,
             ),
             redirect_stdout(output),
         ):
             result = cli.main(["validate", "ci-all"])
 
         self.assertEqual(result, 0)
-        self.assertEqual(order, ["unit", "static", "reference"])
+        self.assertEqual(order, ["preflight", "unit", "validation"])
         self.assertIn("validate ci-all: OK", output.getvalue())
 
-    def test_ci_all_reports_the_exact_skills_ref_setup_command(self):
+    def test_ci_all_preflights_skills_ref_before_other_phases(self):
         output = StringIO()
         setup_command = "python3 -m pip install -r requirements-test.txt"
+        order: list[str] = []
 
         with (
             patch.object(cli, "REPOSITORY_ROOT", self.repository.root),
-            patch.object(cli, "run_unit_tests", return_value=0),
-            patch.object(cli, "run_static_validation", return_value=[]),
             patch.object(
                 cli,
-                "run_reference_conformance",
+                "preflight_reference_conformance",
                 side_effect=RuntimeError(setup_command),
+                create=True,
+            ),
+            patch.object(cli, "run_unit_tests", side_effect=lambda root: order.append("unit") or 0),
+            patch.object(
+                cli,
+                "run_ci_validation",
+                side_effect=lambda root: order.append("validation") or [],
+                create=True,
             ),
             redirect_stdout(output),
         ):
             result = cli.main(["validate", "ci-all"])
 
         self.assertEqual(result, 1)
+        self.assertEqual(order, [])
         self.assertIn(setup_command, output.getvalue())
+
+    def test_ci_all_discovers_skills_once_for_static_and_reference_checks(self):
+        self.repository.add_skill("alpha")
+        output = StringIO()
+
+        from scripts.ai_skills_lib.core import discover_testable_skills
+
+        with (
+            patch.object(cli, "REPOSITORY_ROOT", self.repository.root),
+            patch.object(cli, "run_unit_tests", return_value=0),
+            patch(
+                "scripts.ai_skills_lib.static_checks.context.discover_testable_skills",
+                wraps=discover_testable_skills,
+            ) as discover,
+            redirect_stdout(output),
+        ):
+            result = cli.main(["validate", "ci-all"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(discover.call_count, 1)
 
 
 if __name__ == "__main__":

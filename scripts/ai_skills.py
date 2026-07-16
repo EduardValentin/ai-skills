@@ -20,7 +20,8 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from scripts.ai_skills_lib.config import build_parser, command_label
 from scripts.ai_skills_lib.issues import print_grouped_issues
 from scripts.ai_skills_lib.static_validation import (
-    run_reference_conformance,
+    preflight_reference_conformance,
+    run_ci_validation,
     run_static_validation,
 )
 
@@ -49,13 +50,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "validate" and args.target == "static":
         return _report_validation("validate static", run_static_validation(REPOSITORY_ROOT))
     if args.command == "validate" and args.target == "ci-all":
-        failed = run_unit_tests(REPOSITORY_ROOT) != 0
-        issues = run_static_validation(REPOSITORY_ROOT)
         try:
-            issues.extend(run_reference_conformance(REPOSITORY_ROOT))
+            preflight_reference_conformance()
         except RuntimeError as error:
             print(f"validate ci-all: FAILED: {error}")
             return 1
+        failed = run_unit_tests(REPOSITORY_ROOT) != 0
+        issues = run_ci_validation(REPOSITORY_ROOT)
         if issues:
             print_grouped_issues(issues)
             failed = True

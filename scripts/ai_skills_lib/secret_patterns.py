@@ -77,7 +77,13 @@ SECRET_PATTERNS: tuple[SecretPattern, ...] = (
             r"|process\.env\.[A-Z][A-Z0-9_]*(?:_API_KEY|_TOKEN|_SECRET)"
             r")"
             r"[ \t]*(?:=|:)[ \t]*"
-            r"(?P<value>\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s#;,\r\n}]*)",
+            r"(?P<value>"
+            r"\"[^\"\r\n]*\"|'[^'\r\n]*'"
+            r"|\$\([^\r\n)]*\)[^\s#;,\r\n\"']*"
+            r"|\{\{[^\r\n}]*\}\}[^\s#;,\r\n\"']*"
+            r"|os\.environ\[\s*[\"'][A-Za-z_][A-Za-z0-9_]*[\"']\s*\]"
+            r"[^\s#;,\r\n\"']*"
+            r"|[^\s#;,\r\n\"']*)",
             re.MULTILINE,
         ),
         value_group="value",
