@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # get-bot-gh-token.sh - mint a fresh GitHub App installation access token.
 #
-# Reads App ID, Installation ID, and the App's private key from macOS Keychain
-# (entries: ai-skills.gh-bot.{app-id,installation-id,private-key}). Mints a
-# 9-minute RS256 JWT, exchanges it for an installation access token, prints the
-# token to stdout, and exits non-zero with useful stderr on failure.
+# Prefers GH_BOT_APP_ID, GH_BOT_INSTALLATION_ID, and a private key read from
+# GH_BOT_PRIVATE_KEY_PATH. Unset values fall back to macOS Keychain entries
+# ai-skills.gh-bot.{app-id,installation-id,private-key}, using
+# GH_BOT_KEYCHAIN_ACCOUNT or USER as the account. Mints a 9-minute RS256 JWT,
+# exchanges it for an installation token, and prints only that token to stdout.
 #
 # Usage: capture stdout in an ephemeral variable and expose it to one GitHub
 # write command without printing or persisting it.
@@ -15,10 +16,17 @@ KEYCHAIN_PREFIX="ai-skills.gh-bot"
 
 read_keychain() {
   local service="$1"
+  local env_name="$2"
+  local account="${GH_BOT_KEYCHAIN_ACCOUNT:-${USER:-}}"
   local raw
-  if ! raw=$(security find-generic-password -s "$service" -a "$USER" -w 2>/dev/null); then
-    echo "Missing Keychain entry: $service (account: $USER)" >&2
-    echo "Configure the ai-skills.gh-bot Keychain entries before GitHub writes." >&2
+  if [[ -z "$account" ]]; then
+    echo "$env_name is unset and no Keychain account is available." >&2
+    echo "Set $env_name or GH_BOT_KEYCHAIN_ACCOUNT before GitHub writes." >&2
+    exit 1
+  fi
+  if ! raw=$(security find-generic-password -s "$service" -a "$account" -w 2>/dev/null); then
+    echo "$env_name is unset and Keychain fallback is unavailable for $service (account: $account)." >&2
+    echo "Set $env_name explicitly or configure the current ai-skills.gh-bot Keychain entry." >&2
     exit 1
   fi
   # macOS `security ... -w` returns hex-encoded output (no leading 0x) when the
@@ -32,9 +40,27 @@ read_keychain() {
   fi
 }
 
-APP_ID=$(read_keychain "${KEYCHAIN_PREFIX}.app-id")
-INSTALLATION_ID=$(read_keychain "${KEYCHAIN_PREFIX}.installation-id")
-PRIVATE_KEY=$(read_keychain "${KEYCHAIN_PREFIX}.private-key")
+APP_ID="${GH_BOT_APP_ID:-}"
+if [[ -z "$APP_ID" ]]; then
+  APP_ID=$(read_keychain "${KEYCHAIN_PREFIX}.app-id" "GH_BOT_APP_ID")
+fi
+
+INSTALLATION_ID="${GH_BOT_INSTALLATION_ID:-}"
+if [[ -z "$INSTALLATION_ID" ]]; then
+  INSTALLATION_ID=$(read_keychain "${KEYCHAIN_PREFIX}.installation-id" "GH_BOT_INSTALLATION_ID")
+fi
+
+if [[ -n "${GH_BOT_PRIVATE_KEY_PATH:-}" ]]; then
+  if [[ ! -f "$GH_BOT_PRIVATE_KEY_PATH" || ! -r "$GH_BOT_PRIVATE_KEY_PATH" ]]; then
+    echo "GH_BOT_PRIVATE_KEY_PATH must name a readable private-key file." >&2
+    exit 1
+  fi
+  PRIVATE_KEY=$(<"$GH_BOT_PRIVATE_KEY_PATH")
+  PRIVATE_KEY_SOURCE="GH_BOT_PRIVATE_KEY_PATH"
+else
+  PRIVATE_KEY=$(read_keychain "${KEYCHAIN_PREFIX}.private-key" "GH_BOT_PRIVATE_KEY_PATH")
+  PRIVATE_KEY_SOURCE="Keychain fallback"
+fi
 
 # Sanity-check the private key shape before we ask openssl to sign with it.
 # A common footgun is pasting the .pem contents with escaped \n literals
@@ -42,9 +68,8 @@ PRIVATE_KEY=$(read_keychain "${KEYCHAIN_PREFIX}.private-key")
 # that here with a targeted error pointing at the runbook rather than
 # letting openssl emit a generic "Unable to load Private Key".
 if ! printf '%s' "$PRIVATE_KEY" | grep -q "BEGIN .* PRIVATE KEY"; then
-  echo "Private key in Keychain does not look like a PEM block." >&2
-  echo "Re-import ai-skills.gh-bot.private-key from the GitHub App PEM file." >&2
-  echo "Hint: pass the file contents in unquoted via \"\$(cat /path/to/key.pem)\", not as an escaped string." >&2
+  echo "Private key from $PRIVATE_KEY_SOURCE does not look like a PEM block." >&2
+  echo "Point GH_BOT_PRIVATE_KEY_PATH at the GitHub App PEM file or repair the Keychain fallback entry." >&2
   exit 2
 fi
 
@@ -68,7 +93,7 @@ SIGNING_INPUT="${HEADER_B64}.${PAYLOAD_B64}"
 if ! SIG=$(printf '%s' "$SIGNING_INPUT" \
   | openssl dgst -sha256 -sign <(printf '%s' "$PRIVATE_KEY") -binary \
   | b64url); then
-  echo "JWT signing failed. Is the private key in Keychain a valid PEM-encoded RSA private key?" >&2
+  echo "JWT signing failed. The configured file or Keychain fallback must contain a valid PEM-encoded RSA private key." >&2
   exit 2
 fi
 

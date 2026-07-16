@@ -21,7 +21,7 @@ The response confirms repository/worktree, target PR, intended GitHub action, ex
 [[scenario.criteria]]
 key = "sets_bot_git_identity_for_commits"
 description = """
-For commit-capable flows, the response requires bot git identity from Keychain and fails closed if it cannot be read.
+For commit-capable flows, the response resolves GH_BOT_GIT_NAME and GH_BOT_GIT_EMAIL first, uses the documented Keychain account fallback only for missing values, and fails closed if either identity field remains unavailable.
 """
 
 [[scenario.criteria]]
