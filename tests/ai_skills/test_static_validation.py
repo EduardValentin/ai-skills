@@ -441,6 +441,26 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         self.assertTrue(any("broken symlink" in message for message in messages))
         self.assertTrue(any("symlink target must stay inside" in message for message in messages))
 
+    def test_reports_self_referential_symlinks_without_raising(self):
+        skill_root = self.repository.add_skill("alpha")
+        assets = skill_root / "assets"
+        assets.mkdir()
+        (assets / "self").symlink_to("self")
+
+        self.assert_issue("invalid symlink: assets/self")
+
+    def test_reports_two_link_symlink_loops_without_raising(self):
+        skill_root = self.repository.add_skill("alpha")
+        assets = skill_root / "assets"
+        assets.mkdir()
+        (assets / "one").symlink_to("two")
+        (assets / "two").symlink_to("one")
+
+        messages = self.messages()
+
+        self.assertTrue(any("invalid symlink: assets/one" in message for message in messages))
+        self.assertTrue(any("invalid symlink: assets/two" in message for message in messages))
+
     def test_does_not_traverse_an_escaping_content_root_symlink(self):
         skill_root = self.repository.add_skill("alpha")
         external_references = self.repository.root / "external-references"
@@ -466,6 +486,19 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         (references / "linked.md").symlink_to(target)
 
         self.assert_issue("openai-api-key")
+
+    def test_logical_reference_aliases_keep_markdown_specific_validation(self):
+        skill_root = self.repository.add_skill("alpha")
+        assets = skill_root / "assets"
+        assets.mkdir()
+        target = assets / "shared-reference.txt"
+        target.write_text("Read [missing](references/missing.md).\n", encoding="utf-8")
+        references = skill_root / "references"
+        references.mkdir()
+        (references / "shared.txt").symlink_to(target)
+        (references / "shared.md").symlink_to(target)
+
+        self.assert_issue("referenced local file does not exist: references/missing.md")
 
     def test_applies_the_executable_contract_to_contained_script_symlinks(self):
         skill_root = self.repository.add_skill("alpha")
@@ -639,6 +672,18 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
         fixture.write_bytes(b"\x00SERVICE_TOKEN=authored-value\xff")
 
         self.assert_no_issues()
+
+    def test_logical_eval_aliases_keep_json_specific_validation(self):
+        skill_root = self.repository.add_skill("alpha")
+        assets = skill_root / "assets"
+        assets.mkdir()
+        target = assets / "shared-eval.txt"
+        target.write_text("{", encoding="utf-8")
+        evals = skill_root / "evals"
+        (evals / "z.txt").symlink_to(target)
+        (evals / "a.json").symlink_to(target)
+
+        self.assert_issue("evals/a.json contains invalid JSON")
 
 
 class SecretPatternTests(unittest.TestCase):

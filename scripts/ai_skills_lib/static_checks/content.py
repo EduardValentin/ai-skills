@@ -13,6 +13,7 @@ from scripts.ai_skills_lib.secret_patterns import SECRET_PATTERNS, SecretMatch
 from scripts.ai_skills_lib.static_checks.context import (
     AuthoredFile,
     ValidationContext,
+    resolve_strict,
     skill_scope,
 )
 
@@ -44,10 +45,9 @@ _FAKE_VALUE_PATTERN = re.compile(r"FAKE_[A-Za-z0-9][A-Za-z0-9_.:/-]*\Z")
 
 
 def walk_authored_files(content_root: Path, skill_root: Path) -> Iterator[AuthoredFile]:
-    try:
-        resolved_skill_root = skill_root.resolve(strict=True)
-        resolved_content_root = content_root.resolve(strict=True)
-    except OSError:
+    resolved_skill_root = resolve_strict(skill_root).resolved_path
+    resolved_content_root = resolve_strict(content_root).resolved_path
+    if resolved_skill_root is None or resolved_content_root is None:
         return
     if not resolved_content_root.is_dir() or not resolved_content_root.is_relative_to(
         resolved_skill_root
@@ -56,12 +56,10 @@ def walk_authored_files(content_root: Path, skill_root: Path) -> Iterator[Author
 
     pending = [content_root]
     seen_directories: set[Path] = set()
-    seen_files: set[Path] = set()
     while pending:
         logical_directory = pending.pop()
-        try:
-            resolved_directory = logical_directory.resolve(strict=True)
-        except OSError:
+        resolved_directory = resolve_strict(logical_directory).resolved_path
+        if resolved_directory is None:
             continue
         if (
             resolved_directory in seen_directories
@@ -74,24 +72,21 @@ def walk_authored_files(content_root: Path, skill_root: Path) -> Iterator[Author
         except OSError:
             continue
         for logical_path in children:
-            try:
-                resolved_path = logical_path.resolve(strict=True)
-            except OSError:
+            resolved_path = resolve_strict(logical_path).resolved_path
+            if resolved_path is None:
                 continue
             if not resolved_path.is_relative_to(resolved_skill_root):
                 continue
             if resolved_path.is_dir():
                 pending.append(logical_path)
-            elif resolved_path.is_file() and resolved_path not in seen_files:
-                seen_files.add(resolved_path)
+            elif resolved_path.is_file():
                 yield AuthoredFile(logical_path=logical_path, resolved_path=resolved_path)
 
 
 def authored_file(logical_path: Path, skill_root: Path) -> AuthoredFile | None:
-    try:
-        resolved_root = skill_root.resolve(strict=True)
-        resolved_path = logical_path.resolve(strict=True)
-    except OSError:
+    resolved_root = resolve_strict(skill_root).resolved_path
+    resolved_path = resolve_strict(logical_path).resolved_path
+    if resolved_root is None or resolved_path is None:
         return None
     if not resolved_path.is_file() or not resolved_path.is_relative_to(resolved_root):
         return None

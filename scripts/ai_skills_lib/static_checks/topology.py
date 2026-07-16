@@ -8,7 +8,11 @@ from pathlib import Path
 
 from scripts.ai_skills_lib.core import SkillRecord
 from scripts.ai_skills_lib.issues import ValidationIssue
-from scripts.ai_skills_lib.static_checks.context import ValidationContext, skill_scope
+from scripts.ai_skills_lib.static_checks.context import (
+    ValidationContext,
+    resolve_strict,
+    skill_scope,
+)
 
 
 _ALLOWED_SKILL_ROOT_ENTRIES = frozenset(
@@ -117,13 +121,19 @@ def validate_skill_root(
                 )
             )
         if path.is_symlink():
-            try:
-                target = path.resolve(strict=True)
-            except (FileNotFoundError, OSError):
+            resolution = resolve_strict(path)
+            if resolution.error is not None:
+                kind = (
+                    "broken"
+                    if isinstance(resolution.error, FileNotFoundError)
+                    else "invalid"
+                )
                 issues.append(
-                    ValidationIssue(scope=scope, message=f"broken symlink: {relative}")
+                    ValidationIssue(scope=scope, message=f"{kind} symlink: {relative}")
                 )
                 continue
+            target = resolution.resolved_path
+            assert target is not None
             if not target.is_relative_to(resolved_root):
                 issues.append(
                     ValidationIssue(

@@ -17,6 +17,12 @@ class AuthoredFile:
 
 
 @dataclass(frozen=True)
+class StrictPathResolution:
+    resolved_path: Path | None
+    error: OSError | RuntimeError | None
+
+
+@dataclass(frozen=True)
 class ValidationContext:
     root: Path
     skills: tuple[SkillRecord, ...]
@@ -31,6 +37,13 @@ def build_validation_context(root: Path) -> ValidationContext:
         skills=skills,
         public_names=frozenset(skill.name for skill in skills),
     )
+
+
+def resolve_strict(path: Path) -> StrictPathResolution:
+    try:
+        return StrictPathResolution(path.resolve(strict=True), None)
+    except (OSError, RuntimeError) as error:
+        return StrictPathResolution(None, error)
 
 
 def skill_scope(context: ValidationContext, skill: SkillRecord) -> str:
