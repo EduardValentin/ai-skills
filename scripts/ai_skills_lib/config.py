@@ -12,6 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate = commands.add_parser("validate")
     validate.add_argument("target", choices=("static", "runtime", "ci-all", "triggers", "evals", "all"))
     validate.add_argument("--harness")
+    validate.add_argument("--runs", type=int, choices=(1, 2, 3), default=1)
 
     check_local_installs = commands.add_parser("check-local-installs")
     check_local_installs.add_argument("--harness", required=True)
