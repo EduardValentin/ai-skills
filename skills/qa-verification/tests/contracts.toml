@@ -1,7 +1,0 @@
-[suite]
-name = "qa-verification contract"
-
-[[assertion]]
-type = "line_count_at_most"
-path = "skills/qa-verification/SKILL.md"
-max = 110

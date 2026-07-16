@@ -6,9 +6,9 @@ docs/superpowers/
 **/dist/*.zip
 **/dist/**/*.zip
 
-# Stock-research scripts (canonical location)
-skills/stock-research/scripts/.venv/
-skills/stock-research/scripts/.pytest_cache/
+# Skill-local runtime caches
+skills/*/*/scripts/.venv/
+skills/*/*/scripts/.pytest_cache/
 
 # Financial-toolkit (shared between stock-research and stock-recap)
 toolkits/financial-toolkit/.venv/
