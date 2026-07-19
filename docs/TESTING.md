@@ -112,21 +112,43 @@ machine-specific tooling into a case workspace.
 
 ## Results And Grading
 
-Runs write reviewable artifacts outside the repository:
+Each invocation creates one collision-safe result workspace outside the
+repository. Its `attempts/` directory contains a separate collision-safe
+workspace for every declared run:
 
 ```text
-outputs/response.md
-transcript.md
-execution_trace.jsonl
-timing.json
-grading.json
+summary.md
 benchmark.json
+attempts/<attempt>/attempt.json
+attempts/<attempt>/outputs/response.md
+attempts/<attempt>/transcript.md
+attempts/<attempt>/execution_trace.jsonl
+attempts/<attempt>/timing.json
+attempts/<attempt>/grading.json
 ```
 
-The generated `grading.json` records each assertion, pass or fail, and concrete
-evidence. A human may add a complete `manual_grading.json` with the same shape;
-generated judge output remains unchanged. Aggregation can then use judge,
-manual, or both grade sources.
+The runner writes the immutable, schema-validated `attempt.json` before external
+execution. It anchors run identity, variant membership, contribution policy,
+required variants, and comparisons. Failed attempts preserve available
+response, transcript, normalized trace, and timing without inventing a grade.
+
+The generated `grading.json` records every assertion result, concrete evidence,
+and judge model/reasoning metadata. A human may add a complete
+`manual_grading.json` with the same schema; generated output remains unchanged.
+Aggregate preserved results offline with:
+
+```bash
+python3 scripts/ai_skills.py evals aggregate \
+  --results-dir <invocation-result-directory> \
+  --grade-source judge|manual|both
+```
+
+Aggregation rejects undeclared, partial, failed, mismatched, or unbalanced
+attempts. It reports judge and manual summaries separately when `both` is used;
+the complete manual grade is the effective override for the command outcome.
+Exit `0` means all contributing effective grades passed, exit `1` means a
+trusted contributing assertion failed, and exit `2` means the result set is
+invalid or untrustworthy.
 
 Harness-native `error` and `turn.failed` messages are forwarded in bounded form
 for diagnosis rather than reclassified into a repository-specific error

@@ -24,6 +24,7 @@ from scripts.ai_skills_lib.harness import (
 
 
 _SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "ai-skills"
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ResultArtifactError(RuntimeError):
@@ -32,11 +33,31 @@ class ResultArtifactError(RuntimeError):
     exit_code = 2
 
 
+class JudgeExecutionError(ResultArtifactError):
+    """Raised with complete normalized evidence from an untrusted judge execution."""
+
+    def __init__(self, message: str, execution: HarnessExecution):
+        super().__init__(message)
+        self.execution = execution
+
+
 @dataclass(frozen=True)
-class ArtifactPaths:
-    """Canonical paths for one durable evaluation result workspace."""
+class ResultWorkspace:
+    """Invocation-owned durable result and human-summary paths."""
 
     root: Path
+    attempts: Path
+    benchmark: Path
+    output_summary: Path
+    repository_root: Path
+
+
+@dataclass(frozen=True)
+class AttemptPaths:
+    """Canonical paths for one declared evaluation attempt."""
+
+    root: Path
+    manifest: Path
     response: Path
     transcript: Path
     execution_trace: Path
@@ -44,7 +65,6 @@ class ArtifactPaths:
     grading: Path
     manual_grading: Path
     feedback: Path
-    benchmark: Path
 
 
 @dataclass(frozen=True)
@@ -125,12 +145,14 @@ class GraderRecord:
 
     type: str
     model: str | None
+    reasoning_effort: str | None
     prompt_version: str
 
     def to_dict(self) -> dict[str, object]:
         return {
             "type": self.type,
             "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
             "prompt_version": self.prompt_version,
         }
 
@@ -176,6 +198,27 @@ class AggregationMetadata:
 
 
 @dataclass(frozen=True)
+class AttemptManifest:
+    """Immutable caller-owned identity and aggregation policy for one attempt."""
+
+    run_id: str
+    skill_name: str
+    case_id: str
+    run_kind: str
+    aggregation: AggregationMetadata
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "ai-skills.eval.attempt.v1",
+            "run_id": self.run_id,
+            "skill_name": self.skill_name,
+            "case_id": self.case_id,
+            "run_kind": self.run_kind,
+            "aggregation": self.aggregation.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
 class JudgeGradingContext:
     """Caller-owned grading identity, scope, and aggregation policy."""
 
@@ -185,6 +228,7 @@ class JudgeGradingContext:
     run_kind: str
     prompt_version: str
     graded_at: str
+    allowed_evidence_artifacts: tuple[str, ...]
     expected_assertions: tuple[AssertionDefinition, ...]
     aggregation: AggregationMetadata
 
@@ -256,6 +300,24 @@ def default_results_root(
     return state_home / "ai-skills" / "results"
 
 
+def resolve_external_result_path(
+    path: Path,
+    *,
+    repository_root: Path | None = None,
+) -> Path:
+    repository = _REPOSITORY_ROOT if repository_root is None else repository_root
+    try:
+        resolved_repository = repository.resolve(strict=True)
+        resolved_path = path.resolve(strict=False)
+    except (OSError, RuntimeError) as error:
+        raise ResultArtifactError(f"cannot resolve result path: {error}") from error
+    if resolved_path == resolved_repository or resolved_path.is_relative_to(resolved_repository):
+        raise ResultArtifactError(
+            f"result path must be outside the repository: {resolved_path}"
+        )
+    return resolved_path
+
+
 def create_result_workspace(
     command: str,
     *,
@@ -263,8 +325,9 @@ def create_result_workspace(
     environ: Mapping[str, str] | None = None,
     home: Path | None = None,
     now: datetime | None = None,
-) -> ArtifactPaths:
-    """Create one durable result workspace and return all canonical paths."""
+    repository_root: Path | None = None,
+) -> ResultWorkspace:
+    """Create one external invocation workspace."""
     if results_dir is None:
         created_at = now or datetime.now(timezone.utc)
         timestamp = created_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -275,16 +338,80 @@ def create_result_workspace(
         )
     else:
         root = results_dir
+    root = resolve_external_result_path(root, repository_root=repository_root)
+    repository = _REPOSITORY_ROOT if repository_root is None else repository_root
     try:
+        resolved_repository = repository.resolve(strict=True)
         root.mkdir(parents=True, exist_ok=False)
-        outputs = root / "outputs"
-        outputs.mkdir()
+        attempts = root / "attempts"
+        attempts.mkdir()
     except FileExistsError as error:
         raise ResultArtifactError(f"result workspace already exists: {root}") from error
     except OSError as error:
         raise ResultArtifactError(f"cannot create result workspace {root}: {error}") from error
-    return ArtifactPaths(
+    return ResultWorkspace(
         root=root,
+        attempts=attempts,
+        benchmark=root / "benchmark.json",
+        output_summary=root / "summary.md",
+        repository_root=resolved_repository,
+    )
+
+
+def create_attempt_workspace(
+    workspace: ResultWorkspace,
+    manifest: AttemptManifest,
+) -> AttemptPaths:
+    """Declare one attempt durably before any external execution."""
+    document = manifest.to_dict()
+    validate_result_document(document, "attempt.schema.json")
+    if manifest.aggregation.variant not in manifest.aggregation.required_variants:
+        raise ResultArtifactError(
+            "attempt aggregation variant must be one of its required variants"
+        )
+    if workspace.root.is_symlink() or workspace.attempts.is_symlink():
+        raise ResultArtifactError("invocation attempts directory must not be a symlink")
+    try:
+        invocation_root = workspace.root.resolve(strict=True)
+        attempts_root = workspace.attempts.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ResultArtifactError(f"cannot resolve invocation attempts directory: {error}") from error
+    expected_attempts_root = invocation_root / "attempts"
+    if attempts_root != expected_attempts_root or not attempts_root.is_dir():
+        raise ResultArtifactError("invocation attempts directory is not owned by its workspace")
+    resolve_external_result_path(
+        attempts_root,
+        repository_root=workspace.repository_root,
+    )
+
+    run_slug = re.sub(r"[^a-z0-9]+", "-", manifest.run_id.lower()).strip("-") or "attempt"
+    directory_name = f"{run_slug}-{uuid.uuid4().hex[:12]}"
+    root = attempts_root / directory_name
+    attempts_descriptor: int | None = None
+    attempt_descriptor: int | None = None
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        attempts_descriptor = os.open(attempts_root, directory_flags)
+        os.mkdir(directory_name, dir_fd=attempts_descriptor)
+        attempt_descriptor = os.open(
+            directory_name,
+            directory_flags,
+            dir_fd=attempts_descriptor,
+        )
+        os.mkdir("outputs", dir_fd=attempt_descriptor)
+    except FileExistsError as error:
+        raise ResultArtifactError(f"attempt workspace already exists: {root}") from error
+    except OSError as error:
+        raise ResultArtifactError(f"cannot create attempt workspace {root}: {error}") from error
+    finally:
+        if attempt_descriptor is not None:
+            os.close(attempt_descriptor)
+        if attempts_descriptor is not None:
+            os.close(attempts_descriptor)
+    outputs = root / "outputs"
+    paths = AttemptPaths(
+        root=root,
+        manifest=root / "attempt.json",
         response=outputs / "response.md",
         transcript=root / "transcript.md",
         execution_trace=root / "execution_trace.jsonl",
@@ -292,8 +419,9 @@ def create_result_workspace(
         grading=root / "grading.json",
         manual_grading=root / "manual_grading.json",
         feedback=root / "feedback.json",
-        benchmark=root / "benchmark.json",
     )
+    _write_json_once(paths.manifest, document, paths.root)
+    return paths
 
 
 def record_harness_timing(
@@ -349,20 +477,26 @@ def validate_result_document(document: Mapping[str, object], schema_name: str) -
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         Draft202012Validator(schema, format_checker=FormatChecker()).validate(document)
-    except (OSError, json.JSONDecodeError, ValidationError) as error:
-        raise ResultArtifactError(f"invalid {schema_name} result: {error}") from error
+    except ValidationError as error:
+        keyword = str(error.validator)
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", keyword):
+            keyword = "validation"
+        raise ResultArtifactError(
+            f"invalid {schema_name} result at {_safe_validation_path(error.absolute_path)}: "
+            f"{keyword}"
+        ) from error
+    except (OSError, json.JSONDecodeError) as error:
+        raise ResultArtifactError(f"cannot load offline schema {schema_name}: {error}") from error
 
 
-def write_eval_run_artifacts(paths: ArtifactPaths, record: EvalRunRecord) -> None:
+def write_eval_run_artifacts(paths: AttemptPaths, record: EvalRunRecord) -> None:
     """Write one complete generated run without touching manual review artifacts."""
     timing = record.timing.to_dict()
     grading = record.grading.to_dict()
     validate_result_document(timing, "timing.schema.json")
     validate_result_document(grading, "grading.schema.json")
 
-    trace_text = "".join(
-        f"{json.dumps(dict(event), sort_keys=True)}\n" for event in record.execution_trace
-    )
+    trace_text = _serialize_execution_trace(record.execution_trace)
     _write_json_once(paths.timing, timing, paths.root)
     _write_text_once(paths.response, record.response, paths.root)
     _write_text_once(paths.transcript, record.transcript, paths.root)
@@ -370,11 +504,32 @@ def write_eval_run_artifacts(paths: ArtifactPaths, record: EvalRunRecord) -> Non
     _write_json_once(paths.grading, grading, paths.root)
 
 
+def write_incomplete_attempt_artifacts(
+    paths: AttemptPaths,
+    *,
+    response: str | None,
+    transcript: str | None,
+    execution_trace: Sequence[Mapping[str, object]],
+    timing: TimingRecord,
+) -> None:
+    """Preserve available failed-attempt evidence without inventing a grade."""
+    timing_document = timing.to_dict()
+    validate_result_document(timing_document, "timing.schema.json")
+    _write_json_once(paths.timing, timing_document, paths.root)
+    if response is not None:
+        _write_text_once(paths.response, response, paths.root)
+    if transcript is not None:
+        _write_text_once(paths.transcript, transcript, paths.root)
+    trace_text = _serialize_execution_trace(execution_trace)
+    _write_text_once(paths.execution_trace, trace_text, paths.root)
+
+
 def parse_judge_response(
     response: str,
     context: JudgeGradingContext,
     *,
     model: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> GradingRecord:
     """Parse judge verdicts while retaining caller-owned scope and policy."""
     try:
@@ -419,9 +574,9 @@ def parse_judge_response(
                 "invalid judge response: evidence must be a non-empty string"
             )
         raw_references = result["evidence_refs"]
-        if not isinstance(raw_references, list):
+        if not isinstance(raw_references, list) or not raw_references:
             raise ResultArtifactError(
-                "invalid judge response: evidence_refs must be an array"
+                "invalid judge response: evidence_refs must contain evidence"
             )
         references: list[Mapping[str, str]] = []
         for reference in raw_references:
@@ -435,6 +590,10 @@ def parse_judge_response(
             ):
                 raise ResultArtifactError(
                     "invalid judge response: evidence reference is incomplete"
+                )
+            if reference["artifact"] not in context.allowed_evidence_artifacts:
+                raise ResultArtifactError(
+                    "invalid judge response: evidence artifact is not allowed"
                 )
             references.append(reference)
         verdicts.append((result["passed"], result["evidence"], tuple(references)))
@@ -462,6 +621,7 @@ def parse_judge_response(
         grader=GraderRecord(
             type="llm",
             model=model,
+            reasoning_effort=reasoning_effort,
             prompt_version=context.prompt_version,
         ),
         graded_at=context.graded_at,
@@ -484,22 +644,32 @@ def invoke_judge(
         raise ValueError("judge invocation requires a request with role='judge'")
     execution = adapter.execute(request, artifact_dir)
     if execution.timed_out:
-        raise ResultArtifactError("judge execution timed out")
+        raise JudgeExecutionError("judge execution timed out", execution)
     if execution.failure:
-        raise ResultArtifactError(f"judge execution failed: {execution.failure}")
-    if execution.exit_code != 0:
-        raise ResultArtifactError(f"judge execution failed with exit code {execution.exit_code}")
-    if execution.model is None or execution.reasoning_effort is None:
-        raise ResultArtifactError(
-            "judge execution did not report model and reasoning metadata"
+        raise JudgeExecutionError(
+            f"judge execution failed: {execution.failure}", execution
         )
-
-    return JudgeInvocationResult(
-        grading=parse_judge_response(
+    if execution.exit_code != 0:
+        raise JudgeExecutionError(
+            f"judge execution failed with exit code {execution.exit_code}", execution
+        )
+    if execution.model is None or execution.reasoning_effort is None:
+        raise JudgeExecutionError(
+            "judge execution did not report model and reasoning metadata",
+            execution,
+        )
+    try:
+        grading = parse_judge_response(
             execution.response,
             context,
             model=execution.model,
-        ),
+            reasoning_effort=execution.reasoning_effort,
+        )
+    except ResultArtifactError as error:
+        raise JudgeExecutionError(str(error), execution) from error
+
+    return JudgeInvocationResult(
+        grading=grading,
         execution=execution,
     )
 
@@ -522,41 +692,87 @@ def combine_grading_results(
     return combined
 
 
-def aggregate_results(results_dir: Path, grade_source: str) -> dict[str, object]:
-    """Aggregate preserved grades using only caller-provided generic metadata."""
+def aggregate_results(
+    results_dir: Path,
+    grade_source: str,
+    *,
+    repository_root: Path | None = None,
+) -> dict[str, object]:
+    """Aggregate only complete attempts anchored by immutable declarations."""
     if grade_source not in ("judge", "manual", "both"):
         raise ResultArtifactError(
             "grade_source must be one of 'judge', 'manual', or 'both'"
         )
-    root = results_dir.resolve()
+    root = resolve_external_result_path(
+        results_dir,
+        repository_root=repository_root,
+    )
     if not root.is_dir():
         raise ResultArtifactError(f"results directory does not exist: {results_dir}")
+    attempts_root = root / "attempts"
+    if attempts_root.is_symlink() or not attempts_root.is_dir():
+        raise ResultArtifactError(f"results directory has no attempts: {results_dir}")
 
-    timing_paths = sorted(root.rglob("timing.json"))
-    generated_paths = sorted(root.rglob("grading.json"))
-    if not timing_paths:
-        raise ResultArtifactError(f"no timing.json attempt artifacts found under {results_dir}")
-    timing_parents = {path.parent for path in timing_paths}
-    grading_parents = {path.parent for path in generated_paths}
-    if extra_grades := sorted(grading_parents - timing_parents):
-        raise ResultArtifactError(
-            f"generated grading.json has no timing.json attempt artifact: {extra_grades[0]}"
-        )
+    try:
+        attempt_entries = sorted(attempts_root.iterdir())
+    except OSError as error:
+        raise ResultArtifactError(f"cannot inventory attempt entries: {error}") from error
+    manifest_paths: list[Path] = []
+    for entry in attempt_entries:
+        if entry.is_symlink():
+            raise ResultArtifactError(f"attempt entry must not be a symlink: {entry}")
+        if not entry.is_dir():
+            raise ResultArtifactError(f"attempt entry must be a directory: {entry}")
+        manifest_path = entry / "attempt.json"
+        if manifest_path.is_symlink() or not manifest_path.is_file():
+            raise ResultArtifactError(
+                f"attempt entry must contain one readable attempt.json: {entry}"
+            )
+        nested_manifests = list(entry.rglob("attempt.json"))
+        if nested_manifests != [manifest_path]:
+            raise ResultArtifactError(
+                f"attempt entry must contain exactly one attempt.json: {entry}"
+            )
+        manifest_paths.append(manifest_path)
+    if not manifest_paths:
+        raise ResultArtifactError(f"no attempt.json declarations found under {results_dir}")
+    declared_parents = {path.parent for path in manifest_paths}
+    for artifact_name in ("timing.json", "grading.json", "manual_grading.json"):
+        for artifact_path in sorted(root.rglob(artifact_name)):
+            if artifact_path.parent not in declared_parents:
+                raise ResultArtifactError(
+                    f"undeclared attempt artifact {artifact_name}: {artifact_path}"
+                )
 
     requested_sources = ("judge", "manual") if grade_source == "both" else (grade_source,)
     preserved: dict[str, list[tuple[dict[str, object], dict[str, object]]]] = {
         source: [] for source in requested_sources
     }
-    for timing_path in timing_paths:
+    run_ids: set[str] = set()
+    for manifest_path in manifest_paths:
+        manifest = _read_result_document(manifest_path, "attempt.schema.json", root)
+        run_id = manifest["run_id"]
+        if run_id in run_ids:
+            raise ResultArtifactError(f"duplicate run_id in attempt manifests: {run_id}")
+        run_ids.add(run_id)
+        aggregation = manifest["aggregation"]
+        if aggregation["variant"] not in aggregation["required_variants"]:
+            raise ResultArtifactError(
+                f"unexpected variant in attempt manifest: {aggregation['variant']}"
+            )
+
+        timing_path = manifest_path.with_name("timing.json")
         timing = _read_result_document(timing_path, "timing.schema.json", root)
         generated_path = timing_path.with_name("grading.json")
         generated = _read_result_document(generated_path, "grading.schema.json", root)
         _validate_grading_semantics(generated, expected_source="judge")
-        _validate_matching_timing(generated, timing, timing_path)
+        _validate_artifact_matches_manifest(timing, manifest, timing_path)
+        _validate_artifact_matches_manifest(generated, manifest, generated_path)
         if timing["status"] != "completed":
             raise ResultArtifactError(
-                f"run {generated['run_id']} is not trustworthy: timing status is {timing['status']}"
+                f"attempt is not trustworthy: timing status is {timing['status']}"
             )
+        _validate_completed_timing(timing, timing_path)
 
         if "judge" in preserved:
             preserved["judge"].append((generated, timing))
@@ -564,6 +780,7 @@ def aggregate_results(results_dir: Path, grade_source: str) -> dict[str, object]
             manual_path = generated_path.with_name("manual_grading.json")
             manual = _read_result_document(manual_path, "grading.schema.json", root)
             _validate_grading_semantics(manual, expected_source="manual")
+            _validate_artifact_matches_manifest(manual, manifest, manual_path)
             _validate_complete_manual_override(generated, manual, manual_path)
             preserved["manual"].append((manual, timing))
 
@@ -577,6 +794,12 @@ def aggregate_results(results_dir: Path, grade_source: str) -> dict[str, object]
     }
     validate_result_document(benchmark, "benchmark.schema.json")
     _write_json_atomic(root / "benchmark.json", benchmark, root)
+    _write_text_atomic(
+        root / "summary.md",
+        f"{format_benchmark_summary(benchmark)}\n",
+        root,
+        replace_existing=True,
+    )
     return benchmark
 
 
@@ -633,6 +856,8 @@ def _aggregate_source(
             contributing.append(grading)
 
     groups = [_aggregate_group(group_id, grouped[group_id]) for group_id in sorted(grouped)]
+    if not contributing:
+        raise ResultArtifactError("grading source has no contributing outcomes")
     passed_cases = sum(_grading_passed(grading) for grading in contributing)
     total_cases = len(contributing)
     return {
@@ -670,6 +895,29 @@ def _aggregate_group(
         raise ResultArtifactError(
             f"aggregation group {group_id!r} is missing required variants: {', '.join(missing)}"
         )
+    unexpected = sorted(set(by_variant) - required_variants)
+    if unexpected:
+        raise ResultArtifactError(
+            f"aggregation group {group_id!r} has unexpected variants: {', '.join(unexpected)}"
+        )
+    run_counts = {variant: len(variant_records) for variant, variant_records in by_variant.items()}
+    if len(set(run_counts.values())) != 1:
+        raise ResultArtifactError(
+            f"aggregation group {group_id!r} has unequal repeated-run counts"
+        )
+    for variant, variant_records in by_variant.items():
+        policies = {
+            (
+                grading["aggregation"]["contributes_to_outcome"],
+                grading["aggregation"].get("compare_to"),
+                grading["run_kind"],
+            )
+            for grading, _ in variant_records
+        }
+        if len(policies) != 1:
+            raise ResultArtifactError(
+                f"aggregation group {group_id!r} has inconsistent metadata for variant {variant!r}"
+            )
 
     variants = {
         variant: _aggregate_variant(by_variant[variant]) for variant in sorted(by_variant)
@@ -787,14 +1035,25 @@ def _validate_complete_manual_override(
         raise ResultArtifactError(f"manual grading is not a complete override for {manual_path}")
 
 
-def _validate_matching_timing(
-    grading: Mapping[str, object], timing: Mapping[str, object], timing_path: Path
+def _validate_artifact_matches_manifest(
+    artifact: Mapping[str, object],
+    manifest: Mapping[str, object],
+    artifact_path: Path,
 ) -> None:
     for field in ("run_id", "skill_name", "case_id", "run_kind"):
-        if grading[field] != timing[field]:
+        if artifact[field] != manifest[field]:
             raise ResultArtifactError(
-                f"timing identity does not match grading in {timing_path}: {field}"
+                f"artifact does not match attempt manifest in {artifact_path}: {field}"
             )
+    if "aggregation" in artifact and artifact["aggregation"] != manifest["aggregation"]:
+        raise ResultArtifactError(
+            f"artifact aggregation policy does not match attempt manifest in {artifact_path}"
+        )
+
+
+def _validate_completed_timing(
+    timing: Mapping[str, object], timing_path: Path
+) -> None:
     if timing["status"] == "completed" and timing["exit_code"] != 0:
         raise ResultArtifactError(
             f"completed timing lacks an explicit successful exit in {timing_path}"
@@ -815,50 +1074,6 @@ def _summarize_assertions(results: Sequence[AssertionResult]) -> GradingSummary:
         failed=total - passed,
         total=total,
         pass_rate=passed / total if total else 0.0,
-    )
-
-
-def _grading_record_from_dict(document: Mapping[str, object]) -> GradingRecord:
-    grader = document["grader"]
-    aggregation = document["aggregation"]
-    summary = document["summary"]
-    return GradingRecord(
-        run_id=document["run_id"],
-        skill_name=document["skill_name"],
-        case_id=document["case_id"],
-        run_kind=document["run_kind"],
-        grade_source=document["grade_source"],
-        grader=GraderRecord(
-            type=grader["type"],
-            model=grader["model"],
-            prompt_version=grader["prompt_version"],
-        ),
-        graded_at=document["graded_at"],
-        assertion_results=tuple(
-            AssertionResult(
-                id=result["id"],
-                kind=result["kind"],
-                text=result["text"],
-                passed=result["passed"],
-                checked_by=result["checked_by"],
-                evidence=result["evidence"],
-                evidence_refs=tuple(result["evidence_refs"]),
-            )
-            for result in document["assertion_results"]
-        ),
-        summary=GradingSummary(
-            passed=summary["passed"],
-            failed=summary["failed"],
-            total=summary["total"],
-            pass_rate=summary["pass_rate"],
-        ),
-        aggregation=AggregationMetadata(
-            group_id=aggregation["group_id"],
-            variant=aggregation["variant"],
-            contributes_to_outcome=aggregation["contributes_to_outcome"],
-            required_variants=tuple(aggregation["required_variants"]),
-            compare_to=aggregation.get("compare_to"),
-        ),
     )
 
 
@@ -929,12 +1144,12 @@ def _write_text_atomic(
 
 
 def _ensure_safe_artifact_path(root: Path, path: Path) -> None:
-    resolved_root = root.resolve()
     if path.is_symlink():
         raise ResultArtifactError(f"artifact path must not be a symlink: {path}")
     try:
+        resolved_root = root.resolve(strict=True)
         resolved_parent = path.parent.resolve(strict=True)
-    except OSError as error:
+    except (OSError, RuntimeError) as error:
         raise ResultArtifactError(f"cannot resolve artifact path {path}: {error}") from error
     if not resolved_parent.is_relative_to(resolved_root):
         raise ResultArtifactError(f"artifact path escapes result workspace: {path}")
@@ -944,3 +1159,61 @@ def _format_timestamp(value: datetime) -> str:
     if value.tzinfo is None:
         raise ValueError("timestamps must include timezone information")
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _serialize_execution_trace(
+    execution_trace: Sequence[Mapping[str, object]],
+) -> str:
+    try:
+        return "".join(
+            f"{json.dumps(dict(event), sort_keys=True)}\n"
+            for event in execution_trace
+        )
+    except (TypeError, ValueError) as error:
+        raise ResultArtifactError("cannot serialize normalized execution trace") from error
+
+
+def _safe_validation_path(path: Sequence[object]) -> str:
+    safe_fields = {
+        "schema_version",
+        "run_id",
+        "skill_name",
+        "case_id",
+        "run_kind",
+        "grader",
+        "type",
+        "model",
+        "reasoning_effort",
+        "prompt_version",
+        "graded_at",
+        "assertion_results",
+        "id",
+        "kind",
+        "text",
+        "passed",
+        "checked_by",
+        "evidence",
+        "evidence_refs",
+        "artifact",
+        "locator",
+        "summary",
+        "aggregation",
+        "group_id",
+        "variant",
+        "contributes_to_outcome",
+        "required_variants",
+        "compare_to",
+        "source_summaries",
+        "groups",
+        "variants",
+        "comparisons",
+    }
+    rendered = "$"
+    for component in path:
+        if isinstance(component, int):
+            rendered += f"[{component}]"
+        elif component in safe_fields:
+            rendered += f".{component}"
+        else:
+            rendered += ".<property>"
+    return rendered

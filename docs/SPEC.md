@@ -32,6 +32,15 @@ selection without preloading the target skill body into the prompt. Fixtures
 are optional and belong under `evals/fixtures/<eval-id>/` only when a case needs
 them.
 
+Model-backed invocations preserve results outside the repository. Each run is
+declared by an immutable `attempt.json` before execution; that declaration owns
+its identity and generic aggregation policy. Aggregation requires every
+declared attempt, required variant, timing record, and requested grade source to
+be complete and mutually consistent. A complete manual grade overrides the
+generated grade when manual or both sources are requested, without replacing
+the generated artifact. Aggregate exit codes are `0` for pass, `1` for a
+trusted evaluated failure, and `2` for invalid or untrustworthy evidence.
+
 The schemas and validation commands are documented in [Testing](TESTING.md).
 Do not create additional skill-specific test artifacts. Non-trivial bundled
 scripts may instead have deterministic repository tests under `tests/runtime/`.

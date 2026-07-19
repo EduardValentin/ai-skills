@@ -23,6 +23,7 @@ from scripts.ai_skills_lib.eval_core import (
     aggregate_results,
     benchmark_exit_code,
     format_benchmark_summary,
+    resolve_external_result_path,
 )
 from scripts.ai_skills_lib.issues import print_grouped_issues
 from scripts.ai_skills_lib.static_validation import (
@@ -54,15 +55,16 @@ def _report_validation(label: str, issues) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "evals" and args.evals_command == "aggregate":
-        results_dir = args.results_dir.resolve()
-        print(f"Results: {results_dir}")
         try:
+            results_dir = resolve_external_result_path(args.results_dir)
+            print(f"Results: {results_dir}")
             benchmark = aggregate_results(results_dir, args.grade_source)
+            summary = format_benchmark_summary(benchmark)
+            exit_code = benchmark_exit_code(benchmark)
         except ResultArtifactError as error:
             print(f"evals aggregate: FAILED: {error}")
             return 2
-        print(format_benchmark_summary(benchmark))
-        exit_code = benchmark_exit_code(benchmark)
+        print(summary)
         print("evals aggregate: OK" if exit_code == 0 else "evals aggregate: ASSERTIONS FAILED")
         return exit_code
     if args.command == "validate" and args.target == "static":

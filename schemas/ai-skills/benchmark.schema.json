@@ -19,6 +19,42 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {"properties": {"grade_source": {"const": "judge"}}},
+      "then": {
+        "properties": {
+          "source_summaries": {
+            "required": ["judge"],
+            "maxProperties": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"grade_source": {"const": "manual"}}},
+      "then": {
+        "properties": {
+          "source_summaries": {
+            "required": ["manual"],
+            "maxProperties": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"grade_source": {"const": "both"}}},
+      "then": {
+        "properties": {
+          "source_summaries": {
+            "required": ["judge", "manual"],
+            "minProperties": 2,
+            "maxProperties": 2
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "outcome_summary": {
       "type": "object",

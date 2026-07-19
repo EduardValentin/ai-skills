@@ -47,6 +47,8 @@ class HarnessRequest:
             raise ValueError("run_variant must be non-empty")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if self.role == "judge" and (self.skill_sources or self.expected_skill is not None):
+            raise ValueError("judge requests cannot provision skill sources or an expected skill")
 
 
 @dataclass(frozen=True)

@@ -87,6 +87,21 @@ class HarnessContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     HarnessRequest(**arguments)
 
+    def test_judge_request_rejects_actor_skill_provisioning(self):
+        for restricted in (
+            {"skill_sources": (Path("skills/workflows/example"),)},
+            {"expected_skill": "example"},
+        ):
+            with self.subTest(restricted=restricted):
+                with self.assertRaisesRegex(ValueError, "judge.*skill"):
+                    HarnessRequest(
+                        role="judge",
+                        run_variant="semantic_grade",
+                        prompt="Grade the evidence.",
+                        timeout_seconds=30,
+                        **restricted,
+                    )
+
     def test_adapter_protocol_exposes_preflight_and_normalized_execution(self):
         adapter = RecordingHarness()
         request = HarnessRequest(
