@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-skills/grading.schema.json",
+  "title": "AI Skills generated or manual grading record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "skill_name",
+    "case_id",
+    "run_kind",
+    "grade_source",
+    "grader",
+    "graded_at",
+    "assertion_results",
+    "summary",
+    "aggregation"
+  ],
+  "properties": {
+    "schema_version": {"const": "ai-skills.eval.grading.v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "skill_name": {"type": "string", "minLength": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "run_kind": {"type": "string", "minLength": 1},
+    "grade_source": {"enum": ["judge", "manual"]},
+    "grader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "model", "prompt_version"],
+      "properties": {
+        "type": {"enum": ["llm", "human", "deterministic"]},
+        "model": {"type": ["string", "null"], "minLength": 1},
+        "prompt_version": {"type": "string", "minLength": 1}
+      }
+    },
+    "graded_at": {"type": "string", "format": "date-time"},
+    "assertion_results": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/assertion_result"}
+    },
+    "summary": {"$ref": "#/$defs/grading_summary"},
+    "aggregation": {"$ref": "#/$defs/aggregation_metadata"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"grade_source": {"const": "manual"}}},
+      "then": {"properties": {"grader": {"properties": {"type": {"const": "human"}}}}}
+    },
+    {
+      "if": {"properties": {"grade_source": {"const": "judge"}}},
+      "then": {
+        "properties": {
+          "grader": {"properties": {"type": {"enum": ["llm", "deterministic"]}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "assertion_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "text",
+        "passed",
+        "checked_by",
+        "evidence",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1},
+        "passed": {"type": "boolean"},
+        "checked_by": {"type": "string", "minLength": 1},
+        "evidence": {"type": "string", "minLength": 1},
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact", "locator"],
+            "properties": {
+              "artifact": {"type": "string", "minLength": 1},
+              "locator": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "grading_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "total", "pass_rate"],
+      "properties": {
+        "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "aggregation_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group_id",
+        "variant",
+        "contributes_to_outcome",
+        "required_variants"
+      ],
+      "properties": {
+        "group_id": {"type": "string", "minLength": 1},
+        "variant": {"type": "string", "minLength": 1},
+        "contributes_to_outcome": {"type": "boolean"},
+        "required_variants": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "compare_to": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

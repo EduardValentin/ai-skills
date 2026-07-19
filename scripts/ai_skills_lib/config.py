@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     evals = commands.add_parser("evals")
     evals_commands = evals.add_subparsers(dest="evals_command", required=True)
     aggregate = evals_commands.add_parser("aggregate")
-    aggregate.add_argument("--results-dir", required=True)
+    aggregate.add_argument("--results-dir", type=Path, required=True)
     aggregate.add_argument("--grade-source", choices=("judge", "manual", "both"), required=True)
 
     return parser

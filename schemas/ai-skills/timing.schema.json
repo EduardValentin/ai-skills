@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-skills/timing.schema.json",
+  "title": "AI Skills evaluation timing record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "skill_name",
+    "case_id",
+    "run_kind",
+    "harness",
+    "model",
+    "reasoning_effort",
+    "started_at",
+    "ended_at",
+    "duration_ms",
+    "total_tokens",
+    "status",
+    "exit_code",
+    "token_details"
+  ],
+  "properties": {
+    "schema_version": {"const": "ai-skills.eval.timing.v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "skill_name": {"type": "string", "minLength": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "run_kind": {"type": "string", "minLength": 1},
+    "harness": {"type": "string", "minLength": 1},
+    "model": {"type": ["string", "null"], "minLength": 1},
+    "reasoning_effort": {"type": ["string", "null"], "minLength": 1},
+    "started_at": {"type": "string", "format": "date-time"},
+    "ended_at": {"type": "string", "format": "date-time"},
+    "duration_ms": {"type": "integer", "minimum": 0},
+    "total_tokens": {"type": ["integer", "null"], "minimum": 0},
+    "status": {"enum": ["completed", "failed", "timeout"]},
+    "exit_code": {"type": ["integer", "null"]},
+    "token_details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output", "cached", "source"],
+      "properties": {
+        "input": {"type": ["integer", "null"], "minimum": 0},
+        "output": {"type": ["integer", "null"], "minimum": 0},
+        "cached": {"type": ["integer", "null"], "minimum": 0},
+        "source": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

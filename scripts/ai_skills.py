@@ -18,6 +18,12 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from scripts.ai_skills_lib.config import build_parser, command_label
+from scripts.ai_skills_lib.eval_core import (
+    ResultArtifactError,
+    aggregate_results,
+    benchmark_exit_code,
+    format_benchmark_summary,
+)
 from scripts.ai_skills_lib.issues import print_grouped_issues
 from scripts.ai_skills_lib.static_validation import (
     preflight_reference_conformance,
@@ -47,6 +53,18 @@ def _report_validation(label: str, issues) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "evals" and args.evals_command == "aggregate":
+        results_dir = args.results_dir.resolve()
+        print(f"Results: {results_dir}")
+        try:
+            benchmark = aggregate_results(results_dir, args.grade_source)
+        except ResultArtifactError as error:
+            print(f"evals aggregate: FAILED: {error}")
+            return 2
+        print(format_benchmark_summary(benchmark))
+        exit_code = benchmark_exit_code(benchmark)
+        print("evals aggregate: OK" if exit_code == 0 else "evals aggregate: ASSERTIONS FAILED")
+        return exit_code
     if args.command == "validate" and args.target == "static":
         return _report_validation("validate static", run_static_validation(REPOSITORY_ROOT))
     if args.command == "validate" and args.target == "ci-all":
