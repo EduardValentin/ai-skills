@@ -52,9 +52,9 @@ never edit installed or generated copies.
   Codex activation requires an exact successful read of the installed
   `SKILL.md`.
 - Never run `validate triggers`, `validate evals`, `validate all`, or real
-  Docker/Codex integration smoke tests unless the user explicitly requests
-  them. A skill change, review, implementation workflow, or PR request is not
-  approval.
+  Docker Sandboxes/Codex integration smoke tests unless the user explicitly
+  requests them. A skill change, review, implementation workflow, or PR request
+  is not approval.
 - Before requested model-backed runs, print run counts, preflight calls,
   concurrency, and the durable result path. Default concurrency is `2`;
   supported values are `1` through `4`. Hidden retries are forbidden; preserve
@@ -65,18 +65,20 @@ never edit installed or generated copies.
   `mockserverInitialization.json` with the shared fail-closed proxy. Otherwise
   use fake data, shims, transcripts, or specialized local fixtures instead of
   real credentials or private sessions.
-- Model-backed runs use the shared Docker sandbox. Do not weaken mounts,
-  credential isolation, resource limits, network policy, judge isolation,
-  MockServer no-passthrough behavior, or cleanup without updating
-  `docs/TESTING.md` and the harness tests.
-- Runtime pins are immutable: no floating image tags, package ranges, or
-  runtime-schema downloads. Changes to `config/eval-runtime.json`, the actor
-  Dockerfile, or the vendored MockServer schema require `docs/TESTING.md` updates
-  and a report of the recommended integration verification; the agent-backed
-  suite still requires explicit user approval.
+- Model-backed runs use reusable Docker Sandboxes worker pools. Give every case
+  a fresh actor projection, workspace, `CODEX_HOME`, and ephemeral harness
+  session; keep actor and judge workers separate, keep real credentials in the
+  host proxy, and recycle a worker when reset verification fails. Do not weaken
+  resource limits, network policy, oracle isolation, MockServer no-passthrough
+  behavior, or cleanup without updating `docs/TESTING.md` and the harness tests.
+- Runtime pins are immutable: no floating sandbox/template/image tags, package
+  ranges, or runtime-schema downloads. Changes to `config/eval-runtime.json`,
+  Docker Sandboxes or Codex pins, or the vendored MockServer schema require
+  `docs/TESTING.md` updates and a report of the recommended integration
+  verification; the agent-backed suite still requires explicit user approval.
 - `validate ci-all` is deterministic, offline, and model-free. It includes
-  `tests/ai_skills/` plus deterministic runtime tests. Real
-  Docker/Codex/MockServer smoke tests belong under
+  `tests/ai_skills/` plus deterministic runtime tests. Real Docker
+  Sandboxes/Codex/MockServer smoke tests belong under
   `tests/integration/eval_runtime/` and run only through model-backed preflight
   or an explicit integration command.
 - Non-trivial bundled executable code may have deterministic tests under
