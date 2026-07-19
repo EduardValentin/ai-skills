@@ -109,6 +109,37 @@ class TemporaryRepositoryTestCase(unittest.TestCase):
         self.assertEqual(run_static_validation(self.repository.root), [])
 
 
+class RepositoryShapeValidationTests(TemporaryRepositoryTestCase):
+    def test_accepts_canonical_uppercase_skill_filename(self):
+        self.repository.add_skill("alpha")
+
+        messages = self.messages()
+
+        self.assertFalse(
+            any("must be named SKILL.md" in message for message in messages),
+            messages,
+        )
+
+    def test_rejects_authored_mis_cased_skill_filenames(self):
+        for authored_name in ("skill.md", "Skill.md"):
+            with self.subTest(authored_name=authored_name):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                intermediate = skill_root / "renaming-skill-document"
+                (skill_root / "SKILL.md").rename(intermediate)
+                intermediate.rename(skill_root / authored_name)
+
+                messages = [
+                    issue.message for issue in run_static_validation(repository.root)
+                ]
+
+                self.assertTrue(
+                    any("must be named SKILL.md" in message for message in messages),
+                    messages,
+                )
+
+
 class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
     def test_discovers_only_two_level_public_skills(self):
         skill_root = self.repository.add_skill("alpha", group="procedural")

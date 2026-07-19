@@ -25,7 +25,20 @@ def validate_repository_shape(root: Path) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     skills_directory = root / "skills"
     if skills_directory.exists():
-        for path in sorted(skills_directory.rglob("SKILL.md")):
+        skill_documents = sorted(
+            path
+            for path in _iter_skill_tree(skills_directory)
+            if path.name.casefold() == "skill.md"
+        )
+        for path in skill_documents:
+            if path.name != "SKILL.md":
+                issues.append(
+                    ValidationIssue(
+                        scope="repository",
+                        message=f"{path.relative_to(root)} must be named SKILL.md",
+                    )
+                )
+                continue
             relative = path.relative_to(skills_directory)
             if len(relative.parts) != 3:
                 issues.append(
@@ -37,13 +50,6 @@ def validate_repository_shape(root: Path) -> list[ValidationIssue]:
                         ),
                     )
                 )
-        for path in sorted(skills_directory.rglob("skill.md")):
-            issues.append(
-                ValidationIssue(
-                    scope="repository",
-                    message=f"{path.relative_to(root)} must be named SKILL.md",
-                )
-            )
 
     for pattern in (
         "plugins/*/skills/*/SKILL.md",
