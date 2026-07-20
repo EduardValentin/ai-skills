@@ -1,0 +1,15 @@
+{
+  "skill_name": "pr-reviewer-summary",
+  "queries": [
+    {
+      "id": "draft-pr-body-from-review-context",
+      "query": "Draft a ready-to-paste PR description from this branch diff, changed-file summary, test commands, and ticket context. Focus on the final shipped behavior and give reviewers practical manual verification steps.",
+      "should_trigger": true
+    },
+    {
+      "id": "review-diff-for-defects",
+      "query": "Review this pull request diff for correctness bugs, security risks, regressions, and missing tests. Return findings ordered by severity with file and line references.",
+      "should_trigger": false
+    }
+  ]
+}

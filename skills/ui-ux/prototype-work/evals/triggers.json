@@ -1,0 +1,15 @@
+{
+  "skill_name": "prototype-work",
+  "queries": [
+    {
+      "id": "prototype-onboarding-flow",
+      "query": "In the React reference app under designs/customer-portal, add an onboarding flow with mocked eligibility rules, a simulated enrollment API, and loading, empty, success, and failure states. Keep PRD.md aligned and verify the flow in the browser.",
+      "should_trigger": true
+    },
+    {
+      "id": "production-react-feature",
+      "query": "Implement the approved billing settings screen directly in our production Next.js app from the Figma design, connect it to the real account API, and add integration tests.",
+      "should_trigger": false
+    }
+  ]
+}

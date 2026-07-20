@@ -1,0 +1,15 @@
+{
+  "skill_name": "web-copy",
+  "queries": [
+    {
+      "id": "rewrite-invoice-empty-state",
+      "query": "Rewrite the empty state and validation error for our invoicing app. Keep the established term \"clients,\" make the CTA specific, and tell users how to recover when an invoice total is missing.",
+      "should_trigger": true
+    },
+    {
+      "id": "design-dashboard-information-architecture",
+      "query": "Design the information architecture and responsive layout for an invoicing dashboard, including navigation groups, breakpoints, component placement, and the mobile interaction flow.",
+      "should_trigger": false
+    }
+  ]
+}

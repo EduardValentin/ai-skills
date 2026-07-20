@@ -1,0 +1,15 @@
+{
+  "skill_name": "bitbucket-pr-management",
+  "queries": [
+    {
+      "id": "summarize-bitbucket-cloud-discussion",
+      "query": "Summarize the unresolved discussion on https://bitbucket.org/acme/widget/pull-requests/42 and tell me what still blocks approval.",
+      "should_trigger": true
+    },
+    {
+      "id": "review-github-pull-request",
+      "query": "Review the authentication changes in GitHub pull request #42 for acme/widget and draft a review summary.",
+      "should_trigger": false
+    }
+  ]
+}

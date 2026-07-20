@@ -1,0 +1,15 @@
+{
+  "skill_name": "qa-verification",
+  "queries": [
+    {
+      "id": "manual-mixed-invite-qa",
+      "query": "Manually QA the new invite flow in the running web app and API. Verify the browser behavior, API responses, duplicate handling, and persisted invite status, then give me evidence for each acceptance criterion.",
+      "should_trigger": true
+    },
+    {
+      "id": "pr-readiness-gate-review",
+      "query": "Review PR #842 for CI status, required approvals, unresolved review comments, mergeability, and whether the linked ticket is in the correct release state.",
+      "should_trigger": false
+    }
+  ]
+}

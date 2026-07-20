@@ -1,0 +1,15 @@
+{
+  "skill_name": "semantic-design-tokens",
+  "queries": [
+    {
+      "id": "audit-checkout-token-boundaries",
+      "query": "Audit the changed React and Tailwind checkout UI for raw colors and repeated spacing. Reuse existing semantic theme roles where appropriate, decide whether any missing values deserve global or scoped tokens, and leave true one-off layout values local.",
+      "should_trigger": true
+    },
+    {
+      "id": "extract-reusable-button-api",
+      "query": "Refactor three nearly identical React buttons into one accessible Button component with size, loading, icon, and destructive variants while preserving the existing styles.",
+      "should_trigger": false
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "skill_name": "linear-issue-management",
+  "queries": [
+    {
+      "id": "publish-approved-linear-story",
+      "query": "The refund audit story is approved. Check the Course Platform project in Linear for duplicates, then create it under CP-812 with the Compliance label, High priority, and Eduard as assignee.",
+      "should_trigger": true
+    },
+    {
+      "id": "draft-platform-neutral-stories",
+      "query": "Turn these onboarding interview notes into a polished platform-neutral epic and user stories with acceptance criteria so the product team can review the draft.",
+      "should_trigger": false
+    }
+  ]
+}

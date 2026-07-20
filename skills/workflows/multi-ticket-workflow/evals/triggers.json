@@ -1,0 +1,15 @@
+{
+  "skill_name": "multi-ticket-workflow",
+  "queries": [
+    {
+      "id": "coordinate-billing-epic",
+      "query": "Coordinate the Billing Revamp Epic as one scope across PAY-101 pricing API, PAY-102 checkout UI, PAY-103 invoice migration, and PAY-104 analytics. Map their dependencies, agree the cross-ticket design and execution plan with me, then orchestrate the work and PR handoffs.",
+      "should_trigger": true
+    },
+    {
+      "id": "run-standalone-ticket-workflow",
+      "query": "Take BUG-419 from intake through implementation, review, QA, and PR handoff. It is one standalone ticket with no related subtasks or cross-ticket dependencies.",
+      "should_trigger": false
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "skill_name": "implementation-workflow",
+  "queries": [
+    {
+      "id": "approved-plan-ready-to-code",
+      "query": "The design and implementation plan for BILL-218 are approved, including acceptance criteria, non-goals, affected services, branch state, and expected checks. Implement the retry-flow plan now, then complete independent review, manual QA, and the implementation report.",
+      "should_trigger": true
+    },
+    {
+      "id": "requirements-still-unapproved",
+      "query": "Turn these rough customer notes about billing retries into a scoped user story, acceptance criteria, design options, and an implementation plan for approval before anyone starts coding.",
+      "should_trigger": false
+    }
+  ]
+}

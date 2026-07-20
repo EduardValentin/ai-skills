@@ -1,0 +1,15 @@
+{
+  "skill_name": "ticket-workflow",
+  "queries": [
+    {
+      "id": "standalone-ticket-lifecycle",
+      "query": "Use ticket-workflow to take the standalone Jira ticket PAY-418 from intake through a written spec, an approved implementation plan, implementation, and final PR-readiness. Start with the ticket and repository context and do not skip the approval gates.",
+      "should_trigger": true
+    },
+    {
+      "id": "coordinate-related-ticket-batch",
+      "query": "Coordinate six interdependent tickets under one Epic as a batch, order their shared migrations and API changes, and manage cross-ticket implementation and integration risk.",
+      "should_trigger": false
+    }
+  ]
+}

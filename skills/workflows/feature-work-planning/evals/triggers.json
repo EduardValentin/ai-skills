@@ -1,0 +1,15 @@
+{
+  "skill_name": "feature-work-planning",
+  "queries": [
+    {
+      "id": "break-down-checkout-eligibility-work",
+      "query": "Before anyone implements checkout eligibility, break the work into a sensible delivery plan. We know it touches a billing API rule, a checkout banner, existing-data migration, analytics, rollout controls, and QA.",
+      "should_trigger": true
+    },
+    {
+      "id": "draft-approved-jira-stories",
+      "query": "The team-invitations work plan has been approved. Turn it into polished Jira stories with final descriptions and acceptance criteria, ready for me to publish.",
+      "should_trigger": false
+    }
+  ]
+}

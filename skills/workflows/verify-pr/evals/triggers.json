@@ -1,0 +1,15 @@
+{
+  "skill_name": "verify-pr",
+  "queries": [
+    {
+      "id": "verify-final-merge-readiness",
+      "query": "PR https://github.com/acme/payments/pull/412 is up for final approval. Check the live PR state, required CI, tests covering the changed checkout flow, approvals, unresolved threads, and linked Linear ticket, then tell me whether it is ready to merge.",
+      "should_trigger": true
+    },
+    {
+      "id": "review-pr-diff-for-defects",
+      "query": "Review the diff in acme/payments#412 for correctness, security regressions, and missing tests, and give me prioritized inline findings.",
+      "should_trigger": false
+    }
+  ]
+}

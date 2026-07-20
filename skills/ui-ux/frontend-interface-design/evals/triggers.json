@@ -1,0 +1,15 @@
+{
+  "skill_name": "frontend-interface-design",
+  "queries": [
+    {
+      "id": "implement-responsive-settings-surface",
+      "query": "Implement a responsive settings surface in our existing React admin app. Use the current component library and design tokens, and cover keyboard access, async loading, empty and error outcomes, a disabled Save state, and a safe Delete account flow.",
+      "should_trigger": true
+    },
+    {
+      "id": "audit-dashboard-visual-regressions",
+      "query": "Review the supplied desktop and mobile dashboard screenshots, identify spacing, hierarchy, contrast, and overflow regressions, and return prioritized findings. Do not change the implementation.",
+      "should_trigger": false
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "skill_name": "reusable-ui-components",
+  "queries": [
+    {
+      "id": "refactor-dashboard-metric-tiles",
+      "query": "Our React dashboard now has the same KPI tile markup on three pages, with compact and regular densities and one page needing a richer footer. Review the nearby MetricTile component and decide whether to reuse it, add variants or slots, or introduce a separate component without pulling page analytics and routing into it.",
+      "should_trigger": true
+    },
+    {
+      "id": "audit-theme-token-contrast",
+      "query": "Audit our light and dark theme tokens for color contrast, spacing consistency, and semantic naming, then propose a revised token scale. The component structure and APIs should remain unchanged.",
+      "should_trigger": false
+    }
+  ]
+}

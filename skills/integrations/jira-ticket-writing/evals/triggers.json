@@ -1,0 +1,15 @@
+{
+  "skill_name": "jira-ticket-writing",
+  "queries": [
+    {
+      "id": "revise-existing-jira-ticket",
+      "query": "Clean up PAY-418 before I update it in Jira: rewrite the file-name-only summary, move the existing acceptance criteria into the project's dedicated field, and represent its blocker and parent using Jira-native fields.",
+      "should_trigger": true
+    },
+    {
+      "id": "triage-jira-bug-ownership",
+      "query": "Triage BUG-482 by comparing it with recent duplicate reports, assessing severity and customer impact, identifying the likely owning team, and recommending the next investigation step.",
+      "should_trigger": false
+    }
+  ]
+}

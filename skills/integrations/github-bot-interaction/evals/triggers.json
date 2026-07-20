@@ -1,0 +1,15 @@
+{
+  "skill_name": "github-bot-interaction",
+  "queries": [
+    {
+      "id": "post-approved-pr-comment-as-bot",
+      "query": "In /workspace/octo-widget, post the approved comment `Ready for your review` on PR #41 using the configured GitHub App bot identity. I confirm this write.",
+      "should_trigger": true
+    },
+    {
+      "id": "summarize-pr-status-read-only",
+      "query": "Summarize the changed files, unresolved review threads, and failing checks on GitHub PR #41 in octo-org/octo-widget.",
+      "should_trigger": false
+    }
+  ]
+}

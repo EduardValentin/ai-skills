@@ -1,0 +1,15 @@
+{
+  "skill_name": "stock-research",
+  "queries": [
+    {
+      "id": "new-us-thesis",
+      "query": "Research COST from scratch as a potential long-term holding. Build a durable fundamentals thesis and tell me whether it is a buy, watch, or avoid at the current price.",
+      "should_trigger": true
+    },
+    {
+      "id": "existing-thesis-quarterly-recap",
+      "query": "I already have a saved AAPL thesis. Update it for the latest 10-Q and tell me what changed versus my original assumptions.",
+      "should_trigger": false
+    }
+  ]
+}

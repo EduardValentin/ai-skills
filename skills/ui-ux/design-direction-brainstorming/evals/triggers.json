@@ -1,0 +1,15 @@
+{
+  "skill_name": "design-direction-brainstorming",
+  "queries": [
+    {
+      "id": "redesign-cluttered-analytics-dashboard",
+      "query": "Our analytics dashboard feels bland and cluttered. Redesign it so it feels more premium and trustworthy, and use your judgment on the direction.",
+      "should_trigger": true
+    },
+    {
+      "id": "rewrite-onboarding-interface-copy",
+      "query": "Rewrite the onboarding empty-state and validation messages so they are clearer, calmer, and more actionable while preserving the existing layout and styling.",
+      "should_trigger": false
+    }
+  ]
+}

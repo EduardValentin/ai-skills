@@ -1,0 +1,15 @@
+{
+  "skill_name": "declaratia-unica-romania",
+  "queries": [
+    {
+      "id": "complete-d212-investments",
+      "query": "Vreau să completez Declarația Unică D212 pentru 2025. Am dividende și câștiguri din vânzări de ETF-uri prin Interactive Brokers și am rapoartele brokerului.",
+      "should_trigger": true
+    },
+    {
+      "id": "pfa-income-norm",
+      "query": "Am PFA impozitat la normă de venit și vreau să stabilesc norma ajustată și ce sume declar anul acesta.",
+      "should_trigger": false
+    }
+  ]
+}

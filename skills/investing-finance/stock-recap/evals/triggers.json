@@ -1,0 +1,15 @@
+{
+  "skill_name": "stock-recap",
+  "queries": [
+    {
+      "id": "recap-existing-msft-thesis",
+      "query": "Catch me up on MSFT since my last saved thesis. Compare every new 10-Q or 10-K with my bull case, base case, and bear case projections, and re-evaluate my sell triggers.",
+      "should_trigger": true
+    },
+    {
+      "id": "research-brand-new-ticker",
+      "query": "I have never researched CRWD. Build an initial five-year bull, base, and bear thesis and tell me whether it is a buy.",
+      "should_trigger": false
+    }
+  ]
+}

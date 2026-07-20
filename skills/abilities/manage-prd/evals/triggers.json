@@ -1,0 +1,15 @@
+{
+  "skill_name": "manage-prd",
+  "queries": [
+    {
+      "id": "review-and-clean-prd",
+      "query": "Please review this PRD section, consolidate the repeated permission rules, flag contradictions, and rewrite it in business language without the API and database details.",
+      "should_trigger": true
+    },
+    {
+      "id": "turn-approved-prd-into-tickets",
+      "query": "The PRD is approved. Break it into Jira implementation tickets with acceptance criteria, dependencies, and delivery order.",
+      "should_trigger": false
+    }
+  ]
+}

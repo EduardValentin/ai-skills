@@ -1,0 +1,15 @@
+{
+  "skill_name": "ticket-writing",
+  "queries": [
+    {
+      "id": "draft-approved-invite-story",
+      "query": "Turn this approved brief into a platform-neutral user story: workspace admins invite teammates by email, duplicate pending invitations are rejected, invitations expire after seven days, and accepted teammates join with the role the admin selected. Capture that the work is blocked by email-service setup.",
+      "should_trigger": true
+    },
+    {
+      "id": "plan-undefined-scheduling-feature",
+      "query": "We are considering a scheduling feature but have not decided the actors, workflow, permissions, data model, edge cases, or integrations. Help us explore options and produce an approved feature plan before anyone writes tickets.",
+      "should_trigger": false
+    }
+  ]
+}
