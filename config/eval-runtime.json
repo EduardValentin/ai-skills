@@ -4,7 +4,19 @@
   "sbx": {
     "version": "0.35.0",
     "revision": "01e01520456e4126a9653471e7072e4d9b280321",
-    "network_policy": "balanced"
+    "network_policy": {
+      "preset": "balanced",
+      "policy_id": "local-policy",
+      "rules_sha256": "bfda7227d418d394822f5747f3d030884a5c114741441c6fb3870a5235e904e2",
+      "required_rule_ids": [
+        "default-ai-services",
+        "default-package-managers",
+        "default-code-and-containers",
+        "default-cloud-infrastructure",
+        "default-os-packages",
+        "default-cert-validation"
+      ]
+    }
   },
   "codex": {
     "agent": "codex",
@@ -48,6 +60,8 @@
       "bind": "microvm-loopback",
       "reuse_scope": "worker",
       "ca_scope": "worker",
+      "maximum_expected_requests": 128,
+      "bundled_default_ca_sha256": "26fc755116841c1c31ff004fb6c727b00de6d4b57b77557e09f2eaaae022b846",
       "schema": {
         "release": "mockserver-7.4.0",
         "source": "https://raw.githubusercontent.com/mock-server/mockserver/mockserver-7.4.0/mockserver-vscode/schemas/mockserver-expectation.schema.json",

@@ -32,6 +32,29 @@ selection without preloading the target skill body into the prompt. Fixtures
 are optional and belong under `evals/fixtures/<eval-id>/` only when a case needs
 them.
 
+Model actors receive a generated runtime projection containing only
+`SKILL.md`, `scripts/`, `references/`, and `assets/`. Runtime material must not
+reference `evals/`; definitions, expected results, assertions, trigger answers,
+and judge context stay outside actor mounts. Only explicitly declared files
+below the current case's `evals/fixtures/<eval-id>/inputs/` directory may be
+copied into its actor workspace. Both those files and an optional
+`mockserverInitialization.json` are bound to that exact case fixture root;
+sibling skill or case fixtures are invalid. Judges receive no skill catalog.
+
+HTTP(S) fixture initialization files must pass the pinned official MockServer
+schema and repository safety policy. Use only static `httpResponse` or
+`httpError` actions with fake data. Do not use forwarding, callbacks,
+executable templates, delays, relaxed body matching, generated responses,
+file-backed response bodies, or unbounded repetition. Every expectation needs
+one non-empty exact method, path, and `Host` matcher. Each expectation is one
+required call unless finite `times` declares a repeat count, and one case may
+declare at most 128 total calls. The runner quotes authored request strings as
+Java-regex literals and enables exact-case method/path matching before uploading
+them to MockServer. The shared runner
+owns authenticated control access, dynamic CA material, per-case reset,
+complete ordered-call verification, bounded redacted request evidence, and
+proxy environment injection.
+
 Model-backed invocations preserve results outside the repository. Each run is
 declared by an immutable `attempt.json` before execution; that declaration owns
 its identity and generic aggregation policy. Aggregation requires every

@@ -200,6 +200,12 @@ class EvalArtifactSchemaTests(unittest.TestCase):
 
         self.assertIn("jsonschema==4.26.0", requirements.splitlines())
 
+    def test_runtime_requirements_pin_fixture_control_crypto(self):
+        requirements = (REPOSITORY_ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+        self.assertIn("PyJWT==2.13.0", requirements.splitlines())
+        self.assertIn("cryptography==49.0.0", requirements.splitlines())
+
     def test_timing_schema_accepts_unavailable_token_counts(self):
         validator = Draft202012Validator(load_schema("timing.schema.json"))
 

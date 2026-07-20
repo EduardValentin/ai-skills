@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import tempfile
 import unittest
 
 from scripts.ai_skills_lib.harness import (
+    ActorInput,
     HarnessAdapter,
     HarnessCapabilities,
     HarnessExecution,
@@ -101,6 +102,111 @@ class HarnessContractTests(unittest.TestCase):
                         timeout_seconds=30,
                         **restricted,
                     )
+
+    def test_actor_request_accepts_an_immutable_shell_environment(self):
+        request = HarnessRequest(
+            role="actor",
+            run_variant="fixture",
+            prompt="Call the fixture API.",
+            timeout_seconds=60,
+            shell_environment=(("HTTPS_PROXY", "http://127.0.0.1:1080"),),
+        )
+
+        self.assertEqual(
+            request.shell_environment,
+            (("HTTPS_PROXY", "http://127.0.0.1:1080"),),
+        )
+
+    def test_judge_request_rejects_actor_fixture_provisioning(self):
+        with self.assertRaisesRegex(ValueError, "judge.*fixture"):
+            HarnessRequest(
+                role="judge",
+                run_variant="semantic_grade",
+                prompt="Grade the evidence.",
+                timeout_seconds=30,
+                fixture_initialization=Path("evals/fixtures/example/mockserverInitialization.json"),
+            )
+
+    def test_actor_input_contract_rejects_judges_and_unsafe_destinations(self):
+        actor_input = ActorInput(
+            source=Path("evals/fixtures/example/inputs/request.md"),
+            destination=PurePosixPath("request.md"),
+        )
+        with self.assertRaisesRegex(ValueError, "judge.*input"):
+            HarnessRequest(
+                role="judge",
+                run_variant="semantic_grade",
+                prompt="Grade the evidence.",
+                timeout_seconds=30,
+                actor_inputs=(actor_input,),
+            )
+        for destination in (
+            PurePosixPath("../escape"),
+            PurePosixPath("/absolute"),
+            PurePosixPath("."),
+        ):
+            with self.subTest(destination=destination):
+                with self.assertRaisesRegex(ValueError, "actor input"):
+                    ActorInput(source=Path("request.md"), destination=destination)
+
+        with self.assertRaisesRegex(ValueError, "actor input destinations"):
+            HarnessRequest(
+                role="actor",
+                run_variant="fixture",
+                prompt="Use the inputs.",
+                timeout_seconds=30,
+                actor_inputs=(actor_input, actor_input),
+            )
+
+    def test_actor_fixture_material_requires_an_exact_case_fixture_root(self):
+        actor_input = ActorInput(
+            source=Path("evals/fixtures/example/inputs/request.md"),
+            destination=PurePosixPath("request.md"),
+        )
+        for fixture_fields in (
+            {"actor_inputs": (actor_input,)},
+            {
+                "fixture_initialization": Path(
+                    "evals/fixtures/example/mockserverInitialization.json"
+                )
+            },
+        ):
+            with self.subTest(fixture_fields=fixture_fields):
+                with self.assertRaisesRegex(ValueError, "fixture root"):
+                    HarnessRequest(
+                        role="actor",
+                        run_variant="fixture",
+                        prompt="Use the fixture.",
+                        timeout_seconds=30,
+                        **fixture_fields,
+                    )
+
+    def test_request_rejects_unsafe_duplicate_or_judge_shell_environment(self):
+        invalid = (
+            (("BAD-NAME", "value"),),
+            (("HTTPS_PROXY", "one"), ("HTTPS_PROXY", "two")),
+            (("HTTPS_PROXY", "value\x00"),),
+            (("HOME", "/escape"),),
+        )
+        for shell_environment in invalid:
+            with self.subTest(shell_environment=shell_environment):
+                with self.assertRaisesRegex(ValueError, "shell environment"):
+                    HarnessRequest(
+                        role="actor",
+                        run_variant="fixture",
+                        prompt="Call the fixture API.",
+                        timeout_seconds=60,
+                        shell_environment=shell_environment,
+                    )
+
+        with self.assertRaisesRegex(ValueError, "judge.*shell environment"):
+            HarnessRequest(
+                role="judge",
+                run_variant="semantic_grade",
+                prompt="Grade the evidence.",
+                timeout_seconds=30,
+                shell_environment=(("HTTPS_PROXY", "http://127.0.0.1:1080"),),
+            )
 
     def test_adapter_protocol_exposes_preflight_and_normalized_execution(self):
         adapter = RecordingHarness()

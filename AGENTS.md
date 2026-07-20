@@ -64,7 +64,13 @@ never edit installed or generated copies.
   For production-shaped private-integration HTTP(S), use
   `mockserverInitialization.json` with the shared fail-closed proxy. Otherwise
   use fake data, shims, transcripts, or specialized local fixtures instead of
-  real credentials or private sessions.
+  real credentials or private sessions. MockServer fixtures may use only
+  static response/error actions; never add forwards, callbacks, executable
+  templates, delays, relaxed matching, generated responses, file-backed
+  response bodies, or unbounded repetition. Require exact non-empty method,
+  path, and `Host` matchers; keep the total declared calls at or below the
+  manifest limit. Every declared call is verified. Bind actor inputs and HTTP
+  initialization to the exact current case fixture root.
 - Model-backed runs use reusable Docker Sandboxes worker pools. Give every case
   a fresh actor projection, workspace, `CODEX_HOME`, and ephemeral harness
   session; keep actor and judge workers separate, keep real credentials in the

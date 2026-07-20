@@ -89,3 +89,37 @@ SECRET_PATTERNS: tuple[SecretPattern, ...] = (
         value_group="value",
     ),
 )
+
+
+def redact_runtime_secrets(text: str) -> str:
+    """Redact high-confidence values and authorization syntax from runtime evidence."""
+    redacted = re.sub(
+        r"\bFAKE_[A-Za-z0-9][A-Za-z0-9_.:/-]*",
+        "[REDACTED]",
+        text,
+    )
+    for pattern in SECRET_PATTERNS:
+        redacted = pattern.regex.sub("[REDACTED]", redacted)
+    redacted = re.sub(
+        r"(?i)\b(?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*[^\r\n]+",
+        "[REDACTED]",
+        redacted,
+    )
+    return re.sub(
+        r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]+=*",
+        "Bearer [REDACTED]",
+        redacted,
+    )
+
+
+def bounded_redacted_runtime_text(text: str, maximum_bytes: int) -> str:
+    """Redact one durable runtime scalar and enforce its UTF-8 byte limit."""
+    if maximum_bytes <= 0:
+        raise ValueError("runtime text byte limit must be positive")
+    redacted = redact_runtime_secrets(text)
+    encoded = redacted.encode("utf-8")
+    if len(encoded) <= maximum_bytes:
+        return redacted
+    marker = "[TRUNCATED]"
+    budget = max(0, maximum_bytes - len(marker.encode("ascii")))
+    return encoded[:budget].decode("utf-8", errors="ignore") + marker
