@@ -10,8 +10,11 @@ import re
 from scripts.ai_skills_lib.authored_content import (
     AuthoredFile,
     authored_file,
+    extract_bundled_paths,
     find_static_secret_issues,
+    read_text_fixture,
     resolve_strict,
+    walk_authored_files,
 )
 from scripts.ai_skills_lib.core import SkillRecord
 from scripts.ai_skills_lib.issues import ValidationIssue
@@ -21,10 +24,6 @@ from scripts.ai_skills_lib.static_checks.context import (
 )
 
 
-_BUNDLED_PATH_PATTERN = re.compile(
-    r"(?<![A-Za-z0-9_])(?P<target>(?:scripts|references|assets|evals/fixtures)/"
-    r"[A-Za-z0-9._/-]+)(?![A-Za-z0-9._/\\-])"
-)
 _REFERENCE_DEFINITION_PREFIX = re.compile(
     r"^[ \t]{0,3}\[(?:\\.|[^\]])+\]:[ \t]*", re.MULTILINE
 )
@@ -35,45 +34,6 @@ _POSIX_PERSONAL_PATH_PATTERN = re.compile(
 _WINDOWS_PERSONAL_PATH_PATTERN = re.compile(
     r"(?P<prefix>[A-Za-z]:\\Users\\)(?P<user>[^\\\s,;.)]+|<[^<>]+>)"
 )
-def walk_authored_files(content_root: Path, skill_root: Path) -> Iterator[AuthoredFile]:
-    resolved_skill_root = resolve_strict(skill_root).resolved_path
-    resolved_content_root = resolve_strict(content_root).resolved_path
-    if resolved_skill_root is None or resolved_content_root is None:
-        return
-    if not resolved_content_root.is_dir() or not resolved_content_root.is_relative_to(
-        resolved_skill_root
-    ):
-        return
-
-    pending = [content_root]
-    seen_directories: set[Path] = set()
-    while pending:
-        logical_directory = pending.pop()
-        resolved_directory = resolve_strict(logical_directory).resolved_path
-        if resolved_directory is None:
-            continue
-        if (
-            resolved_directory in seen_directories
-            or not resolved_directory.is_relative_to(resolved_skill_root)
-        ):
-            continue
-        seen_directories.add(resolved_directory)
-        try:
-            children = sorted(logical_directory.iterdir(), reverse=True)
-        except OSError:
-            continue
-        for logical_path in children:
-            resolved_path = resolve_strict(logical_path).resolved_path
-            if resolved_path is None:
-                continue
-            if not resolved_path.is_relative_to(resolved_skill_root):
-                continue
-            if resolved_path.is_dir():
-                pending.append(logical_path)
-            elif resolved_path.is_file():
-                yield AuthoredFile(logical_path=logical_path, resolved_path=resolved_path)
-
-
 def read_authored_text(
     context: ValidationContext, skill: SkillRecord, source: AuthoredFile
 ) -> tuple[str | None, list[ValidationIssue]]:
@@ -86,19 +46,6 @@ def read_authored_text(
                 message=f"cannot read {source.logical_path.name}: {error}",
             )
         ]
-
-
-def read_text_fixture(source: AuthoredFile) -> str | None:
-    try:
-        content = source.resolved_path.read_bytes()
-    except OSError:
-        return None
-    if b"\x00" in content:
-        return None
-    try:
-        return content.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
 
 
 def validate_skill_document(
@@ -211,7 +158,7 @@ def _local_reference_issues(
     context: ValidationContext, skill: SkillRecord, source: Path, text: str
 ) -> list[ValidationIssue]:
     targets = extract_markdown_destinations(text)
-    targets.extend(match.group("target") for match in _BUNDLED_PATH_PATTERN.finditer(text))
+    targets.extend(extract_bundled_paths(text))
     issues: list[ValidationIssue] = []
     for target in targets:
         issues.extend(_validate_local_target(context, skill, source, target))

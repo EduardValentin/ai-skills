@@ -4,18 +4,26 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+import ctypes
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
+import stat
 import tempfile
 import uuid
 
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import ValidationError
 
+from scripts.ai_skills_lib.authored_content import (
+    JsonPreflightError,
+    preflight_bounded_json_structure,
+)
 from scripts.ai_skills_lib.harness import (
     HarnessAdapter,
     HarnessExecution,
@@ -25,8 +33,44 @@ from scripts.ai_skills_lib.harness import (
 
 _SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "ai-skills"
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+_MAX_JUDGE_RESPONSE_BYTES = 256 * 1024
+_MAX_JUDGE_EVIDENCE_CHARS = 4096
+_MAX_JUDGE_EVIDENCE_REFS = 16
+_MAX_JUDGE_ARTIFACT_NAME_CHARS = 512
+_MAX_JUDGE_LOCATOR_CHARS = 1024
+_MAX_DECLARED_ATTEMPTS = 1024
+_MAX_RESULT_JSON_FILE_BYTES = 4 * 1024 * 1024
+_MAX_RESULT_JSON_NODES = 100_000
+_MAX_RESULT_JSON_DEPTH = 32
+_MAX_RESULT_JSON_SCALAR_BYTES = 64 * 1024
+_MAX_RESULT_JSON_NUMBER_CHARS = 128
+_MAX_RESULT_FILE_BYTES = 16 * 1024 * 1024
+_MAX_RESULT_TREE_BYTES = 256 * 1024 * 1024
+_MAX_RESULT_TREE_ENTRIES = 100_000
+_MAX_RESULT_TREE_DEPTH = 40
+_MAX_RESULT_ANCESTOR_DEPTH = 256
+_MAX_RESULT_ENTRIES_PER_ATTEMPT = 4096
+_MAX_RESULT_ROOT_ENTRIES = 4
+_MAX_OFFLINE_SCHEMA_BYTES = 1024 * 1024
+_RESULT_READ_CHUNK_BYTES = 64 * 1024
 
-
+_ROOT_RESULT_FILES = frozenset(
+    {"invocation.json", "benchmark.json", "summary.md"}
+)
+_ATTEMPT_RESULT_FILES = frozenset(
+    {
+        "attempt.json",
+        "timing.json",
+        "grading.json",
+        "manual_grading.json",
+        "feedback.json",
+        "transcript.md",
+        "execution_trace.jsonl",
+    }
+)
+_REQUIRED_ATTEMPT_RESULT_FILES = frozenset(
+    {"attempt.json"}
+)
 class ResultArtifactError(RuntimeError):
     """Raised when preserved evaluation evidence cannot be trusted."""
 
@@ -39,6 +83,35 @@ class JudgeExecutionError(ResultArtifactError):
     def __init__(self, message: str, execution: HarnessExecution):
         super().__init__(message)
         self.execution = execution
+
+
+class _JsonBoundaryError(ValueError):
+    """Internal marker for sanitized strict-JSON boundary failures."""
+
+
+@dataclass(frozen=True)
+class _StableFileRead:
+    content: bytes
+    metadata: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class _StableContentIdentity:
+    metadata: tuple[int, ...]
+    digest: bytes
+
+
+@dataclass(frozen=True)
+class _ResultTreeSnapshot:
+    files: Mapping[tuple[str, ...], tuple[int, ...]]
+    directories: Mapping[tuple[str, ...], tuple[int, ...]]
+    total_bytes: int
+
+
+@dataclass
+class _ResultTreeScanState:
+    entries: int = 0
+    total_bytes: int = 0
 
 
 @dataclass(frozen=True)
@@ -343,7 +416,7 @@ def resolve_external_result_path(
         resolved_repository = repository.resolve(strict=True)
         resolved_path = path.resolve(strict=False)
     except (OSError, RuntimeError) as error:
-        raise ResultArtifactError(f"cannot resolve result path: {error}") from error
+        raise ResultArtifactError("cannot resolve result path") from error
     if resolved_path == resolved_repository or resolved_path.is_relative_to(resolved_repository):
         raise ResultArtifactError(
             f"result path must be outside the repository: {resolved_path}"
@@ -376,12 +449,15 @@ def create_result_workspace(
     try:
         resolved_repository = repository.resolve(strict=True)
         root.mkdir(parents=True, exist_ok=False)
-        attempts = root / "attempts"
-        attempts.mkdir()
     except FileExistsError as error:
         raise ResultArtifactError(f"result workspace already exists: {root}") from error
     except OSError as error:
-        raise ResultArtifactError(f"cannot create result workspace {root}: {error}") from error
+        raise ResultArtifactError(f"cannot create result workspace {root}") from error
+    attempts = root / "attempts"
+    try:
+        attempts.mkdir()
+    except OSError as error:
+        raise _retained_workspace_error(root) from error
     return ResultWorkspace(
         root=root,
         attempts=attempts,
@@ -414,6 +490,8 @@ def declare_invocation(
         raise ResultArtifactError("invocation command must be non-empty")
     if not manifests:
         raise ResultArtifactError("invocation must declare at least one attempt")
+    if len(manifests) > _MAX_DECLARED_ATTEMPTS:
+        raise ResultArtifactError("invocation exceeds the declared attempt limit")
     run_ids = [manifest.run_id for manifest in manifests]
     if len(run_ids) != len(set(run_ids)):
         raise ResultArtifactError("invocation attempt run identifiers must be unique")
@@ -437,28 +515,18 @@ def create_attempt_workspace(
         raise ResultArtifactError(
             "attempt aggregation variant must be one of its required variants"
         )
-    if workspace.invocation_manifest.exists():
-        invocation = _read_result_document(
-            workspace.invocation_manifest,
-            "invocation.schema.json",
-            workspace.root,
+    declared_attempts = _read_declared_attempts(workspace.root)
+    if declared_attempts.get(manifest.run_id) != document:
+        raise ResultArtifactError(
+            "attempt does not match the immutable invocation manifest"
         )
-        declared = [
-            attempt
-            for attempt in invocation["attempts"]
-            if attempt["run_id"] == manifest.run_id
-        ]
-        if declared != [document]:
-            raise ResultArtifactError(
-                "attempt does not match the immutable invocation manifest"
-            )
     if workspace.root.is_symlink() or workspace.attempts.is_symlink():
         raise ResultArtifactError("invocation attempts directory must not be a symlink")
     try:
         invocation_root = workspace.root.resolve(strict=True)
         attempts_root = workspace.attempts.resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise ResultArtifactError(f"cannot resolve invocation attempts directory: {error}") from error
+        raise ResultArtifactError("cannot resolve invocation attempts directory") from error
     expected_attempts_root = invocation_root / "attempts"
     if attempts_root != expected_attempts_root or not attempts_root.is_dir():
         raise ResultArtifactError("invocation attempts directory is not owned by its workspace")
@@ -485,7 +553,7 @@ def create_attempt_workspace(
     except FileExistsError as error:
         raise ResultArtifactError(f"attempt workspace already exists: {root}") from error
     except OSError as error:
-        raise ResultArtifactError(f"cannot create attempt workspace {root}: {error}") from error
+        raise ResultArtifactError(f"cannot create attempt workspace {root}") from error
     finally:
         if attempt_descriptor is not None:
             os.close(attempt_descriptor)
@@ -558,7 +626,22 @@ def validate_result_document(document: Mapping[str, object], schema_name: str) -
     """Validate one result document against a repository-owned offline schema."""
     schema_path = _SCHEMA_ROOT / schema_name
     try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        schema_bytes = _read_stable_path_file(
+            schema_path,
+            maximum_bytes=_MAX_OFFLINE_SCHEMA_BYTES,
+            label="offline result schema",
+        ).content
+        schema = _parse_bounded_json(
+            schema_bytes,
+            label="offline result schema",
+            maximum_bytes=_MAX_OFFLINE_SCHEMA_BYTES,
+        )
+        if not isinstance(schema, dict):
+            raise ResultArtifactError("offline result schema must contain a JSON object")
+        _validate_bounded_json_structure(
+            document,
+            label=f"{schema_name} result",
+        )
         Draft202012Validator(schema, format_checker=FormatChecker()).validate(document)
     except ValidationError as error:
         keyword = str(error.validator)
@@ -568,12 +651,25 @@ def validate_result_document(document: Mapping[str, object], schema_name: str) -
             f"invalid {schema_name} result at {_safe_validation_path(error.absolute_path)}: "
             f"{keyword}"
         ) from error
-    except (OSError, json.JSONDecodeError) as error:
-        raise ResultArtifactError(f"cannot load offline schema {schema_name}: {error}") from error
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+        ValueError,
+    ) as error:
+        raise ResultArtifactError(
+            f"cannot load or apply offline schema {schema_name}"
+        ) from error
 
 
 def write_eval_run_artifacts(paths: AttemptPaths, record: EvalRunRecord) -> None:
     """Write one complete generated run without touching manual review artifacts."""
+    _require_declared_attempt_paths(paths)
     timing = record.timing.to_dict()
     grading = record.grading.to_dict()
     validate_result_document(timing, "timing.schema.json")
@@ -596,6 +692,7 @@ def write_incomplete_attempt_artifacts(
     timing: TimingRecord,
 ) -> None:
     """Preserve available failed-attempt evidence without inventing a grade."""
+    _require_declared_attempt_paths(paths)
     timing_document = timing.to_dict()
     validate_result_document(timing_document, "timing.schema.json")
     _write_json_once(paths.timing, timing_document, paths.root)
@@ -615,10 +712,11 @@ def parse_judge_response(
     reasoning_effort: str | None = None,
 ) -> GradingRecord:
     """Parse judge verdicts while retaining caller-owned scope and policy."""
-    try:
-        document = json.loads(response)
-    except json.JSONDecodeError as error:
-        raise ResultArtifactError(f"invalid judge response JSON: {error}") from error
+    document = _parse_bounded_json(
+        response,
+        label="invalid judge response",
+        maximum_bytes=_MAX_JUDGE_RESPONSE_BYTES,
+    )
     if not isinstance(document, dict):
         raise ResultArtifactError("invalid judge response: expected a JSON object")
     if set(document) != {"assertion_results"}:
@@ -652,14 +750,22 @@ def parse_judge_response(
             raise ResultArtifactError(
                 "invalid judge response: passed must be a boolean"
             )
-        if not isinstance(result["evidence"], str) or not result["evidence"]:
+        if (
+            not isinstance(result["evidence"], str)
+            or not result["evidence"]
+            or len(result["evidence"]) > _MAX_JUDGE_EVIDENCE_CHARS
+        ):
             raise ResultArtifactError(
-                "invalid judge response: evidence must be a non-empty string"
+                "invalid judge response: evidence must be a bounded non-empty string"
             )
         raw_references = result["evidence_refs"]
-        if not isinstance(raw_references, list) or not raw_references:
+        if (
+            not isinstance(raw_references, list)
+            or not raw_references
+            or len(raw_references) > _MAX_JUDGE_EVIDENCE_REFS
+        ):
             raise ResultArtifactError(
-                "invalid judge response: evidence_refs must contain evidence"
+                "invalid judge response: evidence_refs must contain bounded evidence"
             )
         references: list[Mapping[str, str]] = []
         for reference in raw_references:
@@ -670,6 +776,8 @@ def parse_judge_response(
                     not isinstance(reference[field], str) or not reference[field]
                     for field in expected_reference_fields
                 )
+                or len(reference["artifact"]) > _MAX_JUDGE_ARTIFACT_NAME_CHARS
+                or len(reference["locator"]) > _MAX_JUDGE_LOCATOR_CHARS
             ):
                 raise ResultArtifactError(
                     "invalid judge response: evidence reference is incomplete"
@@ -780,142 +888,187 @@ def aggregate_results(
     grade_source: str,
     *,
     repository_root: Path | None = None,
+    terminal_decision: str | None = None,
 ) -> dict[str, object]:
     """Aggregate only complete attempts anchored by immutable declarations."""
     if grade_source not in ("judge", "manual", "both"):
         raise ResultArtifactError(
             "grade_source must be one of 'judge', 'manual', or 'both'"
         )
+    if terminal_decision not in (None, "pass", "expectations failed"):
+        raise ResultArtifactError(
+            "aggregate terminal decision must be 'pass' or 'expectations failed'"
+        )
+    repository_identity = _resolved_repository_identity(repository_root)
     root = resolve_external_result_path(
         results_dir,
         repository_root=repository_root,
     )
-    if not root.is_dir():
-        raise ResultArtifactError(f"results directory does not exist: {results_dir}")
-    attempts_root = root / "attempts"
-    if attempts_root.is_symlink() or not attempts_root.is_dir():
-        raise ResultArtifactError(f"results directory has no attempts: {results_dir}")
-    invocation_path = root / "invocation.json"
-    declared_attempts: dict[str, dict[str, object]] | None = None
-    if invocation_path.exists() or invocation_path.is_symlink():
-        invocation = _read_result_document(
-            invocation_path,
-            "invocation.schema.json",
-            root,
-        )
-        declared_attempts = {}
-        for attempt in invocation["attempts"]:
-            run_id = attempt["run_id"]
-            if run_id in declared_attempts:
-                raise ResultArtifactError(
-                    f"duplicate run_id in invocation manifest: {run_id}"
-                )
-            declared_attempts[run_id] = attempt
-
+    root_descriptor, root_metadata = _open_result_root(root, results_dir)
     try:
-        attempt_entries = sorted(attempts_root.iterdir())
-    except OSError as error:
-        raise ResultArtifactError(f"cannot inventory attempt entries: {error}") from error
-    manifest_paths: list[Path] = []
-    for entry in attempt_entries:
-        if entry.is_symlink():
-            raise ResultArtifactError(f"attempt entry must not be a symlink: {entry}")
-        if not entry.is_dir():
-            raise ResultArtifactError(f"attempt entry must be a directory: {entry}")
-        manifest_path = entry / "attempt.json"
-        if manifest_path.is_symlink() or not manifest_path.is_file():
+        _verify_result_root_outside_repository(
+            root_descriptor,
+            repository_identity,
+        )
+        invocation_read = _read_required_invocation(root_descriptor, root)
+        invocation = _parse_result_document(
+            invocation_read.content,
+            root / "invocation.json",
+            "invocation.schema.json",
+        )
+        declared_attempts = _declared_attempts(invocation)
+        snapshot = _snapshot_result_tree(
+            root_descriptor,
+            root,
+            declared_attempt_count=len(declared_attempts),
+        )
+        if snapshot.files.get(("invocation.json",)) != invocation_read.metadata:
             raise ResultArtifactError(
-                f"attempt entry must contain one readable attempt.json: {entry}"
+                "result invocation changed during bounded inventory"
             )
-        nested_manifests = list(entry.rglob("attempt.json"))
-        if nested_manifests != [manifest_path]:
-            raise ResultArtifactError(
-                f"attempt entry must contain exactly one attempt.json: {entry}"
+        attempt_directories = _validate_result_tree(snapshot, results_dir)
+
+        requested_sources = (
+            ("judge", "manual") if grade_source == "both" else (grade_source,)
+        )
+        preserved: dict[
+            str,
+            list[tuple[dict[str, object], dict[str, object]]],
+        ] = {source: [] for source in requested_sources}
+        run_ids: set[str] = set()
+        for directory_name in attempt_directories:
+            attempt_parts = ("attempts", directory_name)
+            manifest_parts = (*attempt_parts, "attempt.json")
+            manifest_path = root.joinpath(*manifest_parts)
+            manifest = _read_snapshotted_result_document(
+                root_descriptor,
+                snapshot,
+                manifest_parts,
+                manifest_path,
+                "attempt.schema.json",
             )
-        manifest_paths.append(manifest_path)
-    if not manifest_paths:
-        raise ResultArtifactError(f"no attempt.json declarations found under {results_dir}")
-    declared_parents = {path.parent for path in manifest_paths}
-    for artifact_name in ("timing.json", "grading.json", "manual_grading.json"):
-        for artifact_path in sorted(root.rglob(artifact_name)):
-            if artifact_path.parent not in declared_parents:
+            run_id = manifest["run_id"]
+            if run_id in run_ids:
                 raise ResultArtifactError(
-                    f"undeclared attempt artifact {artifact_name}: {artifact_path}"
+                    f"duplicate run_id in attempt manifests: {run_id}"
+                )
+            run_ids.add(run_id)
+            if declared_attempts.get(run_id) != manifest:
+                raise ResultArtifactError(
+                    f"attempt does not match the immutable invocation manifest: {run_id}"
+                )
+            aggregation = manifest["aggregation"]
+            if aggregation["variant"] not in aggregation["required_variants"]:
+                raise ResultArtifactError(
+                    f"unexpected variant in attempt manifest: {aggregation['variant']}"
                 )
 
-    requested_sources = ("judge", "manual") if grade_source == "both" else (grade_source,)
-    preserved: dict[str, list[tuple[dict[str, object], dict[str, object]]]] = {
-        source: [] for source in requested_sources
-    }
-    run_ids: set[str] = set()
-    thresholded_attempts = False
-    for manifest_path in manifest_paths:
-        manifest = _read_result_document(manifest_path, "attempt.schema.json", root)
-        run_id = manifest["run_id"]
-        if run_id in run_ids:
-            raise ResultArtifactError(f"duplicate run_id in attempt manifests: {run_id}")
-        run_ids.add(run_id)
-        if declared_attempts is not None and declared_attempts.get(run_id) != manifest:
-            raise ResultArtifactError(
-                f"attempt does not match the immutable invocation manifest: {run_id}"
+            timing_parts = (*attempt_parts, "timing.json")
+            timing_path = root.joinpath(*timing_parts)
+            timing = _read_snapshotted_result_document(
+                root_descriptor,
+                snapshot,
+                timing_parts,
+                timing_path,
+                "timing.schema.json",
             )
-        aggregation = manifest["aggregation"]
-        thresholded_attempts = thresholded_attempts or (
-            "minimum_pass_rate" in aggregation
+            generated_parts = (*attempt_parts, "grading.json")
+            generated_path = root.joinpath(*generated_parts)
+            generated = _read_snapshotted_result_document(
+                root_descriptor,
+                snapshot,
+                generated_parts,
+                generated_path,
+                "grading.schema.json",
+            )
+            _validate_grading_semantics(generated, expected_source="judge")
+            _validate_artifact_matches_manifest(timing, manifest, timing_path)
+            _validate_artifact_matches_manifest(generated, manifest, generated_path)
+            if timing["status"] != "completed":
+                raise ResultArtifactError(
+                    f"attempt is not trustworthy: timing status is {timing['status']}"
+                )
+            _validate_completed_timing(timing, timing_path)
+
+            if "judge" in preserved:
+                preserved["judge"].append((generated, timing))
+            if "manual" in preserved:
+                manual_parts = (*attempt_parts, "manual_grading.json")
+                manual_path = root.joinpath(*manual_parts)
+                manual = _read_snapshotted_result_document(
+                    root_descriptor,
+                    snapshot,
+                    manual_parts,
+                    manual_path,
+                    "grading.schema.json",
+                )
+                _validate_grading_semantics(manual, expected_source="manual")
+                _validate_artifact_matches_manifest(manual, manifest, manual_path)
+                _validate_complete_manual_override(generated, manual, manual_path)
+                preserved["manual"].append((manual, timing))
+
+        if run_ids != set(declared_attempts):
+            raise ResultArtifactError(
+                "attempt set does not match the immutable invocation manifest"
+            )
+
+        benchmark: dict[str, object] = {
+            "schema_version": "ai-skills.eval.benchmark.v1",
+            "generated_at": _format_timestamp(datetime.now(timezone.utc)),
+            "grade_source": grade_source,
+            "source_summaries": {
+                source: _aggregate_source(records)
+                for source, records in preserved.items()
+            },
+        }
+        validate_result_document(benchmark, "benchmark.schema.json")
+        resolved_terminal_decision = terminal_decision or (
+            "expectations failed" if benchmark_exit_code(benchmark) else "pass"
         )
-        if aggregation["variant"] not in aggregation["required_variants"]:
+        final_snapshot = _snapshot_result_tree(
+            root_descriptor,
+            root,
+            declared_attempt_count=len(declared_attempts),
+        )
+        if final_snapshot != snapshot:
             raise ResultArtifactError(
-                f"unexpected variant in attempt manifest: {aggregation['variant']}"
+                "result tree changed during bounded aggregation"
             )
-
-        timing_path = manifest_path.with_name("timing.json")
-        timing = _read_result_document(timing_path, "timing.schema.json", root)
-        generated_path = timing_path.with_name("grading.json")
-        generated = _read_result_document(generated_path, "grading.schema.json", root)
-        _validate_grading_semantics(generated, expected_source="judge")
-        _validate_artifact_matches_manifest(timing, manifest, timing_path)
-        _validate_artifact_matches_manifest(generated, manifest, generated_path)
-        if timing["status"] != "completed":
-            raise ResultArtifactError(
-                f"attempt is not trustworthy: timing status is {timing['status']}"
-            )
-        _validate_completed_timing(timing, timing_path)
-
-        if "judge" in preserved:
-            preserved["judge"].append((generated, timing))
-        if "manual" in preserved:
-            manual_path = generated_path.with_name("manual_grading.json")
-            manual = _read_result_document(manual_path, "grading.schema.json", root)
-            _validate_grading_semantics(manual, expected_source="manual")
-            _validate_artifact_matches_manifest(manual, manifest, manual_path)
-            _validate_complete_manual_override(generated, manual, manual_path)
-            preserved["manual"].append((manual, timing))
-
-    if declared_attempts is not None and run_ids != set(declared_attempts):
+        _verify_open_result_root(root_descriptor, root, root_metadata)
+        _verify_result_root_outside_repository(
+            root_descriptor,
+            repository_identity,
+        )
+        _write_aggregate_result_artifacts(
+            root_descriptor,
+            root,
+            root_metadata,
+            repository_identity,
+            snapshot,
+            benchmark,
+            terminal_decision=resolved_terminal_decision,
+            declared_attempt_count=len(declared_attempts),
+        )
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
         raise ResultArtifactError(
-            "attempt set does not match the immutable invocation manifest"
-        )
-    if thresholded_attempts and declared_attempts is None:
-        raise ResultArtifactError(
-            "threshold aggregation requires an immutable invocation manifest"
-        )
-
-    benchmark: dict[str, object] = {
-        "schema_version": "ai-skills.eval.benchmark.v1",
-        "generated_at": _format_timestamp(datetime.now(timezone.utc)),
-        "grade_source": grade_source,
-        "source_summaries": {
-            source: _aggregate_source(records) for source, records in preserved.items()
-        },
-    }
-    validate_result_document(benchmark, "benchmark.schema.json")
-    _write_json_atomic(root / "benchmark.json", benchmark, root)
-    _write_text_atomic(
-        root / "summary.md",
-        f"{format_benchmark_summary(benchmark)}\n",
-        root,
-        replace_existing=True,
-    )
+            "result aggregation exceeded bounded resource limits"
+        ) from error
+    finally:
+        try:
+            os.close(root_descriptor)
+        except OSError as error:
+            raise ResultArtifactError(
+                "result aggregation could not release its directory handle"
+            ) from error
     return benchmark
 
 
@@ -1184,18 +1337,1844 @@ def _grading_passed(grading: Mapping[str, object]) -> bool:
     return grading["summary"]["failed"] == 0
 
 
+def _parse_bounded_json(
+    value: str | bytes,
+    *,
+    label: str,
+    maximum_bytes: int | None = None,
+    maximum_nodes: int | None = None,
+    maximum_depth: int | None = None,
+    maximum_scalar_bytes: int | None = None,
+) -> object:
+    maximum_bytes = (
+        _MAX_RESULT_JSON_FILE_BYTES if maximum_bytes is None else maximum_bytes
+    )
+    maximum_nodes = _MAX_RESULT_JSON_NODES if maximum_nodes is None else maximum_nodes
+    maximum_depth = _MAX_RESULT_JSON_DEPTH if maximum_depth is None else maximum_depth
+    maximum_scalar_bytes = (
+        _MAX_RESULT_JSON_SCALAR_BYTES
+        if maximum_scalar_bytes is None
+        else maximum_scalar_bytes
+    )
+    if min(
+        maximum_bytes,
+        maximum_nodes,
+        maximum_depth,
+        maximum_scalar_bytes,
+    ) < 1:
+        raise ResultArtifactError(f"{label} has invalid JSON boundary limits")
+    if not isinstance(value, (str, bytes)):
+        raise ResultArtifactError(f"{label} is not bounded JSON text")
+    try:
+        if isinstance(value, bytes):
+            encoded_size = len(value)
+            text = value.decode("utf-8")
+        else:
+            encoded_size = len(value.encode("utf-8"))
+            text = value
+    except (MemoryError, UnicodeError) as error:
+        raise ResultArtifactError(f"{label} is not bounded UTF-8 JSON") from error
+    if encoded_size > maximum_bytes:
+        raise ResultArtifactError(f"{label} exceeds the JSON byte limit")
+    try:
+        preflight_bounded_json_structure(
+            text,
+            maximum_nodes=maximum_nodes,
+            maximum_depth=maximum_depth,
+            maximum_scalar_bytes=maximum_scalar_bytes,
+            maximum_number_characters=_MAX_RESULT_JSON_NUMBER_CHARS,
+        )
+    except JsonPreflightError as error:
+        if error.kind == "depth":
+            raise ResultArtifactError(f"{label} exceeds the JSON depth limit") from error
+        if error.kind == "nodes":
+            raise ResultArtifactError(f"{label} exceeds the JSON node limit") from error
+        if error.kind == "scalar":
+            raise ResultArtifactError(f"{label} exceeds the JSON scalar limit") from error
+        if error.kind == "nonfinite":
+            raise ResultArtifactError(
+                f"{label} contains a non-finite JSON number"
+            ) from error
+        raise ResultArtifactError(f"{label} is invalid bounded JSON") from error
+
+    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        document: dict[str, object] = {}
+        for key, item in pairs:
+            if key in document:
+                raise _JsonBoundaryError("contains a duplicate JSON key")
+            document[key] = item
+        return document
+
+    def bounded_integer(token: str) -> int:
+        if len(token) > _MAX_RESULT_JSON_NUMBER_CHARS:
+            raise _JsonBoundaryError("exceeds the JSON scalar limit")
+        return int(token)
+
+    def bounded_float(token: str) -> float:
+        if len(token) > _MAX_RESULT_JSON_NUMBER_CHARS:
+            raise _JsonBoundaryError("exceeds the JSON scalar limit")
+        result = float(token)
+        if not math.isfinite(result):
+            raise _JsonBoundaryError("contains a non-finite JSON number")
+        return result
+
+    def reject_constant(_: str) -> object:
+        raise _JsonBoundaryError("contains a non-finite JSON number")
+
+    try:
+        document = json.loads(
+            text,
+            object_pairs_hook=unique_object,
+            parse_int=bounded_integer,
+            parse_float=bounded_float,
+            parse_constant=reject_constant,
+        )
+    except _JsonBoundaryError as error:
+        raise ResultArtifactError(f"{label} {error}") from error
+    except (
+        json.JSONDecodeError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        UnicodeError,
+        ValueError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(f"{label} is invalid bounded JSON") from error
+    _validate_bounded_json_structure(
+        document,
+        label=label,
+        maximum_nodes=maximum_nodes,
+        maximum_depth=maximum_depth,
+        maximum_scalar_bytes=maximum_scalar_bytes,
+    )
+    return document
+
+
+def _validate_bounded_json_structure(
+    document: object,
+    *,
+    label: str,
+    maximum_nodes: int | None = None,
+    maximum_depth: int | None = None,
+    maximum_scalar_bytes: int | None = None,
+) -> None:
+    maximum_nodes = _MAX_RESULT_JSON_NODES if maximum_nodes is None else maximum_nodes
+    maximum_depth = _MAX_RESULT_JSON_DEPTH if maximum_depth is None else maximum_depth
+    maximum_scalar_bytes = (
+        _MAX_RESULT_JSON_SCALAR_BYTES
+        if maximum_scalar_bytes is None
+        else maximum_scalar_bytes
+    )
+    pending: list[tuple[object, int]] = [(document, 1)]
+    nodes = 0
+    try:
+        while pending:
+            item, depth = pending.pop()
+            if depth > maximum_depth:
+                raise ResultArtifactError(f"{label} exceeds the JSON depth limit")
+            nodes += 1
+            if nodes > maximum_nodes:
+                raise ResultArtifactError(f"{label} exceeds the JSON node limit")
+            if isinstance(item, Mapping):
+                if len(item) > maximum_nodes - nodes:
+                    raise ResultArtifactError(f"{label} exceeds the JSON node limit")
+                for key, child in item.items():
+                    nodes += 1
+                    if nodes > maximum_nodes:
+                        raise ResultArtifactError(f"{label} exceeds the JSON node limit")
+                    _validate_json_scalar(
+                        key,
+                        label=label,
+                        maximum_scalar_bytes=maximum_scalar_bytes,
+                    )
+                    pending.append((child, depth + 1))
+            elif isinstance(item, list):
+                if len(item) > maximum_nodes - nodes:
+                    raise ResultArtifactError(f"{label} exceeds the JSON node limit")
+                pending.extend((child, depth + 1) for child in item)
+            else:
+                _validate_json_scalar(
+                    item,
+                    label=label,
+                    maximum_scalar_bytes=maximum_scalar_bytes,
+                )
+    except ResultArtifactError:
+        raise
+    except (
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+        UnicodeError,
+        ValueError,
+    ) as error:
+        raise ResultArtifactError(
+            f"{label} exceeds bounded JSON structure limits"
+        ) from error
+
+
+def _validate_json_scalar(
+    value: object,
+    *,
+    label: str,
+    maximum_scalar_bytes: int,
+) -> None:
+    if isinstance(value, str):
+        if len(value.encode("utf-8")) > maximum_scalar_bytes:
+            raise ResultArtifactError(f"{label} exceeds the JSON scalar limit")
+        return
+    if value is None or type(value) is bool:
+        return
+    if type(value) is int:
+        if value.bit_length() > _MAX_RESULT_JSON_NUMBER_CHARS * 4:
+            raise ResultArtifactError(f"{label} exceeds the JSON scalar limit")
+        return
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise ResultArtifactError(f"{label} contains a non-finite JSON number")
+        return
+    raise ResultArtifactError(f"{label} contains a non-JSON scalar")
+
+
+def _parse_result_document(
+    content: bytes,
+    path: Path,
+    schema_name: str,
+) -> dict[str, object]:
+    document = _parse_bounded_json(
+        content,
+        label=f"cannot read trustworthy result {path}:",
+    )
+    if not isinstance(document, dict):
+        raise ResultArtifactError(f"result artifact must contain a JSON object: {path}")
+    if schema_name == "invocation.schema.json":
+        attempts = document.get("attempts")
+        if isinstance(attempts, list) and len(attempts) > _MAX_DECLARED_ATTEMPTS:
+            raise ResultArtifactError("invocation exceeds the declared attempt limit")
+    validate_result_document(document, schema_name)
+    return document
+
+
 def _read_result_document(
     path: Path, schema_name: str, root: Path
 ) -> dict[str, object]:
     _ensure_safe_artifact_path(root, path)
+    content = _read_stable_path_file(
+        path,
+        maximum_bytes=_MAX_RESULT_JSON_FILE_BYTES,
+        label=f"cannot read trustworthy result {path}",
+        limit_name="JSON byte limit",
+    ).content
+    return _parse_result_document(content, path, schema_name)
+
+
+def _read_declared_attempts(root: Path) -> dict[str, dict[str, object]]:
+    """Read the mandatory immutable declaration for one result workspace."""
+    invocation_path = root / "invocation.json"
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ResultArtifactError(f"cannot read trustworthy result {path}: {error}") from error
-    if not isinstance(document, dict):
-        raise ResultArtifactError(f"result artifact must contain a JSON object: {path}")
-    validate_result_document(document, schema_name)
-    return document
+        invocation_metadata = os.stat(invocation_path, follow_symlinks=False)
+    except (OSError, MemoryError, OverflowError, RuntimeError) as error:
+        raise ResultArtifactError(
+            f"results directory must contain one regular invocation.json: {root}"
+        ) from error
+    if not stat.S_ISREG(invocation_metadata.st_mode):
+        raise ResultArtifactError(
+            f"results directory must contain one regular invocation.json: {root}"
+        )
+    invocation = _read_result_document(
+        invocation_path,
+        "invocation.schema.json",
+        root,
+    )
+    return _declared_attempts(invocation)
+
+
+def _declared_attempts(
+    invocation: Mapping[str, object],
+) -> dict[str, dict[str, object]]:
+    try:
+        attempts = invocation["attempts"]
+        if len(attempts) > _MAX_DECLARED_ATTEMPTS:
+            raise ResultArtifactError("invocation exceeds the declared attempt limit")
+        declared_attempts: dict[str, dict[str, object]] = {}
+        for attempt in attempts:
+            run_id = attempt["run_id"]
+            if run_id in declared_attempts:
+                raise ResultArtifactError(
+                    f"duplicate run_id in invocation manifest: {run_id}"
+                )
+            declared_attempts[run_id] = attempt
+        return declared_attempts
+    except ResultArtifactError:
+        raise
+    except (
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "invocation declaration exceeds bounded resource limits"
+        ) from error
+
+
+def _read_stable_path_file(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    label: str,
+    limit_name: str = "byte limit",
+) -> _StableFileRead:
+    parent_descriptor: int | None = None
+    try:
+        parent_descriptor = os.open(path.parent, _directory_open_flags())
+        observed = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if stat.S_ISLNK(observed.st_mode) or not stat.S_ISREG(observed.st_mode):
+            raise ResultArtifactError(
+                f"{label} must be a regular non-symlink file"
+            )
+        return _read_stable_file_at(
+            parent_descriptor,
+            path.name,
+            observed,
+            maximum_bytes=maximum_bytes,
+            label=label,
+            limit_name=limit_name,
+        )
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(f"{label} cannot be read safely") from error
+    finally:
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+
+
+def _read_stable_file_at(
+    directory_descriptor: int,
+    name: str,
+    expected_metadata: os.stat_result,
+    *,
+    maximum_bytes: int,
+    label: str,
+    limit_name: str,
+) -> _StableFileRead:
+    if expected_metadata.st_size < 0 or expected_metadata.st_size > maximum_bytes:
+        raise ResultArtifactError(f"{label} exceeds the {limit_name}")
+    file_descriptor: int | None = None
+    try:
+        file_descriptor = os.open(
+            name,
+            _regular_file_open_flags(),
+            dir_fd=directory_descriptor,
+        )
+        opened = os.fstat(file_descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or _stable_result_metadata(expected_metadata)
+            != _stable_result_metadata(opened)
+        ):
+            raise ResultArtifactError(f"{label} changed while being read")
+        if opened.st_size < 0 or opened.st_size > maximum_bytes:
+            raise ResultArtifactError(f"{label} exceeds the {limit_name}")
+
+        remaining = opened.st_size
+        content = bytearray()
+        while remaining:
+            chunk = os.read(
+                file_descriptor,
+                min(_RESULT_READ_CHUNK_BYTES, remaining),
+            )
+            if not chunk:
+                raise ResultArtifactError(f"{label} changed while being read")
+            content.extend(chunk)
+            remaining -= len(chunk)
+        if os.read(file_descriptor, 1):
+            raise ResultArtifactError(f"{label} changed while being read")
+
+        final = os.fstat(file_descriptor)
+        current = os.stat(
+            name,
+            dir_fd=directory_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            _stable_result_metadata(opened) != _stable_result_metadata(final)
+            or _stable_result_metadata(final) != _stable_result_metadata(current)
+        ):
+            raise ResultArtifactError(f"{label} changed while being read")
+        return _StableFileRead(
+            content=bytes(content),
+            metadata=_stable_result_metadata(final),
+        )
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(f"{label} changed while being read") from error
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+
+
+def _open_result_root(root: Path, requested_root: Path) -> tuple[int, tuple[int, ...]]:
+    try:
+        observed = os.stat(root, follow_symlinks=False)
+    except (OSError, MemoryError, OverflowError, RuntimeError) as error:
+        raise ResultArtifactError(
+            f"results directory does not exist: {requested_root}"
+        ) from error
+    if stat.S_ISLNK(observed.st_mode) or not stat.S_ISDIR(observed.st_mode):
+        raise ResultArtifactError(
+            f"results directory must be a regular non-symlink directory: {requested_root}"
+        )
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(root, _directory_open_flags())
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or _stable_result_metadata(observed)
+            != _stable_result_metadata(opened)
+        ):
+            raise ResultArtifactError(
+                "results directory changed while opening bounded aggregation"
+            )
+        return descriptor, _stable_result_metadata(opened)
+    except ResultArtifactError:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise ResultArtifactError(
+            "results directory cannot be opened for bounded aggregation"
+        ) from error
+
+
+def _resolved_repository_identity(
+    repository_root: Path | None,
+) -> tuple[int, int]:
+    repository = _REPOSITORY_ROOT if repository_root is None else repository_root
+    try:
+        resolved = repository.resolve(strict=True)
+        metadata = os.stat(resolved, follow_symlinks=False)
+    except (OSError, MemoryError, OverflowError, RuntimeError) as error:
+        raise ResultArtifactError("cannot resolve result path") from error
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise ResultArtifactError("cannot resolve result path")
+    return metadata.st_dev, metadata.st_ino
+
+
+def _verify_result_root_outside_repository(
+    root_descriptor: int,
+    repository_identity: tuple[int, int],
+) -> None:
+    current_descriptor: int | None = None
+    try:
+        current_descriptor = os.dup(root_descriptor)
+        for _ in range(_MAX_RESULT_ANCESTOR_DEPTH):
+            current = os.fstat(current_descriptor)
+            current_identity = (current.st_dev, current.st_ino)
+            if current_identity == repository_identity:
+                raise ResultArtifactError(
+                    "result path must be outside the repository"
+                )
+            parent_descriptor = os.open(
+                "..",
+                _directory_open_flags(),
+                dir_fd=current_descriptor,
+            )
+            parent = os.fstat(parent_descriptor)
+            parent_identity = (parent.st_dev, parent.st_ino)
+            if parent_identity == current_identity:
+                os.close(parent_descriptor)
+                return
+            os.close(current_descriptor)
+            current_descriptor = parent_descriptor
+        raise ResultArtifactError(
+            "result path ancestry exceeds the verification depth limit"
+        )
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "result path ancestry cannot be verified safely"
+        ) from error
+    finally:
+        if current_descriptor is not None:
+            os.close(current_descriptor)
+
+
+def _verify_open_result_root(
+    descriptor: int,
+    root: Path,
+    expected_metadata: tuple[int, ...],
+) -> None:
+    try:
+        opened = os.fstat(descriptor)
+        current = os.stat(root, follow_symlinks=False)
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "results directory changed during bounded aggregation"
+        ) from error
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or expected_metadata != _stable_result_metadata(opened)
+        or expected_metadata != _stable_result_metadata(current)
+    ):
+        raise ResultArtifactError(
+            "results directory changed during bounded aggregation"
+        )
+
+
+def _write_aggregate_result_artifacts(
+    root_descriptor: int,
+    root: Path,
+    root_metadata: tuple[int, ...],
+    repository_identity: tuple[int, int],
+    snapshot: _ResultTreeSnapshot,
+    benchmark: Mapping[str, object],
+    *,
+    terminal_decision: str,
+    declared_attempt_count: int,
+) -> None:
+    try:
+        payloads = (
+            (
+                "benchmark.json",
+                f"{json.dumps(benchmark, indent=2, sort_keys=True)}\n".encode("utf-8"),
+                _MAX_RESULT_JSON_FILE_BYTES,
+            ),
+            (
+                "summary.md",
+                (
+                    "# Evaluation Aggregate\n\n"
+                    f"Decision: {terminal_decision}\n\n"
+                    "## Results\n\n"
+                    f"{format_benchmark_summary(benchmark)}\n"
+                ).encode("utf-8"),
+                _MAX_RESULT_FILE_BYTES,
+            ),
+        )
+    except ResultArtifactError:
+        raise
+    except (
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+        TypeError,
+        UnicodeError,
+        ValueError,
+    ) as error:
+        raise ResultArtifactError(
+            "cannot serialize aggregate result artifacts within resource limits"
+        ) from error
+
+    replaced_bytes = sum(
+        snapshot.files.get((name,), (0, 0, 0, 0, 0))[4]
+        for name, _, _ in payloads
+    )
+    payload_bytes = sum(len(content) for _, content, _ in payloads)
+    if any(len(content) > limit for _, content, limit in payloads):
+        raise ResultArtifactError(
+            "aggregate result artifacts exceed the per-file byte limit"
+        )
+    if snapshot.total_bytes - replaced_bytes + payload_bytes > _MAX_RESULT_TREE_BYTES:
+        raise ResultArtifactError(
+            "aggregate result artifacts exceed the cumulative byte limit"
+        )
+    current_entries = len(snapshot.files) + len(snapshot.directories) - 1
+    added_entries = sum(
+        (name,) not in snapshot.files for name, _, _ in payloads
+    )
+    if (
+        current_entries + added_entries
+        > _result_tree_entry_limit(declared_attempt_count)
+    ):
+        raise ResultArtifactError(
+            "aggregate result artifacts exceed the entry-count limit"
+        )
+
+    original_content: dict[str, bytes | None] = {}
+    for name, _, maximum_bytes in payloads:
+        if (name,) not in snapshot.files:
+            original_content[name] = None
+            continue
+        original_content[name] = _read_snapshotted_file(
+            root_descriptor,
+            snapshot,
+            (name,),
+            maximum_bytes=maximum_bytes,
+            label="aggregate result target",
+            limit_name="byte limit",
+        ).content
+
+    written_metadata: dict[tuple[str, ...], tuple[int, ...]] = {}
+    attempted_names: list[str] = []
+    try:
+        for name, content, maximum_bytes in payloads:
+            attempted_names.append(name)
+            written_metadata[(name,)] = _write_atomic_result_file_at(
+                root_descriptor,
+                name,
+                content,
+                expected_metadata=snapshot.files.get((name,)),
+                maximum_bytes=maximum_bytes,
+            )
+            _verify_open_result_root_identity(
+                root_descriptor,
+                root,
+                root_metadata,
+            )
+            _verify_result_root_outside_repository(
+                root_descriptor,
+                repository_identity,
+            )
+        try:
+            os.fsync(root_descriptor)
+        except OSError as error:
+            raise ResultArtifactError(
+                "cannot write aggregate result artifacts"
+            ) from error
+
+        post_write = _snapshot_result_tree(
+            root_descriptor,
+            root,
+            declared_attempt_count=declared_attempt_count,
+        )
+        expected_files = dict(snapshot.files)
+        expected_files.update(written_metadata)
+        if post_write.files != expected_files:
+            raise ResultArtifactError(
+                "result tree changed while writing aggregate artifacts"
+            )
+        if set(post_write.directories) != set(snapshot.directories) or any(
+            post_write.directories[relative] != metadata
+            for relative, metadata in snapshot.directories.items()
+            if relative
+        ):
+            raise ResultArtifactError(
+                "result tree changed while writing aggregate artifacts"
+            )
+        _verify_open_result_root_identity(
+            root_descriptor,
+            root,
+            root_metadata,
+        )
+        _verify_result_root_outside_repository(
+            root_descriptor,
+            repository_identity,
+        )
+    except BaseException as error:
+        try:
+            _rollback_aggregate_result_artifacts(
+                root_descriptor,
+                payloads,
+                original_content,
+                attempted_names,
+            )
+        except BaseException as rollback_error:
+            if not isinstance(rollback_error, Exception):
+                raise
+            raise ResultArtifactError(
+                "cannot rollback aggregate result artifacts"
+            ) from rollback_error
+        if not isinstance(error, Exception):
+            raise
+        if isinstance(error, ResultArtifactError):
+            raise
+        if isinstance(
+            error,
+            (OSError, MemoryError, OverflowError, RuntimeError, SystemError),
+        ):
+            raise ResultArtifactError(
+                "cannot write aggregate result artifacts"
+            ) from error
+        raise
+
+
+def _rollback_aggregate_result_artifacts(
+    root_descriptor: int,
+    payloads: Sequence[tuple[str, bytes, int]],
+    original_content: Mapping[str, bytes | None],
+    attempted_names: Sequence[str],
+) -> None:
+    payload_by_name = {
+        name: (content, maximum_bytes)
+        for name, content, maximum_bytes in payloads
+    }
+    for name in reversed(attempted_names):
+        replacement, maximum_bytes = payload_by_name[name]
+        _restore_aggregate_result_artifact(
+            root_descriptor,
+            name,
+            replacement=replacement,
+            original=original_content[name],
+            maximum_bytes=maximum_bytes,
+        )
+    try:
+        os.fsync(root_descriptor)
+    except OSError as error:
+        raise ResultArtifactError(
+            "cannot rollback aggregate result artifacts"
+        ) from error
+
+
+def _restore_aggregate_result_artifact(
+    root_descriptor: int,
+    name: str,
+    *,
+    replacement: bytes,
+    original: bytes | None,
+    maximum_bytes: int,
+) -> None:
+    descriptor: int | None = None
+    try:
+        try:
+            descriptor = os.open(
+                name,
+                _regular_file_open_flags(),
+                dir_fd=root_descriptor,
+            )
+        except FileNotFoundError:
+            return
+        current = _fingerprint_result_descriptor(
+            descriptor,
+            maximum_bytes=maximum_bytes,
+            label="aggregate result target during rollback",
+        )
+        original_digest = (
+            None if original is None else hashlib.sha256(original).digest()
+        )
+        replacement_digest = hashlib.sha256(replacement).digest()
+        if original_digest is not None and current.digest == original_digest:
+            return
+        if current.digest != replacement_digest:
+            return
+        if original is None:
+            _remove_result_entry_for_descriptor(
+                root_descriptor,
+                name,
+                descriptor,
+                label="aggregate result target during rollback",
+                expected_identity=current,
+                maximum_bytes=maximum_bytes,
+            )
+            return
+        expected_metadata = current.metadata
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError as error:
+                raise ResultArtifactError(
+                    "cannot release aggregate result handles"
+                ) from error
+    _write_atomic_result_file_at(
+        root_descriptor,
+        name,
+        original,
+        expected_metadata=expected_metadata,
+        maximum_bytes=maximum_bytes,
+    )
+
+
+def _write_atomic_result_file_at(
+    root_descriptor: int,
+    name: str,
+    content: bytes,
+    *,
+    expected_metadata: tuple[int, ...] | None,
+    maximum_bytes: int,
+) -> tuple[int, ...]:
+    existing_descriptor: int | None = None
+    descriptor: int | None = None
+    temporary_name = f".{name}.{uuid.uuid4().hex}.tmp"
+    temporary_present = False
+    result_metadata: tuple[int, ...] | None = None
+    try:
+        try:
+            current = os.stat(
+                name,
+                dir_fd=root_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            if expected_metadata is not None:
+                raise ResultArtifactError(
+                    "aggregate result target changed before writing"
+                )
+        except OSError as error:
+            raise ResultArtifactError(
+                "cannot write aggregate result artifacts"
+            ) from error
+        else:
+            if (
+                expected_metadata is None
+                or not stat.S_ISREG(current.st_mode)
+                or _stable_result_metadata(current) != expected_metadata
+            ):
+                raise ResultArtifactError(
+                    "aggregate result target changed before writing"
+                )
+            existing_descriptor = os.open(
+                name,
+                _regular_file_open_flags(),
+                dir_fd=root_descriptor,
+            )
+            opened_existing = os.fstat(existing_descriptor)
+            current_existing = os.stat(
+                name,
+                dir_fd=root_descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISREG(opened_existing.st_mode)
+                or _stable_result_metadata(opened_existing) != expected_metadata
+                or _stable_result_metadata(current_existing) != expected_metadata
+            ):
+                raise ResultArtifactError(
+                    "aggregate result target changed before writing"
+                )
+
+        descriptor = os.open(
+            temporary_name,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=root_descriptor,
+        )
+        temporary_present = True
+        remaining = memoryview(content)
+        while remaining:
+            written = os.write(descriptor, remaining)
+            if written < 1:
+                raise ResultArtifactError(
+                    "cannot write aggregate result artifacts"
+                )
+            remaining = remaining[written:]
+        os.fsync(descriptor)
+        os.fchmod(descriptor, 0o600)
+        staged = os.fstat(descriptor)
+        if not stat.S_ISREG(staged.st_mode) or staged.st_size != len(content):
+            raise ResultArtifactError(
+                "cannot write aggregate result artifacts"
+            )
+        if expected_metadata is None:
+            try:
+                os.link(
+                    temporary_name,
+                    name,
+                    src_dir_fd=root_descriptor,
+                    dst_dir_fd=root_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileExistsError as error:
+                raise ResultArtifactError(
+                    "aggregate result target changed before writing"
+                ) from error
+            linked = os.fstat(descriptor)
+            installed = os.stat(
+                name,
+                dir_fd=root_descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISREG(installed.st_mode)
+                or _stable_result_metadata(linked)
+                != _stable_result_metadata(installed)
+            ):
+                raise ResultArtifactError(
+                    "aggregate result target changed while writing"
+                )
+            _remove_result_entry_for_descriptor(
+                root_descriptor,
+                temporary_name,
+                descriptor,
+                label="aggregate temporary artifact",
+            )
+            temporary_present = False
+        else:
+            if existing_descriptor is None:
+                raise ResultArtifactError(
+                    "aggregate result target changed before writing"
+                )
+            _replace_existing_result_entry_at(
+                root_descriptor,
+                temporary_name,
+                name,
+                staged_descriptor=descriptor,
+                existing_descriptor=existing_descriptor,
+                expected_metadata=expected_metadata,
+                maximum_bytes=maximum_bytes,
+            )
+            temporary_present = False
+        final = os.fstat(descriptor)
+        installed = os.stat(
+            name,
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISREG(installed.st_mode)
+            or _stable_result_metadata(final)
+            != _stable_result_metadata(installed)
+        ):
+            raise ResultArtifactError(
+                "aggregate result target changed while writing"
+            )
+        result_metadata = _stable_result_metadata(final)
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "cannot write aggregate result artifacts"
+        ) from error
+    finally:
+        cleanup_error: ResultArtifactError | None = None
+        if temporary_present and descriptor is not None:
+            try:
+                _remove_result_entry_for_descriptor(
+                    root_descriptor,
+                    temporary_name,
+                    descriptor,
+                    label="aggregate temporary artifact",
+                )
+            except ResultArtifactError as error:
+                cleanup_error = error
+        for open_descriptor in (existing_descriptor, descriptor):
+            if open_descriptor is None:
+                continue
+            try:
+                os.close(open_descriptor)
+            except OSError as error:
+                if cleanup_error is None:
+                    cleanup_error = ResultArtifactError(
+                        "cannot release aggregate result handles"
+                    )
+                    cleanup_error.__cause__ = error
+        if cleanup_error is not None:
+            raise cleanup_error
+    if result_metadata is None:
+        raise ResultArtifactError("cannot write aggregate result artifacts")
+    return result_metadata
+
+
+def _remove_result_entry_for_descriptor(
+    root_descriptor: int,
+    name: str,
+    open_descriptor: int,
+    *,
+    label: str,
+    expected_identity: _StableContentIdentity | None = None,
+    maximum_bytes: int | None = None,
+) -> None:
+    try:
+        if expected_identity is None:
+            opened_metadata = _stable_result_metadata(
+                os.fstat(open_descriptor)
+            )
+        else:
+            if maximum_bytes is None:
+                raise ResultArtifactError(f"{label} has no fingerprint byte limit")
+            current_identity = _fingerprint_result_descriptor(
+                open_descriptor,
+                maximum_bytes=maximum_bytes,
+                expected_metadata=expected_identity.metadata,
+                label=label,
+            )
+            if current_identity != expected_identity:
+                raise ResultArtifactError(f"{label} changed during cleanup")
+            opened_metadata = current_identity.metadata
+        current = os.stat(
+            name,
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISREG(opened_metadata[2])
+            or _stable_result_metadata(current)
+            != opened_metadata
+        ):
+            raise ResultArtifactError(f"{label} changed during cleanup")
+        os.unlink(name, dir_fd=root_descriptor)
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(f"{label} changed during cleanup") from error
+
+
+def _fingerprint_result_descriptor(
+    descriptor: int,
+    *,
+    maximum_bytes: int,
+    label: str,
+    expected_metadata: tuple[int, ...] | None = None,
+) -> _StableContentIdentity:
+    try:
+        positioned_read = getattr(os, "pread", None)
+        if positioned_read is None or maximum_bytes < 0:
+            raise ResultArtifactError(f"{label} cannot be fingerprinted safely")
+        opened = os.fstat(descriptor)
+        opened_metadata = _stable_result_metadata(opened)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_size < 0
+            or opened.st_size > maximum_bytes
+            or (
+                expected_metadata is not None
+                and opened_metadata != expected_metadata
+            )
+        ):
+            raise ResultArtifactError(f"{label} changed while fingerprinting")
+
+        digest = hashlib.sha256()
+        offset = 0
+        while offset < opened.st_size:
+            chunk = positioned_read(
+                descriptor,
+                min(_RESULT_READ_CHUNK_BYTES, opened.st_size - offset),
+                offset,
+            )
+            if not chunk:
+                raise ResultArtifactError(f"{label} changed while fingerprinting")
+            digest.update(chunk)
+            offset += len(chunk)
+        if positioned_read(descriptor, 1, offset):
+            raise ResultArtifactError(f"{label} changed while fingerprinting")
+
+        final_metadata = _stable_result_metadata(os.fstat(descriptor))
+        if (
+            final_metadata != opened_metadata
+            or (
+                expected_metadata is not None
+                and final_metadata != expected_metadata
+            )
+        ):
+            raise ResultArtifactError(f"{label} changed while fingerprinting")
+        return _StableContentIdentity(
+            metadata=final_metadata,
+            digest=digest.digest(),
+        )
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+        TypeError,
+        ValueError,
+    ) as error:
+        raise ResultArtifactError(f"{label} changed while fingerprinting") from error
+
+
+def _replace_existing_result_entry_at(
+    root_descriptor: int,
+    temporary_name: str,
+    name: str,
+    *,
+    staged_descriptor: int,
+    existing_descriptor: int,
+    expected_metadata: tuple[int, ...],
+    maximum_bytes: int,
+) -> None:
+    exchanged = False
+    rollback_descriptor: int | None = None
+    try:
+        expected_identity = _fingerprint_result_descriptor(
+            existing_descriptor,
+            maximum_bytes=maximum_bytes,
+            expected_metadata=expected_metadata,
+            label="aggregate result target",
+        )
+        current_before_exchange = os.stat(
+            name,
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+        if _stable_result_metadata(current_before_exchange) != expected_metadata:
+            raise ResultArtifactError(
+                "aggregate result target changed before writing"
+            )
+        _atomic_exchange_result_entries(
+            root_descriptor,
+            temporary_name,
+            name,
+        )
+        exchanged = True
+        staged = os.fstat(staged_descriptor)
+        installed = os.stat(
+            name,
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+        retained_identity = _fingerprint_result_descriptor(
+            existing_descriptor,
+            maximum_bytes=maximum_bytes,
+            label="aggregate result target",
+        )
+        retained = os.stat(
+            temporary_name,
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISREG(installed.st_mode)
+            or not stat.S_ISREG(retained.st_mode)
+            or _stable_result_metadata(installed)
+            != _stable_result_metadata(staged)
+            or _stable_result_metadata(retained)
+            != retained_identity.metadata
+            or retained_identity.metadata[:-1]
+            != expected_identity.metadata[:-1]
+            or retained_identity.digest != expected_identity.digest
+        ):
+            raise ResultArtifactError(
+                "aggregate result target changed while writing"
+            )
+        _remove_result_entry_for_descriptor(
+            root_descriptor,
+            temporary_name,
+            existing_descriptor,
+            label="aggregate result target",
+            expected_identity=retained_identity,
+            maximum_bytes=maximum_bytes,
+        )
+        exchanged = False
+    except (
+        ResultArtifactError,
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        if exchanged:
+            try:
+                rollback_descriptor = os.open(
+                    temporary_name,
+                    _regular_file_open_flags(),
+                    dir_fd=root_descriptor,
+                )
+                rollback_identity = _fingerprint_result_descriptor(
+                    rollback_descriptor,
+                    maximum_bytes=maximum_bytes,
+                    label="aggregate retained result target",
+                )
+                current_installed = os.stat(
+                    name,
+                    dir_fd=root_descriptor,
+                    follow_symlinks=False,
+                )
+                current_retained = os.stat(
+                    temporary_name,
+                    dir_fd=root_descriptor,
+                    follow_symlinks=False,
+                )
+                staged = os.fstat(staged_descriptor)
+                if (
+                    _stable_result_metadata(current_installed)
+                    != _stable_result_metadata(staged)
+                    or _stable_result_metadata(current_retained)
+                    != rollback_identity.metadata
+                ):
+                    raise ResultArtifactError(
+                        "aggregate result target changed during rollback"
+                    )
+                _atomic_exchange_result_entries(
+                    root_descriptor,
+                    temporary_name,
+                    name,
+                )
+                restored_target = os.stat(
+                    name,
+                    dir_fd=root_descriptor,
+                    follow_symlinks=False,
+                )
+                restored_temporary = os.stat(
+                    temporary_name,
+                    dir_fd=root_descriptor,
+                    follow_symlinks=False,
+                )
+                staged = os.fstat(staged_descriptor)
+                restored_retained = os.fstat(rollback_descriptor)
+                if (
+                    _stable_result_metadata(restored_target)
+                    != _stable_result_metadata(restored_retained)
+                    or _stable_result_metadata(restored_temporary)
+                    != _stable_result_metadata(staged)
+                ):
+                    raise ResultArtifactError(
+                        "aggregate result target changed during rollback"
+                    )
+                exchanged = False
+            except ResultArtifactError as rollback_error:
+                raise ResultArtifactError(
+                    "aggregate result target changed during rollback"
+                ) from rollback_error
+        if isinstance(error, ResultArtifactError):
+            raise error
+        raise ResultArtifactError(
+            "cannot atomically replace aggregate result target"
+        ) from error
+    finally:
+        if rollback_descriptor is not None:
+            try:
+                os.close(rollback_descriptor)
+            except OSError as error:
+                raise ResultArtifactError(
+                    "cannot release aggregate result handles"
+                ) from error
+
+
+def _atomic_exchange_result_entries(
+    root_descriptor: int,
+    first_name: str,
+    second_name: str,
+) -> None:
+    try:
+        library = ctypes.CDLL(None, use_errno=True)
+        if hasattr(library, "renameatx_np"):
+            exchange = library.renameatx_np
+        elif hasattr(library, "renameat2"):
+            exchange = library.renameat2
+        else:
+            raise ResultArtifactError(
+                "atomic aggregate replacement is unsupported"
+            )
+        exchange.argtypes = (
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        )
+        exchange.restype = ctypes.c_int
+        result = exchange(
+            root_descriptor,
+            os.fsencode(first_name),
+            root_descriptor,
+            os.fsencode(second_name),
+            0x00000002,
+        )
+        if result != 0:
+            error_number = ctypes.get_errno()
+            raise OSError(error_number, "atomic aggregate replacement failed")
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+        TypeError,
+        ValueError,
+    ) as error:
+        raise ResultArtifactError(
+            "cannot atomically replace aggregate result target"
+        ) from error
+
+
+def _verify_open_result_root_identity(
+    descriptor: int,
+    root: Path,
+    expected_metadata: tuple[int, ...],
+) -> None:
+    try:
+        opened = os.fstat(descriptor)
+        current = os.stat(root, follow_symlinks=False)
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "results directory changed while writing aggregate artifacts"
+        ) from error
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or _stable_result_metadata(opened)[:3] != expected_metadata[:3]
+        or _stable_result_metadata(current)[:3] != expected_metadata[:3]
+    ):
+        raise ResultArtifactError(
+            "results directory changed while writing aggregate artifacts"
+        )
+
+
+def _read_required_invocation(
+    root_descriptor: int,
+    root: Path,
+) -> _StableFileRead:
+    try:
+        observed = os.stat(
+            "invocation.json",
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+    except (OSError, MemoryError, OverflowError, RuntimeError) as error:
+        raise ResultArtifactError(
+            f"results directory must contain one regular invocation.json: {root}"
+        ) from error
+    if stat.S_ISLNK(observed.st_mode) or not stat.S_ISREG(observed.st_mode):
+        raise ResultArtifactError(
+            f"results directory must contain one regular invocation.json: {root}"
+        )
+    return _read_stable_file_at(
+        root_descriptor,
+        "invocation.json",
+        observed,
+        maximum_bytes=_MAX_RESULT_JSON_FILE_BYTES,
+        label=f"cannot read trustworthy result {root / 'invocation.json'}",
+        limit_name="JSON byte limit",
+    )
+
+
+def _snapshot_result_tree(
+    root_descriptor: int,
+    root: Path,
+    *,
+    declared_attempt_count: int,
+) -> _ResultTreeSnapshot:
+    maximum_entries = _result_tree_entry_limit(declared_attempt_count)
+    if maximum_entries < 1:
+        raise ResultArtifactError("result tree has an invalid entry-count limit")
+    try:
+        initial_root = os.fstat(root_descriptor)
+        if not stat.S_ISDIR(initial_root.st_mode):
+            raise ResultArtifactError(
+                "results directory changed during bounded inventory"
+            )
+        files: dict[tuple[str, ...], tuple[int, ...]] = {}
+        directories: dict[tuple[str, ...], tuple[int, ...]] = {
+            (): _stable_result_metadata(initial_root)
+        }
+        state = _ResultTreeScanState()
+        _scan_result_directory(
+            root_descriptor,
+            (),
+            files,
+            directories,
+            state,
+            maximum_entries=maximum_entries,
+            maximum_attempt_entries=declared_attempt_count + 1,
+        )
+        final_root = os.fstat(root_descriptor)
+        current_root = os.stat(root, follow_symlinks=False)
+        if (
+            _stable_result_metadata(initial_root)
+            != _stable_result_metadata(final_root)
+            or _stable_result_metadata(final_root)
+            != _stable_result_metadata(current_root)
+        ):
+            raise ResultArtifactError(
+                "result tree changed during bounded inventory"
+            )
+        return _ResultTreeSnapshot(
+            files=files,
+            directories=directories,
+            total_bytes=state.total_bytes,
+        )
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "result tree cannot be inventoried within resource limits"
+        ) from error
+
+
+def _result_tree_entry_limit(declared_attempt_count: int) -> int:
+    return min(
+        _MAX_RESULT_TREE_ENTRIES,
+        _MAX_RESULT_ROOT_ENTRIES
+        + declared_attempt_count * _MAX_RESULT_ENTRIES_PER_ATTEMPT,
+    )
+
+
+def _scan_result_directory(
+    directory_descriptor: int,
+    parent_parts: tuple[str, ...],
+    files: dict[tuple[str, ...], tuple[int, ...]],
+    directories: dict[tuple[str, ...], tuple[int, ...]],
+    state: _ResultTreeScanState,
+    *,
+    maximum_entries: int,
+    maximum_attempt_entries: int,
+) -> None:
+    inspected: list[tuple[str, os.stat_result]] = []
+    try:
+        with os.scandir(directory_descriptor) as entries:
+            for entry in entries:
+                state.entries += 1
+                if state.entries > maximum_entries:
+                    raise ResultArtifactError(
+                        "result tree exceeds the entry-count limit"
+                    )
+                if (
+                    parent_parts == ("attempts",)
+                    and len(inspected) >= maximum_attempt_entries
+                ):
+                    raise ResultArtifactError(
+                        "attempt inventory exceeds the declared attempt count bound "
+                        "for the immutable invocation manifest"
+                    )
+                inspected.append(
+                    (entry.name, entry.stat(follow_symlinks=False))
+                )
+        inspected.sort(key=lambda item: item[0])
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "result tree cannot inspect an entry within resource limits"
+        ) from error
+
+    for name, expected in inspected:
+        relative = (*parent_parts, name)
+        if len(relative) > _MAX_RESULT_TREE_DEPTH:
+            raise ResultArtifactError(
+                "result tree exceeds the directory depth limit"
+            )
+        if stat.S_ISLNK(expected.st_mode):
+            raise ResultArtifactError(
+                "attempt entry or result artifact must not be a symlink"
+            )
+        if stat.S_ISDIR(expected.st_mode):
+            _scan_result_child_directory(
+                directory_descriptor,
+                name,
+                expected,
+                relative,
+                files,
+                directories,
+                state,
+                maximum_entries=maximum_entries,
+                maximum_attempt_entries=maximum_attempt_entries,
+            )
+            continue
+        if not stat.S_ISREG(expected.st_mode):
+            raise ResultArtifactError("result tree contains a special file")
+        if expected.st_size < 0 or expected.st_size > _MAX_RESULT_FILE_BYTES:
+            raise ResultArtifactError(
+                "result tree exceeds the per-file byte limit"
+            )
+        if state.total_bytes + expected.st_size > _MAX_RESULT_TREE_BYTES:
+            raise ResultArtifactError(
+                "result tree exceeds the cumulative byte limit"
+            )
+        state.total_bytes += expected.st_size
+        files[relative] = _stable_result_metadata(expected)
+
+
+def _scan_result_child_directory(
+    parent_descriptor: int,
+    name: str,
+    expected: os.stat_result,
+    relative: tuple[str, ...],
+    files: dict[tuple[str, ...], tuple[int, ...]],
+    directories: dict[tuple[str, ...], tuple[int, ...]],
+    state: _ResultTreeScanState,
+    *,
+    maximum_entries: int,
+    maximum_attempt_entries: int,
+) -> None:
+    child_descriptor: int | None = None
+    try:
+        child_descriptor = os.open(
+            name,
+            _directory_open_flags(),
+            dir_fd=parent_descriptor,
+        )
+        opened = os.fstat(child_descriptor)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or _stable_result_metadata(expected)
+            != _stable_result_metadata(opened)
+        ):
+            raise ResultArtifactError(
+                "result tree changed during bounded inventory"
+            )
+        directories[relative] = _stable_result_metadata(opened)
+        _scan_result_directory(
+            child_descriptor,
+            relative,
+            files,
+            directories,
+            state,
+            maximum_entries=maximum_entries,
+            maximum_attempt_entries=maximum_attempt_entries,
+        )
+        final = os.fstat(child_descriptor)
+        current = os.stat(
+            name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            _stable_result_metadata(opened) != _stable_result_metadata(final)
+            or _stable_result_metadata(final) != _stable_result_metadata(current)
+        ):
+            raise ResultArtifactError(
+                "result tree changed during bounded inventory"
+            )
+    except ResultArtifactError:
+        raise
+    except (
+        OSError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+    ) as error:
+        raise ResultArtifactError(
+            "result tree changed during bounded inventory"
+        ) from error
+    finally:
+        if child_descriptor is not None:
+            os.close(child_descriptor)
+
+
+def _validate_result_tree(
+    snapshot: _ResultTreeSnapshot,
+    results_dir: Path,
+) -> tuple[str, ...]:
+    root_files = {
+        relative[0] for relative in snapshot.files if len(relative) == 1
+    }
+    root_directories = {
+        relative[0]
+        for relative in snapshot.directories
+        if len(relative) == 1
+    }
+    if root_directories != {"attempts"}:
+        if "attempts" not in root_directories:
+            raise ResultArtifactError(
+                f"results directory has no attempts: {results_dir}"
+            )
+        raise ResultArtifactError("result tree contains an undeclared result entry")
+    if "invocation.json" not in root_files:
+        raise ResultArtifactError(
+            f"results directory must contain one regular invocation.json: {results_dir}"
+        )
+    if not root_files.issubset(_ROOT_RESULT_FILES):
+        raise ResultArtifactError("result tree contains an undeclared result entry")
+
+    direct_attempt_files = [
+        relative
+        for relative in snapshot.files
+        if len(relative) == 2 and relative[0] == "attempts"
+    ]
+    if direct_attempt_files:
+        raise ResultArtifactError("attempt entry must be a directory")
+    attempt_directories = tuple(
+        sorted(
+            relative[1]
+            for relative in snapshot.directories
+            if len(relative) == 2 and relative[0] == "attempts"
+        )
+    )
+    if not attempt_directories:
+        raise ResultArtifactError(
+            f"no attempt.json declarations found under {results_dir}"
+        )
+
+    for directory_name in attempt_directories:
+        attempt_prefix = ("attempts", directory_name)
+        direct_files = {
+            relative[-1]
+            for relative in snapshot.files
+            if relative[:-1] == attempt_prefix
+        }
+        direct_directories = {
+            relative[-1]
+            for relative in snapshot.directories
+            if relative[:-1] == attempt_prefix
+        }
+        missing = sorted(_REQUIRED_ATTEMPT_RESULT_FILES - direct_files)
+        if missing:
+            raise ResultArtifactError(
+                "attempt entry must contain required control artifact "
+                f"{missing[0]}"
+            )
+        if not direct_files.issubset(_ATTEMPT_RESULT_FILES):
+            raise ResultArtifactError(
+                "result tree contains an undeclared result entry"
+            )
+        if direct_directories != {"outputs"}:
+            raise ResultArtifactError(
+                "attempt entry must contain only its outputs directory"
+            )
+    return attempt_directories
+
+
+def _read_snapshotted_result_document(
+    root_descriptor: int,
+    snapshot: _ResultTreeSnapshot,
+    relative: tuple[str, ...],
+    path: Path,
+    schema_name: str,
+) -> dict[str, object]:
+    read = _read_snapshotted_file(
+        root_descriptor,
+        snapshot,
+        relative,
+        maximum_bytes=_MAX_RESULT_JSON_FILE_BYTES,
+        label=f"cannot read trustworthy result {path}",
+        limit_name="JSON byte limit",
+    )
+    return _parse_result_document(read.content, path, schema_name)
+
+
+def _read_snapshotted_file(
+    root_descriptor: int,
+    snapshot: _ResultTreeSnapshot,
+    relative: tuple[str, ...],
+    *,
+    maximum_bytes: int,
+    label: str,
+    limit_name: str,
+) -> _StableFileRead:
+    expected_file = snapshot.files.get(relative)
+    if expected_file is None:
+        raise ResultArtifactError(f"{label} is missing from the bounded inventory")
+
+    def descend(directory_descriptor: int, index: int) -> _StableFileRead:
+        name = relative[index]
+        if index == len(relative) - 1:
+            try:
+                observed = os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except (
+                OSError,
+                MemoryError,
+                OverflowError,
+                RuntimeError,
+                SystemError,
+            ) as error:
+                raise ResultArtifactError(f"{label} changed while being read") from error
+            if (
+                not stat.S_ISREG(observed.st_mode)
+                or _stable_result_metadata(observed) != expected_file
+            ):
+                raise ResultArtifactError(f"{label} changed while being read")
+            result = _read_stable_file_at(
+                directory_descriptor,
+                name,
+                observed,
+                maximum_bytes=maximum_bytes,
+                label=label,
+                limit_name=limit_name,
+            )
+            if result.metadata != expected_file:
+                raise ResultArtifactError(f"{label} changed while being read")
+            return result
+
+        prefix = relative[: index + 1]
+        expected_directory = snapshot.directories.get(prefix)
+        if expected_directory is None:
+            raise ResultArtifactError(f"{label} changed while being read")
+        child_descriptor: int | None = None
+        try:
+            observed = os.stat(
+                name,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISDIR(observed.st_mode)
+                or _stable_result_metadata(observed) != expected_directory
+            ):
+                raise ResultArtifactError(f"{label} changed while being read")
+            child_descriptor = os.open(
+                name,
+                _directory_open_flags(),
+                dir_fd=directory_descriptor,
+            )
+            opened = os.fstat(child_descriptor)
+            if (
+                not stat.S_ISDIR(opened.st_mode)
+                or _stable_result_metadata(opened) != expected_directory
+            ):
+                raise ResultArtifactError(f"{label} changed while being read")
+            result = descend(child_descriptor, index + 1)
+            final = os.fstat(child_descriptor)
+            current = os.stat(
+                name,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                _stable_result_metadata(final) != expected_directory
+                or _stable_result_metadata(current) != expected_directory
+            ):
+                raise ResultArtifactError(f"{label} changed while being read")
+            return result
+        except ResultArtifactError:
+            raise
+        except (
+            OSError,
+            MemoryError,
+            OverflowError,
+            RecursionError,
+            RuntimeError,
+            SystemError,
+        ) as error:
+            raise ResultArtifactError(f"{label} changed while being read") from error
+        finally:
+            if child_descriptor is not None:
+                os.close(child_descriptor)
+
+    return descend(root_descriptor, 0)
+
+
+def _stable_result_metadata(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _directory_open_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+
+
+def _regular_file_open_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+
+
+def _require_declared_attempt_paths(paths: AttemptPaths) -> None:
+    """Confirm attempt writers operate only on one invocation-declared attempt."""
+    attempts_root = paths.root.parent
+    workspace_root = attempts_root.parent
+    expected_paths = AttemptPaths(
+        root=paths.root,
+        manifest=paths.root / "attempt.json",
+        response=paths.root / "outputs" / "response.md",
+        transcript=paths.root / "transcript.md",
+        execution_trace=paths.root / "execution_trace.jsonl",
+        timing=paths.root / "timing.json",
+        grading=paths.root / "grading.json",
+        manual_grading=paths.root / "manual_grading.json",
+        feedback=paths.root / "feedback.json",
+    )
+    try:
+        resolved_workspace = workspace_root.resolve(strict=True)
+        resolved_attempts = attempts_root.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ResultArtifactError(
+            "cannot resolve attempt artifact workspace"
+        ) from error
+    if (
+        attempts_root.name != "attempts"
+        or paths != expected_paths
+        or attempts_root.is_symlink()
+        or not attempts_root.is_dir()
+        or paths.root.is_symlink()
+        or not paths.root.is_dir()
+        or resolved_attempts != resolved_workspace / "attempts"
+    ):
+        raise ResultArtifactError("attempt artifact paths are not owned by an invocation workspace")
+    manifest = _read_result_document(paths.manifest, "attempt.schema.json", workspace_root)
+    declared_attempts = _read_declared_attempts(workspace_root)
+    if declared_attempts.get(manifest["run_id"]) != manifest:
+        raise ResultArtifactError(
+            "attempt does not match the immutable invocation manifest"
+        )
 
 
 def _validate_grading_semantics(
@@ -1318,6 +3297,12 @@ def _write_text_once(path: Path, text: str, root: Path) -> None:
     _write_text_atomic(path, text, root, replace_existing=False)
 
 
+def _retained_workspace_error(path: Path) -> ResultArtifactError:
+    return ResultArtifactError(
+        f"cannot initialize result workspace; retained partial state at {path}"
+    )
+
+
 def _write_text_atomic(
     path: Path,
     text: str,
@@ -1350,7 +3335,7 @@ def _write_text_atomic(
     except ResultArtifactError:
         raise
     except OSError as error:
-        raise ResultArtifactError(f"cannot write result artifact {path}: {error}") from error
+        raise ResultArtifactError(f"cannot write result artifact {path}") from error
     finally:
         if temporary_path is not None:
             try:
@@ -1366,7 +3351,7 @@ def _ensure_safe_artifact_path(root: Path, path: Path) -> None:
         resolved_root = root.resolve(strict=True)
         resolved_parent = path.parent.resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise ResultArtifactError(f"cannot resolve artifact path {path}: {error}") from error
+        raise ResultArtifactError(f"cannot resolve artifact path {path}") from error
     if not resolved_parent.is_relative_to(resolved_root):
         raise ResultArtifactError(f"artifact path escapes result workspace: {path}")
 

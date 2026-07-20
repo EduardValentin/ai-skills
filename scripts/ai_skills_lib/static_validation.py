@@ -46,7 +46,6 @@ def run_static_validation(root: Path) -> list[ValidationIssue]:
 
 def run_reference_conformance(root: Path) -> list[ValidationIssue]:
     """Run pinned official conformance with one discovered skill context."""
-    preflight_reference_conformance()
     try:
         context = build_validation_context(root)
     except (OSError, ValueError) as error:
@@ -56,7 +55,6 @@ def run_reference_conformance(root: Path) -> list[ValidationIssue]:
 
 def run_ci_validation(root: Path) -> list[ValidationIssue]:
     """Run static then reference checks from a single discovery pass."""
-    preflight_reference_conformance()
     resolved_root = root.resolve()
     repository_issues = validate_repository_shape(resolved_root)
     try:

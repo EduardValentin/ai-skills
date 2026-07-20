@@ -7,9 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-import shutil
 from typing import Literal
-import uuid
 
 from scripts.ai_skills_lib.core import SkillRecord
 from scripts.ai_skills_lib.eval_core import (
@@ -20,7 +18,6 @@ from scripts.ai_skills_lib.eval_core import (
     GraderRecord,
     GradingRecord,
     GradingSummary,
-    ResultArtifactError,
     ResultWorkspace,
     aggregate_results,
     create_attempt_workspace,
@@ -31,7 +28,14 @@ from scripts.ai_skills_lib.eval_core import (
     write_incomplete_attempt_artifacts,
     write_result_summary,
 )
-from scripts.ai_skills_lib.harness import HarnessAdapter, HarnessExecution, HarnessRequest
+from scripts.ai_skills_lib.evaluation_runtime import CodexEvaluationRuntime
+from scripts.ai_skills_lib.harness import (
+    HarnessAdapter,
+    HarnessCapabilities,
+    HarnessExecution,
+    HarnessRequest,
+    PreparedSkillSource,
+)
 from scripts.ai_skills_lib.issues import ValidationIssue, print_grouped_issues
 from scripts.ai_skills_lib.secret_patterns import bounded_redacted_runtime_text
 from scripts.ai_skills_lib.static_validation import run_static_validation
@@ -42,6 +46,11 @@ from scripts.ai_skills_lib.trigger_definitions import (
     load_trigger_queries,
     validate_trigger_query_files,
 )
+
+
+_MAX_RESPONSE_BYTES = 64 * 1024
+_MAX_SELECTED_QUERIES = 128
+_MAX_MODEL_CALLS = 384
 
 
 @dataclass(frozen=True)
@@ -59,7 +68,7 @@ class TriggerAttemptOutcome:
 class TriggerQueryClassification:
     """Threshold classification across every configured run of one query."""
 
-    status: Literal["pass_stable", "pass_unstable", "fail", "error"]
+    status: Literal["pass_stable", "pending_review", "fail", "error"]
     matching_runs: int
     completed_runs: int
     configured_runs: int
@@ -83,16 +92,133 @@ class TriggerSuiteResult:
     query_results: tuple[TriggerQueryResult, ...]
 
     @property
+    def requires_review(self) -> bool:
+        return any(
+            result.classification.status == "pending_review"
+            for result in self.query_results
+        )
+
+    @property
+    def has_failed_expectations(self) -> bool:
+        return any(
+            result.classification.status == "fail" for result in self.query_results
+        )
+
+    @property
     def exit_code(self) -> int:
         if any(result.classification.status == "error" for result in self.query_results):
             return 2
-        if any(result.classification.status == "fail" for result in self.query_results):
+        if self.has_failed_expectations or self.requires_review:
             return 1
         return 0
 
 
+@dataclass(frozen=True)
+class TerminalDecision:
+    """One precedence-resolved terminal state and its public representations."""
+
+    key: Literal[
+        "pass",
+        "expectations_failed",
+        "pending_review",
+        "execution_error",
+    ]
+    exit_code: int
+    durable_label: str
+    console_label: str
+
+
+def resolve_terminal_decision(
+    *,
+    execution_error: bool,
+    pending_review: bool,
+    expectation_failure: bool,
+) -> TerminalDecision:
+    """Resolve terminal state using the repository's single precedence policy."""
+    if execution_error:
+        return TerminalDecision(
+            key="execution_error",
+            exit_code=2,
+            durable_label="execution error",
+            console_label="EXECUTION ERROR",
+        )
+    if pending_review:
+        return TerminalDecision(
+            key="pending_review",
+            exit_code=1,
+            durable_label="pending review",
+            console_label="PENDING REVIEW",
+        )
+    if expectation_failure:
+        return TerminalDecision(
+            key="expectations_failed",
+            exit_code=1,
+            durable_label="expectations failed",
+            console_label="EXPECTATIONS FAILED",
+        )
+    return TerminalDecision(
+        key="pass",
+        exit_code=0,
+        durable_label="pass",
+        console_label="OK",
+    )
+
+
+@dataclass(frozen=True)
+class TriggerFinalization:
+    """Durable terminal state shared by standalone and combined trigger runners."""
+
+    terminal: TerminalDecision
+    benchmark: dict[str, object] | None
+    failures: tuple[str, ...] = ()
+
+    @property
+    def decision(self) -> Literal[
+        "pass",
+        "expectations_failed",
+        "pending_review",
+        "execution_error",
+    ]:
+        """Retain the concise machine decision for existing callers."""
+        return self.terminal.key
+
+
 class TriggerHarnessError(RuntimeError):
     """Raised when the selected harness cannot produce trustworthy pickup evidence."""
+
+
+@dataclass(frozen=True)
+class PreparedTriggerAttempt:
+    """One immutable trigger attempt selected before runtime preflight."""
+
+    definition: SkillTriggerQueries
+    query: TriggerQuery
+    run_number: int
+    manifest: AttemptManifest
+
+
+@dataclass(frozen=True)
+class PreparedTriggerPlan:
+    """The exact trigger catalog, selection, and attempt set for one invocation."""
+
+    definitions: tuple[SkillTriggerQueries, ...]
+    selected: tuple[tuple[SkillTriggerQueries, TriggerQuery], ...]
+    attempts: tuple[PreparedTriggerAttempt, ...]
+    catalog: tuple[PreparedSkillSource, ...]
+    runs: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.catalog, tuple) or not all(
+            isinstance(source, PreparedSkillSource) for source in self.catalog
+        ):
+            raise ValueError("prepared trigger catalog must contain prepared skill material")
+        expected_names = tuple(definition.skill.name for definition in self.definitions)
+        if tuple(source.name for source in self.catalog) != expected_names:
+            raise ValueError("prepared trigger catalog must cover the complete catalog")
+
+    @property
+    def manifests(self) -> tuple[AttemptManifest, ...]:
+        return tuple(attempt.manifest for attempt in self.attempts)
 
 
 def classify_trigger_attempts(
@@ -111,7 +237,7 @@ def classify_trigger_attempts(
     elif matching_runs == configured_runs:
         status = "pass_stable"
     elif configured_runs == 3 and matching_runs == 2:
-        status = "pass_unstable"
+        status = "pending_review"
     else:
         status = "fail"
     return TriggerQueryClassification(
@@ -132,19 +258,22 @@ def execute_trigger_queries(
     actor_timeout_seconds: int = 900,
     skill_filter: str | None = None,
     query_filter: str | None = None,
+    preflighted_capabilities: HarnessCapabilities | None = None,
 ) -> TriggerSuiteResult:
     """Load the validated catalog and run selected trigger cases."""
     _validate_trigger_execution_options(runs, max_concurrency, actor_timeout_seconds)
+    definitions = load_trigger_queries(root)
     return _execute_trigger_queries(
         root,
         adapter,
         workspace,
-        definitions=load_trigger_queries(root),
+        definitions=definitions,
         runs=runs,
         max_concurrency=max_concurrency,
         actor_timeout_seconds=actor_timeout_seconds,
         skill_filter=skill_filter,
         query_filter=query_filter,
+        preflighted_capabilities=preflighted_capabilities,
     )
 
 
@@ -159,10 +288,43 @@ def _execute_trigger_queries(
     actor_timeout_seconds: int,
     skill_filter: str | None,
     query_filter: str | None,
+    preflighted_capabilities: HarnessCapabilities | None = None,
+    prepared_plan: PreparedTriggerPlan | None = None,
+    invocation_declared: bool = False,
 ) -> TriggerSuiteResult:
     """Run selected trigger cases from one already validated full catalog."""
     _validate_trigger_execution_options(runs, max_concurrency, actor_timeout_seconds)
-    loaded_definitions = definitions
+    plan = prepared_plan or prepare_trigger_plan(
+        definitions,
+        runs=runs,
+        skill_filter=skill_filter,
+        query_filter=query_filter,
+    )
+    if plan.runs != runs:
+        raise TriggerHarnessError("prepared trigger plan run count does not match execution")
+    if not invocation_declared:
+        declare_trigger_plan(workspace, plan)
+    return execute_prepared_trigger_plan(
+        adapter,
+        workspace,
+        plan,
+        max_concurrency=max_concurrency,
+        actor_timeout_seconds=actor_timeout_seconds,
+        preflighted_capabilities=preflighted_capabilities,
+    )
+
+
+def prepare_trigger_plan(
+    definitions: Sequence[SkillTriggerQueries],
+    *,
+    runs: int,
+    skill_filter: str | None,
+    query_filter: str | None,
+) -> PreparedTriggerPlan:
+    """Freeze one validated trigger selection and its exact attempt manifests."""
+    if runs not in (1, 2, 3):
+        raise ValueError("trigger runs must be 1, 2, or 3")
+    loaded_definitions = tuple(definitions)
     selected = _select_trigger_queries(loaded_definitions, skill_filter, query_filter)
     if not selected:
         raise TriggerDefinitionError(
@@ -173,13 +335,29 @@ def _execute_trigger_queries(
                 ),
             )
         )
+    _validate_selected_trigger_queries(selected, runs)
+    from scripts.ai_skills_lib.codex_harness import (
+        CodexOutputError,
+        prepare_actor_skill_source,
+    )
+
+    try:
+        catalog = tuple(
+            prepare_actor_skill_source(definition.skill.root)
+            for definition in loaded_definitions
+        )
+    except (CodexOutputError, OSError, RuntimeError) as error:
+        diagnostic = bounded_redacted_runtime_text(str(error), 4096)
+        raise TriggerHarnessError(
+            f"trigger material preparation failed: {diagnostic}"
+        ) from error
     minimum_pass_rate = 2 / 3 if runs == 3 else 1.0
-    jobs = tuple(
-        (
-            definition,
-            query,
-            run_number,
-            _trigger_attempt_manifest(
+    attempts = tuple(
+        PreparedTriggerAttempt(
+            definition=definition,
+            query=query,
+            run_number=run_number,
+            manifest=_trigger_attempt_manifest(
                 definition.skill,
                 query,
                 run_number,
@@ -190,13 +368,38 @@ def _execute_trigger_queries(
         for definition, query in selected
         for run_number in range(1, runs + 1)
     )
-    declare_invocation(
-        workspace,
-        "validate triggers",
-        tuple(job[3] for job in jobs),
+    return PreparedTriggerPlan(
+        definitions=loaded_definitions,
+        selected=selected,
+        attempts=attempts,
+        catalog=catalog,
+        runs=runs,
     )
 
-    capabilities = adapter.preflight(require_fixtures=False)
+
+def declare_trigger_plan(workspace: ResultWorkspace, plan: PreparedTriggerPlan) -> None:
+    """Persist a prepared trigger plan before any runtime preflight."""
+    declare_invocation(workspace, "validate triggers", plan.manifests)
+
+
+def execute_prepared_trigger_plan(
+    adapter: HarnessAdapter,
+    workspace: ResultWorkspace,
+    plan: PreparedTriggerPlan,
+    *,
+    max_concurrency: int,
+    actor_timeout_seconds: int,
+    preflighted_capabilities: HarnessCapabilities | None = None,
+) -> TriggerSuiteResult:
+    """Execute exactly one already declared immutable trigger plan."""
+    _validate_trigger_execution_options(
+        plan.runs,
+        max_concurrency,
+        actor_timeout_seconds,
+    )
+    if not workspace.invocation_manifest.is_file():
+        raise TriggerHarnessError("prepared trigger invocation was not declared")
+    capabilities = preflighted_capabilities or adapter.preflight(require_fixtures=False)
     if not capabilities.available:
         raise TriggerHarnessError(capabilities.failure or "selected harness is unavailable")
     if not capabilities.reports_successful_skill_reads:
@@ -204,27 +407,29 @@ def _execute_trigger_queries(
             "selected harness does not expose deterministic successful skill-read evidence"
         )
 
-    catalog = tuple(definition.skill.root for definition in loaded_definitions)
     with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
         attempt_outcomes = tuple(
             executor.map(
-                lambda job: _execute_trigger_attempt(
+                lambda attempt: _execute_trigger_attempt(
                     adapter,
                     workspace,
-                    catalog,
-                    job[0].skill,
-                    job[1],
-                    job[3],
+                    plan.catalog,
+                    attempt.definition.skill,
+                    attempt.query,
+                    attempt.manifest,
                     capabilities.harness_name,
                     actor_timeout_seconds,
                 ),
-                jobs,
+                plan.attempts,
             )
         )
 
     outcomes_by_query: dict[tuple[str, str], list[TriggerAttemptOutcome]] = {}
-    for (definition, query, _, _), outcome in zip(jobs, attempt_outcomes, strict=True):
-        outcomes_by_query.setdefault((definition.skill.name, query.id), []).append(outcome)
+    for attempt, outcome in zip(plan.attempts, attempt_outcomes, strict=True):
+        outcomes_by_query.setdefault(
+            (attempt.definition.skill.name, attempt.query.id),
+            [],
+        ).append(outcome)
     query_results = tuple(
         TriggerQueryResult(
             skill_name=definition.skill.name,
@@ -232,13 +437,100 @@ def _execute_trigger_queries(
             should_trigger=query.should_trigger,
             classification=classify_trigger_attempts(
                 outcomes_by_query[(definition.skill.name, query.id)],
-                runs,
+                plan.runs,
             ),
             attempts=tuple(outcomes_by_query[(definition.skill.name, query.id)]),
         )
-        for definition, query in selected
+        for definition, query in plan.selected
     )
     return TriggerSuiteResult(query_results=query_results)
+
+
+def finalize_trigger_result(
+    root: Path,
+    workspace: ResultWorkspace,
+    result: TriggerSuiteResult | None,
+    *,
+    execution_failure: str | None = None,
+) -> TriggerFinalization:
+    """Persist one trigger terminal state without escaping finalization failures."""
+    if execution_failure is not None or result is None:
+        failure = execution_failure or "trigger execution did not complete"
+        terminal = resolve_terminal_decision(
+            execution_error=True,
+            pending_review=False,
+            expectation_failure=False,
+        )
+        summary_failure = _persist_terminal_trigger_summary(
+            workspace,
+            decision=terminal.durable_label,
+            result=result,
+            failure=failure,
+        )
+        failures = [failure]
+        if summary_failure is not None:
+            failures.append(f"result summary failed: {summary_failure}")
+        return TriggerFinalization(
+            terminal=terminal,
+            benchmark=None,
+            failures=tuple(failures),
+        )
+
+    terminal = resolve_terminal_decision(
+        execution_error=result.exit_code == 2,
+        pending_review=result.requires_review,
+        expectation_failure=result.has_failed_expectations,
+    )
+    if terminal.key in ("execution_error", "pending_review"):
+        summary_failure = _persist_terminal_trigger_summary(
+            workspace,
+            decision=terminal.durable_label,
+            result=result,
+        )
+        if summary_failure is None:
+            return TriggerFinalization(terminal=terminal, benchmark=None)
+        failure = f"result summary failed: {summary_failure}"
+        return TriggerFinalization(
+            terminal=resolve_terminal_decision(
+                execution_error=True,
+                pending_review=result.requires_review,
+                expectation_failure=result.has_failed_expectations,
+            ),
+            benchmark=None,
+            failures=(failure,),
+        )
+
+    try:
+        benchmark = aggregate_results(
+            workspace.root,
+            "judge",
+            repository_root=root,
+            terminal_decision=terminal.durable_label,
+        )
+    except Exception as error:
+        failure = f"aggregation failed: {error}"
+        summary_failure = _persist_terminal_trigger_summary(
+            workspace,
+            decision="execution error",
+            result=result,
+            failure=failure,
+        )
+        failures = [failure]
+        if summary_failure is not None:
+            failures.append(f"result summary failed: {summary_failure}")
+        return TriggerFinalization(
+            terminal=resolve_terminal_decision(
+                execution_error=True,
+                pending_review=False,
+                expectation_failure=result.has_failed_expectations,
+            ),
+            benchmark=None,
+            failures=tuple(failures),
+        )
+    return TriggerFinalization(
+        terminal=terminal,
+        benchmark=benchmark,
+    )
 
 
 def _validate_trigger_execution_options(
@@ -270,165 +562,120 @@ def run_trigger_query_harness(
         print_grouped_issues(static_issues)
         print("validate triggers: INVALID STATIC CONTRACT")
         return 2
+    workspace: ResultWorkspace | None = None
     try:
+        _validate_trigger_execution_options(runs, max_concurrency, 1)
         definitions = load_trigger_queries(root)
-        selected = _select_trigger_queries(definitions, skill_filter, query_filter)
-        if not selected:
-            raise TriggerDefinitionError(
-                (
-                    ValidationIssue(
-                        scope="trigger selection",
-                        message="no trigger queries match the selected filters",
-                    ),
-                )
-            )
+        plan = prepare_trigger_plan(
+            definitions,
+            runs=runs,
+            skill_filter=skill_filter,
+            query_filter=query_filter,
+        )
         workspace = create_result_workspace(
             "validate-triggers",
             results_dir=results_dir,
             repository_root=root,
         )
+        declare_trigger_plan(workspace, plan)
     except TriggerDefinitionError as error:
         print_grouped_issues(error.issues)
         print("validate triggers: INVALID DEFINITIONS")
         return 2
-    except ResultArtifactError as error:
-        print(f"validate triggers: FAILED: {error}")
+    except Exception as error:
+        failure = str(error)
+        if workspace is not None:
+            finalization = finalize_trigger_result(
+                root,
+                workspace,
+                None,
+                execution_failure=failure,
+            )
+            failure = "\n".join(finalization.failures)
+        print(
+            "validate triggers: FAILED: "
+            f"{bounded_redacted_runtime_text(failure, 4096)}"
+        )
+        if workspace is not None:
+            _print_results_path(workspace)
+            print(f"validate triggers: {finalization.terminal.console_label}")
         return 2
 
-    actor_runs = len(selected) * runs
-    selected_skill_count = len({definition.skill.name for definition, _ in selected})
+    actor_runs = len(plan.attempts)
+    selected_skill_count = len(
+        {definition.skill.name for definition, _ in plan.selected}
+    )
     print(
         "trigger plan: "
         f"skills={selected_skill_count} catalog_skills={len(definitions)} "
-        f"queries={len(selected)} actor_runs={actor_runs} judge_runs=0 "
+        f"queries={len(plan.selected)} actor_runs={actor_runs} judge_runs=0 "
         f"preflight_calls=1 max_concurrency={max_concurrency} results={workspace.root}"
     )
     if harness != "codex":
         failure = "Claude trigger evidence is not implemented"
-        summary_failure = _persist_terminal_trigger_summary(
+        finalization = finalize_trigger_result(
+            root,
             workspace,
-            decision="execution error",
-            failure=failure,
+            None,
+            execution_failure=failure,
         )
-        if summary_failure is not None:
-            failure = f"{failure}\nresult summary failed: {summary_failure}"
+        failure = "\n".join(finalization.failures)
         print(f"validate triggers: FAILED: {failure}")
         _print_results_path(workspace)
-        return 2
+        print(f"validate triggers: {finalization.terminal.console_label}")
+        return finalization.terminal.exit_code
 
-    from scripts.ai_skills_lib.codex_harness import CodexHarnessAdapter, CodexOutputError
-    from scripts.ai_skills_lib.sandbox_runtime import (
-        EvalRuntimeManifest,
-        SandboxRuntime,
-        SandboxRuntimeError,
-        SubprocessRunner,
-    )
-
-    staging_root = workspace.root.parent / f".ai-skills-workers-{uuid.uuid4().hex[:12]}"
-    runtime: SandboxRuntime | None = None
+    session: CodexEvaluationRuntime | None = None
     result: TriggerSuiteResult | None = None
     failure: str | None = None
-    cleanup_succeeded = False
     try:
-        manifest = EvalRuntimeManifest.load(root / "config" / "eval-runtime.json")
-        runtime = SandboxRuntime(
-            manifest=manifest,
-            process=SubprocessRunner(manifest.limits.maximum_captured_output_bytes),
-            repository_root=root,
-            results_root=workspace.root,
-            staging_root=staging_root,
-            invocation_id=f"triggers-{uuid.uuid4().hex[:10]}",
+        session = CodexEvaluationRuntime.create(
+            root,
+            workspace.root,
+            invocation_label="triggers",
             max_concurrency=max_concurrency,
         )
-        adapter = CodexHarnessAdapter(runtime, allowed_skill_root=root / "skills")
         result = _execute_trigger_queries(
             root,
-            adapter,
+            session.adapter,
             workspace,
             definitions=definitions,
             runs=runs,
             max_concurrency=max_concurrency,
-            actor_timeout_seconds=manifest.limits.actor_timeout_seconds,
+            actor_timeout_seconds=session.manifest.limits.actor_timeout_seconds,
             skill_filter=skill_filter,
             query_filter=query_filter,
+            prepared_plan=plan,
+            invocation_declared=True,
         )
-    except (
-        OSError,
-        CodexOutputError,
-        ResultArtifactError,
-        SandboxRuntimeError,
-        TriggerDefinitionError,
-        TriggerHarnessError,
-        ValueError,
-    ) as error:
+    except Exception as error:
         failure = str(error)
     finally:
-        if runtime is not None:
+        if session is not None:
             try:
-                runtime.close()
-                cleanup_succeeded = True
+                session.close()
             except Exception as error:
                 failure = "\n".join(
-                    part for part in (failure, f"sandbox cleanup failed: {error}") if part
-                )
-        if (cleanup_succeeded or runtime is None) and staging_root.exists():
-            try:
-                shutil.rmtree(staging_root)
-            except OSError as error:
-                failure = "\n".join(
-                    part
-                    for part in (failure, f"worker staging cleanup failed: {error}")
-                    if part
+                    part for part in (failure, str(error)) if part
                 )
 
-    if failure is not None or result is None:
-        failure = failure or "trigger execution did not complete"
-        summary_failure = _persist_terminal_trigger_summary(
-            workspace,
-            decision="execution error",
-            result=result,
-            failure=failure,
+    finalization = finalize_trigger_result(
+        root,
+        workspace,
+        result,
+        execution_failure=failure,
+    )
+    if result is not None:
+        print(format_trigger_summary(result))
+    if finalization.failures:
+        rendered_failures = "\n".join(finalization.failures)
+        print(
+            "validate triggers: FAILED: "
+            f"{bounded_redacted_runtime_text(rendered_failures, 4096)}"
         )
-        if summary_failure is not None:
-            failure = f"{failure}\nresult summary failed: {summary_failure}"
-        print(f"validate triggers: FAILED: {failure}")
-        _print_results_path(workspace)
-        return 2
-    if result.exit_code != 2:
-        try:
-            aggregate_results(workspace.root, "judge", repository_root=root)
-        except ResultArtifactError as error:
-            failure = f"aggregation failed: {error}"
-            summary_failure = _persist_terminal_trigger_summary(
-                workspace,
-                decision="execution error",
-                result=result,
-                failure=failure,
-            )
-            if summary_failure is not None:
-                failure = f"{failure}\nresult summary failed: {summary_failure}"
-            print(f"validate triggers: FAILED: {failure}")
-            _print_results_path(workspace)
-            return 2
-    else:
-        summary_failure = _persist_terminal_trigger_summary(
-            workspace,
-            decision="execution error",
-            result=result,
-        )
-        if summary_failure is not None:
-            print(f"validate triggers: FAILED: result summary failed: {summary_failure}")
-            _print_results_path(workspace)
-            return 2
-    print(format_trigger_summary(result))
     _print_results_path(workspace)
-    if result.exit_code == 0:
-        print("validate triggers: OK")
-    elif result.exit_code == 1:
-        print("validate triggers: EXPECTATIONS FAILED")
-    else:
-        print("validate triggers: EXECUTION ERROR")
-    return result.exit_code
+    print(f"validate triggers: {finalization.terminal.console_label}")
+    return finalization.terminal.exit_code
 
 
 def _print_results_path(workspace: ResultWorkspace) -> None:
@@ -460,29 +707,44 @@ def _persist_terminal_trigger_summary(
         details = format_trigger_summary(result)
         if details:
             lines.extend(("", "## Query Results", "", details))
+        if result.requires_review:
+            lines.extend(
+                (
+                    "",
+                    "## Review Required",
+                    "",
+                    "A two-of-three query has one discordant failed run. Investigate "
+                    "that run before explicitly aggregating these preserved attempts "
+                    "as a trusted pass.",
+                )
+            )
     else:
         lines.extend(("", "No trigger attempt completed."))
     if not workspace.benchmark.exists():
-        lines.extend(
-            (
-                "",
-                "`benchmark.json` was not generated because the result set was not "
-                "complete and trustworthy.",
-            )
+        explanation = (
+            "`benchmark.json` was not generated while human review is pending."
+            if result is not None and result.requires_review
+            else "`benchmark.json` was not generated because the result set was not "
+            "complete and trustworthy."
         )
+        lines.extend(("", explanation))
     try:
         write_result_summary(workspace, "\n".join(lines))
-    except ResultArtifactError as error:
-        return str(error)
+    except Exception as error:
+        return bounded_redacted_runtime_text(str(error), 4096)
     return None
 
 
 def format_trigger_summary(result: TriggerSuiteResult) -> str:
-    """Render stable, unstable, failed, and errored query outcomes for humans."""
+    """Render stable, review-pending, failed, and errored query outcomes."""
     lines: list[str] = []
     for query_result in result.query_results:
         classification = query_result.classification
-        suffix = " INVESTIGATE" if classification.status == "pass_unstable" else ""
+        suffix = (
+            " REVIEW REQUIRED: investigate the discordant failed run before aggregation"
+            if classification.status == "pending_review"
+            else ""
+        )
         lines.append(
             f"{query_result.skill_name}/{query_result.query_id}: "
             f"{classification.status} "
@@ -523,10 +785,26 @@ def _select_trigger_queries(
     )
 
 
+def _validate_selected_trigger_queries(
+    selected: Sequence[tuple[SkillTriggerQueries, TriggerQuery]],
+    runs: int,
+) -> None:
+    query_count = len(selected)
+    model_calls = query_count * runs
+    if model_calls > _MAX_MODEL_CALLS:
+        raise TriggerHarnessError(
+            f"selected trigger invocation exceeds the {_MAX_MODEL_CALLS}-call limit"
+        )
+    if query_count > _MAX_SELECTED_QUERIES:
+        raise TriggerHarnessError(
+            f"selected trigger queries exceed the {_MAX_SELECTED_QUERIES}-query limit"
+        )
+
+
 def _execute_trigger_attempt(
     adapter: HarnessAdapter,
     workspace: ResultWorkspace,
-    catalog: tuple[Path, ...],
+    catalog: tuple[PreparedSkillSource, ...],
     skill: SkillRecord,
     query: TriggerQuery,
     manifest: AttemptManifest,
@@ -583,6 +861,24 @@ def _execute_trigger_attempt(
             trace=(*execution.trace, {"type": "evidence_error", "message": diagnostic}),
             failure=diagnostic,
         )
+    durable_response = bounded_redacted_runtime_text(
+        execution.response,
+        _MAX_RESPONSE_BYTES,
+    )
+    if durable_response != execution.response:
+        diagnostic = (
+            "actor response cannot be preserved exactly under the durable 64 KiB policy"
+        )
+        execution = replace(
+            execution,
+            trace=(
+                *execution.trace,
+                {"type": "evidence_error", "message": diagnostic},
+            ),
+            failure="\n".join(
+                part for part in (execution.failure, diagnostic) if part
+            ),
+        )
     ended_at = datetime.now(timezone.utc)
     timing = record_harness_timing(
         run_id=run_id,
@@ -594,8 +890,7 @@ def _execute_trigger_attempt(
         ended_at=ended_at,
         execution=execution,
     )
-    durable_response = bounded_redacted_runtime_text(execution.response, 65536)
-    transcript = _trigger_transcript(query, execution)
+    transcript = _trigger_transcript(query, durable_response)
     if timing.status != "completed":
         write_incomplete_attempt_artifacts(
             paths,
@@ -687,7 +982,7 @@ def _trigger_attempt_manifest(
     minimum_pass_rate: float,
 ) -> AttemptManifest:
     return AttemptManifest(
-        run_id=f"{skill.name}-{query.id}-run-{run_number}",
+        run_id=_injective_trigger_run_id(skill.name, query.id, run_number),
         skill_name=skill.name,
         case_id=query.id,
         run_kind="trigger",
@@ -703,10 +998,22 @@ def _trigger_attempt_manifest(
     )
 
 
-def _trigger_transcript(query: TriggerQuery, execution: HarnessExecution) -> str:
+def _injective_trigger_run_id(
+    skill_name: str,
+    query_id: str,
+    run_number: int,
+) -> str:
+    rendered_run = str(run_number)
+    return (
+        f"s{len(skill_name)}-{skill_name}-"
+        f"q{len(query_id)}-{query_id}-"
+        f"r{len(rendered_run)}-{rendered_run}"
+    )
+
+
+def _trigger_transcript(query: TriggerQuery, durable_response: str) -> str:
     expectation = "load the skill" if query.should_trigger else "leave the skill unselected"
     durable_query = bounded_redacted_runtime_text(query.query, 16384)
-    durable_response = bounded_redacted_runtime_text(execution.response, 65536)
     return (
         "# Trigger Query\n\n"
         f"{durable_query}\n\n"

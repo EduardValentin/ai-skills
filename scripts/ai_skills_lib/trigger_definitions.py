@@ -23,6 +23,7 @@ from scripts.ai_skills_lib.secret_patterns import bounded_redacted_runtime_text
 _SCHEMA_PATH = (
     Path(__file__).resolve().parents[2] / "schemas" / "ai-skills" / "triggers.schema.json"
 )
+_MAX_QUERY_BYTES = 16 * 1024
 
 
 @dataclass(frozen=True)
@@ -246,6 +247,25 @@ def validate_trigger_query_document(
                     )
                 )
             seen.add(identifier)
+        for query in queries:
+            if not isinstance(query, Mapping):
+                continue
+            query_text = query.get("query")
+            if not isinstance(query_text, str):
+                continue
+            if len(query_text.encode("utf-8")) <= _MAX_QUERY_BYTES:
+                continue
+            identifier = query.get("id")
+            label = f" '{identifier}'" if isinstance(identifier, str) else ""
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        f"evals/triggers.json query{label} exceeds the "
+                        "16 KiB UTF-8 limit"
+                    ),
+                )
+            )
     return issues
 
 

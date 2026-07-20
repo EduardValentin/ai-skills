@@ -5,6 +5,7 @@ from dataclasses import fields
 from io import StringIO
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -70,7 +71,18 @@ class TemporaryRepository:
         if with_evals:
             self.write_json(
                 evals_root / "evals.json",
-                {"evals": [{"id": "basic", "prompt": "Perform the workflow."}]},
+                {
+                    "skill_name": name,
+                    "evals": [
+                        {
+                            "id": "basic",
+                            "prompt": "Perform the workflow.",
+                            "expected_output": "A complete workflow result.",
+                            "assertions": ["The result completes the requested workflow."],
+                            "checks": [],
+                        }
+                    ],
+                },
             )
         if with_triggers:
             self.write_json(
@@ -97,6 +109,24 @@ class TemporaryRepository:
     def write_json(path: Path, value: object) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(value), encoding="utf-8")
+
+    def exercise_bundled_path(self, skill_root: Path, path: str) -> None:
+        evals_path = skill_root / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        document["evals"][0]["assertions"].append(
+            f"The workflow correctly uses `{path}`."
+        )
+        self.write_json(evals_path, document)
+
+    def declare_basic_case_input(self, skill_root: Path, actor_path: str) -> Path:
+        evals_path = skill_root / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        case = document["evals"][0]
+        fixture_path = f"fixtures/basic/inputs/{actor_path}"
+        case.setdefault("files", []).append(fixture_path)
+        case["prompt"] += f" Read `{actor_path}`."
+        self.write_json(evals_path, document)
+        return skill_root / "evals" / fixture_path
 
 
 class TemporaryRepositoryTestCase(unittest.TestCase):
@@ -167,6 +197,77 @@ class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
         )
 
         self.assert_issue("must use skills/<group>/<skill>/SKILL.md")
+
+    def test_rejects_non_directory_entries_at_every_skill_layout_boundary(self):
+        boundaries = (
+            Path("skills"),
+            Path("skills/workflows"),
+            Path("skills/workflows/alpha"),
+        )
+
+        for boundary in boundaries:
+            with self.subTest(boundary=boundary):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                path = repository.root / boundary
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("not a directory\n", encoding="utf-8")
+                expected = f"{boundary} must be a contained non-symlink directory"
+
+                with self.assertRaises(ValueError) as raised:
+                    discover_testable_skills(repository.root)
+
+                self.assertIn(expected, str(raised.exception))
+                messages = [
+                    issue.message for issue in run_static_validation(repository.root)
+                ]
+                self.assertTrue(any(expected in message for message in messages), messages)
+
+    def test_rejects_every_symlink_variant_at_every_skill_layout_boundary(self):
+        boundaries = {
+            Path("skills"): Path("workflows/alpha"),
+            Path("skills/workflows"): Path("alpha"),
+            Path("skills/workflows/alpha"): Path(),
+        }
+
+        for boundary, target_skill_suffix in boundaries.items():
+            for target_kind in ("contained", "escaping", "broken"):
+                with self.subTest(boundary=boundary, target_kind=target_kind):
+                    repository = TemporaryRepository()
+                    self.addCleanup(repository.cleanup)
+                    external = tempfile.TemporaryDirectory()
+                    self.addCleanup(external.cleanup)
+                    link = repository.root / boundary
+                    link.parent.mkdir(parents=True, exist_ok=True)
+                    if target_kind == "contained":
+                        target = repository.root / "layout-targets" / boundary.name
+                    elif target_kind == "escaping":
+                        target = Path(external.name) / boundary.name
+                    else:
+                        target = repository.root / "missing-layout-target" / boundary.name
+
+                    if target_kind != "broken":
+                        target_skill = target / target_skill_suffix
+                        target_skill.mkdir(parents=True)
+                        (target_skill / "SKILL.md").write_text(
+                            "invalid document that discovery must not read\n",
+                            encoding="utf-8",
+                        )
+                    link.symlink_to(target, target_is_directory=True)
+                    expected = (
+                        f"{boundary} must be a contained non-symlink directory"
+                    )
+
+                    with self.assertRaises(ValueError) as raised:
+                        discover_testable_skills(repository.root)
+
+                    self.assertIn(expected, str(raised.exception))
+                    messages = [
+                        issue.message for issue in run_static_validation(repository.root)
+                    ]
+                    self.assertTrue(
+                        any(expected in message for message in messages), messages
+                    )
 
     def test_rejects_duplicate_names_and_folder_name_mismatches(self):
         self.repository.add_skill("shared", group="one")
@@ -394,6 +495,7 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         references = skill_root / "references"
         references.mkdir()
         (references / "guide.md").write_text("Guidance.\n", encoding="utf-8")
+        self.repository.exercise_bundled_path(skill_root, "references/guide.md")
 
         self.assert_no_issues()
 
@@ -410,6 +512,7 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         references.mkdir()
         (references / "guide file.md").write_text("Guidance.\n", encoding="utf-8")
         (references / "appendix(v2).md").write_text("Appendix.\n", encoding="utf-8")
+        self.repository.exercise_bundled_path(skill_root, "references/guide file.md")
 
         self.assert_no_issues()
 
@@ -435,6 +538,7 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         self.assert_issue("must be executable")
 
         script.chmod(0o755)
+        self.repository.exercise_bundled_path(skill_root, "scripts/prepare.sh")
         self.assert_no_issues()
 
     def test_rejects_personal_absolute_paths_in_authored_content(self):
@@ -460,6 +564,7 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         (assets / "sample.txt").write_text(
             f"{credential_shape}\n/Users/example/not-scanned\n", encoding="utf-8"
         )
+        self.repository.exercise_bundled_path(skill_root, "assets/sample.txt")
 
         self.assert_no_issues()
 
@@ -674,7 +779,7 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
         skill_root = self.repository.add_skill("alpha")
         (skill_root / "evals" / "evals.json").write_text("[]", encoding="utf-8")
 
-        self.assert_issue("evals/evals.json must contain an 'evals' list")
+        self.assert_issue("evals/evals.json schema error")
 
         (skill_root / "evals" / "evals.json").write_text("{", encoding="utf-8")
         self.assert_issue("invalid JSON")
@@ -684,49 +789,334 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
         self.repository.write_json(
             skill_root / "evals" / "evals.json",
             {
+                "skill_name": "alpha",
                 "evals": [
-                    {"id": "missing", "prompt": "Run.", "fixture": "evals/fixtures/missing.json"},
-                    {"id": "escape", "prompt": "Run.", "fixture": "../outside.json"},
+                    {
+                        "id": "missing",
+                        "prompt": "Run.",
+                        "expected_output": "A result.",
+                        "assertions": ["The result is complete."],
+                        "files": ["fixtures/missing/inputs/context.txt"],
+                        "checks": [],
+                    },
+                    {
+                        "id": "escape",
+                        "prompt": "Run.",
+                        "expected_output": "A result.",
+                        "assertions": ["The result is complete."],
+                        "files": ["../outside.json"],
+                        "checks": [],
+                    },
                 ]
             },
         )
 
         messages = self.messages()
 
-        self.assertTrue(any("fixture path does not exist" in message for message in messages))
-        self.assertTrue(any("fixture path must stay inside" in message for message in messages))
+        self.assertTrue(any("actor input does not exist" in message for message in messages))
+        self.assertTrue(any("schema error" in message for message in messages))
+
+    def test_auto_discovers_every_unsupported_eval_topology_entry(self):
+        bypasses = (
+            (
+                "arbitrary root file",
+                Path("notes.txt"),
+                "unsupported evals entry: notes.txt",
+            ),
+            (
+                "extra root JSON",
+                Path("extra.json"),
+                "unsupported evals entry: extra.json",
+            ),
+            (
+                "arbitrary root directory",
+                Path("legacy/content.txt"),
+                "unsupported evals entry: legacy",
+            ),
+            (
+                "fixture-root file",
+                Path("fixtures/orphan.txt"),
+                "eval fixture case entry must be a contained non-symlink directory: "
+                "evals/fixtures/orphan.txt",
+            ),
+            (
+                "undeclared case tree",
+                Path("fixtures/undeclared/context.txt"),
+                "fixture tree belongs to undeclared eval case 'undeclared'",
+            ),
+            (
+                "undeclared case JSON",
+                Path("fixtures/basic/extra.json"),
+                "undeclared eval fixture file: evals/fixtures/basic/extra.json",
+            ),
+        )
+
+        for label, relative_path, expected in bypasses:
+            with self.subTest(label=label):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                path = skill_root / "evals" / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    "{}" if path.suffix == ".json" else "fixture\n",
+                    encoding="utf-8",
+                )
+
+                messages = [
+                    issue.message for issue in run_static_validation(repository.root)
+                ]
+
+                self.assertTrue(any(expected in message for message in messages), messages)
+
+    def test_rejects_symlinked_required_eval_files(self):
+        for filename in ("evals.json", "triggers.json"):
+            for target_kind in ("contained", "escaping", "broken"):
+                with self.subTest(filename=filename, target_kind=target_kind):
+                    repository = TemporaryRepository()
+                    self.addCleanup(repository.cleanup)
+                    external = tempfile.TemporaryDirectory()
+                    self.addCleanup(external.cleanup)
+                    skill_root = repository.add_skill("alpha")
+                    path = skill_root / "evals" / filename
+                    original = path.read_text(encoding="utf-8")
+                    path.unlink()
+                    if target_kind == "contained":
+                        other_name = (
+                            "triggers.json" if filename == "evals.json" else "evals.json"
+                        )
+                        target = path.with_name(other_name)
+                    elif target_kind == "escaping":
+                        target = Path(external.name) / filename
+                        target.write_text(original, encoding="utf-8")
+                    else:
+                        target = path.with_name(f"missing-{filename}")
+                    path.symlink_to(target)
+                    expected = (
+                        f"evals/{filename} must be a contained non-symlink regular file"
+                    )
+
+                    messages = [
+                        issue.message for issue in run_static_validation(repository.root)
+                    ]
+
+                    self.assertTrue(
+                        any(expected in message for message in messages), messages
+                    )
+
+    def test_rejects_every_symlink_variant_at_eval_directory_boundaries(self):
+        boundaries = {
+            Path("evals"): "evals must be a contained non-symlink directory",
+            Path("evals/fixtures"): (
+                "evals/fixtures must be a contained non-symlink directory"
+            ),
+            Path("evals/fixtures/basic"): (
+                "eval fixture case entry must be a contained non-symlink directory: "
+                "evals/fixtures/basic"
+            ),
+        }
+
+        for boundary, expected in boundaries.items():
+            for target_kind in ("contained", "escaping", "broken"):
+                with self.subTest(boundary=boundary, target_kind=target_kind):
+                    repository = TemporaryRepository()
+                    self.addCleanup(repository.cleanup)
+                    external = tempfile.TemporaryDirectory()
+                    self.addCleanup(external.cleanup)
+                    skill_root = repository.add_skill("alpha")
+                    link = skill_root / boundary
+                    if boundary == Path("evals"):
+                        if target_kind == "contained":
+                            target = skill_root / "assets" / "evals-target"
+                        elif target_kind == "escaping":
+                            target = Path(external.name) / "evals-target"
+                        else:
+                            target = skill_root / "missing-evals-target"
+                        if target_kind == "broken":
+                            shutil.rmtree(link)
+                        else:
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.move(str(link), target)
+                    else:
+                        link.parent.mkdir(parents=True, exist_ok=True)
+                        if target_kind == "contained":
+                            target = skill_root / "assets" / f"{boundary.name}-target"
+                        elif target_kind == "escaping":
+                            target = Path(external.name) / f"{boundary.name}-target"
+                        else:
+                            target = skill_root / f"missing-{boundary.name}-target"
+                        if target_kind != "broken":
+                            target.mkdir(parents=True)
+                            (target / "fixture.txt").write_text(
+                                "fixture\n", encoding="utf-8"
+                            )
+                    link.symlink_to(target, target_is_directory=True)
+
+                    messages = [
+                        issue.message for issue in run_static_validation(repository.root)
+                    ]
+
+                    self.assertTrue(
+                        any(expected in message for message in messages), messages
+                    )
+
+    def test_rejects_empty_eval_fixture_directories_at_every_depth(self):
+        directories = (
+            Path("evals/fixtures"),
+            Path("evals/fixtures/basic"),
+            Path("evals/fixtures/basic/inputs"),
+        )
+
+        for relative_path in directories:
+            with self.subTest(relative_path=relative_path):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                (skill_root / relative_path).mkdir(parents=True)
+
+                messages = [
+                    issue.message for issue in run_static_validation(repository.root)
+                ]
+
+                expected = f"empty directory is not allowed: {relative_path}"
+                self.assertTrue(any(expected in message for message in messages), messages)
+
+    def test_rejects_broken_and_non_case_fixture_symlinks(self):
+        for target_kind in ("broken", "escaping", "outside-case"):
+            with self.subTest(target_kind=target_kind):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                external = tempfile.TemporaryDirectory()
+                self.addCleanup(external.cleanup)
+                skill_root = repository.add_skill("alpha")
+                case_root = skill_root / "evals" / "fixtures" / "basic"
+                case_root.mkdir(parents=True)
+                link = case_root / "linked-fixture.txt"
+                if target_kind == "broken":
+                    target = case_root / "missing.txt"
+                    expected = "broken eval fixture symlink"
+                elif target_kind == "escaping":
+                    target = Path(external.name) / "fixture.txt"
+                    target.write_text("fixture\n", encoding="utf-8")
+                    expected = "eval fixture symlink target must stay inside its case"
+                else:
+                    target = skill_root / "assets" / "fixture.txt"
+                    target.parent.mkdir()
+                    target.write_text("fixture\n", encoding="utf-8")
+                    expected = "eval fixture symlink target must stay inside its case"
+                link.symlink_to(target)
+
+                messages = [
+                    issue.message for issue in run_static_validation(repository.root)
+                ]
+
+                self.assertTrue(any(expected in message for message in messages), messages)
+
+    def test_accepts_declared_case_input_schema_and_mockserver_fixture(self):
+        skill_root = self.repository.add_skill("alpha")
+        actor_input = self.repository.declare_basic_case_input(
+            skill_root, "context.json"
+        )
+        self.repository.write_json(actor_input, {"source": "fixture"})
+        schema_path = (
+            skill_root / "evals" / "fixtures" / "basic" / "result.schema.json"
+        )
+        self.repository.write_json(schema_path, {"type": "object"})
+        evals_path = skill_root / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        document["evals"][0]["checks"].append(
+            {
+                "type": "json_schema",
+                "path": "result.json",
+                "schema": "fixtures/basic/result.schema.json",
+            }
+        )
+        self.repository.write_json(evals_path, document)
+        self.repository.write_json(
+            skill_root
+            / "evals"
+            / "fixtures"
+            / "basic"
+            / "mockserverInitialization.json",
+            {
+                "id": "get-resource",
+                "httpRequest": {
+                    "method": "GET",
+                    "path": "/resource",
+                    "headers": {"Host": ["api.example.test"]},
+                },
+                "httpResponse": {"statusCode": 200},
+            },
+        )
+
+        self.assert_no_issues()
 
     def test_eval_json_rejects_non_fake_secret_values(self):
         skill_root = self.repository.add_skill("alpha")
         unsafe_assignment = "SERVICE_TOKEN=" + "authored" + "-value"
         self.repository.write_json(
             skill_root / "evals" / "evals.json",
-            {"evals": [{"id": "secret", "prompt": unsafe_assignment}]},
+            {
+                "skill_name": "alpha",
+                "evals": [
+                    {
+                        "id": "secret",
+                        "prompt": unsafe_assignment,
+                        "expected_output": "A result.",
+                        "assertions": ["The result is complete."],
+                        "checks": [],
+                    }
+                ],
+            },
         )
 
         self.assert_issue("sensitive-assignment")
 
         self.repository.write_json(
             skill_root / "evals" / "evals.json",
-            {"evals": [{"id": "fake", "prompt": "SERVICE_TOKEN=FAKE_authored-value"}]},
+            {
+                "skill_name": "alpha",
+                "evals": [
+                    {
+                        "id": "fake",
+                        "prompt": "SERVICE_TOKEN=FAKE_authored-value",
+                        "expected_output": "A result.",
+                        "assertions": ["The result is complete."],
+                        "checks": [],
+                    }
+                ],
+            },
         )
         self.assert_no_issues()
 
     def test_eval_text_fixtures_reject_non_fake_secret_values(self):
         skill_root = self.repository.add_skill("alpha")
-        fixture = skill_root / "evals" / "fixtures" / "environment.env"
-        fixture.parent.mkdir()
+        fixture = self.repository.declare_basic_case_input(
+            skill_root, "environment.env"
+        )
+        fixture.parent.mkdir(parents=True)
         fixture.write_text("SERVICE_TOKEN=" + "authored-value\n", encoding="utf-8")
 
         self.assert_issue("sensitive-assignment")
 
     def test_eval_binary_fixtures_are_not_content_scanned(self):
         skill_root = self.repository.add_skill("alpha")
-        fixture = skill_root / "evals" / "fixtures" / "sample.bin"
-        fixture.parent.mkdir()
+        fixture = self.repository.declare_basic_case_input(skill_root, "sample.bin")
+        fixture.parent.mkdir(parents=True)
         fixture.write_bytes(b"\x00SERVICE_TOKEN=authored-value\xff")
 
         self.assert_no_issues()
+
+    def test_eval_fixture_limit_matches_runtime_preparation(self):
+        skill_root = self.repository.add_skill("alpha")
+        fixture = self.repository.declare_basic_case_input(skill_root, "sample.bin")
+        fixture.parent.mkdir(parents=True)
+        fixture.write_bytes(b"\x00" * (3 * 1024 * 1024))
+
+        self.assert_no_issues()
+
+        fixture.write_bytes(b"\x00" * (4 * 1024 * 1024 + 1))
+        self.assert_issue("4 MiB eval fixture file limit")
 
     def test_logical_eval_aliases_keep_json_specific_validation(self):
         skill_root = self.repository.add_skill("alpha")
@@ -739,6 +1129,70 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
         (evals / "a.json").symlink_to(target)
 
         self.assert_issue("evals/a.json contains invalid JSON")
+
+    def test_mockserver_initialization_uses_the_strict_fixture_policy(self):
+        skill_root = self.repository.add_skill("alpha")
+        initialization = (
+            skill_root
+            / "evals"
+            / "fixtures"
+            / "basic"
+            / "mockserverInitialization.json"
+        )
+        self.repository.write_json(
+            initialization,
+            {
+                "id": "get-resource",
+                "httpRequest": {
+                    "method": "GET",
+                    "path": "/resource",
+                    "headers": {"Host": ["api.example.test"]},
+                },
+                "httpResponse": {"statusCode": 200},
+            },
+        )
+        self.assert_no_issues()
+
+        self.repository.write_json(
+            initialization,
+            {
+                "id": "unsafe-forward",
+                "httpRequest": {
+                    "method": "GET",
+                    "path": "/resource",
+                    "headers": {"Host": ["api.example.test"]},
+                },
+                "httpForward": {"host": "production.example.test", "port": 443},
+            },
+        )
+
+        self.assert_issue("MockServer fixture is invalid")
+
+    def test_mockserver_initialization_rejects_symlinks(self):
+        skill_root = self.repository.add_skill("alpha")
+        fixture_root = skill_root / "evals" / "fixtures" / "basic"
+        fixture_root.mkdir(parents=True)
+        target = fixture_root / "expectations.json"
+        self.repository.write_json(
+            target,
+            {
+                "id": "get-resource",
+                "httpRequest": {
+                    "method": "GET",
+                    "path": "/resource",
+                    "headers": {"Host": ["api.example.test"]},
+                },
+                "httpResponse": {"statusCode": 200},
+            },
+        )
+        initialization = fixture_root / "mockserverInitialization.json"
+        initialization.write_text("[]", encoding="utf-8")
+        self.assert_issue("MockServer fixture is invalid")
+
+        initialization.unlink()
+        initialization.symlink_to(target)
+
+        self.assert_issue("MockServer fixture must be a non-symlink regular file")
 
 
 class SecretPatternTests(unittest.TestCase):
@@ -915,13 +1369,12 @@ class CliValidationTests(TemporaryRepositoryTestCase):
 
         with (
             patch.object(cli, "REPOSITORY_ROOT", self.repository.root),
+            patch.object(cli, "run_unit_tests", side_effect=lambda root: order.append("unit") or 0),
             patch.object(
                 cli,
-                "preflight_reference_conformance",
-                side_effect=lambda: order.append("preflight"),
-                create=True,
+                "run_runtime_validation",
+                side_effect=lambda root: order.append("runtime") or 0,
             ),
-            patch.object(cli, "run_unit_tests", side_effect=lambda root: order.append("unit") or 0),
             patch.object(
                 cli,
                 "run_ci_validation",
@@ -933,28 +1386,26 @@ class CliValidationTests(TemporaryRepositoryTestCase):
             result = cli.main(["validate", "ci-all"])
 
         self.assertEqual(result, 0)
-        self.assertEqual(order, ["preflight", "unit", "validation"])
+        self.assertEqual(order, ["validation", "unit", "runtime"])
         self.assertIn("validate ci-all: OK", output.getvalue())
 
-    def test_ci_all_preflights_skills_ref_before_other_phases(self):
+    def test_ci_all_stops_when_conformance_validation_preflight_is_unavailable(self):
         output = StringIO()
         setup_command = "python3 -m pip install -r requirements-test.txt"
         order: list[str] = []
 
         with (
             patch.object(cli, "REPOSITORY_ROOT", self.repository.root),
-            patch.object(
-                cli,
-                "preflight_reference_conformance",
-                side_effect=RuntimeError(setup_command),
-                create=True,
-            ),
             patch.object(cli, "run_unit_tests", side_effect=lambda root: order.append("unit") or 0),
             patch.object(
                 cli,
+                "run_runtime_validation",
+                side_effect=lambda root: order.append("runtime") or 0,
+            ),
+            patch.object(
+                cli,
                 "run_ci_validation",
-                side_effect=lambda root: order.append("validation") or [],
-                create=True,
+                side_effect=RuntimeError(setup_command),
             ),
             redirect_stdout(output),
         ):
@@ -963,6 +1414,24 @@ class CliValidationTests(TemporaryRepositoryTestCase):
         self.assertEqual(result, 1)
         self.assertEqual(order, [])
         self.assertIn(setup_command, output.getvalue())
+
+    def test_ci_all_runs_reference_conformance_preflight_exactly_once(self):
+        self.repository.add_skill("alpha")
+
+        with (
+            patch.object(cli, "REPOSITORY_ROOT", self.repository.root),
+            patch.object(cli, "run_unit_tests", return_value=0),
+            patch.object(cli, "run_runtime_validation", return_value=0),
+            patch(
+                "scripts.ai_skills_lib.static_checks.conformance."
+                "preflight_reference_conformance"
+            ) as preflight,
+            redirect_stdout(StringIO()),
+        ):
+            result = cli.main(["validate", "ci-all"])
+
+        self.assertEqual(result, 0)
+        preflight.assert_called_once_with()
 
     def test_ci_all_discovers_skills_once_for_static_and_reference_checks(self):
         self.repository.add_skill("alpha")

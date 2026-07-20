@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
+import io
 import json
+import os
 from pathlib import Path
+import signal
 import sys
 import subprocess
 import tempfile
@@ -11,22 +15,53 @@ import time
 import unittest
 from unittest import mock
 
+from scripts.ai_skills_lib.evaluation_runtime import (
+    CodexEvaluationRuntime,
+    EvaluationRuntimeError,
+)
 from scripts.ai_skills_lib.sandbox_runtime import (
     CATALOG_RENAME_PROBE_SCRIPT,
+    CASE_CGROUP_EXEC_SCRIPT,
+    CASE_CGROUP_REMOVE_SCRIPT,
+    CASE_CGROUP_SETUP_SCRIPT,
+    CASE_CGROUP_TERMINATE_SCRIPT,
+    CASE_FILESYSTEM_CLEANUP_SCRIPT,
+    CASE_FILESYSTEM_PROBE_SCRIPT,
+    CASE_PRIVILEGE_LOCKDOWN_SCRIPT,
+    CASE_PRIVILEGE_PROBE_SCRIPT,
     CaseWorkspace,
     CommandResult,
     EvalRuntimeManifest,
     IPC_CLEANUP_SCRIPT,
     ManifestError,
+    PROCESS_FULLY_TERMINATED,
+    ProcessTerminationOutcome,
     SandboxRuntime,
     SandboxRuntimeError,
+    SandboxWorker,
     SubprocessRunner,
     network_policy_sha256,
+    process_termination_outcome,
 )
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = REPOSITORY_ROOT / "config" / "eval-runtime.json"
+OWNERSHIP_MARKER_NAME = ".ai-skills-sandbox-owner"
+DOCKER_CODEX_PROXY_CONFIG = """\
+# Codex configuration for Docker sandbox
+# This configuration enables "yolo mode" - no approvals, full access
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+mcp_oauth_credentials_store = "file"
+model_provider = "sandboxd"
+[model_providers.sandboxd]
+name = "Sandbox Proxy"
+base_url = "https://chatgpt.com/backend-api/codex"
+experimental_bearer_token = "oai-oat01-proxy-managed"
+requires_openai_auth = false
+"""
+DOCKER_CODEX_PROXY_AUTH = '{\n  "OPENAI_API_KEY": "proxy-managed"\n}\n'
 
 
 class FakeProcessRunner:
@@ -42,16 +77,30 @@ class FakeProcessRunner:
             if isinstance(override, CommandResult):
                 return override
         if argv[:3] == ("sbx", "exec", "--user"):
-            if len(argv) > 5 and argv[3] == "root" and argv[5] == "pgrep":
-                return CommandResult(returncode=1, stdout="", stderr="")
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
             if len(argv) > 5 and argv[3] == "root" and argv[5] == "getent":
                 return CommandResult(returncode=2, stdout="", stderr="")
-            if argv[3] == "root" or (len(argv) > 5 and argv[5] == "test"):
+            if CASE_CGROUP_EXEC_SCRIPT in argv:
+                script_index = argv.index(CASE_CGROUP_EXEC_SCRIPT)
+                wrapped = argv[script_index + 3 :]
+                if wrapped[:1] == ("test",) or (
+                    wrapped[:2] == ("python3", "-c")
+                    and len(wrapped) > 2
+                    and wrapped[2]
+                    in (CATALOG_RENAME_PROBE_SCRIPT, CASE_PRIVILEGE_PROBE_SCRIPT)
+                ):
+                    return completed()
+            elif argv[3] == "root":
+                return completed()
+            if len(argv) > 5 and argv[5] == "test":
                 return completed()
             if (
                 len(argv) > 7
                 and argv[5:7] == ("python3", "-c")
-                and argv[7] == CATALOG_RENAME_PROBE_SCRIPT
+                and argv[7]
+                in (CATALOG_RENAME_PROBE_SCRIPT, CASE_PRIVILEGE_PROBE_SCRIPT)
             ):
                 return completed()
         if argv == ("sbx", "ls", "--json"):
@@ -75,6 +124,29 @@ class FakeProcessRunner:
 
 def completed(stdout: str = "", stderr: str = "") -> CommandResult:
     return CommandResult(returncode=0, stdout=stdout, stderr=stderr)
+
+
+def ownership_marker_probe_result(argv: tuple[str, ...]) -> CommandResult | None:
+    if (
+        len(argv) != 9
+        or argv[:4] != ("sbx", "exec", "--user", "root")
+        or argv[5:7] != ("python3", "-c")
+        or Path(argv[8]).name != OWNERSHIP_MARKER_NAME
+    ):
+        return None
+    marker = Path(argv[8])
+    if not marker.is_file() or marker.is_symlink():
+        return CommandResult(returncode=1, stdout="", stderr="")
+    return completed(hashlib.sha256(marker.read_bytes()).hexdigest())
+
+
+def cgroup_wrapped_case_command(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    if CASE_CGROUP_EXEC_SCRIPT not in argv:
+        return None
+    script_index = argv.index(CASE_CGROUP_EXEC_SCRIPT)
+    if len(argv) <= script_index + 3:
+        return None
+    return argv[script_index + 3 :]
 
 
 def balanced_policy_payload() -> dict[str, object]:
@@ -156,6 +228,9 @@ class EvalRuntimeManifestTests(unittest.TestCase):
         )
         self.assertEqual(manifest.workers.default_concurrency, 2)
         self.assertEqual(manifest.workers.maximum_concurrency, 4)
+        self.assertEqual(manifest.case_isolation.writable_filesystem, "tmpfs")
+        self.assertEqual(manifest.case_isolation.maximum_writable_bytes, 268435456)
+        self.assertEqual(manifest.case_isolation.maximum_writable_inodes, 32768)
 
     def test_rejects_unknown_keys(self) -> None:
         raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
@@ -222,8 +297,47 @@ class EvalRuntimeManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(ManifestError, "maximum_concurrency"):
                 EvalRuntimeManifest.load(path)
 
+    def test_rejects_changes_to_the_pinned_case_filesystem_quota(self) -> None:
+        changes = (
+            ("writable_filesystem", "ext4"),
+            ("maximum_writable_bytes", 268435457),
+            ("maximum_writable_inodes", 32769),
+        )
+        for key, value in changes:
+            with self.subTest(key=key):
+                raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+                raw["case_isolation"][key] = value
+
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / "runtime.json"
+                    path.write_text(json.dumps(raw), encoding="utf-8")
+                    with self.assertRaisesRegex(ManifestError, "pinned tmpfs"):
+                        EvalRuntimeManifest.load(path)
+
 
 class SubprocessRunnerTests(unittest.TestCase):
+    def test_popen_failure_reports_that_no_process_started(self) -> None:
+        with mock.patch(
+            "scripts.ai_skills_lib.sandbox_runtime.subprocess.Popen",
+            side_effect=OSError("spawn failed"),
+        ):
+            with self.assertRaises(OSError) as raised:
+                SubprocessRunner(maximum_output_bytes=100).run(
+                    ("sbx", "create"),
+                    timeout_seconds=5,
+                )
+
+        outcome = process_termination_outcome(raised.exception)
+        self.assertEqual(
+            outcome,
+            ProcessTerminationOutcome(
+                process_started=False,
+                leader_reaped=False,
+                process_group_absent=True,
+                drains_stopped=True,
+            ),
+        )
+
     def test_caps_combined_captured_output_without_using_a_shell(self) -> None:
         runner = SubprocessRunner(maximum_output_bytes=100)
 
@@ -239,6 +353,7 @@ class SubprocessRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertLessEqual(len(result.stdout.encode()), 50)
         self.assertLessEqual(len(result.stderr.encode()), 50)
+        self.assertTrue(result.process_outcome.fully_terminated_and_reaped)
 
     def test_kills_a_timed_out_process_and_preserves_bounded_partial_output(self) -> None:
         runner = SubprocessRunner(maximum_output_bytes=1000)
@@ -256,8 +371,256 @@ class SubprocessRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 124)
         self.assertIn("partial", result.stdout)
 
+    def test_base_exception_terminates_kills_and_reaps_the_process_group(self) -> None:
+        class InterruptedProcess:
+            def __init__(self) -> None:
+                self.pid = 424242
+                self.stdout = io.BytesIO()
+                self.stderr = io.BytesIO()
+                self.returncode: int | None = None
+                self.wait_calls = 0
+
+            def wait(self, timeout=None):
+                self.wait_calls += 1
+                if self.wait_calls == 1:
+                    raise KeyboardInterrupt()
+                self.returncode = -signal.SIGKILL
+                return self.returncode
+
+        process = InterruptedProcess()
+        runner = SubprocessRunner(maximum_output_bytes=100)
+        def prove_group_absent(_pid: int, signal_number: int) -> None:
+            if signal_number == 0:
+                raise ProcessLookupError()
+
+        with (
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.subprocess.Popen",
+                return_value=process,
+            ),
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.os.killpg",
+                side_effect=prove_group_absent,
+            ) as kill_group,
+        ):
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                runner.run(("sbx", "create"), timeout_seconds=5)
+
+        signals = [call.args[1] for call in kill_group.call_args_list]
+        self.assertIn(signal.SIGTERM, signals)
+        self.assertIn(signal.SIGKILL, signals)
+        self.assertIn(0, signals)
+        self.assertGreaterEqual(process.wait_calls, 2)
+        self.assertEqual(process.returncode, -signal.SIGKILL)
+        self.assertTrue(process.stdout.closed)
+        self.assertTrue(process.stderr.closed)
+        outcome = process_termination_outcome(raised.exception)
+        self.assertIsNotNone(outcome)
+        self.assertTrue(outcome.fully_terminated_and_reaped)
+
+    def test_thread_setup_interruptions_still_settle_the_started_process(self) -> None:
+        class Process:
+            def __init__(self) -> None:
+                self.pid = 424243
+                self.stdout = io.BytesIO()
+                self.stderr = io.BytesIO()
+                self.returncode: int | None = None
+
+            def wait(self, timeout=None):
+                self.returncode = -signal.SIGKILL
+                return self.returncode
+
+        def prove_group_absent(_pid: int, signal_number: int) -> None:
+            if signal_number == 0:
+                raise ProcessLookupError()
+
+        for setup_patch in ("constructor", "start"):
+            with self.subTest(setup_patch=setup_patch):
+                process = Process()
+                patches = [
+                    mock.patch(
+                        "scripts.ai_skills_lib.sandbox_runtime.subprocess.Popen",
+                        return_value=process,
+                    ),
+                    mock.patch(
+                        "scripts.ai_skills_lib.sandbox_runtime.os.killpg",
+                        side_effect=prove_group_absent,
+                    ),
+                ]
+                if setup_patch == "constructor":
+                    patches.append(
+                        mock.patch(
+                            "scripts.ai_skills_lib.sandbox_runtime.threading.Thread",
+                            side_effect=KeyboardInterrupt(),
+                        )
+                    )
+                else:
+                    patches.append(
+                        mock.patch(
+                            "scripts.ai_skills_lib.sandbox_runtime.threading.Thread.start",
+                            side_effect=KeyboardInterrupt(),
+                        )
+                    )
+                with patches[0], patches[1], patches[2]:
+                    with self.assertRaises(KeyboardInterrupt) as raised:
+                        SubprocessRunner(maximum_output_bytes=100).run(
+                            ("sbx", "create"),
+                            timeout_seconds=5,
+                        )
+
+                outcome = process_termination_outcome(raised.exception)
+                self.assertIsNotNone(outcome)
+                self.assertTrue(outcome.fully_terminated_and_reaped)
+                self.assertTrue(process.stdout.closed)
+                self.assertTrue(process.stderr.closed)
+
+    def test_blocked_waits_and_drains_have_bounded_incomplete_outcome(self) -> None:
+        class BlockedStream:
+            def read(self, _size: int) -> bytes:
+                return b""
+
+            def fileno(self) -> int:
+                return 99
+
+            def close(self) -> None:
+                raise AssertionError("a live drain's buffered stream must not block cleanup")
+
+        class BlockedProcess:
+            def __init__(self) -> None:
+                self.pid = 424244
+                self.stdout = BlockedStream()
+                self.stderr = BlockedStream()
+                self.returncode = None
+                self.wait_calls = 0
+
+            def wait(self, timeout=None):
+                self.wait_calls += 1
+                if self.wait_calls == 1:
+                    raise KeyboardInterrupt()
+                raise subprocess.TimeoutExpired(("sbx", "create"), timeout)
+
+        class BlockedThread:
+            def __init__(self, *args, **kwargs) -> None:
+                self.join_timeouts: list[float | None] = []
+
+            def start(self) -> None:
+                return None
+
+            def is_alive(self) -> bool:
+                return True
+
+            def join(self, timeout=None) -> None:
+                self.join_timeouts.append(timeout)
+
+        process = BlockedProcess()
+        threads = [BlockedThread(), BlockedThread()]
+
+        def prove_group_absent(_pid: int, signal_number: int) -> None:
+            if signal_number == 0:
+                raise ProcessLookupError()
+
+        with (
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.subprocess.Popen",
+                return_value=process,
+            ),
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.threading.Thread",
+                side_effect=threads,
+            ),
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.os.killpg",
+                side_effect=prove_group_absent,
+            ),
+            mock.patch("scripts.ai_skills_lib.sandbox_runtime.os.close"),
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.PROCESS_KILL_GRACE_SECONDS",
+                0.01,
+            ),
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.PROCESS_DRAIN_JOIN_SECONDS",
+                0.01,
+            ),
+        ):
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                SubprocessRunner(maximum_output_bytes=100).run(
+                    ("sbx", "create"),
+                    timeout_seconds=5,
+                )
+
+        outcome = process_termination_outcome(raised.exception)
+        self.assertIsNotNone(outcome)
+        self.assertFalse(outcome.fully_terminated_and_reaped)
+        self.assertFalse(outcome.leader_reaped)
+        self.assertFalse(outcome.drains_stopped)
+        self.assertLessEqual(process.wait_calls, 3)
+        self.assertTrue(all(thread.join_timeouts for thread in threads))
+        self.assertTrue(
+            all(
+                timeout is not None
+                for thread in threads
+                for timeout in thread.join_timeouts
+            )
+        )
+
+    def test_surviving_process_group_member_is_reported_as_unsettled(self) -> None:
+        class ReapedLeader:
+            def __init__(self) -> None:
+                self.pid = 424245
+                self.stdout = io.BytesIO()
+                self.stderr = io.BytesIO()
+                self.returncode = 0
+
+            def wait(self, timeout=None):
+                return 0
+
+        process = ReapedLeader()
+        with (
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.subprocess.Popen",
+                return_value=process,
+            ),
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.os.killpg",
+                return_value=None,
+            ) as kill_group,
+            mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.PROCESS_GROUP_PROOF_SECONDS",
+                0,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "termination and reaping",
+            ) as raised:
+                SubprocessRunner(maximum_output_bytes=100).run(
+                    ("sbx", "create"),
+                    timeout_seconds=5,
+                )
+
+        outcome = process_termination_outcome(raised.exception)
+        self.assertIsNotNone(outcome)
+        self.assertTrue(outcome.leader_reaped)
+        self.assertFalse(outcome.process_group_absent)
+        self.assertFalse(outcome.fully_terminated_and_reaped)
+        self.assertGreaterEqual(kill_group.call_count, 1)
+        self.assertTrue(
+            all(call.args == (process.pid, 0) for call in kill_group.call_args_list),
+            "a reaped leader's numeric process-group ID must only be observed",
+        )
+
 
 class SandboxRuntimeTests(unittest.TestCase):
+    def test_case_filesystem_scripts_are_valid_python(self) -> None:
+        compile(CASE_FILESYSTEM_PROBE_SCRIPT, "<case-filesystem-probe>", "exec")
+        compile(CASE_FILESYSTEM_CLEANUP_SCRIPT, "<case-filesystem-cleanup>", "exec")
+        compile(CASE_PRIVILEGE_LOCKDOWN_SCRIPT, "<case-privilege-lockdown>", "exec")
+        compile(CASE_PRIVILEGE_PROBE_SCRIPT, "<case-privilege-probe>", "exec")
+        compile(CASE_CGROUP_SETUP_SCRIPT, "<case-cgroup-setup>", "exec")
+        compile(CASE_CGROUP_EXEC_SCRIPT, "<case-cgroup-exec>", "exec")
+        compile(CASE_CGROUP_TERMINATE_SCRIPT, "<case-cgroup-terminate>", "exec")
+        compile(CASE_CGROUP_REMOVE_SCRIPT, "<case-cgroup-remove>", "exec")
+
     def test_ipc_cleanup_script_is_valid_python(self) -> None:
         compile(IPC_CLEANUP_SCRIPT, "<ipc-cleanup>", "exec")
 
@@ -630,6 +993,15 @@ class SandboxRuntimeTests(unittest.TestCase):
             first_actor = runtime.acquire_worker("actor")
             second_actor = runtime.acquire_worker("actor")
             judge = runtime.acquire_worker("judge")
+            actor_marker = first_actor.host_root / OWNERSHIP_MARKER_NAME
+            judge_marker = judge.host_root / OWNERSHIP_MARKER_NAME
+
+            self.assertNotEqual(
+                actor_marker.read_text(encoding="ascii"),
+                judge_marker.read_text(encoding="ascii"),
+            )
+            self.assertEqual(actor_marker.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(judge_marker.stat().st_mode & 0o777, 0o600)
 
         self.assertIs(first_actor, second_actor)
         self.assertNotEqual(first_actor.name, judge.name)
@@ -678,6 +1050,188 @@ class SandboxRuntimeTests(unittest.TestCase):
 
         self.assertFalse(thread.is_alive())
 
+    def test_worker_lease_releases_acquisition_reservation_on_base_exception(self) -> None:
+        process = FakeProcessRunner()
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = SandboxWorker(
+                id="actor-id",
+                name="ai-skills-unit-test-actor-1",
+                role="actor",
+                slot=0,
+                host_root=Path(state) / "workers" / "actor",
+            )
+            with mock.patch.object(
+                runtime,
+                "acquire_worker",
+                side_effect=(KeyboardInterrupt(), worker),
+            ) as acquire:
+                with self.assertRaises(KeyboardInterrupt):
+                    with runtime.lease_worker("actor"):
+                        self.fail("interrupted acquisition must not yield a worker")
+
+                with runtime.lease_worker("actor") as acquired:
+                    self.assertIs(acquired, worker)
+
+        self.assertEqual(acquire.call_count, 2)
+
+    def test_worker_lease_releases_reservation_when_handoff_is_interrupted(self) -> None:
+        process = FakeProcessRunner()
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = SandboxWorker(
+                id="actor-id",
+                name="ai-skills-unit-test-actor-1",
+                role="actor",
+                slot=0,
+                host_root=Path(state) / "workers" / "actor",
+            )
+            with (
+                mock.patch.object(runtime, "acquire_worker", return_value=worker) as acquire,
+                mock.patch.object(
+                    runtime,
+                    "_handoff_leased_worker",
+                    side_effect=(KeyboardInterrupt(), worker),
+                ),
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    with runtime.lease_worker("actor"):
+                        self.fail("interrupted handoff must not yield a worker")
+
+                with runtime.lease_worker("actor") as acquired:
+                    self.assertIs(acquired, worker)
+
+        self.assertEqual(acquire.call_count, 2)
+
+    def test_worker_lease_release_interruption_cannot_leave_busy_reservation(self) -> None:
+        process = FakeProcessRunner()
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = SandboxWorker(
+                id="actor-id",
+                name="ai-skills-unit-test-actor-1",
+                role="actor",
+                slot=0,
+                host_root=Path(state) / "workers" / "actor",
+            )
+            with (
+                mock.patch.object(runtime, "acquire_worker", return_value=worker),
+                mock.patch.object(
+                    runtime,
+                    "_release_worker_reservation",
+                    side_effect=KeyboardInterrupt(),
+                ),
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    with runtime.lease_worker("actor") as acquired:
+                        self.assertIs(acquired, worker)
+
+            self.assertEqual(runtime._busy_workers, set())
+            with mock.patch.object(runtime, "acquire_worker", return_value=worker):
+                with runtime.lease_worker("actor") as acquired:
+                    self.assertIs(acquired, worker)
+
+    def test_close_interruption_outside_target_cleanup_remains_retryable(self) -> None:
+        process = FakeProcessRunner()
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            original_clear = runtime._clear_terminal_runtime_state
+            clear_calls = 0
+
+            def interrupt_once() -> None:
+                nonlocal clear_calls
+                clear_calls += 1
+                if clear_calls == 1:
+                    raise KeyboardInterrupt()
+                original_clear()
+
+            with mock.patch.object(
+                runtime,
+                "_clear_terminal_runtime_state",
+                side_effect=interrupt_once,
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    runtime.close()
+                self.assertFalse(runtime._closed)
+                self.assertFalse(runtime._closing)
+                self.assertFalse(runtime.sandbox_cleanup_completed)
+
+                runtime.close()
+
+            self.assertTrue(runtime._closed)
+            self.assertFalse(runtime._closing)
+            self.assertTrue(runtime.sandbox_cleanup_completed)
+
+    def test_close_interruption_immediately_after_claim_remains_retryable(self) -> None:
+        class InterruptValuesOnce(dict):
+            def __init__(self) -> None:
+                super().__init__()
+                self.interrupted = False
+
+            def values(self):
+                if not self.interrupted:
+                    self.interrupted = True
+                    raise KeyboardInterrupt()
+                return super().values()
+
+        process = FakeProcessRunner()
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            runtime._cleanup_targets = InterruptValuesOnce()
+
+            with self.assertRaises(KeyboardInterrupt):
+                runtime.close()
+
+            self.assertFalse(runtime._closed)
+            self.assertFalse(runtime._closing)
+            self.assertFalse(runtime.sandbox_cleanup_completed)
+
+            runtime.close()
+
+            self.assertTrue(runtime._closed)
+            self.assertFalse(runtime._closing)
+            self.assertTrue(runtime.sandbox_cleanup_completed)
+
     def test_cleanup_removes_only_invocation_owned_workers_and_verifies_absence(self) -> None:
         process = FakeProcessRunner(
             [
@@ -706,6 +1260,291 @@ class SandboxRuntimeTests(unittest.TestCase):
             process.calls,
         )
         self.assertNotIn("personal-sandbox", [part for argv, _ in process.calls for part in argv])
+
+    def test_close_attempts_every_target_and_recovers_by_exact_identity(self) -> None:
+        sandboxes = {"unrelated-id": "personal-sandbox"}
+        cleanup_failures = {"actor-id"}
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                name = argv[argv.index("--name") + 1]
+                worker_id = "actor-id" if "-actor-" in name else "judge-id"
+                sandboxes[worker_id] = name
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                worker_id = argv[4]
+                if worker_id in cleanup_failures:
+                    cleanup_failures.remove(worker_id)
+                    return CommandResult(
+                        returncode=1,
+                        stdout="",
+                        stderr="initial cleanup failed",
+                    )
+                return completed()
+            if argv[:3] == ("sbx", "rm", "--force"):
+                sandboxes.pop(argv[3], None)
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=2,
+            )
+            actor = runtime.acquire_worker("actor")
+            judge = runtime.acquire_worker("judge")
+
+            runtime.close()
+
+        cleanup_attempts = [
+            argv[4]
+            for argv, _ in process.calls
+            if argv[:4] == ("sbx", "exec", "--user", "root")
+        ]
+        self.assertIn(actor.id, cleanup_attempts)
+        self.assertIn(judge.id, cleanup_attempts)
+        purge_attempts = [
+            argv[4]
+            for argv, _ in process.calls
+            if argv[:4] == ("sbx", "exec", "--user", "root")
+            and len(argv) > 5
+            and argv[5] == "find"
+        ]
+        self.assertEqual(purge_attempts.count(actor.id), 1)
+        remove_ids = [
+            argv[3]
+            for argv, _ in process.calls
+            if argv[:3] == ("sbx", "rm", "--force")
+        ]
+        self.assertIn(actor.id, remove_ids)
+        self.assertIn(judge.id, remove_ids)
+        self.assertNotIn("unrelated-id", remove_ids)
+
+    def test_close_finishes_all_targets_before_propagating_interruption(self) -> None:
+        sandboxes: dict[str, str] = {}
+        actor_interrupted = False
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            nonlocal actor_interrupted
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                name = argv[argv.index("--name") + 1]
+                worker_id = "actor-id" if "-actor-" in name else "judge-id"
+                sandboxes[worker_id] = name
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                if argv[4] == "actor-id" and not actor_interrupted:
+                    actor_interrupted = True
+                    raise KeyboardInterrupt()
+                return completed()
+            if argv[:3] == ("sbx", "rm", "--force"):
+                sandboxes.pop(argv[3], None)
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=2,
+            )
+            actor = runtime.acquire_worker("actor")
+            judge = runtime.acquire_worker("judge")
+
+            with self.assertRaises(KeyboardInterrupt):
+                runtime.close()
+
+            self.assertTrue(runtime.sandbox_cleanup_completed)
+            self.assertFalse(actor.host_root.exists())
+            self.assertFalse(judge.host_root.exists())
+
+        remove_ids = [
+            argv[3]
+            for argv, _ in process.calls
+            if argv[:3] == ("sbx", "rm", "--force")
+        ]
+        self.assertIn(actor.id, remove_ids)
+        self.assertIn(judge.id, remove_ids)
+
+    def test_interrupted_close_reports_unresolved_cleanup_and_retains_host_staging(self) -> None:
+        sandboxes: dict[str, str] = {}
+        interrupt_cleanup = False
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                name = argv[argv.index("--name") + 1]
+                sandboxes["actor-id"] = name
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                if interrupt_cleanup:
+                    raise KeyboardInterrupt()
+                return completed()
+            if argv[:3] == ("sbx", "rm", "--force"):
+                if interrupt_cleanup:
+                    raise KeyboardInterrupt()
+                sandboxes.pop(argv[3], None)
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            interrupt_cleanup = True
+
+            with self.assertRaises(KeyboardInterrupt):
+                runtime.close()
+
+            self.assertFalse(runtime.sandbox_cleanup_completed)
+            self.assertTrue(worker.host_root.exists())
+
+        self.assertIn("actor-id", sandboxes)
+
+    def test_close_aggregates_bounded_redacted_failures_after_all_targets(self) -> None:
+        sandboxes: dict[str, str] = {}
+        secret = "sk-abcdefghijklmnopqrstuvwxyz123456"
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                name = argv[argv.index("--name") + 1]
+                worker_id = "actor-id" if "-actor-" in name else "judge-id"
+                sandboxes[worker_id] = name
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr=f"cleanup refused for {argv[4]} {secret} " + ("x" * 10000),
+                )
+            if argv[:3] == ("sbx", "rm", "--force"):
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr=f"removal refused for {argv[3]} {secret} " + ("y" * 10000),
+                )
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=2,
+            )
+            actor = runtime.acquire_worker("actor")
+            judge = runtime.acquire_worker("judge")
+
+            with self.assertRaises(SandboxRuntimeError) as raised:
+                runtime.close()
+
+            self.assertTrue(actor.host_root.exists())
+            self.assertTrue(judge.host_root.exists())
+
+        diagnostic = str(raised.exception)
+        self.assertIn(actor.name, diagnostic)
+        self.assertIn(judge.name, diagnostic)
+        self.assertNotIn(secret, diagnostic)
+        self.assertLessEqual(len(diagnostic.encode("utf-8")), 8192)
+        cleanup_attempts = [
+            argv[4]
+            for argv, _ in process.calls
+            if argv[:4] == ("sbx", "exec", "--user", "root")
+        ]
+        self.assertIn(actor.id, cleanup_attempts)
+        self.assertIn(judge.id, cleanup_attempts)
+        purge_attempts = [
+            argv[4]
+            for argv, _ in process.calls
+            if argv[:4] == ("sbx", "exec", "--user", "root")
+            and len(argv) > 5
+            and argv[5] == "find"
+        ]
+        self.assertEqual(purge_attempts.count(actor.id), 1)
+        self.assertEqual(purge_attempts.count(judge.id), 1)
+        remove_ids = [
+            argv[3]
+            for argv, _ in process.calls
+            if argv[:3] == ("sbx", "rm", "--force")
+        ]
+        self.assertCountEqual(remove_ids, [actor.id, judge.id])
 
     def test_close_retries_host_cleanup_without_removing_the_sandbox_twice(self) -> None:
         process = FakeProcessRunner(
@@ -741,7 +1580,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "scripts.ai_skills_lib.sandbox_runtime.shutil.rmtree",
                 side_effect=fail_once,
             ):
-                with self.assertRaisesRegex(OSError, "host cleanup"):
+                with self.assertRaisesRegex(SandboxRuntimeError, "host cleanup"):
                     runtime.close()
                 runtime.close()
 
@@ -750,7 +1589,7 @@ class SandboxRuntimeTests(unittest.TestCase):
         remove_calls = [argv for argv, _ in process.calls if argv[:2] == ("sbx", "rm")]
         self.assertEqual(len(remove_calls), 1)
 
-    def test_close_retries_only_absence_verification_after_successful_removal(self) -> None:
+    def test_close_reconciles_absence_after_successful_removal(self) -> None:
         process = FakeProcessRunner(
             [
                 completed(),
@@ -783,8 +1622,6 @@ class SandboxRuntimeTests(unittest.TestCase):
             )
             runtime.acquire_worker("actor")
 
-            with self.assertRaisesRegex(SandboxRuntimeError, "list unavailable"):
-                runtime.close()
             runtime.close()
 
         purge_calls = [
@@ -797,6 +1634,200 @@ class SandboxRuntimeTests(unittest.TestCase):
         remove_calls = [argv for argv, _ in process.calls if argv[:2] == ("sbx", "rm")]
         self.assertEqual(len(purge_calls), 1)
         self.assertEqual(len(remove_calls), 1)
+
+    def test_absent_sandbox_does_not_settle_an_unreaped_removal_process(self) -> None:
+        sandboxes: dict[str, str] = {}
+        unproven = ProcessTerminationOutcome(
+            process_started=True,
+            leader_reaped=True,
+            process_group_absent=False,
+            drains_stopped=True,
+        )
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                sandboxes["actor-id"] = argv[argv.index("--name") + 1]
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                return completed()
+            if argv == ("sbx", "rm", "--force", "actor-id"):
+                sandboxes.pop("actor-id", None)
+                return CommandResult(
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                    process_outcome=unproven,
+                )
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "removal process termination is unproven",
+            ):
+                runtime.close()
+
+            target = runtime._cleanup_targets[worker.name]
+            self.assertTrue(target.removal_started)
+            self.assertFalse(target.removal_process_settled)
+            self.assertFalse(runtime.sandbox_cleanup_completed)
+            self.assertTrue(worker.host_root.exists())
+            self.assertEqual(sandboxes, {})
+
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "removal process termination is unproven",
+            ):
+                runtime.close()
+
+        remove_calls = [
+            argv for argv, _ in process.calls if argv[:3] == ("sbx", "rm", "--force")
+        ]
+        self.assertEqual(remove_calls, [("sbx", "rm", "--force", "actor-id")])
+
+    def test_evaluation_runtime_removes_staging_after_trustworthy_cleanup(self) -> None:
+        runtime = mock.Mock()
+        with tempfile.TemporaryDirectory() as state:
+            staging_root = Path(state) / "workers"
+            staging_root.mkdir()
+            (staging_root / "evidence.txt").write_text("temporary", encoding="utf-8")
+            evaluation_runtime = CodexEvaluationRuntime(
+                manifest=object(),
+                adapter=mock.Mock(),
+                runtime=runtime,
+                staging_root=staging_root,
+            )
+
+            evaluation_runtime.close()
+
+            self.assertFalse(staging_root.exists())
+        runtime.close.assert_called_once_with()
+
+    def test_evaluation_runtime_preserves_staging_when_cleanup_is_incomplete(self) -> None:
+        runtime = mock.Mock()
+        secret = "sk-abcdefghijklmnopqrstuvwxyz123456"
+        runtime.close.side_effect = SandboxRuntimeError(
+            f"cleanup incomplete {secret} " + ("x" * 10000)
+        )
+        with tempfile.TemporaryDirectory() as state:
+            staging_root = Path(state) / "workers"
+            staging_root.mkdir()
+            evidence = staging_root / "evidence.txt"
+            evidence.write_text("temporary", encoding="utf-8")
+            evaluation_runtime = CodexEvaluationRuntime(
+                manifest=object(),
+                adapter=mock.Mock(),
+                runtime=runtime,
+                staging_root=staging_root,
+            )
+
+            with self.assertRaises(EvaluationRuntimeError) as raised:
+                evaluation_runtime.close()
+
+            self.assertTrue(evidence.exists())
+
+        diagnostic = str(raised.exception)
+        self.assertIn("sandbox cleanup failed", diagnostic)
+        self.assertNotIn(secret, diagnostic)
+        self.assertLessEqual(len(diagnostic.encode("utf-8")), 8192)
+
+    def test_evaluation_runtime_removes_staging_after_completed_interrupted_cleanup(self) -> None:
+        runtime = mock.Mock()
+        runtime.sandbox_cleanup_completed = True
+        runtime.close.side_effect = KeyboardInterrupt()
+        with tempfile.TemporaryDirectory() as state:
+            staging_root = Path(state) / "workers"
+            staging_root.mkdir()
+            evidence = staging_root / "evidence.txt"
+            evidence.write_text("temporary", encoding="utf-8")
+            evaluation_runtime = CodexEvaluationRuntime(
+                manifest=object(),
+                adapter=mock.Mock(),
+                runtime=runtime,
+                staging_root=staging_root,
+            )
+
+            with self.assertRaises(KeyboardInterrupt):
+                evaluation_runtime.close()
+
+            self.assertFalse(staging_root.exists())
+
+    def test_evaluation_runtime_retains_staging_after_unresolved_interruption(self) -> None:
+        runtime = mock.Mock()
+        runtime.sandbox_cleanup_completed = False
+        runtime.close.side_effect = KeyboardInterrupt()
+        with tempfile.TemporaryDirectory() as state:
+            staging_root = Path(state) / "workers"
+            staging_root.mkdir()
+            evidence = staging_root / "evidence.txt"
+            evidence.write_text("temporary", encoding="utf-8")
+            evaluation_runtime = CodexEvaluationRuntime(
+                manifest=object(),
+                adapter=mock.Mock(),
+                runtime=runtime,
+                staging_root=staging_root,
+            )
+
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                evaluation_runtime.close()
+
+            self.assertTrue(evidence.exists())
+            self.assertIn("staging was retained", " ".join(raised.exception.__notes__))
+
+    def test_evaluation_runtime_bounds_and_redacts_host_staging_failures(self) -> None:
+        runtime = mock.Mock()
+        secret = "sk-abcdefghijklmnopqrstuvwxyz123456"
+        with tempfile.TemporaryDirectory() as state:
+            staging_root = Path(state) / "workers"
+            staging_root.mkdir()
+            evidence = staging_root / "evidence.txt"
+            evidence.write_text("temporary", encoding="utf-8")
+            evaluation_runtime = CodexEvaluationRuntime(
+                manifest=object(),
+                adapter=mock.Mock(),
+                runtime=runtime,
+                staging_root=staging_root,
+            )
+
+            with mock.patch(
+                "scripts.ai_skills_lib.evaluation_runtime.shutil.rmtree",
+                side_effect=OSError(f"host cleanup failed {secret} " + ("x" * 10000)),
+            ):
+                with self.assertRaises(EvaluationRuntimeError) as raised:
+                    evaluation_runtime.close()
+
+            self.assertTrue(evidence.exists())
+
+        diagnostic = str(raised.exception)
+        self.assertIn("worker staging cleanup failed", diagnostic)
+        self.assertNotIn(secret, diagnostic)
+        self.assertLessEqual(len(diagnostic.encode("utf-8")), 8192)
 
     def test_failed_create_does_not_remove_an_unproven_same_named_sandbox(self) -> None:
         process = FakeProcessRunner(
@@ -831,7 +1862,223 @@ class SandboxRuntimeTests(unittest.TestCase):
 
         self.assertFalse(any(argv[:2] == ("sbx", "rm") for argv, _ in process.calls))
 
-    def test_create_timeout_removes_sandbox_when_name_was_proven_absent(self) -> None:
+    def test_unsettled_create_retains_preregistered_nonce_and_staging(self) -> None:
+        sandbox_name = "ai-skills-unit-test-actor-1"
+        create_interrupted = False
+        allow_cleanup = False
+        runtime_reference: list[SandboxRuntime] = []
+
+        def interrupt_create(argv: tuple[str, ...]) -> CommandResult:
+            nonlocal create_interrupted
+            if argv == ("sbx", "ls", "--json"):
+                if create_interrupted and not allow_cleanup:
+                    raise KeyboardInterrupt()
+                return completed(json.dumps({"sandboxes": []}))
+            if argv[:2] == ("sbx", "create"):
+                runtime = runtime_reference[0]
+                self.assertIn(sandbox_name, runtime._cleanup_targets)
+                marker = Path(argv[-1]) / OWNERSHIP_MARKER_NAME
+                self.assertRegex(marker.read_text(encoding="ascii"), r"^[0-9a-f]{64}\n$")
+                create_interrupted = True
+                raise KeyboardInterrupt()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=interrupt_create)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            runtime_reference.append(runtime)
+
+            with self.assertRaises(KeyboardInterrupt):
+                runtime.acquire_worker("actor")
+
+            target = runtime._cleanup_targets[sandbox_name]
+            self.assertIsNone(target.id)
+            self.assertTrue(target.host_root.exists())
+            self.assertTrue((target.host_root / OWNERSHIP_MARKER_NAME).is_file())
+
+            allow_cleanup = True
+            with self.assertRaisesRegex(SandboxRuntimeError, "termination is unproven"):
+                runtime.close()
+            with self.assertRaisesRegex(SandboxRuntimeError, "termination is unproven"):
+                runtime.close()
+            self.assertTrue(target.host_root.exists())
+            self.assertTrue(target.ownership_marker.is_file())
+            self.assertFalse(runtime.sandbox_cleanup_completed)
+
+    def test_only_fully_terminated_process_outcome_settles_create(self) -> None:
+        sandbox_name = "ai-skills-unit-test-actor-1"
+        process = FakeProcessRunner(
+            [
+                CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="create failed",
+                    process_outcome=ProcessTerminationOutcome(
+                        process_started=True,
+                        leader_reaped=True,
+                        process_group_absent=False,
+                        drains_stopped=True,
+                    ),
+                ),
+                completed(json.dumps({"sandboxes": []})),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "definitively terminated"):
+                runtime.acquire_worker("actor")
+
+            target = runtime._cleanup_targets[sandbox_name]
+            self.assertTrue(target.create_started)
+            self.assertFalse(target.create_process_settled)
+            self.assertTrue(target.host_root.exists())
+            self.assertTrue(target.ownership_marker.is_file())
+
+    def test_settled_create_retains_evidence_past_old_window_until_delayed_appearance(
+        self,
+    ) -> None:
+        sandbox_name = "ai-skills-unit-test-actor-1"
+        post_create_listings = 0
+        sandbox_present = False
+
+        def delayed_registration(argv: tuple[str, ...]) -> CommandResult:
+            nonlocal post_create_listings, sandbox_present
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                if post_create_listings or any(
+                    call[0][:2] == ("sbx", "create") for call in process.calls
+                ):
+                    post_create_listings += 1
+                sandboxes = (
+                    [{"id": "actor-id", "name": sandbox_name}]
+                    if sandbox_present
+                    else []
+                )
+                return completed(json.dumps({"sandboxes": sandboxes}))
+            if argv[:2] == ("sbx", "create"):
+                return CommandResult(
+                    returncode=124,
+                    stdout="",
+                    stderr="create timed out",
+                    timed_out=True,
+                    process_outcome=PROCESS_FULLY_TERMINATED,
+                )
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                return completed()
+            if argv == ("sbx", "rm", "--force", "actor-id"):
+                sandbox_present = False
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=delayed_registration)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "authoritative"):
+                runtime.acquire_worker("actor")
+
+            target = runtime._cleanup_targets[sandbox_name]
+            self.assertTrue(target.create_process_settled)
+            self.assertTrue(target.ownership_marker.is_file())
+            with self.assertRaisesRegex(SandboxRuntimeError, "authoritative"):
+                runtime.close()
+            time.sleep(1.1)
+            with self.assertRaisesRegex(SandboxRuntimeError, "authoritative"):
+                runtime.close()
+            self.assertTrue(target.host_root.exists())
+            self.assertTrue(target.ownership_marker.is_file())
+
+            sandbox_present = True
+            runtime.close()
+
+            self.assertFalse(target.host_root.exists())
+
+        self.assertGreaterEqual(post_create_listings, 6)
+        self.assertIn(
+            ("sbx", "rm", "--force", "actor-id"),
+            [argv for argv, _ in process.calls],
+        )
+
+    def test_create_timeout_refuses_same_named_candidate_without_nonce_proof(self) -> None:
+        sandbox_name = "ai-skills-unit-test-actor-1"
+
+        def reject_marker_probe(argv: tuple[str, ...]) -> CommandResult | None:
+            if (
+                argv[:4] == ("sbx", "exec", "--user", "root")
+                and len(argv) == 9
+                and argv[5:7] == ("python3", "-c")
+            ):
+                return completed("0" * 64)
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(json.dumps({"sandboxes": []})),
+                CommandResult(
+                    returncode=124,
+                    stdout="",
+                    stderr="create timed out",
+                    timed_out=True,
+                ),
+                completed(
+                    json.dumps(
+                        {"sandboxes": [{"id": "impostor-id", "name": sandbox_name}]}
+                    )
+                ),
+            ],
+            side_effect=reject_marker_probe,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "ownership"):
+                runtime.acquire_worker("actor")
+
+            target = runtime._cleanup_targets[sandbox_name]
+            self.assertIsNone(target.id)
+            self.assertTrue(target.host_root.exists())
+
+        self.assertNotIn(
+            ("sbx", "rm", "--force", "impostor-id"),
+            [argv for argv, _ in process.calls],
+        )
+
+    def test_create_timeout_removes_sandbox_only_after_exact_nonce_proof(self) -> None:
         sandbox_name = "ai-skills-unit-test-actor-1"
         process = FakeProcessRunner(
             [
@@ -845,6 +2092,18 @@ class SandboxRuntimeTests(unittest.TestCase):
                 completed(
                     json.dumps(
                         {"sandboxes": [{"id": "actor-id", "name": sandbox_name}]}
+                    )
+                ),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
                     )
                 ),
                 completed(),
@@ -869,6 +2128,15 @@ class SandboxRuntimeTests(unittest.TestCase):
             ("sbx", "rm", "--force", "actor-id"),
             [argv for argv, _ in process.calls],
         )
+        marker_probes = [
+            argv
+            for argv, _ in process.calls
+            if argv[:4] == ("sbx", "exec", "--user", "root")
+            and len(argv) == 9
+            and argv[5:7] == ("python3", "-c")
+            and Path(argv[8]).name == OWNERSHIP_MARKER_NAME
+        ]
+        self.assertEqual(len(marker_probes), 1)
 
     def test_create_timeout_keeps_unresolved_cleanup_retryable(self) -> None:
         sandbox_name = "ai-skills-unit-test-actor-1"
@@ -947,7 +2215,16 @@ class SandboxRuntimeTests(unittest.TestCase):
             self.assertEqual(list(second.skills.iterdir()), [])
             self.assertEqual(
                 {path.name for path in second.root.iterdir()},
-                {"home", "codex-home", "tmp", "workspace", "bootstrap"},
+                {
+                    "home",
+                    "codex-home",
+                    "tmp",
+                    "workspace",
+                    "bootstrap",
+                    ".system-var-tmp",
+                    ".system-dev-shm",
+                    ".system-run-lock",
+                },
             )
             self.assertEqual(second.skills.parent, second.codex_home)
 
@@ -1001,13 +2278,80 @@ class SandboxRuntimeTests(unittest.TestCase):
             case = runtime.prepare_case(worker, "case-one")
 
         case_commands = [
-            argv[5:]
+            wrapped
             for argv, _ in process.calls
-            if argv[:5] == ("sbx", "exec", "--user", case.user_name, "actor-id")
+            if (wrapped := cgroup_wrapped_case_command(argv)) is not None
         ]
+        commands = [argv for argv, _ in process.calls]
+        setup_index = next(
+            index
+            for index, argv in enumerate(commands)
+            if len(argv) > 7 and argv[7] == CASE_CGROUP_SETUP_SCRIPT
+        )
+        first_case_command_index = next(
+            index
+            for index, argv in enumerate(commands)
+            if cgroup_wrapped_case_command(argv) is not None
+        )
+        self.assertLess(setup_index, first_case_command_index)
+        self.assertEqual(
+            commands[setup_index][-1],
+            str(case.cgroup_path),
+        )
         self.assertIn(("test", "!", "-r", "/var/run/docker.sock"), case_commands)
         self.assertIn(("test", "!", "-w", "/var/run/docker.sock"), case_commands)
         self.assertIn(("test", "!", "-r", "/home/agent/.codex/auth.json"), case_commands)
+
+    def test_missing_cgroup_v2_controls_discards_worker_before_case_execution(self) -> None:
+        def reject_cgroup_setup(argv: tuple[str, ...]) -> CommandResult | None:
+            if len(argv) > 7 and argv[7] == CASE_CGROUP_SETUP_SCRIPT:
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="required cgroup v2 lifecycle controls are unavailable",
+                )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=reject_cgroup_setup,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "reset"):
+                runtime.prepare_case(worker, "case-one")
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertFalse(
+            any(cgroup_wrapped_case_command(argv) is not None for argv in commands)
+        )
+        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
 
     def test_case_layout_is_complete_before_identity_ownership_changes(self) -> None:
         missing_at_chown: list[Path] = []
@@ -1060,6 +2404,387 @@ class SandboxRuntimeTests(unittest.TestCase):
 
         self.assertEqual(missing_at_chown, [])
 
+    def test_execute_uses_one_verified_tmpfs_quota_for_all_case_writable_paths(self) -> None:
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed("result"),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+            (case.workspace / "seed.txt").write_text("seed", encoding="utf-8")
+
+            result = runtime.execute(worker, case, ("true",), timeout_seconds=30)
+            runtime.quiesce_case(worker, case)
+
+        self.assertEqual(result.stdout, "result")
+        self.assertEqual(case.host_staging_root, case.root)
+        self.assertEqual(
+            case.host_export_bridge,
+            worker.host_root / ".ai-skills-case-bridge" / "host",
+        )
+        commands = [argv for argv, _ in process.calls]
+        tmpfs_mount = next(
+            argv
+            for argv in commands
+            if argv[:7]
+            == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "actor-id",
+                "mount",
+                "-t",
+            )
+        )
+        self.assertEqual(tmpfs_mount[7], "tmpfs")
+        mount_options = tmpfs_mount[tmpfs_mount.index("-o") + 1].split(",")
+        self.assertIn(
+            f"size={self.manifest.case_isolation.maximum_writable_bytes}",
+            mount_options,
+        )
+        self.assertIn(
+            f"nr_inodes={self.manifest.case_isolation.maximum_writable_inodes}",
+            mount_options,
+        )
+        self.assertIn("nosuid", mount_options)
+        self.assertIn("nodev", mount_options)
+        self.assertEqual(tmpfs_mount[-2], case.filesystem_source)
+        self.assertEqual(tmpfs_mount[-1], str(case.root))
+
+        expected_binds = {
+            (str(case.tmpdir), "/tmp"),
+            (str(case.system_var_tmp), "/var/tmp"),
+            (str(case.system_dev_shm), "/dev/shm"),
+            (str(case.system_run_lock), "/run/lock"),
+        }
+        actual_binds = {
+            (argv[-2], argv[-1])
+            for argv in commands
+            if argv[:7]
+            == ("sbx", "exec", "--user", "root", "actor-id", "mount", "--bind")
+        }
+        self.assertTrue(expected_binds.issubset(actual_binds))
+        probes = [
+            argv
+            for argv in commands
+            if len(argv) > 7
+            and argv[:7]
+            == ("sbx", "exec", "--user", "root", "actor-id", "python3", "-c")
+            and argv[7] == CASE_FILESYSTEM_PROBE_SCRIPT
+        ]
+        self.assertGreaterEqual(len(probes), 2)
+        self.assertEqual(probes[0][8], str(case.root))
+        self.assertEqual(probes[0][9], case.filesystem_source)
+        self.assertEqual(
+            probes[0][10],
+            str(self.manifest.case_isolation.maximum_writable_bytes),
+        )
+        self.assertEqual(
+            probes[0][11],
+            str(self.manifest.case_isolation.maximum_writable_inodes),
+        )
+        privilege_lockdowns = [
+            argv
+            for argv in commands
+            if len(argv) > 7
+            and argv[:7]
+            == ("sbx", "exec", "--user", "root", "actor-id", "python3", "-c")
+            and argv[7] == CASE_PRIVILEGE_LOCKDOWN_SCRIPT
+        ]
+        privilege_probes = [
+            argv
+            for argv in commands
+            if (
+                (wrapped := cgroup_wrapped_case_command(argv)) is not None
+                and wrapped[:3]
+                == ("python3", "-c", CASE_PRIVILEGE_PROBE_SCRIPT)
+            )
+        ]
+        self.assertEqual(len(privilege_lockdowns), 1)
+        self.assertGreaterEqual(len(privilege_probes), 2)
+        seed_copy = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "actor-id",
+            "cp",
+            "--archive",
+            "--one-file-system",
+            "--",
+            f"{case.host_export_bridge}/.",
+            f"{case.root}/",
+        )
+        export_copy = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "actor-id",
+            "cp",
+            "--archive",
+            "--one-file-system",
+            "--",
+            f"{case.root}/.",
+            f"{case.host_export_bridge}/",
+        )
+        self.assertIn(seed_copy, commands)
+        self.assertIn(export_copy, commands)
+        cleanup_index = next(
+            index
+            for index, argv in enumerate(commands)
+            if len(argv) > 7 and argv[7] == CASE_FILESYSTEM_CLEANUP_SCRIPT
+        )
+        actor_index = next(
+            index
+            for index, argv in enumerate(commands)
+            if argv[:4] == ("sbx", "exec", "--user", "root")
+            and "--workdir" in argv
+            and cgroup_wrapped_case_command(argv) == ("true",)
+        )
+        self.assertLess(commands.index(seed_copy), actor_index)
+        self.assertLess(commands.index(privilege_lockdowns[0]), actor_index)
+        self.assertLess(commands.index(privilege_probes[-1]), actor_index)
+        self.assertLess(actor_index, commands.index(export_copy))
+        self.assertLess(commands.index(export_copy), cleanup_index)
+
+    def test_mount_verification_failure_recycles_worker_before_actor_execution(self) -> None:
+        def fail_mount_probe(argv: tuple[str, ...]) -> CommandResult | None:
+            if len(argv) > 7 and argv[7] == CASE_FILESYSTEM_PROBE_SCRIPT:
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="tmpfs quota mismatch",
+                )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=fail_mount_probe,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with self.assertRaises(SandboxRuntimeError):
+                runtime.execute(worker, case, ("actor-command",), timeout_seconds=30)
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertFalse(
+            any(
+                cgroup_wrapped_case_command(argv) == ("actor-command",)
+                for argv in commands
+            )
+        )
+        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+        self.assertFalse(
+            any(
+                argv[:8]
+                == (
+                    "sbx",
+                    "exec",
+                    "--user",
+                    "root",
+                    "actor-id",
+                    "cp",
+                    "--archive",
+                    "--one-file-system",
+                )
+                and argv[-2:] == (f"{case.root}/.", f"{case.host_export_bridge}/")
+                for argv in commands
+            )
+        )
+
+    def test_nested_mount_verification_failure_blocks_host_export(self) -> None:
+        mount_probes = 0
+
+        def fail_export_mount_probe(argv: tuple[str, ...]) -> CommandResult | None:
+            nonlocal mount_probes
+            if len(argv) > 7 and argv[7] == CASE_FILESYSTEM_PROBE_SCRIPT:
+                mount_probes += 1
+                if mount_probes == 2:
+                    return CommandResult(
+                        returncode=1,
+                        stdout="",
+                        stderr="unexpected nested mount beneath case quota",
+                    )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed("actor result"),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=fail_export_mount_probe,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+            runtime.execute(worker, case, ("actor-command",), timeout_seconds=30)
+
+            with self.assertRaises(SandboxRuntimeError):
+                runtime.quiesce_case(worker, case)
+
+        commands = [argv for argv, _ in process.calls]
+        export_copy_prefix = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "actor-id",
+            "cp",
+            "--archive",
+            "--one-file-system",
+        )
+        self.assertEqual(mount_probes, 2)
+        self.assertFalse(
+            any(
+                argv[: len(export_copy_prefix)] == export_copy_prefix
+                and argv[-2:] == (f"{case.root}/.", f"{case.host_export_bridge}/")
+                for argv in commands
+            )
+        )
+        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+
+    def test_privilege_boundary_failure_recycles_worker_before_actor_execution(self) -> None:
+        privilege_probes = 0
+
+        def fail_active_privilege_probe(argv: tuple[str, ...]) -> CommandResult | None:
+            nonlocal privilege_probes
+            wrapped = cgroup_wrapped_case_command(argv)
+            if (
+                wrapped is not None
+                and wrapped[:3]
+                == ("python3", "-c", CASE_PRIVILEGE_PROBE_SCRIPT)
+            ):
+                privilege_probes += 1
+                if privilege_probes == 2:
+                    return CommandResult(
+                        returncode=1,
+                        stdout="",
+                        stderr="mount creation unexpectedly succeeded",
+                    )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=fail_active_privilege_probe,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with self.assertRaises(SandboxRuntimeError):
+                runtime.execute(worker, case, ("actor-command",), timeout_seconds=30)
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertEqual(privilege_probes, 2)
+        self.assertFalse(
+            any(
+                cgroup_wrapped_case_command(argv) == ("actor-command",)
+                for argv in commands
+            )
+        )
+        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+
     def test_executes_direct_arguments_with_case_scoped_environment(self) -> None:
         process = FakeProcessRunner(
             [
@@ -1098,7 +2823,10 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertIn(("--env", f"CODEX_HOME={case.codex_home}"), tuple(zip(argv, argv[1:])))
         self.assertIn(("--env", f"TMPDIR={case.tmpdir}"), tuple(zip(argv, argv[1:])))
         self.assertIn(("--env", "EXAMPLE=value with spaces"), tuple(zip(argv, argv[1:])))
-        self.assertIn(("--user", case.user_name), tuple(zip(argv, argv[1:])))
+        self.assertIn(("--user", "root"), tuple(zip(argv, argv[1:])))
+        self.assertIn(CASE_CGROUP_EXEC_SCRIPT, argv)
+        self.assertIn(str(case.cgroup_path), argv)
+        self.assertIn(str(case.uid), argv)
         self.assertEqual(argv[-3:], ("printf", "%s", "hello world"))
         self.assertNotIn("/bin/sh", argv)
 
@@ -1213,7 +2941,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             [argv for argv, _ in process.calls],
         )
 
-    def test_quiesces_case_processes_before_evidence_collection(self) -> None:
+    def test_quiesces_case_cgroup_before_ipc_and_evidence_collection(self) -> None:
         process = FakeProcessRunner(
             [
                 completed(),
@@ -1244,8 +2972,13 @@ class SandboxRuntimeTests(unittest.TestCase):
             runtime.quiesce_case(worker, case)
 
         commands = [argv[5:] for argv, _ in process.calls if argv[:5] == ("sbx", "exec", "--user", "root", "actor-id")]
-        self.assertIn(("pkill", "-KILL", "-u", str(case.uid)), commands)
-        self.assertIn(("pgrep", "-u", str(case.uid)), commands)
+        cgroup_commands = [
+            command
+            for command in commands
+            if command[:3] == ("python3", "-c", CASE_CGROUP_TERMINATE_SCRIPT)
+        ]
+        self.assertEqual(len(cgroup_commands), 1)
+        self.assertEqual(cgroup_commands[0][3], str(case.cgroup_path))
         ipc_commands = [
             command
             for command in commands
@@ -1254,6 +2987,181 @@ class SandboxRuntimeTests(unittest.TestCase):
         ]
         self.assertEqual(len(ipc_commands), 1)
         self.assertEqual(ipc_commands[0][-1], str(case.uid))
+        self.assertLess(
+            commands.index(cgroup_commands[0]),
+            commands.index(ipc_commands[0]),
+        )
+        self.assertFalse(any(command[:1] in (("pkill",), ("pgrep",)) for command in commands))
+        self.assertLess(
+            CASE_CGROUP_TERMINATE_SCRIPT.index('"cgroup.freeze").write_text("1'),
+            CASE_CGROUP_TERMINATE_SCRIPT.index('"cgroup.kill").write_text("1'),
+        )
+        self.assertIn('state.get("populated") == "0"', CASE_CGROUP_TERMINATE_SCRIPT)
+        self.assertIn('"cgroup.procs"', CASE_CGROUP_TERMINATE_SCRIPT)
+
+    def test_ambiguous_cgroup_population_discards_worker_before_ipc_or_export(self) -> None:
+        def report_fork_churn(argv: tuple[str, ...]) -> CommandResult | None:
+            if len(argv) > 7 and argv[7] == CASE_CGROUP_TERMINATE_SCRIPT:
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="case cgroup population could not be proven empty",
+                )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=report_fork_churn,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "cgroup emptiness"):
+                runtime.quiesce_case(worker, case)
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertFalse(
+            any(
+                len(argv) > 7
+                and argv[5:7] == ("python3", "-c")
+                and argv[7] == IPC_CLEANUP_SCRIPT
+                for argv in commands
+            )
+        )
+        self.assertFalse(
+            any(
+                argv[:8]
+                == (
+                    "sbx",
+                    "exec",
+                    "--user",
+                    "root",
+                    "actor-id",
+                    "cp",
+                    "--archive",
+                    "--one-file-system",
+                )
+                and argv[-2:] == (f"{case.root}/.", f"{case.host_export_bridge}/")
+                for argv in commands
+            )
+        )
+        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+
+    def test_close_quarantines_cgroup_ambiguity_and_destroys_without_export(self) -> None:
+        def reject_cgroup_termination(argv: tuple[str, ...]) -> CommandResult | None:
+            if len(argv) > 7 and argv[7] == CASE_CGROUP_TERMINATE_SCRIPT:
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="fork churn prevented a stable empty observation",
+                )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=reject_cgroup_termination,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            runtime.close()
+
+            self.assertTrue(runtime.sandbox_cleanup_completed)
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertEqual(
+            sum(
+                1
+                for argv in commands
+                if len(argv) > 7 and argv[7] == CASE_CGROUP_TERMINATE_SCRIPT
+            ),
+            1,
+        )
+        self.assertFalse(
+            any(len(argv) > 7 and argv[7] == IPC_CLEANUP_SCRIPT for argv in commands)
+        )
+        self.assertFalse(
+            any(
+                argv[:8]
+                == (
+                    "sbx",
+                    "exec",
+                    "--user",
+                    "root",
+                    "actor-id",
+                    "cp",
+                    "--archive",
+                    "--one-file-system",
+                )
+                and argv[-2:] == (f"{case.root}/.", f"{case.host_export_bridge}/")
+                for argv in commands
+            )
+        )
+        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
 
     def test_environment_rejects_unsafe_names_and_nul_values(self) -> None:
         process = FakeProcessRunner(
@@ -1316,11 +3224,11 @@ class SandboxRuntimeTests(unittest.TestCase):
                 return
             target = Path(argv[-1])
             (target / "config.toml").write_text(
-                'model_provider = "sandboxd"\n[model_providers.sandboxd]\nbase_url = "http://proxy"\n',
+                DOCKER_CODEX_PROXY_CONFIG,
                 encoding="utf-8",
             )
             (target / "auth.json").write_text(
-                json.dumps({"OPENAI_API_KEY": "host-proxy-placeholder"}),
+                DOCKER_CODEX_PROXY_AUTH,
                 encoding="utf-8",
             )
 
@@ -1350,6 +3258,447 @@ class SandboxRuntimeTests(unittest.TestCase):
         copy_argv = next(argv for argv, _ in process.calls if "cp" in argv)
         self.assertIn("/home/agent/.codex/config.toml", copy_argv)
         self.assertIn("/home/agent/.codex/auth.json", copy_argv)
+        profile_handoff = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "actor-id",
+            "chown",
+            f"{case.uid}:{case.uid}",
+            str(case.codex_home / "config.toml"),
+            str(case.codex_home / "auth.json"),
+        )
+        self.assertIn(profile_handoff, [argv for argv, _ in process.calls])
+
+    def test_proxy_profile_read_is_bounded_after_post_stat_growth(self) -> None:
+        def copy_proxy_state(argv: tuple[str, ...]) -> None:
+            if argv[:2] != ("sbx", "exec") or "cp" not in argv:
+                return
+            target = Path(argv[-1])
+            (target / "config.toml").write_text(
+                DOCKER_CODEX_PROXY_CONFIG,
+                encoding="utf-8",
+            )
+            (target / "auth.json").write_text(
+                DOCKER_CODEX_PROXY_AUTH,
+                encoding="utf-8",
+            )
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+            ],
+            side_effect=copy_proxy_state,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+            config_path = case.codex_home / "config.toml"
+            real_read = os.read
+            grew = False
+
+            def grow_after_stat(descriptor: int, size: int) -> bytes:
+                nonlocal grew
+                if (
+                    not grew
+                    and config_path.exists()
+                    and os.fstat(descriptor).st_ino == config_path.stat().st_ino
+                ):
+                    with config_path.open("ab") as stream:
+                        stream.write(b"x" * (1024 * 1024 + 1))
+                    grew = True
+                return real_read(descriptor, size)
+
+            with mock.patch(
+                "scripts.ai_skills_lib.sandbox_runtime.os.read",
+                side_effect=grow_after_stat,
+            ):
+                with self.assertRaisesRegex(
+                    SandboxRuntimeError,
+                    "changed while being read",
+                ):
+                    runtime._initialize_codex_home_unchecked(worker, case)
+
+            self.assertTrue(grew)
+
+    def test_proxy_profile_reader_does_not_use_unbounded_path_reads(self) -> None:
+        def copy_proxy_state(argv: tuple[str, ...]) -> None:
+            if argv[:2] != ("sbx", "exec") or "cp" not in argv:
+                return
+            target = Path(argv[-1])
+            (target / "config.toml").write_text(
+                DOCKER_CODEX_PROXY_CONFIG,
+                encoding="utf-8",
+            )
+            (target / "auth.json").write_text(
+                DOCKER_CODEX_PROXY_AUTH,
+                encoding="utf-8",
+            )
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+            ],
+            side_effect=copy_proxy_state,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with mock.patch.object(
+                Path,
+                "read_bytes",
+                side_effect=AssertionError("unbounded pathname read used"),
+            ):
+                runtime._initialize_codex_home_unchecked(worker, case)
+
+    def test_proxy_profile_replacement_at_handoff_is_rejected(self) -> None:
+        replaced = False
+
+        def copy_or_replace_proxy_state(argv: tuple[str, ...]) -> None:
+            nonlocal replaced
+            if argv[:2] != ("sbx", "exec"):
+                return
+            if "cp" in argv:
+                target = Path(argv[-1])
+                (target / "config.toml").write_text(
+                    DOCKER_CODEX_PROXY_CONFIG,
+                    encoding="utf-8",
+                )
+                (target / "auth.json").write_text(
+                    DOCKER_CODEX_PROXY_AUTH,
+                    encoding="utf-8",
+                )
+                return
+            if (
+                len(argv) > 7
+                and argv[5] == "chown"
+                and argv[-2].endswith("/config.toml")
+                and argv[-1].endswith("/auth.json")
+                and not replaced
+            ):
+                config_path = Path(argv[-2])
+                parked = config_path.with_name("config.toml.parked")
+                config_path.rename(parked)
+                config_path.write_text(
+                    DOCKER_CODEX_PROXY_CONFIG,
+                    encoding="utf-8",
+                )
+                replaced = True
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+            ],
+            side_effect=copy_or_replace_proxy_state,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "changed before profile handoff",
+            ):
+                runtime._initialize_codex_home_unchecked(worker, case)
+
+            self.assertTrue(replaced)
+
+    def test_rejects_noncanonical_docker_codex_config_on_first_handoff(self) -> None:
+        cases = {
+            "unexpected comment": DOCKER_CODEX_PROXY_CONFIG
+            + "# unexpected first-case comment\n",
+            "alternate whitespace": DOCKER_CODEX_PROXY_CONFIG.replace(
+                'approval_policy = "never"',
+                'approval_policy="never"',
+            ),
+            "alternate ordering": DOCKER_CODEX_PROXY_CONFIG.replace(
+                'approval_policy = "never"\nsandbox_mode = "danger-full-access"',
+                'sandbox_mode = "danger-full-access"\napproval_policy = "never"',
+            ),
+            "opaque suffix": DOCKER_CODEX_PROXY_CONFIG + "opaque-suffix",
+            "unexpected trailing byte": DOCKER_CODEX_PROXY_CONFIG + " ",
+            "non-UTF-8 byte": DOCKER_CODEX_PROXY_CONFIG.encode("utf-8") + b"\xff",
+        }
+
+        for label, config in cases.items():
+            with self.subTest(label=label):
+                self._assert_codex_proxy_profile_rejected_before_handoff(
+                    config=config,
+                    auth=DOCKER_CODEX_PROXY_AUTH,
+                    error_pattern="config bytes do not match",
+                )
+
+    def test_rejects_noncanonical_docker_codex_auth_on_first_handoff(self) -> None:
+        cases = {
+            "alternate whitespace": '{"OPENAI_API_KEY":"proxy-managed"}\n',
+            "alternate indentation": '{\n    "OPENAI_API_KEY": "proxy-managed"\n}\n',
+            "missing final newline": DOCKER_CODEX_PROXY_AUTH.removesuffix("\n"),
+            "opaque suffix": DOCKER_CODEX_PROXY_AUTH + "opaque-suffix",
+            "unexpected trailing byte": DOCKER_CODEX_PROXY_AUTH + " ",
+            "non-UTF-8 byte": DOCKER_CODEX_PROXY_AUTH.encode("utf-8") + b"\xff",
+        }
+
+        for label, auth in cases.items():
+            with self.subTest(label=label):
+                self._assert_codex_proxy_profile_rejected_before_handoff(
+                    config=DOCKER_CODEX_PROXY_CONFIG,
+                    auth=auth,
+                    error_pattern="placeholder bytes do not match",
+                )
+
+    def test_rejects_unexpected_docker_codex_config_before_profile_handoff(self) -> None:
+        cases = {
+            "provider": DOCKER_CODEX_PROXY_CONFIG
+            + "\n[model_providers.unexpected]\nbase_url = \"https://example.invalid\"\n",
+            "endpoint": DOCKER_CODEX_PROXY_CONFIG.replace(
+                "https://chatgpt.com/backend-api/codex",
+                "https://example.invalid/backend-api/codex",
+            ),
+            "headers": DOCKER_CODEX_PROXY_CONFIG
+            + "\n[model_providers.sandboxd.http_headers]\nAuthorization = \"opaque-value\"\n",
+            "mcp": DOCKER_CODEX_PROXY_CONFIG
+            + "\n[mcp_servers.unexpected]\ncommand = \"credential-reader\"\n",
+            "tool": "web_search = \"live\"\n" + DOCKER_CODEX_PROXY_CONFIG,
+            "unknown": "unexpected = \"value\"\n" + DOCKER_CODEX_PROXY_CONFIG,
+            "malformed type": DOCKER_CODEX_PROXY_CONFIG.replace(
+                'requires_openai_auth = false',
+                'requires_openai_auth = "false"',
+            ),
+        }
+
+        for label, config in cases.items():
+            with self.subTest(label=label):
+                with mock.patch(
+                    "scripts.ai_skills_lib.sandbox_runtime."
+                    "_PINNED_DOCKER_CODEX_CONFIG_BYTES",
+                    config.encode("utf-8"),
+                ):
+                    self._assert_codex_proxy_profile_rejected_before_handoff(
+                        config=config,
+                        auth=DOCKER_CODEX_PROXY_AUTH,
+                    )
+
+    def test_rejects_unexpected_docker_codex_auth_before_profile_handoff(self) -> None:
+        cases = {
+            "opaque token": '{"OPENAI_API_KEY": "opaque-value-1234567890"}',
+            "unknown": '{"OPENAI_API_KEY": "proxy-managed", "unexpected": "value"}',
+            "malformed value type": '{"OPENAI_API_KEY": 123}',
+            "malformed root type": '[{"OPENAI_API_KEY": "proxy-managed"}]',
+            "duplicate field": (
+                '{"OPENAI_API_KEY": "opaque-value", '
+                '"OPENAI_API_KEY": "proxy-managed"}'
+            ),
+        }
+
+        for label, auth in cases.items():
+            with self.subTest(label=label):
+                with mock.patch(
+                    "scripts.ai_skills_lib.sandbox_runtime."
+                    "_PINNED_DOCKER_CODEX_AUTH_BYTES",
+                    auth.encode("utf-8"),
+                ):
+                    self._assert_codex_proxy_profile_rejected_before_handoff(
+                        config=DOCKER_CODEX_PROXY_CONFIG,
+                        auth=auth,
+                    )
+
+    def test_keeps_profile_digest_immutable_after_raw_and_shape_validation(self) -> None:
+        def copy_proxy_state(argv: tuple[str, ...]) -> None:
+            if argv[:2] != ("sbx", "exec") or "cp" not in argv:
+                return
+            target = Path(argv[-1])
+            (target / "config.toml").write_text(
+                DOCKER_CODEX_PROXY_CONFIG,
+                encoding="utf-8",
+            )
+            (target / "auth.json").write_text(
+                DOCKER_CODEX_PROXY_AUTH,
+                encoding="utf-8",
+            )
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=copy_proxy_state,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+            runtime.initialize_codex_home(worker, case)
+            runtime._proxy_state_digests[worker.id] = ("0" * 64, "0" * 64)
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "changed between cases"):
+                runtime.initialize_codex_home(worker, case)
+
+        profile_handoffs = [
+            argv
+            for argv, _ in process.calls
+            if argv[:7]
+            == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "actor-id",
+                "chown",
+                f"{case.uid}:{case.uid}",
+            )
+        ]
+        self.assertEqual(len(profile_handoffs), 1)
+
+    def _assert_codex_proxy_profile_rejected_before_handoff(
+        self,
+        *,
+        config: str | bytes,
+        auth: str | bytes,
+        error_pattern: str = "Docker-generated",
+    ) -> None:
+        def copy_proxy_state(argv: tuple[str, ...]) -> None:
+            if argv[:2] != ("sbx", "exec") or "cp" not in argv:
+                return
+            target = Path(argv[-1])
+            config_bytes = config.encode("utf-8") if isinstance(config, str) else config
+            auth_bytes = auth.encode("utf-8") if isinstance(auth, str) else auth
+            (target / "config.toml").write_bytes(config_bytes)
+            (target / "auth.json").write_bytes(auth_bytes)
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=copy_proxy_state,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with self.assertRaisesRegex(SandboxRuntimeError, error_pattern):
+                runtime.initialize_codex_home(worker, case)
+
+        profile_handoff_prefix = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "actor-id",
+            "chown",
+            f"{case.uid}:{case.uid}",
+        )
+        self.assertFalse(
+            any(argv[:7] == profile_handoff_prefix for argv, _ in process.calls)
+        )
 
     def test_seals_the_complete_skill_catalog_against_case_user_mutation(self) -> None:
         process = FakeProcessRunner(
@@ -1385,6 +3734,11 @@ class SandboxRuntimeTests(unittest.TestCase):
             runtime.seal_skill_catalog(worker, case)
 
         commands = [argv for argv, _ in process.calls]
+        wrapped_commands = [
+            wrapped
+            for argv in commands
+            if (wrapped := cgroup_wrapped_case_command(argv)) is not None
+        ]
         self.assertIn(
             ("sbx", "exec", "--user", "root", "actor-id", "chown", "-R", "root:root", str(case.skills)),
             commands,
@@ -1410,17 +3764,8 @@ class SandboxRuntimeTests(unittest.TestCase):
             case.bootstrap,
         ):
             self.assertIn(
-                (
-                    "sbx",
-                    "exec",
-                    "--user",
-                    case.user_name,
-                    "actor-id",
-                    "test",
-                    "-w",
-                    str(writable_path),
-                ),
-                commands,
+                ("test", "-w", str(writable_path)),
+                wrapped_commands,
             )
         self.assertIn(
             (
@@ -1466,26 +3811,13 @@ class SandboxRuntimeTests(unittest.TestCase):
             commands,
         )
         self.assertIn(
-            (
-                "sbx",
-                "exec",
-                "--user",
-                case.user_name,
-                "actor-id",
-                "test",
-                "!",
-                "-w",
-                str(case.skills),
-            ),
-            commands,
+            ("test", "!", "-w", str(case.skills)),
+            wrapped_commands,
         )
         rename_probes = {
-            (argv[-2], argv[-1])
-            for argv in commands
-            if argv[:5]
-            == ("sbx", "exec", "--user", case.user_name, "actor-id")
-            and argv[5:7] == ("python3", "-c")
-            and argv[7] == CATALOG_RENAME_PROBE_SCRIPT
+            (wrapped[-2], wrapped[-1])
+            for wrapped in wrapped_commands
+            if wrapped[:3] == ("python3", "-c", CATALOG_RENAME_PROBE_SCRIPT)
         }
         self.assertEqual(
             rename_probes,
@@ -1547,7 +3879,7 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertEqual(old_worker.id, "old-id")
         self.assertEqual(replacement.id, "new-id")
 
-    def test_identity_reconciliation_failure_verifies_the_requested_name_is_absent(self) -> None:
+    def test_empty_listings_never_authorize_unknown_create_evidence_deletion(self) -> None:
         process = FakeProcessRunner(
             [
                 completed(),
@@ -1566,8 +3898,12 @@ class SandboxRuntimeTests(unittest.TestCase):
                 max_concurrency=1,
             )
 
-            with self.assertRaisesRegex(SandboxRuntimeError, "identity"):
+            with self.assertRaisesRegex(SandboxRuntimeError, "authoritative"):
                 runtime.acquire_worker("actor")
+            target = runtime._cleanup_targets["ai-skills-unit-test-actor-1"]
+            self.assertTrue(target.host_root.exists())
+            self.assertTrue(target.ownership_marker.is_file())
+            self.assertFalse(runtime.sandbox_cleanup_completed)
 
         self.assertEqual(
             [argv[:2] for argv, _ in process.calls],

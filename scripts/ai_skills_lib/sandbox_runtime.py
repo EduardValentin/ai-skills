@@ -6,22 +6,575 @@ from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
 import re
+import secrets
 import signal
 import shutil
+import stat
 import subprocess
 import threading
+import time
 import tomllib
 from typing import Iterator, Literal, Protocol
 
 from scripts.ai_skills_lib.runtime_environment import CASE_OWNED_ENVIRONMENT_NAMES
-from scripts.ai_skills_lib.secret_patterns import SECRET_PATTERNS
+from scripts.ai_skills_lib.secret_patterns import (
+    SECRET_PATTERNS,
+    bounded_redacted_runtime_text,
+)
 
 
 WorkerRole = Literal["actor", "judge"]
+_MAX_DOCKER_CODEX_PROFILE_BYTES = 1024 * 1024
+_PROFILE_READ_CHUNK_BYTES = 64 * 1024
+
+# Canonical OAuth profile emitted by the Codex kit bundled with pinned sbx v0.35.0.
+_PINNED_DOCKER_CODEX_CONFIG_BYTES = b"""\
+# Codex configuration for Docker sandbox
+# This configuration enables "yolo mode" - no approvals, full access
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+mcp_oauth_credentials_store = "file"
+model_provider = "sandboxd"
+[model_providers.sandboxd]
+name = "Sandbox Proxy"
+base_url = "https://chatgpt.com/backend-api/codex"
+experimental_bearer_token = "oai-oat01-proxy-managed"
+requires_openai_auth = false
+"""
+_PINNED_DOCKER_CODEX_AUTH_BYTES = b'{\n  "OPENAI_API_KEY": "proxy-managed"\n}\n'
+
+_EXPECTED_DOCKER_CODEX_CONFIG_SHAPE: dict[str, object] = {
+    "approval_policy": "never",
+    "sandbox_mode": "danger-full-access",
+    "mcp_oauth_credentials_store": "file",
+    "model_provider": "sandboxd",
+    "model_providers": {
+        "sandboxd": {
+            "name": "Sandbox Proxy",
+            "base_url": "https://chatgpt.com/backend-api/codex",
+            "experimental_bearer_token": "oai-oat01-proxy-managed",
+            "requires_openai_auth": False,
+        }
+    },
+}
+_EXPECTED_DOCKER_CODEX_AUTH_SHAPE: dict[str, object] = {
+    "OPENAI_API_KEY": "proxy-managed",
+}
+
+CLEANUP_FAILURE_MAXIMUM_BYTES = 8192
+CLEANUP_TARGET_FAILURE_MAXIMUM_BYTES = 640
+OWNERSHIP_MARKER_FILENAME = ".ai-skills-sandbox-owner"
+OWNERSHIP_NONCE_BYTES = 32
+CASE_TMPFS_SIZE_BYTES = 268435456
+CASE_TMPFS_NR_INODES = 32768
+PROCESS_KILL_GRACE_SECONDS = 2.0
+PROCESS_GROUP_PROOF_SECONDS = 1.0
+PROCESS_DRAIN_JOIN_SECONDS = 1.0
+PROCESS_POLL_SECONDS = 0.01
+
+CASE_FILESYSTEM_PROBE_SCRIPT = r"""import os
+import pathlib
+import re
+import stat
+import sys
+
+case_root = os.path.normpath(sys.argv[1])
+expected_source = sys.argv[2]
+expected_bytes = int(sys.argv[3])
+expected_inodes = int(sys.argv[4])
+covered_paths = tuple(os.path.normpath(path) for path in sys.argv[5:])
+mount_points = (
+    (case_root, "/"),
+    ("/tmp", "/tmp"),
+    ("/var/tmp", "/.system-var-tmp"),
+    ("/dev/shm", "/.system-dev-shm"),
+    ("/run/lock", "/.system-run-lock"),
+)
+
+def decode_mount_field(value):
+    return re.sub(
+        r"\\([0-7]{3})",
+        lambda match: chr(int(match.group(1), 8)),
+        value,
+    )
+
+entries = {}
+all_entries = []
+for line in pathlib.Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+    fields = line.split()
+    try:
+        separator = fields.index("-")
+    except ValueError:
+        continue
+    if len(fields) <= separator + 3:
+        continue
+    mount_point = os.path.normpath(decode_mount_field(fields[4]))
+    entry = (
+        os.path.normpath(decode_mount_field(fields[3])),
+        fields[2],
+        fields[separator + 1],
+        decode_mount_field(fields[separator + 2]),
+        set(fields[5].split(",")) | set(fields[separator + 3].split(",")),
+    )
+    entries.setdefault(mount_point, []).append(entry)
+    all_entries.append((mount_point, entry))
+
+root_device = os.stat(case_root).st_dev
+root_mount_device = None
+for mount_point, expected_root in mount_points:
+    candidates = entries.get(mount_point, ())
+    if not candidates:
+        raise SystemExit(f"required case mount is absent: {mount_point}")
+    mounted_root, mount_device, filesystem, source, options = candidates[-1]
+    if (
+        mounted_root != expected_root
+        or filesystem != "tmpfs"
+        or source not in (expected_source, "tmpfs")
+        or not {"rw", "nosuid", "nodev"}.issubset(options)
+    ):
+        raise SystemExit(f"case mount does not match the pinned tmpfs: {mount_point}")
+    if root_mount_device is None:
+        root_mount_device = mount_device
+    elif mount_device != root_mount_device:
+        raise SystemExit(f"case mount does not share the case tmpfs: {mount_point}")
+    matching_mounts = [
+        candidate
+        for candidate in candidates
+        if candidate[0] == expected_root
+        and candidate[1] == mount_device
+        and candidate[2] == "tmpfs"
+        and candidate[3] in (expected_source, "tmpfs")
+    ]
+    if len(matching_mounts) != 1 or matching_mounts[0] != candidates[-1]:
+        raise SystemExit(f"case mount is unexpectedly stacked: {mount_point}")
+    filesystem_stats = os.statvfs(mount_point)
+    if filesystem_stats.f_blocks * filesystem_stats.f_frsize != expected_bytes:
+        raise SystemExit(f"case mount byte quota does not match: {mount_point}")
+    if filesystem_stats.f_files != expected_inodes:
+        raise SystemExit(f"case mount inode quota does not match: {mount_point}")
+    if os.stat(mount_point).st_dev != root_device:
+        raise SystemExit(f"case mount does not share the case quota: {mount_point}")
+
+protected_roots = tuple(path for path, _ in mount_points)
+for mount_point, _ in all_entries:
+    if any(
+        mount_point != protected_root
+        and mount_point.startswith(protected_root.rstrip("/") + "/")
+        for protected_root in protected_roots
+    ):
+        raise SystemExit(f"unexpected nested mount beneath case quota: {mount_point}")
+
+if stat.S_IMODE(os.stat(case_root).st_mode) != 0o555:
+    raise SystemExit("case tmpfs root mode does not match")
+for path in covered_paths:
+    if os.stat(path).st_dev != root_device:
+        raise SystemExit(f"writable case path escapes the case quota: {path}")
+"""
+
+CASE_FILESYSTEM_CLEANUP_SCRIPT = r"""import os
+import pathlib
+import re
+import subprocess
+import sys
+
+expected_source = sys.argv[1]
+case_root = os.path.normpath(sys.argv[2])
+bridge_mount = os.path.normpath(sys.argv[3])
+case_mounts = tuple(os.path.normpath(path) for path in sys.argv[4:])
+case_mount_roots = ("/tmp", "/.system-var-tmp", "/.system-dev-shm", "/.system-run-lock")
+if len(case_mounts) != len(case_mount_roots):
+    raise SystemExit("case filesystem cleanup received an invalid mount contract")
+
+def decode_mount_field(value):
+    return re.sub(
+        r"\\([0-7]{3})",
+        lambda match: chr(int(match.group(1), 8)),
+        value,
+    )
+
+def read_mounts():
+    entries = []
+    for line in pathlib.Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+        except ValueError:
+            continue
+        if len(fields) <= separator + 2:
+            continue
+        entries.append(
+            {
+                "id": fields[0],
+                "parent": fields[1],
+                "device": fields[2],
+                "root": os.path.normpath(decode_mount_field(fields[3])),
+                "path": os.path.normpath(decode_mount_field(fields[4])),
+                "filesystem": fields[separator + 1],
+                "source": decode_mount_field(fields[separator + 2]),
+            }
+        )
+    return entries
+
+def mounts_at(path, entries):
+    return [entry for entry in entries if entry["path"] == path]
+
+def unmount_top(path):
+    before = mounts_at(path, read_mounts())
+    if not before:
+        return
+    mounted_id = before[-1]["id"]
+    subprocess.run(("umount", "--", path), check=False)
+    after = mounts_at(path, read_mounts())
+    if after and after[-1]["id"] == mounted_id:
+        raise SystemExit(f"mount could not be cleared: {path}")
+
+def expose_mount(path, expected_id):
+    for _ in range(16):
+        candidates = mounts_at(path, read_mounts())
+        if not candidates:
+            raise SystemExit(f"expected case mount disappeared: {path}")
+        if candidates[-1]["id"] == expected_id:
+            return
+        if not any(candidate["id"] == expected_id for candidate in candidates):
+            raise SystemExit(f"unexpected mount replaced the case mount: {path}")
+        unmount_top(path)
+    raise SystemExit(f"case mount stack is too deep: {path}")
+
+def descendant_depth(entry, ancestor_id, by_id):
+    depth = 0
+    current = entry
+    visited = set()
+    while current["parent"] in by_id and current["parent"] not in visited:
+        visited.add(current["parent"])
+        depth += 1
+        if current["parent"] == ancestor_id:
+            return depth
+        current = by_id[current["parent"]]
+    return None
+
+def clear_mount_tree(path, expected_entry):
+    expose_mount(path, expected_entry["id"])
+    for _ in range(128):
+        entries = read_mounts()
+        by_id = {entry["id"]: entry for entry in entries}
+        descendants = []
+        for entry in entries:
+            depth = descendant_depth(entry, expected_entry["id"], by_id)
+            if depth is not None:
+                descendants.append((depth, entry))
+        if not descendants:
+            break
+        _, deepest = max(
+            descendants,
+            key=lambda item: (item[0], item[1]["path"].count("/")),
+        )
+        unmount_top(deepest["path"])
+    else:
+        raise SystemExit(f"nested case mount tree is too deep: {path}")
+    expose_mount(path, expected_entry["id"])
+    unmount_top(path)
+    if any(
+        entry["id"] == expected_entry["id"]
+        for entry in read_mounts()
+    ):
+        raise SystemExit(f"case mount remains mounted: {path}")
+
+entries = read_mounts()
+case_candidates = [
+    entry
+    for entry in mounts_at(case_root, entries)
+    if entry["root"] == "/"
+    and entry["filesystem"] == "tmpfs"
+]
+if case_candidates:
+    case_entry = case_candidates[-1]
+    case_device = case_entry["device"]
+    expected_system_mounts = []
+    entries = read_mounts()
+    for mount_point, mounted_root in zip(case_mounts, case_mount_roots, strict=True):
+        candidates = [
+            entry
+            for entry in mounts_at(mount_point, entries)
+            if entry["device"] == case_device
+            and entry["root"] == mounted_root
+            and entry["filesystem"] == "tmpfs"
+        ]
+        if candidates:
+            expected_system_mounts.append((mount_point, candidates[-1]))
+    for mount_point, expected_entry in reversed(expected_system_mounts):
+        clear_mount_tree(mount_point, expected_entry)
+    clear_mount_tree(case_root, case_entry)
+
+for _ in range(16):
+    if not mounts_at(bridge_mount, read_mounts()):
+        break
+    unmount_top(bridge_mount)
+else:
+    raise SystemExit("case host bridge mount stack is too deep")
+"""
+
+CASE_PRIVILEGE_LOCKDOWN_SCRIPT = r"""import os
+import pathlib
+import stat
+
+def pin_zero(path, *, required):
+    target = pathlib.Path(path)
+    if not target.exists():
+        if required:
+            raise SystemExit(f"required namespace control is unavailable: {path}")
+        return
+    target.write_text("0\n", encoding="ascii")
+    if target.read_text(encoding="ascii").strip() != "0":
+        raise SystemExit(f"namespace control did not remain disabled: {path}")
+
+pin_zero("/proc/sys/user/max_user_namespaces", required=True)
+pin_zero("/proc/sys/kernel/unprivileged_userns_clone", required=False)
+
+fuse_path = "/dev/fuse"
+if os.path.lexists(fuse_path):
+    metadata = os.lstat(fuse_path)
+    if stat.S_ISDIR(metadata.st_mode):
+        raise SystemExit("/dev/fuse is unexpectedly a directory")
+    os.unlink(fuse_path)
+if os.path.lexists(fuse_path):
+    raise SystemExit("/dev/fuse remains available")
+"""
+
+CASE_PRIVILEGE_PROBE_SCRIPT = r"""import ctypes
+import errno
+import os
+import pathlib
+import sys
+
+mountpoint = os.fsencode(sys.argv[1])
+if pathlib.Path("/proc/sys/user/max_user_namespaces").read_text(
+    encoding="ascii"
+).strip() != "0":
+    raise SystemExit("unprivileged user namespaces are not disabled")
+clone_control = pathlib.Path("/proc/sys/kernel/unprivileged_userns_clone")
+if clone_control.exists() and clone_control.read_text(encoding="ascii").strip() != "0":
+    raise SystemExit("unprivileged user namespace cloning is not disabled")
+if os.path.lexists("/dev/fuse"):
+    raise SystemExit("FUSE device remains available")
+
+libc = ctypes.CDLL(None, use_errno=True)
+if libc.mount(b"tmpfs", mountpoint, b"tmpfs", 0, b"size=4096,nr_inodes=4") == 0:
+    libc.umount2(mountpoint, 2)
+    raise SystemExit("case UID can create mounts")
+if ctypes.get_errno() not in (errno.EPERM, errno.EACCES):
+    raise SystemExit("case UID mount denial is ambiguous")
+
+CLONE_NEWUSER = 0x10000000
+if libc.unshare(CLONE_NEWUSER) == 0:
+    raise SystemExit("case UID can create a user namespace")
+if ctypes.get_errno() not in (errno.EPERM, errno.EACCES, errno.EINVAL, errno.ENOSYS):
+    raise SystemExit("case UID user namespace denial is ambiguous")
+"""
+
+CASE_CGROUP_SETUP_SCRIPT = r"""import os
+import pathlib
+import re
+import stat
+import sys
+
+cgroup = pathlib.Path(sys.argv[1])
+cgroup_root = pathlib.Path("/sys/fs/cgroup")
+expected_parent = cgroup_root / "ai-skills-evals"
+if cgroup.parent != expected_parent or re.fullmatch(r"[a-zA-Z0-9.+-]+", cgroup.name) is None:
+    raise SystemExit("case cgroup path is outside the runner-owned hierarchy")
+
+def decode_mount_field(value):
+    return re.sub(
+        r"\\([0-7]{3})",
+        lambda match: chr(int(match.group(1), 8)),
+        value,
+    )
+
+cgroup_mounts = []
+for line in pathlib.Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+    fields = line.split()
+    try:
+        separator = fields.index("-")
+    except ValueError:
+        continue
+    if len(fields) <= separator + 1:
+        continue
+    if os.path.normpath(decode_mount_field(fields[4])) == str(cgroup_root):
+        cgroup_mounts.append((
+            os.path.normpath(decode_mount_field(fields[3])),
+            fields[separator + 1],
+            set(fields[5].split(",")) | set(fields[separator + 3].split(",")),
+        ))
+if len(cgroup_mounts) != 1 or cgroup_mounts[0][0] != "/" or cgroup_mounts[0][1] != "cgroup2":
+    raise SystemExit("a unique cgroup v2 mount is unavailable")
+if "rw" not in cgroup_mounts[0][2]:
+    raise SystemExit("the cgroup v2 mount is not writable")
+
+expected_parent.mkdir(mode=0o700, exist_ok=True)
+parent_metadata = expected_parent.lstat()
+if (
+    not stat.S_ISDIR(parent_metadata.st_mode)
+    or parent_metadata.st_uid != 0
+    or stat.S_IMODE(parent_metadata.st_mode) != 0o700
+):
+    raise SystemExit("runner-owned cgroup parent is not root-only")
+if cgroup.exists():
+    raise SystemExit("case cgroup already exists")
+cgroup.mkdir(mode=0o700)
+cgroup_metadata = cgroup.lstat()
+if (
+    not stat.S_ISDIR(cgroup_metadata.st_mode)
+    or cgroup_metadata.st_uid != 0
+    or stat.S_IMODE(cgroup_metadata.st_mode) != 0o700
+):
+    raise SystemExit("case cgroup is not root-only")
+required = ("cgroup.procs", "cgroup.events", "cgroup.freeze", "cgroup.kill")
+if any(not (cgroup / name).is_file() for name in required):
+    raise SystemExit("required cgroup v2 lifecycle controls are unavailable")
+
+def events():
+    parsed = {}
+    for line in (cgroup / "cgroup.events").read_text(encoding="ascii").splitlines():
+        name, value = line.split()
+        parsed[name] = value
+    return parsed
+
+if (cgroup / "cgroup.procs").read_text(encoding="ascii").strip():
+    raise SystemExit("new case cgroup is unexpectedly populated")
+if events().get("populated") != "0":
+    raise SystemExit("new case cgroup population cannot be proven empty")
+(cgroup / "cgroup.freeze").write_text("0\n", encoding="ascii")
+if events().get("frozen") != "0":
+    raise SystemExit("new case cgroup could not be proven unfrozen")
+"""
+
+CASE_CGROUP_EXEC_SCRIPT = r"""import ctypes
+import os
+import pathlib
+import sys
+
+cgroup = pathlib.Path(sys.argv[1])
+uid = int(sys.argv[2])
+command = sys.argv[3:]
+if not command or uid <= 0:
+    raise SystemExit("case cgroup execution contract is incomplete")
+for name in ("cgroup.procs", "cgroup.events", "cgroup.freeze", "cgroup.kill"):
+    if not (cgroup / name).is_file():
+        raise SystemExit("case cgroup lifecycle control disappeared")
+(cgroup / "cgroup.procs").write_text(f"{os.getpid()}\n", encoding="ascii")
+members = {
+    int(value)
+    for value in (cgroup / "cgroup.procs").read_text(encoding="ascii").split()
+}
+if os.getpid() not in members:
+    raise SystemExit("case process did not enter its cgroup")
+
+PR_SET_NO_NEW_PRIVS = 38
+if ctypes.CDLL(None, use_errno=True).prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0:
+    raise SystemExit("case process could not enable no-new-privileges")
+os.setgroups([])
+os.setresgid(uid, uid, uid)
+os.setresuid(uid, uid, uid)
+if os.getuid() != uid or os.getgid() != uid or os.getgroups():
+    raise SystemExit("case process identity transition failed")
+status = {}
+for line in pathlib.Path("/proc/self/status").read_text(encoding="ascii").splitlines():
+    if ":" in line:
+        name, value = line.split(":", 1)
+        status[name] = value.strip()
+for name in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"):
+    value = status.get(name)
+    if value is None:
+        raise SystemExit("case process capability state is unavailable")
+if any(int(status[name], 16) != 0 for name in ("CapInh", "CapPrm", "CapEff", "CapAmb")):
+    raise SystemExit("case process retained Linux capabilities")
+os.execvp(command[0], command)
+"""
+
+CASE_CGROUP_TERMINATE_SCRIPT = r"""import pathlib
+import sys
+import time
+
+cgroup = pathlib.Path(sys.argv[1])
+timeout_seconds = float(sys.argv[2])
+if timeout_seconds <= 0:
+    raise SystemExit("case cgroup cleanup timeout is invalid")
+for name in ("cgroup.procs", "cgroup.events", "cgroup.freeze", "cgroup.kill"):
+    if not (cgroup / name).is_file():
+        raise SystemExit("required cgroup v2 lifecycle control is unavailable")
+
+def events():
+    parsed = {}
+    for line in (cgroup / "cgroup.events").read_text(encoding="ascii").splitlines():
+        name, value = line.split()
+        parsed[name] = value
+    return parsed
+
+deadline = time.monotonic() + timeout_seconds
+(cgroup / "cgroup.freeze").write_text("1\n", encoding="ascii")
+while events().get("frozen") != "1":
+    if time.monotonic() >= deadline:
+        raise SystemExit("case cgroup could not be frozen")
+    time.sleep(0.01)
+
+(cgroup / "cgroup.kill").write_text("1\n", encoding="ascii")
+while True:
+    state = events()
+    members = (cgroup / "cgroup.procs").read_text(encoding="ascii").strip()
+    if state.get("populated") == "0" and not members:
+        break
+    if time.monotonic() >= deadline:
+        raise SystemExit("case cgroup population could not be proven empty")
+    time.sleep(0.01)
+if events().get("populated") != "0" or (cgroup / "cgroup.procs").read_text(
+    encoding="ascii"
+).strip():
+    raise SystemExit("case cgroup emptiness changed during verification")
+"""
+
+CASE_CGROUP_REMOVE_SCRIPT = r"""import pathlib
+import sys
+
+cgroup = pathlib.Path(sys.argv[1])
+if not cgroup.is_dir():
+    raise SystemExit("case cgroup disappeared before verified removal")
+events = {}
+for line in (cgroup / "cgroup.events").read_text(encoding="ascii").splitlines():
+    name, value = line.split()
+    events[name] = value
+if events.get("populated") != "0" or (cgroup / "cgroup.procs").read_text(
+    encoding="ascii"
+).strip():
+    raise SystemExit("populated case cgroup cannot be removed")
+cgroup.rmdir()
+if cgroup.exists():
+    raise SystemExit("case cgroup removal could not be verified")
+"""
+
+OWNERSHIP_MARKER_PROBE_SCRIPT = """import hashlib
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+descriptor = os.open(path, flags)
+try:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 256:
+        raise SystemExit("ownership marker is not a bounded regular file")
+    content = os.read(descriptor, 257)
+    if len(content) != metadata.st_size:
+        raise SystemExit("ownership marker changed while being read")
+    sys.stdout.write(hashlib.sha256(content).hexdigest())
+finally:
+    os.close(descriptor)
+"""
 
 IPC_CLEANUP_SCRIPT = """import pathlib
 import subprocess
@@ -111,6 +664,40 @@ class SandboxRuntimeError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ProcessTerminationOutcome:
+    """Observable proof that a started host command no longer has live state."""
+
+    process_started: bool
+    leader_reaped: bool
+    process_group_absent: bool
+    drains_stopped: bool
+
+    @property
+    def fully_terminated_and_reaped(self) -> bool:
+        return (
+            self.process_started
+            and self.leader_reaped
+            and self.process_group_absent
+            and self.drains_stopped
+        )
+
+
+PROCESS_NOT_STARTED = ProcessTerminationOutcome(
+    process_started=False,
+    leader_reaped=False,
+    process_group_absent=True,
+    drains_stopped=True,
+)
+PROCESS_FULLY_TERMINATED = ProcessTerminationOutcome(
+    process_started=True,
+    leader_reaped=True,
+    process_group_absent=True,
+    drains_stopped=True,
+)
+_PROCESS_OUTCOME_ATTRIBUTE = "_ai_skills_process_termination_outcome"
+
+
+@dataclass(frozen=True)
 class CommandResult:
     returncode: int
     stdout: str
@@ -119,11 +706,29 @@ class CommandResult:
     stdout_truncated: bool = False
     stderr_truncated: bool = False
     lifecycle_failure: str | None = None
+    process_outcome: ProcessTerminationOutcome = PROCESS_FULLY_TERMINATED
+
+
+def _attach_process_outcome(
+    error: BaseException,
+    outcome: ProcessTerminationOutcome,
+) -> None:
+    try:
+        setattr(error, _PROCESS_OUTCOME_ATTRIBUTE, outcome)
+    except BaseException:
+        pass
+
+
+def process_termination_outcome(
+    error: BaseException,
+) -> ProcessTerminationOutcome | None:
+    outcome = getattr(error, _PROCESS_OUTCOME_ATTRIBUTE, None)
+    return outcome if isinstance(outcome, ProcessTerminationOutcome) else None
 
 
 class ProcessRunner(Protocol):
     def run(self, argv: tuple[str, ...], *, timeout_seconds: int) -> CommandResult:
-        """Run one bounded host process without invoking a shell."""
+        """Run one bounded host process and expose its verified termination outcome."""
 
 
 class SubprocessRunner:
@@ -133,71 +738,251 @@ class SubprocessRunner:
         self._maximum_output_bytes = maximum_output_bytes
 
     def run(self, argv: tuple[str, ...], *, timeout_seconds: int) -> CommandResult:
-        timed_out = False
-        process = subprocess.Popen(
-            argv,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-        stdout_buffer = bytearray()
-        stderr_buffer = bytearray()
-        stdout_budget = self._maximum_output_bytes // 2
-        stderr_budget = self._maximum_output_bytes - stdout_budget
-        truncation = {"stdout": False, "stderr": False}
-
-        def drain(stream, buffer: bytearray, budget: int, key: str) -> None:
-            while True:
-                chunk = stream.read(65536)
-                if not chunk:
-                    return
-                remaining = budget - len(buffer)
-                if remaining > 0:
-                    buffer.extend(chunk[:remaining])
-                if len(chunk) > max(remaining, 0):
-                    truncation[key] = True
-
-        stdout_thread = threading.Thread(
-            target=drain,
-            args=(process.stdout, stdout_buffer, stdout_budget, "stdout"),
-            daemon=True,
-        )
-        stderr_thread = threading.Thread(
-            target=drain,
-            args=(process.stderr, stderr_buffer, stderr_budget, "stderr"),
-            daemon=True,
-        )
-        stdout_thread.start()
-        stderr_thread.start()
+        process: subprocess.Popen[bytes] | None = None
+        drains: list[tuple[threading.Thread, object]] = []
         try:
-            returncode = process.wait(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            os.killpg(process.pid, signal.SIGTERM)
+            stdout_buffer = bytearray()
+            stderr_buffer = bytearray()
+            truncation = {"stdout": False, "stderr": False}
+            timed_out = False
+            process = subprocess.Popen(
+                argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+            stdout_budget = self._maximum_output_bytes // 2
+            stderr_budget = self._maximum_output_bytes - stdout_budget
+
+            def drain(stream, buffer: bytearray, budget: int, key: str) -> None:
+                while True:
+                    chunk = stream.read(65536)
+                    if not chunk:
+                        return
+                    remaining = budget - len(buffer)
+                    if remaining > 0:
+                        buffer.extend(chunk[:remaining])
+                    if len(chunk) > max(remaining, 0):
+                        truncation[key] = True
+
+            for stream, buffer, budget, key in (
+                (process.stdout, stdout_buffer, stdout_budget, "stdout"),
+                (process.stderr, stderr_buffer, stderr_budget, "stderr"),
+            ):
+                if stream is None:
+                    raise SandboxRuntimeError("host process output pipe was not created")
+                thread = threading.Thread(
+                    target=drain,
+                    args=(stream, buffer, budget, key),
+                    daemon=True,
+                )
+                drains.append((thread, stream))
+                thread.start()
+
             try:
-                process.wait(timeout=2)
+                returncode = process.wait(timeout=timeout_seconds)
+                outcome = self._settle_process(
+                    process,
+                    drains,
+                    leader_reaped=True,
+                    terminate_group=False,
+                )
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
-            returncode = 124
-        stdout_thread.join()
-        stderr_thread.join()
-        if process.stdout is not None:
-            process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
-        return CommandResult(
-            returncode=returncode,
-            stdout=self._decode(stdout_buffer),
-            stderr=self._decode(stderr_buffer),
-            timed_out=timed_out,
-            stdout_truncated=truncation["stdout"],
-            stderr_truncated=truncation["stderr"],
-        )
+                timed_out = True
+                returncode = 124
+                outcome = self._settle_process(
+                    process,
+                    drains,
+                    leader_reaped=False,
+                    terminate_group=True,
+                )
+            if not outcome.fully_terminated_and_reaped:
+                error = SandboxRuntimeError(
+                    "host process group termination and reaping could not be proven"
+                )
+                _attach_process_outcome(error, outcome)
+                raise error
+            return CommandResult(
+                returncode=returncode,
+                stdout=self._decode(stdout_buffer),
+                stderr=self._decode(stderr_buffer),
+                timed_out=timed_out,
+                stdout_truncated=truncation["stdout"],
+                stderr_truncated=truncation["stderr"],
+                process_outcome=outcome,
+            )
+        except BaseException as error:
+            if process is None:
+                _attach_process_outcome(error, PROCESS_NOT_STARTED)
+                raise
+            outcome = self._settle_process_safely(process, drains)
+            _attach_process_outcome(error, outcome)
+            raise
 
     @staticmethod
     def _decode(value: bytes) -> str:
         return value.decode("utf-8", errors="replace")
+
+    def _settle_process(
+        self,
+        process: subprocess.Popen[bytes],
+        drains: Sequence[tuple[threading.Thread, object]],
+        *,
+        leader_reaped: bool,
+        terminate_group: bool,
+    ) -> ProcessTerminationOutcome:
+        if terminate_group and not leader_reaped and process.returncode is None:
+            # Complete every destructive group signal before wait() can reap the
+            # leader and make its numeric process-group identity reusable.
+            self._signal_process_group(process.pid, signal.SIGTERM)
+            self._signal_process_group(process.pid, signal.SIGKILL)
+            leader_reaped = self._bounded_wait(
+                process,
+                PROCESS_KILL_GRACE_SECONDS,
+            )
+
+        group_absent = self._prove_process_group_absent(process.pid)
+        drains_stopped = self._stop_drain_threads(process, drains)
+        return ProcessTerminationOutcome(
+            process_started=True,
+            leader_reaped=leader_reaped or process.returncode is not None,
+            process_group_absent=group_absent,
+            drains_stopped=drains_stopped,
+        )
+
+    def _settle_process_safely(
+        self,
+        process: subprocess.Popen[bytes],
+        drains: Sequence[tuple[threading.Thread, object]],
+    ) -> ProcessTerminationOutcome:
+        for _ in range(2):
+            try:
+                return self._settle_process(
+                    process,
+                    drains,
+                    leader_reaped=process.returncode is not None,
+                    terminate_group=True,
+                )
+            except BaseException:
+                pass
+        return ProcessTerminationOutcome(
+            process_started=True,
+            leader_reaped=process.returncode is not None,
+            process_group_absent=False,
+            drains_stopped=False,
+        )
+
+    @staticmethod
+    def _bounded_wait(
+        process: subprocess.Popen[bytes],
+        maximum_seconds: float,
+    ) -> bool:
+        deadline = time.monotonic() + maximum_seconds
+        while process.returncode is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                process.wait(timeout=remaining)
+            except subprocess.TimeoutExpired:
+                break
+            except BaseException:
+                SubprocessRunner._pause(
+                    min(PROCESS_POLL_SECONDS, max(0.0, remaining))
+                )
+            else:
+                return True
+        return process.returncode is not None
+
+    @classmethod
+    def _prove_process_group_absent(cls, process_group_id: int) -> bool:
+        deadline = time.monotonic() + PROCESS_GROUP_PROOF_SECONDS
+        while True:
+            if not cls._process_group_exists(process_group_id):
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            cls._pause(PROCESS_POLL_SECONDS)
+
+    @staticmethod
+    def _process_group_exists(process_group_id: int) -> bool:
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return False
+        except BaseException:
+            return True
+        return True
+
+    @staticmethod
+    def _signal_process_group(process_group_id: int, signal_number: int) -> None:
+        try:
+            os.killpg(process_group_id, signal_number)
+        except BaseException:
+            pass
+
+    @classmethod
+    def _stop_drain_threads(
+        cls,
+        process: subprocess.Popen[bytes],
+        drains: Sequence[tuple[threading.Thread, object]],
+    ) -> bool:
+        cls._join_drain_threads(drains)
+        for thread, stream in drains:
+            if cls._thread_is_alive(thread):
+                try:
+                    os.close(stream.fileno())
+                except BaseException:
+                    pass
+        cls._join_drain_threads(drains)
+        stopped = not any(cls._thread_is_alive(thread) for thread, _ in drains)
+        threads_by_stream = {id(stream): thread for thread, stream in drains}
+        for stream in (process.stdout, process.stderr):
+            if stream is None:
+                continue
+            thread = threads_by_stream.get(id(stream))
+            if thread is not None and cls._thread_is_alive(thread):
+                continue
+            try:
+                stream.close()
+            except BaseException:
+                stopped = False
+        return stopped
+
+    @staticmethod
+    def _join_drain_threads(
+        drains: Sequence[tuple[threading.Thread, object]],
+    ) -> None:
+        for thread, _ in drains:
+            deadline = time.monotonic() + (
+                PROCESS_DRAIN_JOIN_SECONDS / max(1, len(drains))
+            )
+            while SubprocessRunner._thread_is_alive(thread):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return
+                try:
+                    thread.join(timeout=remaining)
+                except BaseException:
+                    SubprocessRunner._pause(
+                        min(PROCESS_POLL_SECONDS, max(0.0, remaining))
+                    )
+                    continue
+                break
+
+    @staticmethod
+    def _thread_is_alive(thread: threading.Thread) -> bool:
+        try:
+            return thread.is_alive()
+        except BaseException:
+            return True
+
+    @staticmethod
+    def _pause(seconds: float) -> None:
+        try:
+            time.sleep(seconds)
+        except BaseException:
+            pass
 
 
 @dataclass(frozen=True)
@@ -281,6 +1066,9 @@ class CaseIsolation:
     fresh_tmpdir: bool
     ephemeral_harness_session: bool
     durable_results_mounted_into_actor: bool
+    writable_filesystem: str
+    maximum_writable_bytes: int
+    maximum_writable_inodes: int
     reset_failure: str
 
 
@@ -391,6 +1179,9 @@ class EvalRuntimeManifest:
                 "fresh_tmpdir",
                 "ephemeral_harness_session",
                 "durable_results_mounted_into_actor",
+                "writable_filesystem",
+                "maximum_writable_bytes",
+                "maximum_writable_inodes",
                 "reset_failure",
             },
         )
@@ -482,6 +1273,13 @@ class EvalRuntimeManifest:
                 durable_results_mounted_into_actor=_boolean(
                     isolation_raw, "durable_results_mounted_into_actor"
                 ),
+                writable_filesystem=_string(isolation_raw, "writable_filesystem"),
+                maximum_writable_bytes=_positive_integer(
+                    isolation_raw, "maximum_writable_bytes"
+                ),
+                maximum_writable_inodes=_positive_integer(
+                    isolation_raw, "maximum_writable_inodes"
+                ),
                 reset_failure=_string(isolation_raw, "reset_failure"),
             ),
         )
@@ -562,6 +1360,12 @@ class EvalRuntimeManifest:
             )
         ) or isolation.durable_results_mounted_into_actor:
             raise ManifestError("case isolation invariants cannot be weakened")
+        if (
+            isolation.writable_filesystem != "tmpfs"
+            or isolation.maximum_writable_bytes != CASE_TMPFS_SIZE_BYTES
+            or isolation.maximum_writable_inodes != CASE_TMPFS_NR_INODES
+        ):
+            raise ManifestError("case writable filesystem quotas must match the pinned tmpfs")
         if isolation.reset_failure != "fail-case-and-recycle-worker":
             raise ManifestError("reset failures must fail the case and recycle the worker")
 
@@ -596,6 +1400,13 @@ class CaseWorkspace:
     bootstrap: Path
     user_name: str
     uid: int
+    host_staging_root: Path | None = None
+    host_export_bridge: Path | None = None
+    filesystem_source: str | None = None
+    system_var_tmp: Path | None = None
+    system_dev_shm: Path | None = None
+    system_run_lock: Path | None = None
+    cgroup_path: Path | None = None
 
 
 @dataclass
@@ -603,8 +1414,310 @@ class CleanupTarget:
     name: str
     id: str | None
     host_root: Path
+    ownership_marker_sha256: str
+    create_started: bool = False
+    create_process_settled: bool = False
+    removal_started: bool = False
+    removal_process_settled: bool = False
     removal_issued: bool = False
     sandbox_removed: bool = False
+    discard_without_export: bool = False
+
+    @property
+    def ownership_marker(self) -> Path:
+        return self.host_root / OWNERSHIP_MARKER_FILENAME
+
+
+@dataclass(frozen=True)
+class _OpenedDockerProfileFile:
+    name: str
+    descriptor: int
+    content: bytes
+    identity: tuple[int, int]
+
+
+@contextmanager
+def _open_docker_codex_profile(
+    codex_home: Path,
+) -> Iterator[tuple[int, tuple[_OpenedDockerProfileFile, ...]]]:
+    directory_descriptor: int | None = None
+    file_descriptors: list[int] = []
+    try:
+        try:
+            observed_directory = os.stat(codex_home, follow_symlinks=False)
+            if not stat.S_ISDIR(observed_directory.st_mode):
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state is incomplete"
+                )
+            directory_descriptor = os.open(
+                codex_home,
+                os.O_RDONLY
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+            )
+            opened_directory = os.fstat(directory_descriptor)
+        except SandboxRuntimeError:
+            raise
+        except OSError as error:
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state is incomplete"
+            ) from error
+        if (
+            not stat.S_ISDIR(opened_directory.st_mode)
+            or _stable_profile_metadata(opened_directory)
+            != _stable_profile_metadata(observed_directory)
+        ):
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state changed while being read"
+            )
+
+        opened_files: list[_OpenedDockerProfileFile] = []
+        for name in ("config.toml", "auth.json"):
+            try:
+                observed = os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except OSError as error:
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state is incomplete"
+                ) from error
+            if not stat.S_ISREG(observed.st_mode):
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state is incomplete"
+                )
+            if observed.st_size > _MAX_DOCKER_CODEX_PROFILE_BYTES:
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state is unexpectedly large"
+                )
+            try:
+                descriptor = os.open(
+                    name,
+                    os.O_RDONLY
+                    | getattr(os, "O_CLOEXEC", 0)
+                    | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=directory_descriptor,
+                )
+                file_descriptors.append(descriptor)
+                opened = os.fstat(descriptor)
+            except OSError as error:
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state changed while being read"
+                ) from error
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or _stable_profile_metadata(opened)
+                != _stable_profile_metadata(observed)
+            ):
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state changed while being read"
+                )
+            content = _read_bounded_profile_descriptor(descriptor, opened)
+            try:
+                current = os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except OSError as error:
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state changed while being read"
+                ) from error
+            if _stable_profile_metadata(current) != _stable_profile_metadata(opened):
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state changed while being read"
+                )
+            opened_files.append(
+                _OpenedDockerProfileFile(
+                    name=name,
+                    descriptor=descriptor,
+                    content=content,
+                    identity=(opened.st_dev, opened.st_ino),
+                )
+            )
+        _verify_profile_directory_identity(
+            codex_home,
+            directory_descriptor,
+            (opened_directory.st_dev, opened_directory.st_ino),
+            error_message=(
+                "Docker-generated Codex proxy state changed while being read"
+            ),
+        )
+        yield directory_descriptor, tuple(opened_files)
+    finally:
+        for descriptor in reversed(file_descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if directory_descriptor is not None:
+            try:
+                os.close(directory_descriptor)
+            except OSError:
+                pass
+
+
+def _read_bounded_profile_descriptor(
+    descriptor: int,
+    expected: os.stat_result,
+) -> bytes:
+    if (
+        not stat.S_ISREG(expected.st_mode)
+        or expected.st_size < 0
+        or expected.st_size > _MAX_DOCKER_CODEX_PROFILE_BYTES
+    ):
+        raise SandboxRuntimeError(
+            "Docker-generated Codex proxy state is unexpectedly large"
+        )
+    try:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        remaining = expected.st_size
+        chunks: list[bytes] = []
+        while remaining:
+            chunk = os.read(
+                descriptor,
+                min(_PROFILE_READ_CHUNK_BYTES, remaining),
+            )
+            if not chunk:
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex proxy state changed while being read"
+                )
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state changed while being read"
+            )
+        final = os.fstat(descriptor)
+    except SandboxRuntimeError:
+        raise
+    except (OSError, MemoryError, OverflowError) as error:
+        raise SandboxRuntimeError(
+            "Docker-generated Codex proxy state changed while being read"
+        ) from error
+    if _stable_profile_metadata(final) != _stable_profile_metadata(expected):
+        raise SandboxRuntimeError(
+            "Docker-generated Codex proxy state changed while being read"
+        )
+    try:
+        return b"".join(chunks)
+    except (MemoryError, OverflowError) as error:
+        raise SandboxRuntimeError(
+            "Docker-generated Codex proxy state changed while being read"
+        ) from error
+
+
+def _verify_docker_codex_profile_handoff(
+    codex_home: Path,
+    directory_descriptor: int,
+    opened_files: Sequence[_OpenedDockerProfileFile],
+) -> None:
+    opened_directory = os.fstat(directory_descriptor)
+    _verify_profile_directory_identity(
+        codex_home,
+        directory_descriptor,
+        (opened_directory.st_dev, opened_directory.st_ino),
+        error_message=(
+            "Docker-generated Codex proxy state changed before profile handoff"
+        ),
+    )
+    for opened_file in opened_files:
+        try:
+            descriptor_metadata = os.fstat(opened_file.descriptor)
+            visible_metadata = os.stat(
+                opened_file.name,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as error:
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state changed before profile handoff"
+            ) from error
+        if (
+            not stat.S_ISREG(descriptor_metadata.st_mode)
+            or not stat.S_ISREG(visible_metadata.st_mode)
+            or (descriptor_metadata.st_dev, descriptor_metadata.st_ino)
+            != opened_file.identity
+            or (visible_metadata.st_dev, visible_metadata.st_ino)
+            != opened_file.identity
+            or descriptor_metadata.st_size != len(opened_file.content)
+            or visible_metadata.st_size != len(opened_file.content)
+        ):
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state changed before profile handoff"
+            )
+        current_content = _read_bounded_profile_descriptor(
+            opened_file.descriptor,
+            descriptor_metadata,
+        )
+        if not hmac.compare_digest(current_content, opened_file.content):
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state changed before profile handoff"
+            )
+        try:
+            final_descriptor_metadata = os.fstat(opened_file.descriptor)
+            final_visible_metadata = os.stat(
+                opened_file.name,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as error:
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state changed before profile handoff"
+            ) from error
+        if (
+            (final_descriptor_metadata.st_dev, final_descriptor_metadata.st_ino)
+            != opened_file.identity
+            or (final_visible_metadata.st_dev, final_visible_metadata.st_ino)
+            != opened_file.identity
+            or final_descriptor_metadata.st_size != len(opened_file.content)
+            or final_visible_metadata.st_size != len(opened_file.content)
+        ):
+            raise SandboxRuntimeError(
+                "Docker-generated Codex proxy state changed before profile handoff"
+            )
+    _verify_profile_directory_identity(
+        codex_home,
+        directory_descriptor,
+        (opened_directory.st_dev, opened_directory.st_ino),
+        error_message=(
+            "Docker-generated Codex proxy state changed before profile handoff"
+        ),
+    )
+
+
+def _verify_profile_directory_identity(
+    codex_home: Path,
+    directory_descriptor: int,
+    expected_identity: tuple[int, int],
+    *,
+    error_message: str,
+) -> None:
+    try:
+        opened = os.fstat(directory_descriptor)
+        visible = os.stat(codex_home, follow_symlinks=False)
+    except OSError as error:
+        raise SandboxRuntimeError(error_message) from error
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or not stat.S_ISDIR(visible.st_mode)
+        or (opened.st_dev, opened.st_ino) != expected_identity
+        or (visible.st_dev, visible.st_ino) != expected_identity
+    ):
+        raise SandboxRuntimeError(error_message)
+
+
+def _stable_profile_metadata(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
 
 
 class SandboxRuntime:
@@ -650,9 +1763,18 @@ class SandboxRuntime:
         self._case_sequences: dict[str, int] = {}
         self._active_cases: dict[str, CaseWorkspace] = {}
         self._proxy_state_digests: dict[str, tuple[str, str]] = {}
+        self._mounted_case_filesystems: set[str] = set()
         self._busy_workers: set[tuple[WorkerRole, int]] = set()
         self._worker_condition = threading.Condition()
         self._closed = False
+        self._closing = False
+        self._sandbox_cleanup_completed = False
+
+    @property
+    def sandbox_cleanup_completed(self) -> bool:
+        """Whether every invocation-owned sandbox has verified removal."""
+        with self._worker_condition:
+            return self._sandbox_cleanup_completed
 
     def preflight(self) -> PreflightReport:
         """Validate host-side pinned runtime capabilities without exposing secrets."""
@@ -719,7 +1841,7 @@ class SandboxRuntime:
 
     def acquire_worker(self, role: WorkerRole, slot: int = 0) -> SandboxWorker:
         with self._worker_condition:
-            if self._closed:
+            if self._closed or self._closing:
                 raise SandboxRuntimeError("sandbox runtime is closed")
             if role not in ("actor", "judge"):
                 raise SandboxRuntimeError("worker role must be actor or judge")
@@ -739,6 +1861,14 @@ class SandboxRuntime:
                 )
             host_root = self.staging_root / name
             host_root.mkdir(parents=True, exist_ok=False)
+            marker_content = f"{secrets.token_hex(OWNERSHIP_NONCE_BYTES)}\n".encode("ascii")
+            target = CleanupTarget(
+                name=name,
+                id=None,
+                host_root=host_root,
+                ownership_marker_sha256=hashlib.sha256(marker_content).hexdigest(),
+            )
+            self._cleanup_targets[name] = target
             command = (
                 "sbx",
                 "create",
@@ -754,25 +1884,39 @@ class SandboxRuntime:
                 str(host_root),
             )
             try:
-                self._checked(command, self.manifest.limits.preflight_timeout_seconds)
-                sandboxes = self._list_sandboxes()
-                matches = [item for item in sandboxes if item.get("name") == name]
-                if len(matches) != 1 or not isinstance(matches[0].get("id"), str):
+                self._write_ownership_marker(target, marker_content)
+                target.create_started = True
+                try:
+                    create_result = self._checked(
+                        command,
+                        self.manifest.limits.preflight_timeout_seconds,
+                    )
+                except BaseException as create_error:
+                    create_outcome = process_termination_outcome(create_error)
+                    if create_outcome is not None:
+                        target.create_process_settled = (
+                            create_outcome.fully_terminated_and_reaped
+                        )
+                        if not create_outcome.process_started:
+                            target.create_started = False
+                    raise
+                else:
+                    target.create_process_settled = (
+                        create_result.process_outcome.fully_terminated_and_reaped
+                    )
+                sandbox_id = self._exact_cleanup_identity(target, self._list_sandboxes())
+                if sandbox_id is None:
                     raise SandboxRuntimeError(
                         "created sandbox identity could not be reconciled from sbx ls --json"
                     )
-            except Exception as error:
-                self._reconcile_failed_create(name, host_root, error)
+            except BaseException as error:
+                self._reconcile_failed_create(target, error)
+            assert target.id is not None
             worker = SandboxWorker(
-                id=matches[0]["id"],
+                id=target.id,
                 name=name,
                 role=role,
                 slot=slot,
-                host_root=host_root,
-            )
-            self._cleanup_targets[name] = CleanupTarget(
-                name=name,
-                id=worker.id,
                 host_root=host_root,
             )
             self._workers[key] = worker
@@ -783,53 +1927,81 @@ class SandboxRuntime:
         """Lease one role-specific worker under the invocation-wide concurrency cap."""
         if role not in ("actor", "judge"):
             raise SandboxRuntimeError("worker role must be actor or judge")
-        with self._worker_condition:
-            while True:
-                if self._closed:
-                    raise SandboxRuntimeError("sandbox runtime is closed")
-                if len(self._busy_workers) < self.max_concurrency:
-                    available = next(
-                        (
-                            key
-                            for key in self._workers
-                            if key[0] == role and key not in self._busy_workers
-                        ),
-                        None,
-                    )
-                    if available is None:
+        reservation: tuple[WorkerRole, int] | None = None
+        worker: SandboxWorker | None = None
+        try:
+            with self._worker_condition:
+                while True:
+                    if self._closed or self._closing:
+                        raise SandboxRuntimeError("sandbox runtime is closed")
+                    if len(self._busy_workers) < self.max_concurrency:
                         available = next(
                             (
-                                (role, slot)
-                                for slot in range(self.max_concurrency)
-                                if (role, slot) not in self._workers
-                                and (role, slot) not in self._busy_workers
+                                key
+                                for key in self._workers
+                                if key[0] == role and key not in self._busy_workers
                             ),
                             None,
                         )
-                    if available is not None:
-                        self._busy_workers.add(available)
-                        try:
+                        if available is None:
+                            available = next(
+                                (
+                                    (role, slot)
+                                    for slot in range(self.max_concurrency)
+                                    if (role, slot) not in self._workers
+                                    and (role, slot) not in self._busy_workers
+                                ),
+                                None,
+                            )
+                        if available is not None:
+                            reservation = available
+                            self._busy_workers.add(reservation)
                             worker = self.acquire_worker(*available)
-                        except Exception:
-                            self._busy_workers.remove(available)
-                            self._worker_condition.notify_all()
-                            raise
-                        break
-                self._worker_condition.wait()
-        try:
+                            break
+                    self._worker_condition.wait()
+            assert worker is not None and reservation is not None
+            worker = self._handoff_leased_worker(worker, reservation)
             yield worker
         finally:
-            with self._worker_condition:
-                self._busy_workers.discard((worker.role, worker.slot))
-                self._worker_condition.notify_all()
+            if reservation is not None:
+                try:
+                    self._release_worker_reservation(reservation)
+                except BaseException:
+                    # Set removal is atomic under CPython's GIL and remains the
+                    # final fallback if interruption lands inside Condition use.
+                    self._busy_workers.discard(reservation)
+                    try:
+                        with self._worker_condition:
+                            self._worker_condition.notify_all()
+                    except BaseException:
+                        pass
+                    raise
+
+    def _release_worker_reservation(
+        self,
+        reservation: tuple[WorkerRole, int],
+    ) -> None:
+        with self._worker_condition:
+            self._busy_workers.discard(reservation)
+            self._worker_condition.notify_all()
+
+    @staticmethod
+    def _handoff_leased_worker(
+        worker: SandboxWorker,
+        reservation: tuple[WorkerRole, int],
+    ) -> SandboxWorker:
+        if (worker.role, worker.slot) != reservation:
+            raise SandboxRuntimeError("acquired worker does not match its lease reservation")
+        return worker
 
     def prepare_case(self, worker: SandboxWorker, case_id: str) -> CaseWorkspace:
         """Erase the mounted projection and create a fresh case-owned layout."""
         self._require_owned_worker(worker)
         try:
-            previous = self._active_cases.pop(worker.id, None)
+            previous = self._active_cases.get(worker.id)
             if previous is not None:
                 self._retire_case_identity(worker, previous)
+                self._active_cases.pop(worker.id, None)
             safe_case_id = _safe_identifier(case_id)
             case_root = worker.host_root / "case"
             if case_root.exists() or case_root.is_symlink():
@@ -845,7 +2017,15 @@ class SandboxRuntime:
                 "workspace": case_root / "workspace",
                 "bootstrap": case_root / "bootstrap",
             }
-            for directory in directories.values():
+            system_var_tmp = case_root / ".system-var-tmp"
+            system_dev_shm = case_root / ".system-dev-shm"
+            system_run_lock = case_root / ".system-run-lock"
+            for directory in (
+                *directories.values(),
+                system_var_tmp,
+                system_dev_shm,
+                system_run_lock,
+            ):
                 directory.mkdir()
             skills = directories["codex_home"] / "skills"
             skills.mkdir()
@@ -856,30 +2036,47 @@ class SandboxRuntime:
                 directories["home"] / ".local" / "state",
                 directories["home"] / ".gnupg",
                 directories["tmpdir"] / "runtime",
+                directories["tmpdir"] / ".mount-probe",
             ):
                 directory.mkdir(parents=True)
             sequence = self._case_sequences.get(worker.id, 0) + 1
             self._case_sequences[worker.id] = sequence
             uid = 20000 + sequence
             user_name = f"ai-eval-{sequence}"
+            filesystem_source = (
+                f"ai-skills-case-{self.invocation_id}-{worker.role}-"
+                f"{worker.slot + 1}-{sequence}"
+            )
             case = CaseWorkspace(
                 case_id=safe_case_id,
                 root=case_root,
                 skills=skills,
                 user_name=user_name,
                 uid=uid,
+                host_staging_root=case_root,
+                host_export_bridge=(
+                    worker.host_root / ".ai-skills-case-bridge" / "host"
+                ),
+                filesystem_source=filesystem_source,
+                system_var_tmp=system_var_tmp,
+                system_dev_shm=system_dev_shm,
+                system_run_lock=system_run_lock,
+                cgroup_path=Path("/sys/fs/cgroup/ai-skills-evals")
+                / filesystem_source,
                 **directories,
             )
             self._prepare_case_identity(worker, case)
             self._active_cases[worker.id] = case
             return case
-        except Exception as error:
+        except BaseException as error:
             try:
                 self._discard_worker(worker)
             except Exception as cleanup_error:
                 raise SandboxRuntimeError(
                     f"case reset failed and worker cleanup is pending: {cleanup_error}"
                 ) from error
+            if not isinstance(error, Exception):
+                raise
             raise SandboxRuntimeError(f"case reset failed: {error}") from error
 
     def execute(
@@ -924,11 +2121,12 @@ class SandboxRuntime:
                 "DOCKER_HOST": "",
             }
         )
+        cgroup_path = self._case_cgroup_contract(worker, case)
         command: list[str] = [
             "sbx",
             "exec",
             "--user",
-            case.user_name,
+            "root",
             "--workdir",
             str(case.workspace),
         ]
@@ -937,8 +2135,18 @@ class SandboxRuntime:
                 raise SandboxRuntimeError("worker environment contains an unsafe name or value")
             command.extend(("--env", f"{name}={value}"))
         command.append(worker.id)
+        command.extend(
+            (
+                "python3",
+                "-c",
+                CASE_CGROUP_EXEC_SCRIPT,
+                str(cgroup_path),
+                str(case.uid),
+            )
+        )
         command.extend(argv)
         try:
+            self._activate_case_filesystem(worker, case)
             result = self.process.run(tuple(command), timeout_seconds=timeout_seconds)
         except BaseException as error:
             try:
@@ -1009,27 +2217,18 @@ class SandboxRuntime:
         if self._active_cases.get(worker.id) is not case:
             raise SandboxRuntimeError("case is not active on the selected worker")
         try:
-            self._admin_checked(
-                worker,
-                ("pkill", "-KILL", "-u", str(case.uid)),
-                accepted=(0, 1),
-            )
+            self._terminate_and_prove_case_cgroup_empty(worker, case)
             self._clear_case_ipc(worker, case)
-            process_check = self._worker_command(
-                worker,
-                ("pgrep", "-u", str(case.uid)),
-                user="root",
-                timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
-            )
-            if process_check.returncode != 1 or process_check.stdout.strip():
-                raise SandboxRuntimeError("case processes could not be quiesced")
-        except Exception as error:
+            self._deactivate_case_filesystem(worker, case, export_to_host=True)
+        except BaseException as error:
             try:
                 self.invalidate_worker(worker)
             except Exception as cleanup_error:
                 raise SandboxRuntimeError(
                     f"case quiescence failed and worker cleanup is pending: {cleanup_error}"
                 ) from error
+            if not isinstance(error, Exception):
+                raise
             if isinstance(error, SandboxRuntimeError):
                 raise
             raise SandboxRuntimeError(f"case quiescence failed: {error}") from error
@@ -1066,44 +2265,85 @@ class SandboxRuntime:
             raise SandboxRuntimeError("Docker-generated Codex proxy state could not be initialized")
         config_path = case.codex_home / "config.toml"
         auth_path = case.codex_home / "auth.json"
-        if not config_path.is_file() or not auth_path.is_file():
-            raise SandboxRuntimeError("Docker-generated Codex proxy state is incomplete")
-        if config_path.stat().st_size > 1024 * 1024 or auth_path.stat().st_size > 1024 * 1024:
-            raise SandboxRuntimeError("Docker-generated Codex proxy state is unexpectedly large")
-        config = config_path.read_text(encoding="utf-8")
-        auth = auth_path.read_text(encoding="utf-8")
-        try:
-            config_payload = tomllib.loads(config)
-        except tomllib.TOMLDecodeError as error:
-            raise SandboxRuntimeError("Docker-generated Codex config is not valid TOML") from error
-        providers = config_payload.get("model_providers")
-        sandboxd = providers.get("sandboxd") if isinstance(providers, Mapping) else None
-        if config_payload.get("model_provider") != "sandboxd" or not isinstance(sandboxd, Mapping):
-            raise SandboxRuntimeError("Docker-generated Codex config does not select the sandboxd provider")
-        base_url = sandboxd.get("base_url")
-        if not isinstance(base_url, str) or not base_url.startswith(("http://", "https://")):
-            raise SandboxRuntimeError("Docker-generated sandboxd provider has an invalid base URL")
-        try:
-            auth_payload = json.loads(auth)
-        except json.JSONDecodeError as error:
-            raise SandboxRuntimeError("Docker-generated auth placeholder is not valid JSON") from error
-        if not isinstance(auth_payload, Mapping):
-            raise SandboxRuntimeError("Docker-generated auth placeholder has an unsupported shape")
-        literal_secret_patterns = tuple(
-            pattern for pattern in SECRET_PATTERNS if pattern.name != "sensitive-assignment"
-        )
-        if any(pattern.regex.search(auth) for pattern in literal_secret_patterns):
-            raise SandboxRuntimeError("Docker-generated auth state unexpectedly contains credential material")
-        config_digest = _sha256_text(config)
-        auth_digest = _sha256_text(auth)
-        baseline = self._proxy_state_digests.setdefault(worker.id, (config_digest, auth_digest))
-        if baseline != (config_digest, auth_digest):
-            raise SandboxRuntimeError("immutable Docker-generated proxy state changed between cases")
-        self._admin_checked(
-            worker,
-            ("chown", f"{case.uid}:{case.uid}", str(config_path), str(auth_path)),
-        )
-        self._admin_checked(worker, ("chmod", "0600", str(config_path), str(auth_path)))
+        with _open_docker_codex_profile(case.codex_home) as (
+            profile_directory,
+            profile_files,
+        ):
+            profile_by_name = {item.name: item for item in profile_files}
+            config_bytes = profile_by_name["config.toml"].content
+            auth_bytes = profile_by_name["auth.json"].content
+            if not hmac.compare_digest(
+                config_bytes,
+                _PINNED_DOCKER_CODEX_CONFIG_BYTES,
+            ):
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex config bytes do not match the pinned proxy profile"
+                )
+            if not hmac.compare_digest(
+                auth_bytes,
+                _PINNED_DOCKER_CODEX_AUTH_BYTES,
+            ):
+                raise SandboxRuntimeError(
+                    "Docker-generated auth placeholder bytes do not match the pinned proxy profile"
+                )
+            config = config_bytes.decode("utf-8")
+            auth = auth_bytes.decode("utf-8")
+            try:
+                config_payload = tomllib.loads(config)
+            except tomllib.TOMLDecodeError as error:
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex config is not valid TOML"
+                ) from error
+            if not _matches_exact_shape(
+                config_payload,
+                _EXPECTED_DOCKER_CODEX_CONFIG_SHAPE,
+            ):
+                raise SandboxRuntimeError(
+                    "Docker-generated Codex config does not match the pinned proxy profile"
+                )
+            try:
+                auth_payload = json.loads(
+                    auth,
+                    object_pairs_hook=_unique_json_object,
+                )
+            except (json.JSONDecodeError, ValueError) as error:
+                raise SandboxRuntimeError(
+                    "Docker-generated auth placeholder is not valid JSON"
+                ) from error
+            if not _matches_exact_shape(
+                auth_payload,
+                _EXPECTED_DOCKER_CODEX_AUTH_SHAPE,
+            ):
+                raise SandboxRuntimeError(
+                    "Docker-generated auth placeholder does not match the pinned proxy profile"
+                )
+            config_digest = hashlib.sha256(config_bytes).hexdigest()
+            auth_digest = hashlib.sha256(auth_bytes).hexdigest()
+            current_digests = (config_digest, auth_digest)
+            baseline = self._proxy_state_digests.get(worker.id)
+            if baseline is not None and baseline != current_digests:
+                raise SandboxRuntimeError(
+                    "immutable Docker-generated proxy state changed between cases"
+                )
+            self._admin_checked(
+                worker,
+                (
+                    "chown",
+                    f"{case.uid}:{case.uid}",
+                    str(config_path),
+                    str(auth_path),
+                ),
+            )
+            self._admin_checked(
+                worker,
+                ("chmod", "0600", str(config_path), str(auth_path)),
+            )
+            _verify_docker_codex_profile_handoff(
+                case.codex_home,
+                profile_directory,
+                profile_files,
+            )
+            self._proxy_state_digests.setdefault(worker.id, current_digests)
 
     def seal_skill_catalog(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
         """Make the complete projected catalog runner-owned and actor-immutable."""
@@ -1181,32 +2421,302 @@ class SandboxRuntime:
             "case user can replace the case root containing the skill catalog",
         )
 
+    def _activate_case_filesystem(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        """Seed and verify the aggregate byte- and inode-bounded case tmpfs."""
+        self._require_owned_worker(worker)
+        if self._active_cases.get(worker.id) is not case:
+            raise SandboxRuntimeError("case filesystem belongs to an inactive case")
+        contract = self._case_filesystem_contract(worker, case)
+        if worker.id in self._mounted_case_filesystems:
+            self._verify_case_filesystem(worker, case)
+            self._verify_case_privilege_boundaries(worker, case)
+            return
+
+        bridge_mount, filesystem_source, system_mounts = contract
+        bridge_root = bridge_mount.parent
+        self._admin_checked(worker, ("mkdir", "--parents", str(bridge_mount)))
+        self._admin_checked(worker, ("chown", "root:root", str(bridge_root)))
+        self._admin_checked(worker, ("chmod", "0700", str(bridge_root)))
+        self._admin_checked(worker, ("mount", "--bind", str(case.root), str(bridge_mount)))
+        isolation = self.manifest.case_isolation
+        self._admin_checked(
+            worker,
+            (
+                "mount",
+                "-t",
+                isolation.writable_filesystem,
+                "-o",
+                (
+                    "rw,nosuid,nodev,"
+                    f"size={isolation.maximum_writable_bytes},"
+                    f"nr_inodes={isolation.maximum_writable_inodes},mode=0555"
+                ),
+                filesystem_source,
+                str(case.root),
+            ),
+        )
+        self._admin_checked(
+            worker,
+            (
+                "cp",
+                "--archive",
+                "--one-file-system",
+                "--",
+                f"{bridge_mount}/.",
+                f"{case.root}/",
+            ),
+        )
+        self._admin_checked(worker, ("mkdir", "--parents", "/run/lock"))
+        for source, target in system_mounts:
+            self._admin_checked(worker, ("mount", "--bind", str(source), target))
+        self._verify_case_filesystem(worker, case)
+        self._verify_case_privilege_boundaries(worker, case)
+        self._case_user_checked(
+            worker,
+            case,
+            ("test", "!", "-w", str(case.root)),
+            "case user can mutate the case tmpfs root",
+        )
+        for writable_path in (
+            case.home,
+            case.codex_home,
+            case.tmpdir,
+            case.workspace,
+            case.bootstrap,
+            *(Path(target) for _, target in system_mounts),
+        ):
+            self._case_user_checked(
+                worker,
+                case,
+                ("test", "-w", str(writable_path)),
+                "case tmpfs does not cover a required writable path",
+            )
+        self._case_user_checked(
+            worker,
+            case,
+            ("test", "!", "-x", str(bridge_root)),
+            "case user can traverse the host export bridge",
+        )
+        self._mounted_case_filesystems.add(worker.id)
+
+    def _verify_case_filesystem(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        _, filesystem_source, _ = self._case_filesystem_contract(worker, case)
+        isolation = self.manifest.case_isolation
+        covered_paths = (
+            case.home,
+            case.codex_home,
+            case.tmpdir,
+            case.workspace,
+            case.bootstrap,
+            case.system_var_tmp,
+            case.system_dev_shm,
+            case.system_run_lock,
+        )
+        if any(path is None for path in covered_paths):
+            raise SandboxRuntimeError("case filesystem paths are incomplete")
+        self._admin_checked(
+            worker,
+            (
+                "python3",
+                "-c",
+                CASE_FILESYSTEM_PROBE_SCRIPT,
+                str(case.root),
+                filesystem_source,
+                str(isolation.maximum_writable_bytes),
+                str(isolation.maximum_writable_inodes),
+                *(str(path) for path in covered_paths),
+            ),
+        )
+
+    def _deactivate_case_filesystem(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+        *,
+        export_to_host: bool,
+    ) -> None:
+        if worker.id not in self._mounted_case_filesystems:
+            return
+        bridge_mount, _, _ = self._case_filesystem_contract(worker, case)
+        if export_to_host:
+            self._verify_case_filesystem(worker, case)
+            self._admin_checked(
+                worker,
+                (
+                    "find",
+                    str(bridge_mount),
+                    "-mindepth",
+                    "1",
+                    "-maxdepth",
+                    "1",
+                    "-exec",
+                    "rm",
+                    "-rf",
+                    "--",
+                    "{}",
+                    "+",
+                ),
+            )
+            self._admin_checked(
+                worker,
+                (
+                    "cp",
+                    "--archive",
+                    "--one-file-system",
+                    "--",
+                    f"{case.root}/.",
+                    f"{bridge_mount}/",
+                ),
+            )
+            self._admin_checked(worker, ("sync", "-f", str(bridge_mount)))
+        self._cleanup_case_filesystem_mounts(worker.id, case)
+        self._mounted_case_filesystems.discard(worker.id)
+
+    def _cleanup_case_filesystem_mounts(
+        self,
+        worker_id: str,
+        case: CaseWorkspace,
+    ) -> None:
+        bridge_mount, filesystem_source, system_mounts = self._case_filesystem_contract(
+            None,
+            case,
+        )
+        result = self.process.run(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                worker_id,
+                "python3",
+                "-c",
+                CASE_FILESYSTEM_CLEANUP_SCRIPT,
+                filesystem_source,
+                str(case.root),
+                str(bridge_mount),
+                *(target for _, target in system_mounts),
+            ),
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+        )
+        if result.timed_out or result.returncode != 0:
+            raise SandboxRuntimeError("case filesystem mounts could not be cleared")
+
+    @staticmethod
+    def _case_filesystem_contract(
+        worker: SandboxWorker | None,
+        case: CaseWorkspace,
+    ) -> tuple[Path, str, tuple[tuple[Path, str], ...]]:
+        bridge_mount = case.host_export_bridge
+        filesystem_source = case.filesystem_source
+        system_paths = (
+            (case.tmpdir, "/tmp"),
+            (case.system_var_tmp, "/var/tmp"),
+            (case.system_dev_shm, "/dev/shm"),
+            (case.system_run_lock, "/run/lock"),
+        )
+        if (
+            case.host_staging_root != case.root
+            or bridge_mount is None
+            or filesystem_source is None
+            or re.fullmatch(r"[a-zA-Z0-9.+-]+", filesystem_source) is None
+            or any(source is None for source, _ in system_paths)
+        ):
+            raise SandboxRuntimeError("case filesystem contract is incomplete")
+        assert all(source is not None for source, _ in system_paths)
+        rendered_system_paths = tuple(
+            (source, target) for source, target in system_paths if source is not None
+        )
+        if any(source.parent != case.root for source, _ in rendered_system_paths):
+            raise SandboxRuntimeError("case scratch path escapes the bounded filesystem")
+        if worker is not None and bridge_mount != (
+            worker.host_root / ".ai-skills-case-bridge" / "host"
+        ):
+            raise SandboxRuntimeError("case host bridge escapes the selected worker")
+        return bridge_mount, filesystem_source, rendered_system_paths
+
     def close(self) -> None:
-        with self._worker_condition:
-            if self._closed:
-                return
-            if self._busy_workers:
-                raise SandboxRuntimeError("cannot close the sandbox runtime while workers are leased")
-            self._closed = True
-        targets = tuple(self._cleanup_targets.values())
+        close_claimed = False
+        terminal_cleanup = False
         try:
-            for target in targets:
-                self._remove_cleanup_target(target)
-        except Exception:
             with self._worker_condition:
-                self._closed = False
-            raise
+                if self._closed:
+                    return
+                if self._closing:
+                    raise SandboxRuntimeError(
+                        "sandbox runtime cleanup is already in progress"
+                    )
+                if self._busy_workers:
+                    raise SandboxRuntimeError(
+                        "cannot close the sandbox runtime while workers are leased"
+                    )
+                # Mark the local guard first so every interruption after the
+                # shared claim is covered by the outer finally.
+                close_claimed = True
+                self._closing = True
+                self._sandbox_cleanup_completed = False
+            targets = tuple(self._cleanup_targets.values())
+            failures: dict[str, list[BaseException]] = {}
+            interruption: BaseException | None = None
+            for target in targets:
+                try:
+                    self._remove_cleanup_target(target)
+                except BaseException as error:
+                    failures.setdefault(target.name, []).append(error)
+                    if not isinstance(error, Exception) and interruption is None:
+                        interruption = error
+
+            for target in tuple(self._cleanup_targets.values()):
+                if target.sandbox_removed:
+                    continue
+                try:
+                    self._reconcile_cleanup_target(target)
+                except BaseException as error:
+                    failures.setdefault(target.name, []).append(error)
+                    if not isinstance(error, Exception) and interruption is None:
+                        interruption = error
+
+            pending = tuple(self._cleanup_targets.values())
+            if pending:
+                diagnostic = _cleanup_failure_diagnostic(pending, failures)
+                if interruption is not None:
+                    interruption.add_note(diagnostic)
+                    raise interruption
+                raise SandboxRuntimeError(diagnostic)
+            self._clear_terminal_runtime_state()
+            with self._worker_condition:
+                self._closed = True
+                self._sandbox_cleanup_completed = True
+                terminal_cleanup = True
+            if interruption is not None:
+                raise interruption
+        finally:
+            if close_claimed:
+                if not terminal_cleanup:
+                    self._closed = False
+                    self._sandbox_cleanup_completed = False
+                self._closing = False
+                with self._worker_condition:
+                    self._worker_condition.notify_all()
+
+    def _clear_terminal_runtime_state(self) -> None:
         self._workers.clear()
         self._cleanup_targets.clear()
         self._active_cases.clear()
         self._proxy_state_digests.clear()
+        self._mounted_case_filesystems.clear()
 
     def _discard_worker(self, worker: SandboxWorker) -> None:
         self._require_owned_worker(worker)
-        self._workers.pop((worker.role, worker.slot), None)
-        self._active_cases.pop(worker.id, None)
-        self._proxy_state_digests.pop(worker.id, None)
         target = self._cleanup_targets[worker.name]
+        self._quarantine_cleanup_target(target)
         self._remove_cleanup_target(target)
 
     def invalidate_worker(self, worker: SandboxWorker) -> None:
@@ -1215,21 +2725,245 @@ class SandboxRuntime:
             self._discard_worker(worker)
 
     def _remove_cleanup_target(self, target: CleanupTarget) -> None:
+        if target.create_started and not target.create_process_settled:
+            self._record_exact_cleanup_identity(target)
+            raise SandboxRuntimeError(
+                "sandbox create process termination is unproven; exact cleanup target, "
+                "ownership marker, and staging are retained"
+            )
+        self._require_removal_process_settled(target)
         if not target.sandbox_removed and target.id is None:
-            matches = [
-                item for item in self._list_sandboxes() if item.get("name") == target.name
-            ]
-            if not matches:
+            sandbox_id = self._record_exact_cleanup_identity(target)
+            if sandbox_id is None:
+                if target.create_started:
+                    raise SandboxRuntimeError(
+                        "sandbox create operation has no authoritative completion or "
+                        "cancellation; exact cleanup target, ownership marker, and "
+                        "staging are retained"
+                    )
                 target.sandbox_removed = True
                 self._forget_worker_state(target)
-            elif len(matches) == 1 and isinstance(matches[0].get("id"), str):
-                target.id = matches[0]["id"]
-            else:
-                raise SandboxRuntimeError(
-                    "pending worker cleanup identity remains ambiguous"
-                )
         if not target.sandbox_removed and not target.removal_issued:
             assert target.id is not None
+            if not target.discard_without_export:
+                self._purge_cleanup_target_host_root(target)
+            try:
+                self._issue_cleanup_removal(target, target.id)
+            except BaseException:
+                self._quarantine_cleanup_target(target)
+                raise
+        if not target.sandbox_removed:
+            assert target.id is not None
+            remaining_items = self._list_sandboxes()
+            present = any(item.get("id") == target.id for item in remaining_items)
+            if present:
+                self._quarantine_cleanup_target(target)
+                raise SandboxRuntimeError("worker cleanup could not be verified")
+            target.sandbox_removed = True
+            self._forget_worker_state(target)
+        self._remove_host_cleanup_target(target)
+
+    def _reconcile_cleanup_target(self, target: CleanupTarget) -> None:
+        """Retry one pending worker using only its exact recorded identity."""
+        if target.create_started and not target.create_process_settled:
+            self._record_exact_cleanup_identity(target)
+            raise SandboxRuntimeError(
+                "sandbox create process termination is unproven; exact cleanup target, "
+                "ownership marker, and staging are retained"
+            )
+        self._require_removal_process_settled(target)
+        sandbox_id = self._record_exact_cleanup_identity(target)
+        if sandbox_id is None:
+            if target.id is None:
+                if target.create_started:
+                    raise SandboxRuntimeError(
+                        "sandbox create operation has no authoritative completion or "
+                        "cancellation; exact cleanup target, ownership marker, and "
+                        "staging are retained"
+                    )
+            target.sandbox_removed = True
+            self._forget_worker_state(target)
+            self._remove_host_cleanup_target(target)
+            return
+
+        if not target.discard_without_export:
+            self._purge_cleanup_target_host_root(target)
+        try:
+            self._issue_cleanup_removal(target, sandbox_id)
+        except BaseException:
+            self._quarantine_cleanup_target(target)
+            raise
+        if self._exact_cleanup_identity(target, self._list_sandboxes()) is not None:
+            self._quarantine_cleanup_target(target)
+            raise SandboxRuntimeError("worker cleanup reconciliation could not verify absence")
+        target.sandbox_removed = True
+        self._forget_worker_state(target)
+        self._remove_host_cleanup_target(target)
+
+    @staticmethod
+    def _require_removal_process_settled(target: CleanupTarget) -> None:
+        if target.removal_started and not target.removal_process_settled:
+            raise SandboxRuntimeError(
+                "sandbox removal process termination is unproven; exact cleanup "
+                "target, ownership marker, and staging are retained"
+            )
+
+    def _issue_cleanup_removal(
+        self,
+        target: CleanupTarget,
+        sandbox_id: str,
+    ) -> None:
+        target.removal_started = True
+        target.removal_process_settled = False
+        try:
+            result = self._checked(
+                ("sbx", "rm", "--force", sandbox_id),
+                self.manifest.limits.preflight_timeout_seconds,
+            )
+        except BaseException as error:
+            outcome = process_termination_outcome(error)
+            if outcome is not None:
+                target.removal_started = outcome.process_started
+                target.removal_process_settled = (
+                    outcome.fully_terminated_and_reaped
+                )
+            raise
+        target.removal_process_settled = (
+            result.process_outcome.fully_terminated_and_reaped
+        )
+        if not target.removal_process_settled:
+            raise SandboxRuntimeError(
+                "sandbox removal process termination is unproven"
+            )
+        target.removal_issued = True
+
+    def _exact_cleanup_identity(
+        self,
+        target: CleanupTarget,
+        sandboxes: Sequence[Mapping[str, object]],
+    ) -> str | None:
+        name_matches = [item for item in sandboxes if item.get("name") == target.name]
+        if target.id is None:
+            if not name_matches:
+                return None
+            if len(name_matches) != 1 or not isinstance(name_matches[0].get("id"), str):
+                raise SandboxRuntimeError("pending worker cleanup identity remains ambiguous")
+            candidate_id = name_matches[0]["id"]
+            self._prove_candidate_ownership(target, candidate_id)
+            target.id = candidate_id
+            return target.id
+
+        id_matches = [item for item in sandboxes if item.get("id") == target.id]
+        if not id_matches and not name_matches:
+            return None
+        if (
+            len(id_matches) != 1
+            or len(name_matches) != 1
+            or id_matches[0].get("name") != target.name
+            or name_matches[0].get("id") != target.id
+        ):
+            raise SandboxRuntimeError("pending worker cleanup identity no longer matches")
+        return target.id
+
+    def _record_exact_cleanup_identity(self, target: CleanupTarget) -> str | None:
+        return self._exact_cleanup_identity(target, self._list_sandboxes())
+
+    def _prove_candidate_ownership(
+        self,
+        target: CleanupTarget,
+        candidate_id: str,
+    ) -> None:
+        local_digest = self._read_local_ownership_marker_digest(target)
+        if not hmac.compare_digest(local_digest, target.ownership_marker_sha256):
+            raise SandboxRuntimeError(
+                "same-named sandbox candidate did not prove invocation ownership"
+            )
+        result = self.process.run(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                candidate_id,
+                "python3",
+                "-c",
+                OWNERSHIP_MARKER_PROBE_SCRIPT,
+                str(target.ownership_marker),
+            ),
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+        )
+        candidate_digest = result.stdout.strip()
+        if (
+            result.timed_out
+            or result.returncode != 0
+            or result.stdout_truncated
+            or result.stderr_truncated
+            or re.fullmatch(r"[0-9a-f]{64}", candidate_digest) is None
+            or not hmac.compare_digest(candidate_digest, target.ownership_marker_sha256)
+        ):
+            raise SandboxRuntimeError(
+                "same-named sandbox candidate did not prove invocation ownership"
+            )
+
+    @staticmethod
+    def _write_ownership_marker(target: CleanupTarget, content: bytes) -> None:
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(
+                target.ownership_marker,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+            )
+            remaining = memoryview(content)
+            while remaining:
+                written = os.write(descriptor, remaining)
+                if written <= 0:
+                    raise OSError("ownership marker write made no progress")
+                remaining = remaining[written:]
+            os.fsync(descriptor)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+
+    @staticmethod
+    def _read_local_ownership_marker_digest(target: CleanupTarget) -> str:
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(target.ownership_marker, os.O_RDONLY | os.O_NOFOLLOW)
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode) or before.st_size <= 0 or before.st_size > 256:
+                raise OSError("ownership marker is not a bounded regular file")
+            content = os.read(descriptor, before.st_size + 1)
+            after = os.fstat(descriptor)
+            if (
+                len(content) != before.st_size
+                or before.st_dev != after.st_dev
+                or before.st_ino != after.st_ino
+                or before.st_size != after.st_size
+                or before.st_mtime_ns != after.st_mtime_ns
+            ):
+                raise OSError("ownership marker changed while being read")
+            return hashlib.sha256(content).hexdigest()
+        except OSError as error:
+            raise SandboxRuntimeError("sandbox ownership marker is unavailable") from error
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+
+    def _purge_cleanup_target_host_root(self, target: CleanupTarget) -> None:
+        if target.id is None:
+            raise SandboxRuntimeError("worker host-root purge requires proven sandbox ownership")
+        try:
+            active_case = self._active_cases.get(target.id)
+            if active_case is not None:
+                self._terminate_and_prove_case_cgroup_empty_by_id(
+                    target.id,
+                    active_case,
+                )
+                self._clear_case_ipc_by_id(target.id, active_case)
+                self._cleanup_case_filesystem_mounts(target.id, active_case)
+                self._mounted_case_filesystems.discard(target.id)
+                self._remove_case_cgroup_by_id(target.id, active_case)
             self._checked(
                 (
                     "sbx",
@@ -1252,19 +2986,21 @@ class SandboxRuntime:
                 ),
                 self.manifest.limits.preflight_timeout_seconds,
             )
-            self._checked(
-                ("sbx", "rm", "--force", target.id),
-                self.manifest.limits.preflight_timeout_seconds,
-            )
-            target.removal_issued = True
+        except BaseException:
+            self._quarantine_cleanup_target(target)
+            raise
+
+    def _quarantine_cleanup_target(self, target: CleanupTarget) -> None:
+        target.discard_without_export = True
+        for key, worker in tuple(self._workers.items()):
+            if worker.name != target.name:
+                continue
+            self._workers.pop(key, None)
+            self._proxy_state_digests.pop(worker.id, None)
+
+    def _remove_host_cleanup_target(self, target: CleanupTarget) -> None:
         if not target.sandbox_removed:
-            assert target.id is not None
-            remaining_items = self._list_sandboxes()
-            present = any(item.get("id") == target.id for item in remaining_items)
-            if present:
-                raise SandboxRuntimeError("worker cleanup could not be verified")
-            target.sandbox_removed = True
-            self._forget_worker_state(target)
+            raise SandboxRuntimeError("worker host staging cleanup requires verified sandbox removal")
         if target.host_root.exists():
             shutil.rmtree(target.host_root)
         if target.host_root.exists():
@@ -1278,45 +3014,60 @@ class SandboxRuntime:
             self._workers.pop(key, None)
             self._active_cases.pop(worker.id, None)
             self._proxy_state_digests.pop(worker.id, None)
+            self._mounted_case_filesystems.discard(worker.id)
+        if target.id is not None:
+            self._active_cases.pop(target.id, None)
+            self._proxy_state_digests.pop(target.id, None)
+            self._mounted_case_filesystems.discard(target.id)
 
-    def _reconcile_failed_create(self, name: str, host_root: Path, error: Exception) -> None:
-        try:
-            matches = [item for item in self._list_sandboxes() if item.get("name") == name]
-        except Exception as reconciliation_error:
-            self._cleanup_targets[name] = CleanupTarget(
-                name=name,
-                id=None,
-                host_root=host_root,
-            )
-            raise SandboxRuntimeError(
-                "sandbox creation failed and unresolved cleanup is pending: "
-                f"{reconciliation_error}"
-            ) from error
-        if len(matches) == 1 and isinstance(matches[0].get("id"), str):
-            target = CleanupTarget(
-                name=name,
-                id=matches[0]["id"],
-                host_root=host_root,
-            )
-            self._cleanup_targets[name] = target
+    def _reconcile_failed_create(
+        self,
+        target: CleanupTarget,
+        error: BaseException,
+    ) -> None:
+        if not target.create_started:
+            target.sandbox_removed = True
             try:
-                self._remove_cleanup_target(target)
-            except Exception as cleanup_error:
+                self._remove_host_cleanup_target(target)
+            except BaseException as cleanup_error:
+                if not isinstance(cleanup_error, Exception):
+                    raise
                 raise SandboxRuntimeError(
-                    f"sandbox creation failed and verified cleanup is pending: {cleanup_error}"
+                    "sandbox setup failed before creation and host cleanup is pending: "
+                    f"{_safe_diagnostic(str(cleanup_error))}"
                 ) from error
             raise error
-        if matches:
-            self._cleanup_targets[name] = CleanupTarget(
-                name=name,
-                id=None,
-                host_root=host_root,
-            )
+
+        try:
+            sandbox_id = self._exact_cleanup_identity(target, self._list_sandboxes())
+        except BaseException as reconciliation_error:
+            if not isinstance(reconciliation_error, Exception):
+                raise
             raise SandboxRuntimeError(
-                "sandbox creation failed and ambiguous cleanup is pending"
+                "sandbox creation failed and unresolved ownership cleanup is pending: "
+                f"{_safe_diagnostic(str(reconciliation_error))}"
             ) from error
-        if host_root.exists():
-            shutil.rmtree(host_root)
+        if not target.create_process_settled:
+            raise SandboxRuntimeError(
+                "sandbox creation failed before its process was definitively terminated "
+                "and reaped; exact cleanup target, ownership marker, and staging are retained"
+            ) from error
+        if sandbox_id is None:
+            raise SandboxRuntimeError(
+                "sandbox creation failed because no authoritative operation completion or "
+                "cancellation is available; exact cleanup target, ownership marker, and "
+                "staging are retained"
+            ) from error
+
+        try:
+            self._remove_cleanup_target(target)
+        except BaseException as cleanup_error:
+            if not isinstance(cleanup_error, Exception):
+                raise
+            raise SandboxRuntimeError(
+                "sandbox creation failed and verified cleanup is pending: "
+                f"{_safe_diagnostic(str(cleanup_error))}"
+            ) from error
         raise error
 
     def _require_owned_worker(self, worker: SandboxWorker) -> None:
@@ -1345,7 +3096,30 @@ class SandboxRuntime:
                 case.user_name,
             ),
         )
+        self._setup_case_cgroup(worker, case)
         self._admin_checked(worker, ("chown", "-R", f"{case.uid}:{case.uid}", str(case.root)))
+        scratch_paths = (
+            case.tmpdir,
+            case.system_var_tmp,
+            case.system_dev_shm,
+            case.system_run_lock,
+        )
+        if any(path is None for path in scratch_paths):
+            raise SandboxRuntimeError("case scratch paths are incomplete")
+        self._admin_checked(
+            worker,
+            ("chown", "root:root", *(str(path) for path in scratch_paths)),
+        )
+        self._admin_checked(
+            worker,
+            ("chmod", "1777", *(str(path) for path in scratch_paths)),
+        )
+        self._admin_checked(
+            worker,
+            ("chmod", "0700", str(case.tmpdir / "runtime")),
+        )
+        self._lock_down_case_privileges(worker)
+        self._verify_case_privilege_boundaries(worker, case)
         self._case_user_checked(
             worker,
             case,
@@ -1365,24 +3139,40 @@ class SandboxRuntime:
             "case user can read the immutable proxy source",
         )
 
+    def _lock_down_case_privileges(self, worker: SandboxWorker) -> None:
+        self._admin_checked(
+            worker,
+            ("python3", "-c", CASE_PRIVILEGE_LOCKDOWN_SCRIPT),
+        )
+
+    def _verify_case_privilege_boundaries(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        self._case_user_checked(
+            worker,
+            case,
+            (
+                "python3",
+                "-c",
+                CASE_PRIVILEGE_PROBE_SCRIPT,
+                str(case.tmpdir / ".mount-probe"),
+            ),
+            "case UID can create user namespaces, FUSE state, or mounts",
+        )
+
     def _retire_case_identity(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
-        self._admin_checked(worker, ("pkill", "-KILL", "-u", str(case.uid)), accepted=(0, 1))
+        self._terminate_and_prove_case_cgroup_empty(worker, case)
         self._clear_case_ipc(worker, case)
+        self._deactivate_case_filesystem(worker, case, export_to_host=False)
         self._admin_checked(worker, ("userdel", case.user_name), accepted=(0, 6))
         self._admin_checked(worker, ("groupdel", case.user_name), accepted=(0, 6))
-        for directory in ("/tmp", "/var/tmp", "/dev/shm"):
+        for directory in ("/tmp", "/var/tmp", "/dev/shm", "/run/lock"):
             self._admin_checked(
                 worker,
                 ("find", directory, "-xdev", "-uid", str(case.uid), "-delete"),
             )
-        process_check = self._worker_command(
-            worker,
-            ("pgrep", "-u", str(case.uid)),
-            user="root",
-            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
-        )
-        if process_check.returncode not in (1,) or process_check.stdout.strip():
-            raise SandboxRuntimeError("previous case processes could not be cleared")
         for database in ("passwd", "group"):
             identity_check = self._worker_command(
                 worker,
@@ -1392,7 +3182,7 @@ class SandboxRuntime:
             )
             if identity_check.returncode != 2 or identity_check.stdout.strip():
                 raise SandboxRuntimeError("previous case identity could not be cleared")
-        for directory in ("/tmp", "/var/tmp", "/dev/shm"):
+        for directory in ("/tmp", "/var/tmp", "/dev/shm", "/run/lock"):
             residue = self._worker_command(
                 worker,
                 ("find", directory, "-xdev", "-uid", str(case.uid), "-print", "-quit"),
@@ -1418,12 +3208,134 @@ class SandboxRuntime:
                 "+",
             ),
         )
+        self._remove_case_cgroup(worker, case)
+
+    def _setup_case_cgroup(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        cgroup_path = self._case_cgroup_contract(worker, case)
+        self._checked_case_cgroup_control(
+            worker.id,
+            ("python3", "-c", CASE_CGROUP_SETUP_SCRIPT, str(cgroup_path)),
+            "setup",
+        )
+
+    def _terminate_and_prove_case_cgroup_empty(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        self._case_cgroup_contract(worker, case)
+        self._terminate_and_prove_case_cgroup_empty_by_id(worker.id, case)
+
+    def _terminate_and_prove_case_cgroup_empty_by_id(
+        self,
+        worker_id: str,
+        case: CaseWorkspace,
+    ) -> None:
+        cgroup_path = self._case_cgroup_contract(None, case)
+        cleanup_timeout = max(
+            1,
+            min(10, self.manifest.limits.preflight_timeout_seconds - 1),
+        )
+        self._checked_case_cgroup_control(
+            worker_id,
+            (
+                "python3",
+                "-c",
+                CASE_CGROUP_TERMINATE_SCRIPT,
+                str(cgroup_path),
+                str(cleanup_timeout),
+            ),
+            "emptiness",
+        )
+
+    def _remove_case_cgroup(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        self._case_cgroup_contract(worker, case)
+        self._remove_case_cgroup_by_id(worker.id, case)
+
+    def _remove_case_cgroup_by_id(
+        self,
+        worker_id: str,
+        case: CaseWorkspace,
+    ) -> None:
+        cgroup_path = self._case_cgroup_contract(None, case)
+        self._checked_case_cgroup_control(
+            worker_id,
+            ("python3", "-c", CASE_CGROUP_REMOVE_SCRIPT, str(cgroup_path)),
+            "removal",
+        )
+
+    def _checked_case_cgroup_control(
+        self,
+        worker_id: str,
+        argv: tuple[str, ...],
+        operation: str,
+    ) -> None:
+        result = self._worker_command_by_id(
+            worker_id,
+            argv,
+            user="root",
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+        )
+        if (
+            result.timed_out
+            or result.returncode != 0
+            or result.stdout.strip()
+            or result.stderr.strip()
+            or result.stdout_truncated
+            or result.stderr_truncated
+        ):
+            raise SandboxRuntimeError(
+                f"case cgroup {operation} verification was ambiguous"
+            )
+
+    @staticmethod
+    def _case_cgroup_contract(
+        worker: SandboxWorker | None,
+        case: CaseWorkspace,
+    ) -> Path:
+        cgroup_path = case.cgroup_path
+        expected_parent = Path("/sys/fs/cgroup/ai-skills-evals")
+        if (
+            cgroup_path is None
+            or cgroup_path.parent != expected_parent
+            or cgroup_path.name != case.filesystem_source
+            or re.fullmatch(r"[a-zA-Z0-9.+-]+", cgroup_path.name) is None
+            or (worker is not None and case.root.parent != worker.host_root)
+        ):
+            raise SandboxRuntimeError("case cgroup contract is incomplete")
+        return cgroup_path
 
     def _clear_case_ipc(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
-        self._admin_checked(
-            worker,
+        self._clear_case_ipc_by_id(worker.id, case)
+
+    def _clear_case_ipc_by_id(
+        self,
+        worker_id: str,
+        case: CaseWorkspace,
+    ) -> None:
+        result = self._worker_command_by_id(
+            worker_id,
             ("python3", "-c", IPC_CLEANUP_SCRIPT, str(case.uid)),
+            user="root",
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
         )
+        if (
+            result.timed_out
+            or result.returncode != 0
+            or result.stdout.strip()
+            or result.stderr.strip()
+            or result.stdout_truncated
+            or result.stderr_truncated
+        ):
+            raise SandboxRuntimeError("case IPC cleanup verification was ambiguous")
 
     def _admin_checked(
         self,
@@ -1449,10 +3361,18 @@ class SandboxRuntime:
         argv: Sequence[str],
         failure: str,
     ) -> None:
+        cgroup_path = self._case_cgroup_contract(worker, case)
         result = self._worker_command(
             worker,
-            argv,
-            user=case.user_name,
+            (
+                "python3",
+                "-c",
+                CASE_CGROUP_EXEC_SCRIPT,
+                str(cgroup_path),
+                str(case.uid),
+                *argv,
+            ),
+            user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
         )
         if result.timed_out or result.returncode != 0:
@@ -1467,7 +3387,22 @@ class SandboxRuntime:
         timeout_seconds: int,
     ) -> CommandResult:
         self._require_owned_worker(worker)
-        command = ("sbx", "exec", "--user", user, worker.id, *argv)
+        return self._worker_command_by_id(
+            worker.id,
+            argv,
+            user=user,
+            timeout_seconds=timeout_seconds,
+        )
+
+    def _worker_command_by_id(
+        self,
+        worker_id: str,
+        argv: Sequence[str],
+        *,
+        user: str,
+        timeout_seconds: int,
+    ) -> CommandResult:
+        command = ("sbx", "exec", "--user", user, worker_id, *argv)
         return self.process.run(command, timeout_seconds=timeout_seconds)
 
     def __enter__(self) -> SandboxRuntime:
@@ -1478,11 +3413,23 @@ class SandboxRuntime:
 
     def _checked(self, argv: tuple[str, ...], timeout_seconds: int) -> CommandResult:
         result = self.process.run(argv, timeout_seconds=timeout_seconds)
+        if not result.process_outcome.fully_terminated_and_reaped:
+            error = SandboxRuntimeError(
+                f"command process cleanup was not proven: {' '.join(argv[:2])}"
+            )
+            _attach_process_outcome(error, result.process_outcome)
+            raise error
         if result.timed_out:
-            raise SandboxRuntimeError(f"command timed out: {' '.join(argv[:2])}")
+            error = SandboxRuntimeError(f"command timed out: {' '.join(argv[:2])}")
+            _attach_process_outcome(error, result.process_outcome)
+            raise error
         if result.returncode != 0:
             diagnostic = _safe_diagnostic(result.stderr.strip() or result.stdout.strip() or "no diagnostic")
-            raise SandboxRuntimeError(f"command failed: {' '.join(argv[:2])}: {diagnostic}")
+            error = SandboxRuntimeError(
+                f"command failed: {' '.join(argv[:2])}: {diagnostic}"
+            )
+            _attach_process_outcome(error, result.process_outcome)
+            raise error
         return result
 
     def _json_command(self, argv: tuple[str, ...], timeout_seconds: int) -> Mapping[str, object]:
@@ -1696,6 +3643,26 @@ def _string_tuple(value: Mapping[str, object], key: str) -> tuple[str, ...]:
     return tuple(item)
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    payload: dict[str, object] = {}
+    for key, value in pairs:
+        if key in payload:
+            raise ValueError("duplicate JSON object key")
+        payload[key] = value
+    return payload
+
+
+def _matches_exact_shape(actual: object, expected: object) -> bool:
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return isinstance(actual, dict) and actual.keys() == expected.keys() and all(
+            _matches_exact_shape(actual[key], value)
+            for key, value in expected.items()
+        )
+    return actual == expected
+
+
 def _safe_identifier(value: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9.+-]+", "-", value).strip("-")
     if not cleaned:
@@ -1704,11 +3671,24 @@ def _safe_identifier(value: str) -> str:
 
 
 def _safe_diagnostic(value: str) -> str:
-    redacted = value
-    for pattern in SECRET_PATTERNS:
-        redacted = pattern.regex.sub("[REDACTED]", redacted)
-    return redacted[:8192]
+    return bounded_redacted_runtime_text(value, CLEANUP_FAILURE_MAXIMUM_BYTES)
 
 
-def _sha256_text(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+def _cleanup_failure_diagnostic(
+    pending: Sequence[CleanupTarget],
+    failures: Mapping[str, Sequence[BaseException]],
+) -> str:
+    details: list[str] = []
+    for target in pending:
+        target_failures = failures.get(target.name) or (
+            SandboxRuntimeError("cleanup did not complete"),
+        )
+        detail = " | ".join(str(error) for error in target_failures)
+        details.append(
+            f"{target.name}: "
+            f"{bounded_redacted_runtime_text(detail, CLEANUP_TARGET_FAILURE_MAXIMUM_BYTES)}"
+        )
+    return bounded_redacted_runtime_text(
+        "sandbox cleanup incomplete: " + "; ".join(details),
+        CLEANUP_FAILURE_MAXIMUM_BYTES,
+    )

@@ -10,8 +10,4 @@ docs/superpowers/
 skills/*/*/scripts/.venv/
 skills/*/*/scripts/.pytest_cache/
 
-# Financial-toolkit (shared between stock-research and stock-recap)
-toolkits/financial-toolkit/.venv/
-toolkits/financial-toolkit/.pytest_cache/
-
 **/__pycache__/

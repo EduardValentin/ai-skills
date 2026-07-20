@@ -84,6 +84,9 @@
     "fresh_tmpdir": true,
     "ephemeral_harness_session": true,
     "durable_results_mounted_into_actor": false,
+    "writable_filesystem": "tmpfs",
+    "maximum_writable_bytes": 268435456,
+    "maximum_writable_inodes": 32768,
     "reset_failure": "fail-case-and-recycle-worker"
   }
 }

@@ -167,6 +167,14 @@ class FakeFixtureRuntime:
 
 
 class FixtureDefinitionTests(unittest.TestCase):
+    def test_fixture_domain_errors_never_expose_high_confidence_values(self) -> None:
+        credential = "gh" + "p_" + ("a" * 36)
+
+        error = FixtureProxyError(f"fixture failed for {credential}")
+
+        self.assertNotIn(credential, str(error))
+        self.assertIn("[REDACTED]", str(error))
+
     def test_validates_the_official_pinned_schema_offline(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -184,6 +192,45 @@ class FixtureDefinitionTests(unittest.TestCase):
 
         self.assertEqual(definition.expectations[0]["id"], "get-repository")
         self.assertEqual(len(definition.sha256), 64)
+
+    def test_rejects_nonfinite_and_resource_hostile_fixture_json_boundedly(self) -> None:
+        hostile_documents = (
+            "NaN",
+            "Infinity",
+            "[" * 200 + "0" + "]" * 200,
+            "9" * 5000,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            fixture_root = Path(directory)
+            path = fixture_root / "mockserverInitialization.json"
+            for document in hostile_documents:
+                with self.subTest(prefix=document[:12]):
+                    path.write_text(document, encoding="utf-8")
+                    with self.assertRaises(FixtureProxyError) as raised:
+                        load_fixture_definition(
+                            path,
+                            manifest=MANIFEST,
+                            repository_root=REPOSITORY_ROOT,
+                            allowed_fixture_root=fixture_root,
+                        )
+                    self.assertIn("parser limits", str(raised.exception))
+                    self.assertLess(len(str(raised.exception)), 128)
+
+    def test_rejects_nonfinite_json_embedded_in_exact_body_matchers(self) -> None:
+        document = valid_expectations()
+        document[0]["httpRequest"]["body"]["json"] = '{"score": NaN}'
+        with tempfile.TemporaryDirectory() as directory:
+            fixture_root = Path(directory)
+            path = fixture_root / "mockserverInitialization.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+
+            with self.assertRaisesRegex(FixtureProxyError, "request JSON body is invalid"):
+                load_fixture_definition(
+                    path,
+                    manifest=MANIFEST,
+                    repository_root=REPOSITORY_ROOT,
+                    allowed_fixture_root=fixture_root,
+                )
 
     def test_rejects_empty_or_underspecified_request_matchers(self) -> None:
         invalid_requests = (

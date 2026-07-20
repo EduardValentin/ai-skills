@@ -6,7 +6,7 @@ from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
 
-from scripts.ai_skills_lib.core import SkillRecord
+from scripts.ai_skills_lib.core import SkillRecord, inspect_skill_layout
 from scripts.ai_skills_lib.issues import ValidationIssue
 from scripts.ai_skills_lib.static_checks.context import (
     ValidationContext,
@@ -24,7 +24,20 @@ _DIRECTORY_ENTRIES = _ALLOWED_SKILL_ROOT_ENTRIES - {"SKILL.md"}
 def validate_repository_shape(root: Path) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     skills_directory = root / "skills"
-    if skills_directory.exists():
+    layout = inspect_skill_layout(root)
+    for path in layout.invalid_boundaries:
+        issues.append(
+            ValidationIssue(
+                scope="repository",
+                message=(
+                    f"{path.relative_to(root)} must be a contained non-symlink directory"
+                ),
+            )
+        )
+    if (
+        skills_directory not in layout.invalid_boundaries
+        and skills_directory.exists()
+    ):
         skill_documents = sorted(
             path
             for path in _iter_skill_tree(skills_directory)

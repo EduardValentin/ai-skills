@@ -12,19 +12,20 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import scripts.ai_skills as cli
+import scripts.ai_skills_lib.codex_harness as codex_harness
 import scripts.ai_skills_lib.trigger_definitions as trigger_definitions
 import scripts.ai_skills_lib.trigger_validation as trigger_validation
 from scripts.ai_skills_lib.config import build_parser
 from scripts.ai_skills_lib.eval_core import (
     ResultArtifactError,
     aggregate_results,
-    benchmark_exit_code,
     create_result_workspace,
 )
 from scripts.ai_skills_lib.harness import (
     HarnessCapabilities,
     HarnessExecution,
     HarnessRequest,
+    PreparedSkillSource,
 )
 from scripts.ai_skills_lib.issues import ValidationIssue
 from scripts.ai_skills_lib.trigger_validation import (
@@ -248,6 +249,75 @@ class TriggerDefinitionValidationTests(unittest.TestCase):
 
         self.assertTrue(any("pattern" in message for message in messages))
 
+    def test_authored_query_count_identifier_and_utf8_size_limits(self) -> None:
+        documents = (
+            (
+                {
+                    "skill_name": "alpha",
+                    "queries": [
+                        {
+                            "id": f"query-{index}",
+                            "query": f"Query {index}.",
+                            "should_trigger": index == 0,
+                        }
+                        for index in range(129)
+                    ],
+                },
+                "maxItems",
+            ),
+            (
+                {
+                    "skill_name": "alpha",
+                    "queries": [
+                        {
+                            "id": "a" * 65,
+                            "query": "Use alpha.",
+                            "should_trigger": True,
+                        },
+                        {
+                            "id": "negative",
+                            "query": "Unrelated work.",
+                            "should_trigger": False,
+                        },
+                    ],
+                },
+                "maxLength",
+            ),
+            (
+                {
+                    "skill_name": "alpha",
+                    "queries": [
+                        {
+                            "id": "positive",
+                            "query": "\u00e9" * 8193,
+                            "should_trigger": True,
+                        },
+                        {
+                            "id": "negative",
+                            "query": "Unrelated work.",
+                            "should_trigger": False,
+                        },
+                    ],
+                },
+                "16 KiB UTF-8 limit",
+            ),
+        )
+        for index, (document, expected) in enumerate(documents):
+            with self.subTest(expected=expected):
+                repository = TemporaryTriggerRepository(
+                    self.repository.root / f"bounds-{index}"
+                )
+                repository.add_skill("alpha", trigger_document=document)
+
+                messages = [
+                    issue.message for issue in validate_trigger_query_files(repository.root)
+                ]
+
+                self.assertTrue(
+                    any(expected in message for message in messages),
+                    messages,
+                )
+
     def test_validated_loader_returns_typed_queries_for_every_skill(self) -> None:
         self.repository.add_skill("alpha")
         self.repository.add_skill("beta", group="integrations")
@@ -315,6 +385,76 @@ class TriggerDefinitionValidationTests(unittest.TestCase):
 
 
 class TriggerClassificationTests(unittest.TestCase):
+    def test_terminal_decision_precedence_truth_table(self) -> None:
+        cases = (
+            (False, False, False, "pass", 0, "pass", "OK"),
+            (
+                False,
+                False,
+                True,
+                "expectations_failed",
+                1,
+                "expectations failed",
+                "EXPECTATIONS FAILED",
+            ),
+            (
+                False,
+                True,
+                False,
+                "pending_review",
+                1,
+                "pending review",
+                "PENDING REVIEW",
+            ),
+            (
+                False,
+                True,
+                True,
+                "pending_review",
+                1,
+                "pending review",
+                "PENDING REVIEW",
+            ),
+        )
+        cases += tuple(
+            (
+                True,
+                pending_review,
+                expectation_failure,
+                "execution_error",
+                2,
+                "execution error",
+                "EXECUTION ERROR",
+            )
+            for pending_review in (False, True)
+            for expectation_failure in (False, True)
+        )
+
+        for (
+            execution_error,
+            pending_review,
+            expectation_failure,
+            key,
+            exit_code,
+            durable_label,
+            console_label,
+        ) in cases:
+            with self.subTest(
+                execution_error=execution_error,
+                pending_review=pending_review,
+                expectation_failure=expectation_failure,
+            ):
+                decision = trigger_validation.resolve_terminal_decision(
+                    execution_error=execution_error,
+                    pending_review=pending_review,
+                    expectation_failure=expectation_failure,
+                )
+
+                self.assertEqual(decision.key, key)
+                self.assertEqual(decision.exit_code, exit_code)
+                self.assertEqual(decision.durable_label, durable_label)
+                self.assertEqual(decision.console_label, console_label)
+
     def test_unanimous_matching_runs_are_stable(self) -> None:
         for run_count in (1, 2, 3):
             attempts = tuple(
@@ -325,7 +465,7 @@ class TriggerClassificationTests(unittest.TestCase):
                 result = classify_trigger_attempts(attempts, run_count)
                 self.assertEqual(result.status, "pass_stable")
 
-    def test_two_of_three_is_unstable_but_meets_the_threshold(self) -> None:
+    def test_two_of_three_is_pending_review(self) -> None:
         result = classify_trigger_attempts(
             (
                 TriggerAttemptOutcome(activated=True, matched_expectation=True),
@@ -335,7 +475,7 @@ class TriggerClassificationTests(unittest.TestCase):
             3,
         )
 
-        self.assertEqual(result.status, "pass_unstable")
+        self.assertEqual(result.status, "pending_review")
         self.assertEqual(result.matching_runs, 2)
 
     def test_non_unanimous_two_run_result_fails(self) -> None:
@@ -384,24 +524,152 @@ class TriggerExecutionTests(unittest.TestCase):
     def test_filters_select_cases_without_reducing_the_installed_catalog(self) -> None:
         alpha = self.repository.add_skill("alpha")
         beta = self.repository.add_skill("beta", group="integrations")
-        adapter = FakeTriggerHarness([True])
+        workspace = self.workspace()
 
-        result = execute_trigger_queries(
-            self.repository.root,
-            adapter,
-            self.workspace(),
-            runs=1,
-            max_concurrency=1,
-            skill_filter="alpha",
-            query_filter="alpha-positive",
-        )
+        class ManifestCheckingHarness(FakeTriggerHarness):
+            def preflight(self, *, require_fixtures: bool = False) -> HarnessCapabilities:
+                if not workspace.invocation_manifest.is_file():
+                    raise AssertionError("trigger invocation must precede preflight")
+                return super().preflight(require_fixtures=require_fixtures)
+
+        adapter = ManifestCheckingHarness([True])
+
+        with patch.object(
+            trigger_validation,
+            "load_trigger_queries",
+            wraps=trigger_validation.load_trigger_queries,
+        ) as load_definitions:
+            result = execute_trigger_queries(
+                self.repository.root,
+                adapter,
+                workspace,
+                runs=1,
+                max_concurrency=1,
+                skill_filter="alpha",
+                query_filter="alpha-positive",
+            )
 
         self.assertEqual(result.exit_code, 0)
+        load_definitions.assert_called_once_with(self.repository.root)
         self.assertEqual(len(adapter.requests), 1)
         request = adapter.requests[0]
         self.assertEqual(request.prompt, "Use the alpha workflow.")
         self.assertEqual(request.expected_skill, "alpha")
-        self.assertEqual(set(request.skill_sources), {alpha, beta})
+        self.assertTrue(
+            all(isinstance(source, PreparedSkillSource) for source in request.skill_sources)
+        )
+        self.assertEqual(
+            {source.source_root for source in request.skill_sources},
+            {alpha.resolve(), beta.resolve()},
+        )
+
+    def test_prepared_catalog_survives_mutation_and_deletion_during_preflight(self) -> None:
+        alpha = self.repository.add_skill("alpha")
+        beta = self.repository.add_skill("beta", group="integrations")
+        alpha_root = alpha.resolve()
+        beta_root = beta.resolve()
+        alpha_skill = alpha / "SKILL.md"
+        beta_skill = beta / "SKILL.md"
+        original_skill_bytes = {
+            "alpha": alpha_skill.read_bytes(),
+            "beta": beta_skill.read_bytes(),
+        }
+        workspace = self.workspace()
+
+        class MutatingPreflightHarness(FakeTriggerHarness):
+            def preflight(self, *, require_fixtures: bool = False) -> HarnessCapabilities:
+                self.assert_prepared_before_preflight()
+                alpha_skill.write_text("mutated during preflight\n", encoding="utf-8")
+                shutil.rmtree(beta)
+                return super().preflight(require_fixtures=require_fixtures)
+
+            @staticmethod
+            def assert_prepared_before_preflight() -> None:
+                if not workspace.invocation_manifest.is_file():
+                    raise AssertionError("trigger invocation must precede preflight")
+
+        adapter = MutatingPreflightHarness([True])
+        prepare_actor_skill_source = codex_harness.prepare_actor_skill_source
+
+        def prepare_before_declaration(source: Path) -> PreparedSkillSource:
+            self.assertFalse(workspace.invocation_manifest.exists())
+            return prepare_actor_skill_source(source)
+
+        with patch.object(
+            codex_harness,
+            "prepare_actor_skill_source",
+            side_effect=prepare_before_declaration,
+        ) as prepare_source:
+            result = execute_trigger_queries(
+                self.repository.root,
+                adapter,
+                workspace,
+                runs=1,
+                max_concurrency=1,
+                skill_filter="alpha",
+                query_filter="alpha-positive",
+            )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(prepare_source.call_count, 2)
+        request = adapter.requests[0]
+        prepared_by_name = {source.name: source for source in request.skill_sources}
+        self.assertEqual(set(prepared_by_name), {"alpha", "beta"})
+        self.assertEqual(prepared_by_name["alpha"].source_root, alpha_root)
+        self.assertEqual(prepared_by_name["beta"].source_root, beta_root)
+        for name, source in prepared_by_name.items():
+            skill_file = next(
+                item for item in source.files if item.relative_path.as_posix() == "SKILL.md"
+            )
+            self.assertEqual(skill_file.content, original_skill_bytes[name])
+
+    def test_repeated_attempts_share_the_same_prepared_catalog_identity(self) -> None:
+        self.repository.add_skill("alpha")
+        self.repository.add_skill("beta", group="integrations")
+        adapter = FakeTriggerHarness([True, True])
+
+        with patch.object(
+            codex_harness,
+            "prepare_actor_skill_source",
+            wraps=codex_harness.prepare_actor_skill_source,
+        ) as prepare_source:
+            result = execute_trigger_queries(
+                self.repository.root,
+                adapter,
+                self.workspace(),
+                runs=2,
+                max_concurrency=1,
+                skill_filter="alpha",
+                query_filter="alpha-positive",
+            )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(prepare_source.call_count, 2)
+        first, second = adapter.requests
+        self.assertIs(first.skill_sources, second.skill_sources)
+        self.assertTrue(
+            all(
+                first_source is second_source
+                for first_source, second_source in zip(
+                    first.skill_sources,
+                    second.skill_sources,
+                    strict=True,
+                )
+            )
+        )
+
+    def test_prepared_plan_rejects_a_live_path_catalog(self) -> None:
+        alpha = self.repository.add_skill("alpha")
+        definitions = load_trigger_queries(self.repository.root)
+        plan = trigger_validation.prepare_trigger_plan(
+            definitions,
+            runs=1,
+            skill_filter="alpha",
+            query_filter="alpha-positive",
+        )
+
+        with self.assertRaisesRegex(ValueError, "prepared skill material"):
+            replace(plan, catalog=(alpha,))
 
     def test_completed_run_writes_human_and_machine_reviewable_artifacts(self) -> None:
         self.repository.add_skill("alpha")
@@ -428,6 +696,98 @@ class TriggerExecutionTests(unittest.TestCase):
         self.assertEqual((attempt / "outputs" / "response.md").read_text(), "Actor response")
         self.assertIn("Use the alpha workflow.", (attempt / "transcript.md").read_text())
         self.assertTrue((attempt / "execution_trace.jsonl").is_file())
+
+        finalization = trigger_validation.finalize_trigger_result(
+            self.repository.root,
+            workspace,
+            result,
+        )
+
+        self.assertEqual(finalization.terminal.key, "pass")
+        self.assertIn(
+            "Decision: pass",
+            workspace.output_summary.read_text(encoding="utf-8"),
+        )
+
+    def test_failed_expectation_finalization_persists_terminal_decision(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        result = execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([False]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+
+        finalization = trigger_validation.finalize_trigger_result(
+            self.repository.root,
+            workspace,
+            result,
+        )
+
+        self.assertEqual(finalization.terminal.key, "expectations_failed")
+        self.assertIn(
+            "Decision: expectations failed",
+            workspace.output_summary.read_text(encoding="utf-8"),
+        )
+
+    def test_trigger_run_identifiers_are_injective_across_component_boundaries(self) -> None:
+        first = trigger_validation._trigger_attempt_manifest(
+            SimpleNamespace(name="a"),
+            trigger_definitions.TriggerQuery(
+                id="b-c",
+                query="Use a.",
+                should_trigger=True,
+            ),
+            1,
+            1,
+            1.0,
+        )
+        second = trigger_validation._trigger_attempt_manifest(
+            SimpleNamespace(name="a-b"),
+            trigger_definitions.TriggerQuery(
+                id="c",
+                query="Use a-b.",
+                should_trigger=True,
+            ),
+            1,
+            1,
+            1.0,
+        )
+
+        self.assertNotEqual(first.run_id, second.run_id)
+
+    def test_transformed_actor_response_is_untrustworthy_before_trigger_grading(self) -> None:
+        self.repository.add_skill("alpha")
+
+        class OversizedResponseHarness(FakeTriggerHarness):
+            def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
+                execution = completed_execution(request, activated=True)
+                return replace(
+                    execution,
+                    response=json.dumps({"value": "x" * (64 * 1024)}),
+                )
+
+        workspace = self.workspace()
+        result = execute_trigger_queries(
+            self.repository.root,
+            OversizedResponseHarness(),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+
+        attempt = next(workspace.attempts.iterdir())
+        response = (attempt / "outputs" / "response.md").read_text(encoding="utf-8")
+        trace = (attempt / "execution_trace.jsonl").read_text(encoding="utf-8")
+        self.assertEqual(result.exit_code, 2)
+        self.assertLessEqual(len(response.encode("utf-8")), 64 * 1024)
+        self.assertIn("[TRUNCATED]", response)
+        self.assertIn("cannot be preserved exactly", trace)
+        self.assertFalse((attempt / "grading.json").exists())
 
     def test_durable_transcript_redacts_authored_fake_credentials(self) -> None:
         fake_value = "FAKE_trigger_test_token"
@@ -563,7 +923,7 @@ class TriggerExecutionTests(unittest.TestCase):
         self.assertEqual(timing["status"], "failed")
         self.assertFalse((attempt / "grading.json").exists())
 
-    def test_two_of_three_is_reported_as_unstable_without_hidden_retry(self) -> None:
+    def test_two_of_three_is_pending_review_without_hidden_retry(self) -> None:
         self.repository.add_skill("alpha")
         adapter = FakeTriggerHarness([True, False, True])
         workspace = self.workspace()
@@ -576,35 +936,23 @@ class TriggerExecutionTests(unittest.TestCase):
             max_concurrency=1,
             query_filter="alpha-positive",
         )
-        benchmark = aggregate_results(
-            workspace.root,
-            "judge",
-            repository_root=self.repository.root,
-        )
-
         self.assertEqual(len(adapter.requests), 3)
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.query_results[0].classification.status, "pass_unstable")
-        self.assertEqual(benchmark_exit_code(benchmark), 0)
-        self.assertEqual(
-            benchmark["source_summaries"]["judge"]["summary"],
-            {
-                "total_cases": 1,
-                "passed_cases": 1,
-                "failed_cases": 0,
-                "pass_rate": 1.0,
-            },
-        )
-        skill_summary = benchmark["source_summaries"]["judge"]["skill_summaries"][0]
-        self.assertEqual(skill_summary["skill_name"], "alpha")
-        self.assertEqual(skill_summary["measurements"]["trigger_rate"]["count"], 3)
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.query_results[0].classification.status, "pending_review")
+        attempts = tuple(workspace.attempts.iterdir())
+        self.assertEqual(len(attempts), 3)
+        measurements = [
+            json.loads((attempt / "grading.json").read_text(encoding="utf-8"))[
+                "measurements"
+            ]["trigger_rate"]
+            for attempt in attempts
+        ]
         self.assertAlmostEqual(
-            skill_summary["measurements"]["trigger_rate"]["mean"],
+            sum(measurements) / len(measurements),
             2 / 3,
         )
-        self.assertIn("trigger_rate", workspace.output_summary.read_text(encoding="utf-8"))
         human_summary = format_trigger_summary(result)
-        self.assertIn("INVESTIGATE", human_summary)
+        self.assertIn("REVIEW REQUIRED", human_summary)
         self.assertIn("run 2: mismatch", human_summary)
         self.assertIn("artifacts=", human_summary)
 
@@ -784,6 +1132,46 @@ class TriggerExecutionTests(unittest.TestCase):
 
 
 class TriggerCliTests(unittest.TestCase):
+    def test_selected_query_and_model_call_limits_precede_workspace_creation(self) -> None:
+        root = Path("/nonexistent/repository")
+        skill = SimpleNamespace(name="alpha", root=root / "skills" / "alpha")
+        definition = SimpleNamespace(
+            skill=skill,
+            queries=tuple(
+                trigger_definitions.TriggerQuery(
+                    id=f"query-{index}",
+                    query=f"Query {index}.",
+                    should_trigger=index == 0,
+                )
+                for index in range(129)
+            ),
+        )
+        for runs, expected in ((1, "128-query"), (3, "384-call")):
+            with (
+                self.subTest(runs=runs),
+                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(
+                    trigger_validation,
+                    "load_trigger_queries",
+                    return_value=(definition,),
+                ),
+                patch.object(trigger_validation, "create_result_workspace") as create_results,
+                redirect_stdout(StringIO()) as output,
+            ):
+                result = trigger_validation.run_trigger_query_harness(
+                    root,
+                    harness="codex",
+                    runs=runs,
+                    skill_filter=None,
+                    query_filter=None,
+                    results_dir=None,
+                    max_concurrency=2,
+                )
+
+            self.assertEqual(result, 2)
+            create_results.assert_not_called()
+            self.assertIn(expected, output.getvalue())
+
     def test_model_runner_stops_on_static_trust_boundary_issues(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -845,6 +1233,59 @@ class TriggerCliTests(unittest.TestCase):
         self.assertEqual(args.query, "alpha-positive")
         self.assertEqual(args.results_dir, Path("/tmp/trigger-results"))
 
+    def test_two_of_three_cli_persists_pending_review_without_aggregating(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as repository_directory,
+            tempfile.TemporaryDirectory() as results_directory,
+        ):
+            repository = TemporaryTriggerRepository(Path(repository_directory))
+            repository.add_skill("alpha")
+            results = Path(results_directory) / "run"
+            adapter = FakeTriggerHarness([True, False, True])
+            session = SimpleNamespace(
+                adapter=adapter,
+                manifest=SimpleNamespace(
+                    limits=SimpleNamespace(actor_timeout_seconds=60),
+                ),
+                close=MagicMock(),
+            )
+            output = StringIO()
+
+            with (
+                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(
+                    trigger_validation.CodexEvaluationRuntime,
+                    "create",
+                    return_value=session,
+                ),
+                patch.object(
+                    trigger_validation,
+                    "aggregate_results",
+                    wraps=aggregate_results,
+                ) as aggregate,
+                redirect_stdout(output),
+            ):
+                result = trigger_validation.run_trigger_query_harness(
+                    repository.root,
+                    harness="codex",
+                    runs=3,
+                    skill_filter="alpha",
+                    query_filter="alpha-positive",
+                    results_dir=results,
+                    max_concurrency=1,
+                )
+
+            summary = (results / "summary.md").read_text(encoding="utf-8")
+            self.assertEqual(result, 1)
+            self.assertEqual(len(adapter.requests), 3)
+            self.assertEqual(len(tuple((results / "attempts").iterdir())), 3)
+            aggregate.assert_not_called()
+            self.assertFalse((results / "benchmark.json").exists())
+            self.assertIn("Decision: pending review", summary)
+            self.assertIn("Review Required", summary)
+            self.assertIn("run 2: mismatch", summary)
+            self.assertIn("validate triggers: PENDING REVIEW", output.getvalue())
+
     def test_post_workspace_harness_failure_writes_terminal_summary(self) -> None:
         with (
             tempfile.TemporaryDirectory() as repository_directory,
@@ -893,6 +1334,90 @@ class TriggerCliTests(unittest.TestCase):
             self.assertIn("preflight unavailable", summary)
             self.assertIn("Decision: execution error", summary)
             self.assertFalse((results / "benchmark.json").exists())
+
+    def test_standalone_execution_exception_writes_terminal_summary_and_label(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as repository_directory,
+            tempfile.TemporaryDirectory() as results_directory,
+        ):
+            repository = TemporaryTriggerRepository(Path(repository_directory))
+            repository.add_skill("alpha")
+            results = Path(results_directory) / "run"
+            session = SimpleNamespace(
+                adapter=FakeTriggerHarness(),
+                manifest=SimpleNamespace(
+                    limits=SimpleNamespace(actor_timeout_seconds=60),
+                ),
+                close=MagicMock(),
+            )
+            output = StringIO()
+
+            with (
+                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(
+                    trigger_validation.CodexEvaluationRuntime,
+                    "create",
+                    return_value=session,
+                ),
+                patch.object(
+                    trigger_validation,
+                    "_execute_trigger_queries",
+                    side_effect=RuntimeError("trigger execution raised"),
+                ),
+                redirect_stdout(output),
+            ):
+                result = trigger_validation.run_trigger_query_harness(
+                    repository.root,
+                    harness="codex",
+                    runs=1,
+                    skill_filter=None,
+                    query_filter=None,
+                    results_dir=results,
+                    max_concurrency=1,
+                )
+
+            summary = (results / "summary.md").read_text(encoding="utf-8")
+            self.assertEqual(result, 2)
+            self.assertIn("trigger execution raised", summary)
+            self.assertIn("Decision: execution error", summary)
+            self.assertIn("validate triggers: EXECUTION ERROR", output.getvalue())
+
+    def test_post_workspace_declaration_failure_writes_terminal_summary(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as repository_directory,
+            tempfile.TemporaryDirectory() as results_directory,
+        ):
+            repository = TemporaryTriggerRepository(Path(repository_directory))
+            repository.add_skill("alpha")
+            results = Path(results_directory) / "run"
+            output = StringIO()
+
+            with (
+                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(
+                    trigger_validation,
+                    "declare_trigger_plan",
+                    side_effect=ResultArtifactError("cannot declare invocation"),
+                ),
+                redirect_stdout(output),
+            ):
+                result = trigger_validation.run_trigger_query_harness(
+                    repository.root,
+                    harness="codex",
+                    runs=1,
+                    skill_filter=None,
+                    query_filter=None,
+                    results_dir=results,
+                    max_concurrency=1,
+                )
+
+            rendered = output.getvalue()
+            summary = (results / "summary.md").read_text(encoding="utf-8")
+            self.assertEqual(result, 2)
+            self.assertIn("cannot declare invocation", rendered)
+            self.assertIn(f"Results: {results.resolve()}", rendered)
+            self.assertIn("Decision: execution error", summary)
+            self.assertIn("cannot declare invocation", summary)
 
     def test_errored_trigger_attempt_summary_links_its_artifacts(self) -> None:
         with (

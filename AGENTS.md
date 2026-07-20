@@ -78,12 +78,20 @@ never edit installed or generated copies.
   path, and `Host` matchers; keep the total declared calls at or below the
   manifest limit. Every declared call is verified. Bind actor inputs and HTTP
   initialization to the exact current case fixture root.
+- Keep behavior definitions generic and runner-owned: actor prompts must not
+  contain expected results or grading guidance; use semantic assertions for
+  meaning and only the approved deterministic checks for hard artifact
+  contracts. Declared inputs stay below the exact case `inputs/` directory, and
+  runner-only schemas and proxy expectations stay outside it.
 - Model-backed runs use reusable Docker Sandboxes worker pools. Give every case
   a fresh actor projection, workspace, `CODEX_HOME`, and ephemeral harness
   session; keep actor and judge workers separate, keep real credentials in the
-  host proxy, and recycle a worker when reset verification fails. Do not weaken
-  resource limits, network policy, oracle isolation, MockServer no-passthrough
-  behavior, or cleanup without updating `docs/TESTING.md` and the harness tests.
+  host proxy, keep all case-writable state on the pinned aggregate tmpfs, and
+  recycle a worker when reset verification fails. Judges remain skill-free,
+  read-only, shell-free, web-free, and response-schema-bound; treat all actor
+  evidence as untrusted. Do not weaken resource limits, mount isolation,
+  network policy, oracle isolation, MockServer no-passthrough behavior, or
+  cleanup without updating `docs/TESTING.md` and the harness tests.
 - Runtime pins are immutable: no floating sandbox/template/image tags, package
   ranges, or runtime-schema downloads. Changes to `config/eval-runtime.json`,
   Docker Sandboxes or Codex pins, or the vendored MockServer schema require
@@ -96,12 +104,19 @@ never edit installed or generated copies.
   or an explicit integration command.
 - Non-trivial bundled executable code may have deterministic tests under
   `tests/runtime/`. Keep tests and test-only dependencies outside installable
-  skill folders. `validate runtime` is included by `validate ci-all`.
+  skill folders. Use one named directory per suite with at least one
+  `test_*.py`; do not add root-level files, symlinks, hidden entries, or empty
+  suites. `validate runtime` is included by `validate ci-all`.
 - Secret scanning distinguishes values from names: allow documented
   environment-variable identifiers, lookups, references, and recognized
   placeholders; reject private-key blocks and high-confidence credential
   literals. Authored fake credential values must start with `FAKE_`; never
-  print matched values.
+  print matched values. Preserve safe actor evidence exactly; quarantine and
+  fail an attempt when its evidence would require redaction instead of grading
+  transformed content. Eval prompts use a conservative lexical rejection for
+  explicit owned/live resources; directly qualify non-live resources as fake,
+  mock, fixture, sandbox, simulation, or transcript data. Leave broader
+  semantic private-state concerns to judge and human review.
 - Hard absence evidence is allowed for structural, security, artifact, and
   negative-trigger contracts. Do not use brittle absence assertions against
   model prose.

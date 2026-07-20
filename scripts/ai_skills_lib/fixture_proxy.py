@@ -20,6 +20,11 @@ from jsonschema import Draft7Validator
 import jwt
 from jwt.algorithms import RSAAlgorithm
 
+from scripts.ai_skills_lib.authored_content import (
+    BoundedJsonError,
+    strict_bounded_json_loads,
+)
+from scripts.ai_skills_lib.harness import PreparedFile
 from scripts.ai_skills_lib.secret_patterns import (
     bounded_redacted_runtime_text,
     redact_runtime_secrets,
@@ -68,7 +73,7 @@ class FixtureProxyError(RuntimeError):
         *,
         evidence: Sequence[Mapping[str, object]] = (),
     ) -> None:
-        super().__init__(message)
+        super().__init__(bounded_redacted_runtime_text(message, MAX_EVIDENCE_TEXT_BYTES))
         self.evidence = tuple(evidence)
 
 
@@ -147,23 +152,66 @@ def load_fixture_definition(
     if source.stat().st_size > MAX_FIXTURE_BYTES:
         raise FixtureProxyError("fixture initialization file is too large")
 
+    try:
+        raw_bytes = source.read_bytes()
+    except OSError as error:
+        raise FixtureProxyError("fixture JSON could not be read") from error
+    return load_fixture_definition_bytes(
+        raw_bytes,
+        source=source,
+        manifest=manifest,
+        repository_root=repository_root,
+    )
+
+
+def load_fixture_definition_bytes(
+    raw_bytes: bytes,
+    *,
+    source: Path,
+    manifest: EvalRuntimeManifest,
+    repository_root: Path,
+) -> FixtureDefinition:
+    """Validate already-frozen fixture bytes without re-reading their source path."""
+    if len(raw_bytes) > MAX_FIXTURE_BYTES:
+        raise FixtureProxyError("fixture initialization file is too large")
     schema_path = (repository_root.resolve() / manifest.mockserver.schema_path).resolve()
     if not schema_path.is_relative_to(repository_root.resolve()) or not schema_path.is_file():
         raise FixtureProxyError("vendored MockServer schema is unavailable")
-    schema_bytes = schema_path.read_bytes()
+    try:
+        schema_bytes = schema_path.read_bytes()
+    except OSError as error:
+        raise FixtureProxyError("vendored MockServer schema is unavailable") from error
     if hashlib.sha256(schema_bytes).hexdigest() != manifest.mockserver.schema_sha256:
         raise FixtureProxyError("vendored MockServer schema hash does not match the runtime pin")
     try:
-        schema = json.loads(schema_bytes)
-        raw_bytes = source.read_bytes()
-        payload = json.loads(raw_bytes)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise FixtureProxyError(f"fixture JSON could not be read: {error}") from error
+        schema = strict_bounded_json_loads(
+            schema_bytes,
+            maximum_bytes=MAX_FIXTURE_BYTES,
+        )
+        payload = strict_bounded_json_loads(
+            raw_bytes,
+            maximum_bytes=MAX_FIXTURE_BYTES,
+        )
+    except BoundedJsonError as error:
+        raise FixtureProxyError("fixture JSON is invalid or exceeds parser limits") from error
 
-    errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda item: list(item.path))
-    if errors:
-        location = "/".join(str(part) for part in errors[0].path) or "<root>"
-        raise FixtureProxyError(f"fixture schema validation failed at {location}: {errors[0].message}")
+    try:
+        first_error = min(
+            Draft7Validator(schema).iter_errors(payload),
+            key=lambda item: tuple(
+                (type(part).__name__, str(part)) for part in item.path
+            ),
+            default=None,
+        )
+    except (MemoryError, OverflowError, RecursionError, RuntimeError) as error:
+        raise FixtureProxyError(
+            "fixture schema validation exceeded resource limits"
+        ) from error
+    if first_error is not None:
+        location = "/".join(str(part) for part in first_error.path) or "<root>"
+        raise FixtureProxyError(
+            f"fixture schema validation failed at {location}: {first_error.message}"
+        )
     items = payload if isinstance(payload, list) else [payload]
     if not items:
         raise FixtureProxyError("fixture initialization must declare at least one expectation")
@@ -253,19 +301,37 @@ class FixtureProxy:
         self,
         worker: SandboxWorker,
         case: CaseWorkspace,
-        initialization_path: Path,
+        initialization_path: Path | PreparedFile,
         case_fixture_root: Path,
     ) -> FixtureSession:
         """Reset, load, and expose one fixture through actor-only shell settings."""
-        specific_root = case_fixture_root.resolve()
+        specific_root = (
+            case_fixture_root.absolute()
+            if isinstance(initialization_path, PreparedFile)
+            else case_fixture_root.resolve()
+        )
         if not specific_root.is_relative_to(self.allowed_fixture_root):
             raise FixtureProxyError("case fixture root is outside the configured fixture root")
-        definition = load_fixture_definition(
-            initialization_path,
-            manifest=self.runtime.manifest,
-            repository_root=self.repository_root,
-            allowed_fixture_root=specific_root,
-        )
+        if isinstance(initialization_path, PreparedFile):
+            if initialization_path.source != (
+                specific_root / "mockserverInitialization.json"
+            ):
+                raise FixtureProxyError(
+                    "prepared fixture does not belong to the selected case root"
+                )
+            definition = load_fixture_definition_bytes(
+                initialization_path.content,
+                source=initialization_path.source,
+                manifest=self.runtime.manifest,
+                repository_root=self.repository_root,
+            )
+        else:
+            definition = load_fixture_definition(
+                initialization_path,
+                manifest=self.runtime.manifest,
+                repository_root=self.repository_root,
+                allowed_fixture_root=specific_root,
+            )
         self._require_case(worker, case)
         try:
             state = self._ensure_worker_state(worker)
@@ -551,8 +617,11 @@ class FixtureProxy:
             data_path=state.empty_request_path,
         )
         try:
-            payload = json.loads(result.stdout)
-        except json.JSONDecodeError as error:
+            payload = strict_bounded_json_loads(
+                result.stdout,
+                maximum_bytes=MAX_FIXTURE_BYTES,
+            )
+        except BoundedJsonError as error:
             raise FixtureProxyError("MockServer retrieval returned invalid JSON") from error
         if not isinstance(payload, list) or not all(isinstance(item, Mapping) for item in payload):
             raise FixtureProxyError("MockServer retrieval returned an invalid result shape")
@@ -759,8 +828,11 @@ def _require_json_string(value: object, label: str) -> object:
     if not isinstance(value, str):
         raise FixtureProxyError(f"{label} must contain JSON text")
     try:
-        return json.loads(value)
-    except json.JSONDecodeError as error:
+        return strict_bounded_json_loads(
+            value,
+            maximum_bytes=MAX_FIXTURE_BYTES,
+        )
+    except BoundedJsonError as error:
         raise FixtureProxyError(f"{label} is invalid") from error
 
 
@@ -880,8 +952,14 @@ def _request_body_value(body: object) -> tuple[str, object] | None:
         if not isinstance(value, str):
             return ("unsupported", None)
         try:
-            return ("json", json.loads(value))
-        except json.JSONDecodeError:
+            return (
+                "json",
+                strict_bounded_json_loads(
+                    value,
+                    maximum_bytes=MAX_FIXTURE_BYTES,
+                ),
+            )
+        except BoundedJsonError:
             return ("unsupported", None)
     if body_type == "STRING":
         return ("string", body.get("string"))
@@ -1018,11 +1096,14 @@ def _request_body_json(body: object) -> object | None:
         value = body if isinstance(body, (dict, list)) else None
         return value if _json_size(value) <= MAX_EVIDENCE_BODY_BYTES else None
     value = body.get("json")
-    if isinstance(value, str) and len(value.encode("utf-8")) <= MAX_EVIDENCE_BODY_BYTES:
+    if isinstance(value, str):
         try:
-            parsed = json.loads(value)
+            parsed = strict_bounded_json_loads(
+                value,
+                maximum_bytes=MAX_EVIDENCE_BODY_BYTES,
+            )
             return parsed if _json_size(parsed) <= MAX_EVIDENCE_BODY_BYTES else None
-        except json.JSONDecodeError:
+        except BoundedJsonError:
             return None
     if body.get("type") is None:
         value = dict(body)

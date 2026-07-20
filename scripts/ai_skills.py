@@ -18,6 +18,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from scripts.ai_skills_lib.config import build_parser, command_label
+from scripts.ai_skills_lib.all_validation import run_all_evaluation_harness
 from scripts.ai_skills_lib.eval_core import (
     ResultArtifactError,
     aggregate_results,
@@ -25,9 +26,11 @@ from scripts.ai_skills_lib.eval_core import (
     format_benchmark_summary,
     resolve_external_result_path,
 )
+from scripts.ai_skills_lib.eval_validation import run_behavior_eval_harness
 from scripts.ai_skills_lib.issues import print_grouped_issues
+from scripts.ai_skills_lib.local_installs import run_local_install_check
+from scripts.ai_skills_lib.runtime_validation import run_runtime_validation
 from scripts.ai_skills_lib.static_validation import (
-    preflight_reference_conformance,
     run_ci_validation,
     run_static_validation,
 )
@@ -70,14 +73,17 @@ def main(argv: list[str] | None = None) -> int:
         return exit_code
     if args.command == "validate" and args.target == "static":
         return _report_validation("validate static", run_static_validation(REPOSITORY_ROOT))
+    if args.command == "validate" and args.target == "runtime":
+        return run_runtime_validation(REPOSITORY_ROOT)
     if args.command == "validate" and args.target == "ci-all":
         try:
-            preflight_reference_conformance()
+            issues = run_ci_validation(REPOSITORY_ROOT)
         except RuntimeError as error:
             print(f"validate ci-all: FAILED: {error}")
             return 1
         failed = run_unit_tests(REPOSITORY_ROOT) != 0
-        issues = run_ci_validation(REPOSITORY_ROOT)
+        if run_runtime_validation(REPOSITORY_ROOT) != 0:
+            failed = True
         if issues:
             print_grouped_issues(issues)
             failed = True
@@ -95,6 +101,43 @@ def main(argv: list[str] | None = None) -> int:
             query_filter=args.query,
             results_dir=args.results_dir,
             max_concurrency=args.max_concurrency,
+        )
+    if args.command == "validate" and args.target == "evals":
+        return run_behavior_eval_harness(
+            REPOSITORY_ROOT,
+            harness=args.harness,
+            skill_filter=args.skill,
+            case_filter=args.case,
+            results_dir=args.results_dir,
+            max_concurrency=args.max_concurrency,
+        )
+    if args.command == "validate" and args.target == "all":
+        try:
+            issues = run_ci_validation(REPOSITORY_ROOT)
+        except RuntimeError as error:
+            print(f"validate all: FAILED: {error}")
+            return 1
+        failed = run_unit_tests(REPOSITORY_ROOT) != 0
+        if run_runtime_validation(REPOSITORY_ROOT) != 0:
+            failed = True
+        if issues:
+            print_grouped_issues(issues)
+            failed = True
+        if failed:
+            print(f"validate all: DETERMINISTIC CHECKS FAILED ({len(issues)} validation issues)")
+            return 1
+        return run_all_evaluation_harness(
+            REPOSITORY_ROOT,
+            harness=args.harness,
+            runs=args.runs,
+            skill_filter=args.skill,
+            results_dir=args.results_dir,
+            max_concurrency=args.max_concurrency,
+        )
+    if args.command == "check-local-installs":
+        return run_local_install_check(
+            REPOSITORY_ROOT,
+            harness=args.harness,
         )
     print(f"{command_label(args)}: not implemented")
     return 2

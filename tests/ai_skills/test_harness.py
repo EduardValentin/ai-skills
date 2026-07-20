@@ -118,13 +118,50 @@ class HarnessContractTests(unittest.TestCase):
         )
 
     def test_judge_request_rejects_actor_fixture_provisioning(self):
-        with self.assertRaisesRegex(ValueError, "judge.*fixture"):
+        for restricted in (
+            {
+                "fixture_initialization": Path(
+                    "evals/fixtures/example/mockserverInitialization.json"
+                )
+            },
+            {"capture_outputs": True},
+        ):
+            with self.subTest(restricted=restricted):
+                with self.assertRaisesRegex(ValueError, "judge.*(?:fixture|output)"):
+                    HarnessRequest(
+                        role="judge",
+                        run_variant="semantic_grade",
+                        prompt="Grade the evidence.",
+                        timeout_seconds=30,
+                        **restricted,
+                    )
+
+    def test_only_judges_may_receive_a_structured_response_schema(self):
+        schema = {"type": "object"}
+        judge = HarnessRequest(
+            role="judge",
+            run_variant="semantic_grade",
+            prompt="Grade the evidence.",
+            timeout_seconds=30,
+            response_schema=schema,
+        )
+
+        self.assertIs(judge.response_schema, schema)
+        with self.assertRaisesRegex(ValueError, "actor.*response schema"):
+            HarnessRequest(
+                role="actor",
+                run_variant="candidate",
+                prompt="Perform the case.",
+                timeout_seconds=30,
+                response_schema=schema,
+            )
+        with self.assertRaisesRegex(ValueError, "response_schema"):
             HarnessRequest(
                 role="judge",
                 run_variant="semantic_grade",
                 prompt="Grade the evidence.",
                 timeout_seconds=30,
-                fixture_initialization=Path("evals/fixtures/example/mockserverInitialization.json"),
+                response_schema="not-a-schema",  # type: ignore[arg-type]
             )
 
     def test_actor_input_contract_rejects_judges_and_unsafe_destinations(self):

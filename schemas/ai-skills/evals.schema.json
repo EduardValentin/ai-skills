@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-skills/evals.schema.json",
+  "title": "AI Skills behavior evaluation definitions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["skill_name", "evals"],
+  "properties": {
+    "skill_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "evals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/eval"}
+    }
+  },
+  "$defs": {
+    "safe_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\/$)[^/]+(?:/[^/]+)*$"
+    },
+    "eval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "prompt", "expected_output", "assertions"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384,
+          "pattern": "\\S"
+        },
+        "expected_output": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192,
+          "pattern": "\\S"
+        },
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "\\S"
+          }
+        },
+        "files": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/safe_path"}
+        },
+        "checks": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/check"}
+        }
+      }
+    },
+    "check": {
+      "oneOf": [
+        {"$ref": "#/$defs/file_exists"},
+        {"$ref": "#/$defs/path_absent"},
+        {"$ref": "#/$defs/json_schema"},
+        {"$ref": "#/$defs/exit_code"},
+        {"$ref": "#/$defs/no_secret_patterns"},
+        {"$ref": "#/$defs/response_protocol"}
+      ]
+    },
+    "file_exists": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path"],
+      "properties": {
+        "type": {"const": "file_exists"},
+        "path": {"$ref": "#/$defs/safe_path"}
+      }
+    },
+    "path_absent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path"],
+      "properties": {
+        "type": {"const": "path_absent"},
+        "path": {"$ref": "#/$defs/safe_path"}
+      }
+    },
+    "json_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "path", "schema"],
+      "properties": {
+        "type": {"const": "json_schema"},
+        "path": {"$ref": "#/$defs/safe_path"},
+        "schema": {"$ref": "#/$defs/safe_path"}
+      }
+    },
+    "exit_code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "expected"],
+      "properties": {
+        "type": {"const": "exit_code"},
+        "expected": {"const": 0}
+      }
+    },
+    "no_secret_patterns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"const": "no_secret_patterns"}
+      }
+    },
+    "response_protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "format"],
+      "properties": {
+        "type": {"const": "response_protocol"},
+        "format": {"enum": ["json", "jsonl"]},
+        "schema": {"$ref": "#/$defs/safe_path"}
+      }
+    }
+  }
+}

@@ -6,7 +6,9 @@ from dataclasses import FrozenInstanceError, replace
 from datetime import datetime, timezone
 from io import StringIO
 import json
+import os
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -38,6 +40,7 @@ from scripts.ai_skills_lib.eval_core import (
     combine_grading_results,
     create_attempt_workspace,
     create_result_workspace,
+    declare_invocation,
     default_results_root,
     format_benchmark_summary,
     invoke_judge,
@@ -302,6 +305,7 @@ def generated_grading_record(
     *,
     run_id: str = "run-with-skill",
     run_kind: str = "with_skill",
+    group_id: str = "ticket-workflow/intake",
     variant: str = "with_skill",
     contributes_to_outcome: bool = True,
     required_variants: tuple[str, ...] = ("with_skill", "without_skill"),
@@ -341,7 +345,7 @@ def generated_grading_record(
             pass_rate=1.0 if passed else 0.0,
         ),
         aggregation=AggregationMetadata(
-            group_id="ticket-workflow/intake",
+            group_id=group_id,
             variant=variant,
             contributes_to_outcome=contributes_to_outcome,
             required_variants=required_variants,
@@ -402,6 +406,7 @@ def expected_judge_context() -> JudgeGradingContext:
 def sample_attempt_manifest(
     *,
     run_id: str = "run-candidate-1",
+    group_id: str = "ticket-workflow/intake",
     variant: str = "candidate",
     contributes_to_outcome: bool = True,
     required_variants: tuple[str, ...] = ("candidate", "reference"),
@@ -413,7 +418,7 @@ def sample_attempt_manifest(
         case_id="intake",
         run_kind=variant,
         aggregation=AggregationMetadata(
-            group_id="ticket-workflow/intake",
+            group_id=group_id,
             variant=variant,
             contributes_to_outcome=contributes_to_outcome,
             required_variants=required_variants,
@@ -422,10 +427,30 @@ def sample_attempt_manifest(
     )
 
 
+def preserved_run_manifest(
+    *,
+    run_id: str | None = None,
+    group_id: str = "ticket-workflow/intake",
+    variant: str,
+    contributes_to_outcome: bool,
+    required_variants: tuple[str, ...],
+    compare_to: str | None = None,
+) -> AttemptManifest:
+    return sample_attempt_manifest(
+        run_id=run_id or f"run-{variant}",
+        group_id=group_id,
+        variant=variant,
+        contributes_to_outcome=contributes_to_outcome,
+        required_variants=required_variants,
+        compare_to=compare_to,
+    )
+
+
 def write_preserved_run(
     workspace: ResultWorkspace,
     *,
     run_id: str | None = None,
+    group_id: str = "ticket-workflow/intake",
     variant: str,
     contributes_to_outcome: bool,
     passed: bool,
@@ -447,6 +472,7 @@ def write_preserved_run(
     grading = generated_grading_record(
         run_id=run_id,
         run_kind=variant,
+        group_id=group_id,
         variant=variant,
         contributes_to_outcome=contributes_to_outcome,
         required_variants=required_variants,
@@ -455,8 +481,9 @@ def write_preserved_run(
     )
     paths = create_attempt_workspace(
         workspace,
-        sample_attempt_manifest(
+        preserved_run_manifest(
             run_id=run_id,
+            group_id=group_id,
             variant=variant,
             contributes_to_outcome=contributes_to_outcome,
             required_variants=required_variants,
@@ -476,12 +503,18 @@ def write_preserved_run(
     return paths, grading
 
 
-def create_test_result_workspace(root: Path) -> ResultWorkspace:
-    return create_result_workspace(
+def create_test_result_workspace(
+    root: Path,
+    *manifests: AttemptManifest,
+) -> ResultWorkspace:
+    workspace = create_result_workspace(
         "test evals",
         results_dir=root,
         repository_root=REPOSITORY_ROOT,
     )
+    if manifests:
+        declare_invocation(workspace, "test evals", manifests)
+    return workspace
 
 
 def write_complete_manual_grading(paths, generated: GradingRecord, *, passed: bool) -> None:
@@ -563,6 +596,119 @@ class ResultWorkspaceTests(unittest.TestCase):
             with self.assertRaisesRegex(ResultArtifactError, "already exists"):
                 create_result_workspace("ignored", results_dir=override, now=now)
 
+    def test_workspace_initialization_failure_retains_and_reports_empty_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            repository.mkdir()
+            root = (base / "state/results").resolve()
+            original_mkdir = Path.mkdir
+
+            def fail_attempts_directory(path, *args, **kwargs):
+                if path == root / "attempts":
+                    raise OSError("cannot initialize attempts")
+                return original_mkdir(path, *args, **kwargs)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.Path.mkdir",
+                new=fail_attempts_directory,
+            ):
+                with self.assertRaises(ResultArtifactError) as raised:
+                    create_result_workspace(
+                        "evals run",
+                        results_dir=root,
+                        repository_root=repository,
+                    )
+
+            self.assertIn(f"retained partial state at {root}", str(raised.exception))
+            self.assertTrue(root.is_dir())
+            self.assertEqual(list(root.iterdir()), [])
+            with self.assertRaisesRegex(ResultArtifactError, "already exists"):
+                create_result_workspace(
+                    "evals run",
+                    results_dir=root,
+                    repository_root=repository,
+                )
+            self.assertTrue(root.is_dir())
+
+    def test_workspace_rollback_retains_concurrently_injected_children(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            repository.mkdir()
+            root = (base / "state/results").resolve()
+            injected_marker = root / "concurrent" / "marker.txt"
+            original_mkdir = Path.mkdir
+
+            def inject_child_then_fail(path, *args, **kwargs):
+                if path == root / "attempts":
+                    original_mkdir(injected_marker.parent)
+                    injected_marker.write_text("retain me", encoding="utf-8")
+                    raise OSError("unbounded failure detail " * 10_000)
+                return original_mkdir(path, *args, **kwargs)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.Path.mkdir",
+                new=inject_child_then_fail,
+            ):
+                with self.assertRaises(ResultArtifactError) as raised:
+                    create_result_workspace(
+                        "evals run",
+                        results_dir=root,
+                        repository_root=repository,
+                    )
+
+            message = str(raised.exception)
+            self.assertIn(f"retained partial state at {root}", message)
+            self.assertLessEqual(len(message), 1100)
+            self.assertNotIn("unbounded failure detail", message)
+            self.assertEqual(injected_marker.read_text(encoding="utf-8"), "retain me")
+
+    def test_retained_workspace_error_preserves_a_long_path_in_full(self):
+        path = Path("/synthetic-results") / ("x" * 4096)
+
+        message = str(eval_core._retained_workspace_error(path))
+
+        self.assertEqual(
+            message,
+            f"cannot initialize result workspace; retained partial state at {path}",
+        )
+
+    def test_workspace_failure_retains_identity_swapped_root_and_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            repository.mkdir()
+            root = (base / "state/results").resolve()
+            displaced_root = root.with_name("displaced-results")
+            original_marker = displaced_root / "original.txt"
+            replacement_marker = root / "replacement.txt"
+            original_mkdir = Path.mkdir
+
+            def replace_root_then_fail(path, *args, **kwargs):
+                if path == root / "attempts":
+                    (root / "original.txt").write_text("original", encoding="utf-8")
+                    root.rename(displaced_root)
+                    original_mkdir(root)
+                    replacement_marker.write_text("replacement", encoding="utf-8")
+                    raise OSError("attempt initialization failed")
+                return original_mkdir(path, *args, **kwargs)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.Path.mkdir",
+                new=replace_root_then_fail,
+            ):
+                with self.assertRaises(ResultArtifactError) as raised:
+                    create_result_workspace(
+                        "evals run",
+                        results_dir=root,
+                        repository_root=repository,
+                    )
+
+            self.assertIn(f"retained partial state at {root}", str(raised.exception))
+            self.assertEqual(original_marker.read_text(encoding="utf-8"), "original")
+            self.assertEqual(replacement_marker.read_text(encoding="utf-8"), "replacement")
+
     def test_harness_timing_keeps_required_null_token_counts(self):
         timing = record_harness_timing(
             run_id="run-with-skill",
@@ -625,16 +771,14 @@ class ResultWorkspaceTests(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as directory:
-            workspace = create_test_result_workspace(Path(directory) / "run")
-            paths = create_attempt_workspace(
-                workspace,
-                sample_attempt_manifest(
-                    run_id="run-with-skill",
-                    variant="with_skill",
-                    required_variants=("with_skill", "without_skill"),
-                    compare_to="without_skill",
-                ),
+            manifest = sample_attempt_manifest(
+                run_id="run-with-skill",
+                variant="with_skill",
+                required_variants=("with_skill", "without_skill"),
+                compare_to="without_skill",
             )
+            workspace = create_test_result_workspace(Path(directory) / "run", manifest)
+            paths = create_attempt_workspace(workspace, manifest)
             paths.manual_grading.write_text("manual review", encoding="utf-8")
 
             write_eval_run_artifacts(paths, record)
@@ -656,6 +800,76 @@ class ResultWorkspaceTests(unittest.TestCase):
 
 
 class InvocationAttemptWorkspaceTests(unittest.TestCase):
+    def test_attempt_creation_requires_a_declared_invocation_membership(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            repository.mkdir()
+            workspace = create_result_workspace(
+                "evals run",
+                results_dir=base / "results",
+                repository_root=repository,
+            )
+            declared = sample_attempt_manifest()
+            with self.assertRaisesRegex(ResultArtifactError, "regular invocation.json"):
+                create_attempt_workspace(workspace, declared)
+
+            declare_invocation(workspace, "evals run", (declared,))
+            with self.assertRaisesRegex(ResultArtifactError, "immutable invocation manifest"):
+                create_attempt_workspace(
+                    workspace,
+                    sample_attempt_manifest(run_id="undeclared-attempt"),
+                )
+
+    def test_attempt_artifact_writers_require_the_retained_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            repository.mkdir()
+            workspace = create_result_workspace(
+                "evals run",
+                results_dir=base / "results",
+                repository_root=repository,
+            )
+            manifest = sample_attempt_manifest()
+            declare_invocation(workspace, "evals run", (manifest,))
+            paths = create_attempt_workspace(workspace, manifest)
+            workspace.invocation_manifest.unlink()
+            timing = record_harness_timing(
+                run_id=manifest.run_id,
+                skill_name=manifest.skill_name,
+                case_id=manifest.case_id,
+                run_kind=manifest.run_kind,
+                harness_name="codex",
+                started_at=datetime(2026, 7, 19, 10, 0, tzinfo=timezone.utc),
+                ended_at=datetime(2026, 7, 19, 10, 0, 1, tzinfo=timezone.utc),
+                execution=completed_harness_execution(),
+            )
+            record = EvalRunRecord(
+                response="response",
+                transcript="transcript",
+                execution_trace=(),
+                timing=timing,
+                grading=generated_grading_record(
+                    run_id=manifest.run_id,
+                    run_kind=manifest.run_kind,
+                    variant=manifest.aggregation.variant,
+                    required_variants=manifest.aggregation.required_variants,
+                    compare_to=manifest.aggregation.compare_to,
+                ),
+            )
+
+            with self.assertRaisesRegex(ResultArtifactError, "regular invocation.json"):
+                write_eval_run_artifacts(paths, record)
+            with self.assertRaisesRegex(ResultArtifactError, "regular invocation.json"):
+                write_incomplete_attempt_artifacts(
+                    paths,
+                    response=None,
+                    transcript=None,
+                    execution_trace=(),
+                    timing=timing,
+                )
+
     def test_invocation_and_attempt_workspaces_have_separate_owners(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -669,8 +883,11 @@ class InvocationAttemptWorkspaceTests(unittest.TestCase):
                 repository_root=repository,
                 now=datetime(2026, 7, 19, 10, 0, tzinfo=timezone.utc),
             )
-            first = create_attempt_workspace(workspace, sample_attempt_manifest())
-            second = create_attempt_workspace(workspace, sample_attempt_manifest())
+            first_manifest = sample_attempt_manifest()
+            second_manifest = sample_attempt_manifest(run_id="run-candidate-2")
+            declare_invocation(workspace, "evals run", (first_manifest, second_manifest))
+            first = create_attempt_workspace(workspace, first_manifest)
+            second = create_attempt_workspace(workspace, second_manifest)
 
             self.assertIsInstance(workspace, ResultWorkspace)
             self.assertIsInstance(first, AttemptPaths)
@@ -724,6 +941,7 @@ class InvocationAttemptWorkspaceTests(unittest.TestCase):
                 results_dir=base / "results",
                 repository_root=repository,
             )
+            declare_invocation(workspace, "evals run", (sample_attempt_manifest(),))
             workspace.attempts.rmdir()
             workspace.attempts.symlink_to(repository, target_is_directory=True)
 
@@ -758,7 +976,9 @@ class InvocationAttemptWorkspaceTests(unittest.TestCase):
                 results_dir=base / "results",
                 repository_root=repository,
             )
-            paths = create_attempt_workspace(workspace, sample_attempt_manifest())
+            manifest = sample_attempt_manifest()
+            declare_invocation(workspace, "evals run", (manifest,))
+            paths = create_attempt_workspace(workspace, manifest)
             timing = replace(
                 record_harness_timing(
                     run_id="run-candidate-1",
@@ -804,7 +1024,10 @@ class InvocationAttemptWorkspaceTests(unittest.TestCase):
                 results_dir=base / "results",
                 repository_root=repository,
             )
-            paths = create_attempt_workspace(workspace, sample_attempt_manifest())
+            first_manifest = sample_attempt_manifest()
+            second_manifest = sample_attempt_manifest(run_id="run-candidate-2")
+            declare_invocation(workspace, "evals run", (first_manifest, second_manifest))
+            paths = create_attempt_workspace(workspace, first_manifest)
             timing = replace(
                 record_harness_timing(
                     run_id="run-candidate-1",
@@ -838,13 +1061,13 @@ class InvocationAttemptWorkspaceTests(unittest.TestCase):
 
             fresh_paths = create_attempt_workspace(
                 workspace,
-                sample_attempt_manifest(run_id="run-candidate-2"),
+                second_manifest,
             )
             with patch(
                 "scripts.ai_skills_lib.eval_core.Path.resolve",
                 side_effect=OSError("unresolvable artifact"),
             ):
-                with self.assertRaisesRegex(ResultArtifactError, "resolve artifact path"):
+                with self.assertRaisesRegex(ResultArtifactError, "resolve.*artifact"):
                     write_incomplete_attempt_artifacts(
                         fresh_paths,
                         response="partial",
@@ -859,7 +1082,20 @@ class AggregationTests(unittest.TestCase):
         required = ("candidate", "reference")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=required,
+                    compare_to="reference",
+                ),
+                preserved_run_manifest(
+                    variant="reference",
+                    contributes_to_outcome=False,
+                    required_variants=required,
+                ),
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -876,7 +1112,11 @@ class AggregationTests(unittest.TestCase):
                 required_variants=required,
             )
 
-            benchmark = aggregate_results(root, "judge")
+            benchmark = aggregate_results(
+                root,
+                "judge",
+                terminal_decision="expectations failed",
+            )
 
             self.assertEqual(benchmark_exit_code(benchmark), 1)
             group = benchmark["source_summaries"]["judge"]["groups"][0]
@@ -884,11 +1124,26 @@ class AggregationTests(unittest.TestCase):
             self.assertEqual(group["comparisons"][0]["pass_rate_delta"], -1.0)
             self.assertTrue(group["comparisons"][0]["investigation_required"])
             self.assertTrue((root / "benchmark.json").is_file())
-            self.assertIn("candidate", (root / "summary.md").read_text(encoding="utf-8"))
+            failed_summary = (root / "summary.md").read_text(encoding="utf-8")
+            self.assertIn("Decision: expectations failed", failed_summary)
+            self.assertIn("candidate", failed_summary)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=required,
+                    compare_to="reference",
+                ),
+                preserved_run_manifest(
+                    variant="reference",
+                    contributes_to_outcome=False,
+                    required_variants=required,
+                ),
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -905,12 +1160,33 @@ class AggregationTests(unittest.TestCase):
                 required_variants=required,
             )
 
-            self.assertEqual(benchmark_exit_code(aggregate_results(root, "judge")), 0)
+            self.assertEqual(
+                benchmark_exit_code(
+                    aggregate_results(
+                        root,
+                        "judge",
+                        terminal_decision="pass",
+                    )
+                ),
+                0,
+            )
+            self.assertIn(
+                "Decision: pass",
+                (root / "summary.md").read_text(encoding="utf-8"),
+            )
 
     def test_aggregation_requires_every_caller_declared_variant(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate", "reference"),
+                    compare_to="reference",
+                ),
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -926,7 +1202,21 @@ class AggregationTests(unittest.TestCase):
     def test_aggregation_rejects_an_attempt_with_timing_but_no_grade(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            incomplete_manifest = sample_attempt_manifest(
+                run_id="incomplete-attempt",
+                variant="attempt",
+                required_variants=("attempt",),
+                compare_to=None,
+            )
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+                incomplete_manifest,
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -936,12 +1226,7 @@ class AggregationTests(unittest.TestCase):
             )
             incomplete_paths = create_attempt_workspace(
                 workspace,
-                sample_attempt_manifest(
-                    run_id="incomplete-attempt",
-                    variant="attempt",
-                    required_variants=("attempt",),
-                    compare_to=None,
-                ),
+                incomplete_manifest,
             )
             timing = sample_timing() | {
                 "run_id": "incomplete-attempt",
@@ -959,7 +1244,14 @@ class AggregationTests(unittest.TestCase):
     def test_aggregation_rejects_completed_timing_without_explicit_success(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             paths, _ = write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -977,7 +1269,14 @@ class AggregationTests(unittest.TestCase):
     def test_aggregation_is_anchored_to_attempt_manifests(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             paths, _ = write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -997,7 +1296,14 @@ class AggregationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             root = base / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -1021,7 +1327,14 @@ class AggregationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -1051,7 +1364,14 @@ class AggregationTests(unittest.TestCase):
             with self.subTest(artifact=artifact, field=field):
                 with tempfile.TemporaryDirectory() as directory:
                     root = Path(directory) / "results"
-                    workspace = create_test_result_workspace(root)
+                    workspace = create_test_result_workspace(
+                        root,
+                        preserved_run_manifest(
+                            variant="candidate",
+                            contributes_to_outcome=True,
+                            required_variants=("candidate",),
+                        ),
+                    )
                     paths, _ = write_preserved_run(
                         workspace,
                         variant="candidate",
@@ -1070,7 +1390,15 @@ class AggregationTests(unittest.TestCase):
     def test_aggregation_rejects_duplicate_run_ids_and_unexpected_variants(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "duplicates"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    run_id="duplicate-run",
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             for index in range(2):
                 write_preserved_run(
                     workspace,
@@ -1085,7 +1413,21 @@ class AggregationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "unexpected"
-            workspace = create_test_result_workspace(root)
+            surprise_manifest = sample_attempt_manifest(
+                run_id="run-surprise",
+                variant="surprise",
+                required_variants=("surprise",),
+                compare_to=None,
+            )
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+                surprise_manifest,
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -1095,23 +1437,41 @@ class AggregationTests(unittest.TestCase):
             )
             paths = create_attempt_workspace(
                 workspace,
-                sample_attempt_manifest(
-                    run_id="run-surprise",
-                    variant="surprise",
-                    required_variants=("surprise",),
-                    compare_to=None,
-                ),
+                surprise_manifest,
             )
             manifest = json.loads(paths.manifest.read_text(encoding="utf-8"))
             manifest["aggregation"]["required_variants"] = ["candidate"]
             paths.manifest.write_text(json.dumps(manifest), encoding="utf-8")
+            invocation = json.loads(
+                workspace.invocation_manifest.read_text(encoding="utf-8")
+            )
+            invocation["attempts"][1] = manifest
+            workspace.invocation_manifest.write_text(json.dumps(invocation), encoding="utf-8")
             with self.assertRaisesRegex(ResultArtifactError, "unexpected variant"):
                 aggregate_results(root, "judge")
 
     def test_repeated_variants_require_equal_counts_and_consistent_policy(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "counts"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                *(
+                    preserved_run_manifest(
+                        run_id=f"candidate-{index}",
+                        variant="candidate",
+                        contributes_to_outcome=True,
+                        required_variants=("candidate", "reference"),
+                        compare_to="reference",
+                    )
+                    for index in range(2)
+                ),
+                preserved_run_manifest(
+                    run_id="reference-0",
+                    variant="reference",
+                    contributes_to_outcome=False,
+                    required_variants=("candidate", "reference"),
+                ),
+            )
             for index in range(2):
                 write_preserved_run(
                     workspace,
@@ -1135,7 +1495,31 @@ class AggregationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "policy"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    run_id="candidate-0",
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate", "reference"),
+                    compare_to="reference",
+                ),
+                preserved_run_manifest(
+                    run_id="candidate-1",
+                    variant="candidate",
+                    contributes_to_outcome=False,
+                    required_variants=("candidate", "reference"),
+                ),
+                *(
+                    preserved_run_manifest(
+                        run_id=f"reference-{index}",
+                        variant="reference",
+                        contributes_to_outcome=False,
+                        required_variants=("candidate", "reference"),
+                    )
+                    for index in range(2)
+                ),
+            )
             for run_id, contributes, compare_to in (
                 ("candidate-0", True, "reference"),
                 ("candidate-1", False, None),
@@ -1164,7 +1548,28 @@ class AggregationTests(unittest.TestCase):
     def test_consistent_repeated_variants_aggregate_and_compare(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                *(
+                    manifest
+                    for index in range(2)
+                    for manifest in (
+                        preserved_run_manifest(
+                            run_id=f"candidate-{index}",
+                            variant="candidate",
+                            contributes_to_outcome=True,
+                            required_variants=("candidate", "reference"),
+                            compare_to="reference",
+                        ),
+                        preserved_run_manifest(
+                            run_id=f"reference-{index}",
+                            variant="reference",
+                            contributes_to_outcome=False,
+                            required_variants=("candidate", "reference"),
+                        ),
+                    )
+                ),
+            )
             for index, candidate_passed in enumerate((True, False)):
                 write_preserved_run(
                     workspace,
@@ -1194,7 +1599,14 @@ class AggregationTests(unittest.TestCase):
     def test_aggregation_rejects_a_source_without_contributing_outcomes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="reference",
+                    contributes_to_outcome=False,
+                    required_variants=("reference",),
+                ),
+            )
             write_preserved_run(
                 workspace,
                 variant="reference",
@@ -1239,7 +1651,20 @@ class AggregationTests(unittest.TestCase):
         required = ("candidate", "reference")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=required,
+                    compare_to="reference",
+                ),
+                preserved_run_manifest(
+                    variant="reference",
+                    contributes_to_outcome=False,
+                    required_variants=required,
+                ),
+            )
             candidate_paths, candidate = write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -1272,7 +1697,14 @@ class AggregationTests(unittest.TestCase):
     def test_manual_override_controls_both_source_exit_status(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             paths, generated = write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -1297,7 +1729,14 @@ class AggregationTests(unittest.TestCase):
     def test_manual_override_rejects_partial_assertion_sets(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             paths, generated = write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -1349,6 +1788,1019 @@ class AggregationTests(unittest.TestCase):
         self.assertIn("INVESTIGATE", summary)
 
 
+class UntrustedAggregationBoundaryTests(unittest.TestCase):
+    def _complete_workspace(
+        self,
+        root: Path,
+        *,
+        with_manual: bool = False,
+    ) -> tuple[ResultWorkspace, AttemptPaths, GradingRecord]:
+        manifest = preserved_run_manifest(
+            variant="candidate",
+            contributes_to_outcome=True,
+            required_variants=("candidate",),
+        )
+        workspace = create_test_result_workspace(root, manifest)
+        paths, generated = write_preserved_run(
+            workspace,
+            variant="candidate",
+            contributes_to_outcome=True,
+            passed=True,
+            required_variants=("candidate",),
+        )
+        if with_manual:
+            write_complete_manual_grading(paths, generated, passed=True)
+        return workspace, paths, generated
+
+    def _prepend_duplicate_key(self, path: Path, key: str) -> None:
+        original = path.read_text(encoding="utf-8")
+        self.assertTrue(original.lstrip().startswith("{"))
+        leading_whitespace = original[: len(original) - len(original.lstrip())]
+        document = original.lstrip()
+        path.write_text(
+            f'{leading_whitespace}{{"{key}": "RAW_DUPLICATE_VALUE",{document[1:]}',
+            encoding="utf-8",
+        )
+
+    def test_every_parsed_result_artifact_rejects_duplicate_json_keys(self):
+        cases = (
+            ("invocation", "command"),
+            ("attempt", "run_id"),
+            ("timing", "run_id"),
+            ("grading", "run_id"),
+            ("manual_grading", "run_id"),
+        )
+        for artifact, key in cases:
+            with self.subTest(artifact=artifact):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / "results"
+                    workspace, paths, _ = self._complete_workspace(
+                        root,
+                        with_manual=True,
+                    )
+                    targets = {
+                        "invocation": workspace.invocation_manifest,
+                        "attempt": paths.manifest,
+                        "timing": paths.timing,
+                        "grading": paths.grading,
+                        "manual_grading": paths.manual_grading,
+                    }
+                    self._prepend_duplicate_key(targets[artifact], key)
+
+                    with self.assertRaisesRegex(
+                        ResultArtifactError,
+                        "duplicate JSON key",
+                    ) as raised:
+                        aggregate_results(root, "both")
+
+                    self.assertNotIn("RAW_DUPLICATE_VALUE", str(raised.exception))
+
+    def test_oversized_json_and_huge_scalars_are_rejected_before_schema_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "oversized-json"
+            _, paths, _ = self._complete_workspace(root)
+            paths.grading.write_bytes(
+                b"{" + b" " * eval_core._MAX_RESULT_JSON_FILE_BYTES
+            )
+
+            with self.assertRaisesRegex(ResultArtifactError, "JSON byte limit"):
+                aggregate_results(root, "judge")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "huge-scalar"
+            _, paths, _ = self._complete_workspace(root)
+            document = json.loads(paths.grading.read_text(encoding="utf-8"))
+            document["assertion_results"][0]["evidence"] = (
+                "RAW_HUGE_SCALAR" + "x" * eval_core._MAX_RESULT_JSON_SCALAR_BYTES
+            )
+            paths.grading.write_text(json.dumps(document), encoding="utf-8")
+
+            with self.assertRaisesRegex(ResultArtifactError, "JSON scalar limit") as raised:
+                aggregate_results(root, "judge")
+
+            self.assertNotIn("RAW_HUGE_SCALAR", str(raised.exception))
+
+    def test_deep_and_node_heavy_json_are_rejected_with_structural_limits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "deep-json"
+            _, paths, _ = self._complete_workspace(root)
+            document = json.loads(paths.grading.read_text(encoding="utf-8"))
+            nested: object = "leaf"
+            for _ in range(eval_core._MAX_RESULT_JSON_DEPTH + 1):
+                nested = [nested]
+            document["unexpected"] = nested
+            paths.grading.write_text(json.dumps(document), encoding="utf-8")
+
+            with self.assertRaisesRegex(ResultArtifactError, "JSON depth limit"):
+                aggregate_results(root, "judge")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "node-heavy-json"
+            _, paths, _ = self._complete_workspace(root)
+            document = json.loads(paths.grading.read_text(encoding="utf-8"))
+            document["unexpected"] = [
+                None for _ in range(eval_core._MAX_RESULT_JSON_NODES + 1)
+            ]
+            paths.grading.write_text(json.dumps(document), encoding="utf-8")
+
+            with self.assertRaisesRegex(ResultArtifactError, "JSON node limit"):
+                aggregate_results(root, "judge")
+
+    def test_structural_json_limits_precede_materialization(self):
+        hostile_values = (
+            (
+                "[" * (eval_core._MAX_RESULT_JSON_DEPTH + 1)
+                + "0"
+                + "]" * (eval_core._MAX_RESULT_JSON_DEPTH + 1),
+                "JSON depth limit",
+            ),
+            (
+                "[" + ",".join("0" for _ in range(eval_core._MAX_RESULT_JSON_NODES)) + "]",
+                "JSON node limit",
+            ),
+        )
+        real_loads = json.loads
+
+        for hostile, expected_error in hostile_values:
+            with self.subTest(expected_error=expected_error), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "hostile-json"
+                _, paths, _ = self._complete_workspace(root)
+                paths.grading.write_text(hostile, encoding="utf-8")
+
+                def reject_hostile_materialization(value, *args, **kwargs):
+                    if value == hostile:
+                        raise AssertionError(
+                            "structurally hostile JSON reached json.loads"
+                        )
+                    return real_loads(value, *args, **kwargs)
+
+                with patch.object(
+                    eval_core.json,
+                    "loads",
+                    side_effect=reject_hostile_materialization,
+                ):
+                    with self.assertRaisesRegex(ResultArtifactError, expected_error):
+                        aggregate_results(root, "judge")
+
+    def test_invocation_attempt_count_and_tree_entry_count_are_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "attempt-count"
+            workspace = create_test_result_workspace(root)
+            attempt = sample_attempt_manifest(
+                variant="candidate",
+                required_variants=("candidate",),
+                compare_to=None,
+            ).to_dict()
+            invocation = {
+                "schema_version": "ai-skills.eval.invocation.v1",
+                "command": "test evals",
+                "attempts": [
+                    attempt | {"run_id": f"attempt-{index}"}
+                    for index in range(eval_core._MAX_DECLARED_ATTEMPTS + 1)
+                ],
+            }
+            workspace.invocation_manifest.write_text(
+                json.dumps(invocation),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ResultArtifactError, "declared attempt limit"):
+                aggregate_results(root, "judge")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "entry-count"
+            _, paths, _ = self._complete_workspace(root)
+            for index in range(2):
+                (paths.root / "outputs" / f"captured-{index}.txt").write_text(
+                    "captured",
+                    encoding="utf-8",
+                )
+
+            with patch.object(eval_core, "_MAX_RESULT_TREE_ENTRIES", 11):
+                with self.assertRaisesRegex(ResultArtifactError, "entry-count limit"):
+                    aggregate_results(root, "judge")
+
+    def test_attempt_inventory_and_directory_depth_are_declaration_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "attempt-inventory"
+            workspace, _, _ = self._complete_workspace(root)
+            for index in range(2):
+                (workspace.attempts / f"undeclared-{index}").mkdir()
+
+            with self.assertRaisesRegex(
+                ResultArtifactError,
+                "declared attempt count bound",
+            ):
+                aggregate_results(root, "judge")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "directory-depth"
+            _, paths, _ = self._complete_workspace(root)
+            nested = paths.root / "outputs"
+            for index in range(eval_core._MAX_RESULT_TREE_DEPTH):
+                nested /= f"level-{index}"
+                nested.mkdir()
+
+            with self.assertRaisesRegex(ResultArtifactError, "directory depth limit"):
+                aggregate_results(root, "judge")
+
+    def test_exact_resource_limits_remain_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "exact-limits"
+            _, paths, _ = self._complete_workspace(root)
+            nested = paths.root / "outputs"
+            for index in range(eval_core._MAX_RESULT_TREE_DEPTH - 3):
+                nested /= f"level-{index}"
+                nested.mkdir()
+
+            with patch.object(
+                eval_core,
+                "_format_timestamp",
+                return_value="2026-07-20T10:00:00Z",
+            ):
+                aggregate_results(root, "judge")
+                entries = sum(1 for _ in root.rglob("*"))
+                files = [path for path in root.rglob("*") if path.is_file()]
+                total_bytes = sum(path.stat().st_size for path in files)
+                maximum_file_bytes = max(path.stat().st_size for path in files)
+
+                with (
+                    patch.object(eval_core, "_MAX_DECLARED_ATTEMPTS", 1),
+                    patch.object(eval_core, "_MAX_RESULT_TREE_ENTRIES", entries),
+                    patch.object(
+                        eval_core,
+                        "_MAX_RESULT_FILE_BYTES",
+                        maximum_file_bytes,
+                    ),
+                    patch.object(eval_core, "_MAX_RESULT_TREE_BYTES", total_bytes),
+                ):
+                    benchmark = aggregate_results(root, "judge")
+
+            self.assertEqual(benchmark_exit_code(benchmark), 0)
+
+    def test_per_file_and_cumulative_result_bytes_are_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "per-file"
+            _, paths, _ = self._complete_workspace(root)
+            captured = paths.root / "outputs" / "captured.bin"
+            captured.write_bytes(b"x" * 1025)
+
+            with patch.object(eval_core, "_MAX_RESULT_FILE_BYTES", 1024):
+                with self.assertRaisesRegex(ResultArtifactError, "per-file byte limit"):
+                    aggregate_results(root, "judge")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "cumulative"
+            self._complete_workspace(root)
+            total_bytes = sum(
+                path.stat().st_size for path in root.rglob("*") if path.is_file()
+            )
+
+            with patch.object(eval_core, "_MAX_RESULT_TREE_BYTES", total_bytes - 1):
+                with self.assertRaisesRegex(ResultArtifactError, "cumulative byte limit"):
+                    aggregate_results(root, "judge")
+
+    def test_symlinks_and_fifos_are_rejected_without_reading_special_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "symlink"
+            _, paths, _ = self._complete_workspace(root)
+            outside = root.parent / "outside-grading.json"
+            outside.write_text("RAW_OUTSIDE_CONTENT", encoding="utf-8")
+            paths.grading.unlink()
+            paths.grading.symlink_to(outside)
+
+            with self.assertRaisesRegex(ResultArtifactError, "symlink") as raised:
+                aggregate_results(root, "judge")
+
+            self.assertNotIn("RAW_OUTSIDE_CONTENT", str(raised.exception))
+
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("FIFO creation is unavailable")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "fifo"
+            _, paths, _ = self._complete_workspace(root)
+            paths.grading.unlink()
+            os.mkfifo(paths.grading)
+
+            with patch.object(
+                Path,
+                "read_text",
+                side_effect=AssertionError("unbounded path read"),
+            ):
+                with self.assertRaisesRegex(ResultArtifactError, "special file"):
+                    aggregate_results(root, "judge")
+
+    def test_inventory_resource_failures_are_sanitized_result_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "resource-failure"
+            self._complete_workspace(root)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.os.scandir",
+                side_effect=OSError("RAW_RESOURCE_FAILURE"),
+            ):
+                with self.assertRaises(ResultArtifactError) as raised:
+                    aggregate_results(root, "judge")
+
+            self.assertNotIn("RAW_RESOURCE_FAILURE", str(raised.exception))
+
+    def test_file_mutation_during_a_bounded_read_fails_without_content_disclosure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "mutation"
+            _, paths, _ = self._complete_workspace(root)
+            target_inode = paths.grading.stat().st_ino
+            real_read = os.read
+            mutated = False
+
+            def mutate_after_read(descriptor: int, count: int) -> bytes:
+                nonlocal mutated
+                chunk = real_read(descriptor, count)
+                if not mutated and os.fstat(descriptor).st_ino == target_inode:
+                    with paths.grading.open("ab") as artifact:
+                        artifact.write(b"RAW_MUTATED_CONTENT")
+                    mutated = True
+                return chunk
+
+            with patch("scripts.ai_skills_lib.eval_core.os.read", new=mutate_after_read):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "changed while being read",
+                ) as raised:
+                    aggregate_results(root, "judge")
+
+            self.assertTrue(mutated)
+            self.assertNotIn("RAW_MUTATED_CONTENT", str(raised.exception))
+
+    def test_undeclared_trees_are_rejected_but_captured_outputs_remain_available(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "undeclared"
+            workspace, _, _ = self._complete_workspace(root)
+            rogue = workspace.root / "undeclared" / "nested"
+            rogue.mkdir(parents=True)
+            (rogue / "artifact.txt").write_text("untrusted", encoding="utf-8")
+
+            with self.assertRaisesRegex(ResultArtifactError, "undeclared result entry"):
+                aggregate_results(root, "judge")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "captured-output"
+            _, paths, generated = self._complete_workspace(root, with_manual=True)
+            report = paths.root / "outputs" / "reports" / "result.json"
+            report.parent.mkdir()
+            report.write_text('{"status":"captured"}\n', encoding="utf-8")
+            for control_name in (
+                "attempt.json",
+                "timing.json",
+                "grading.json",
+                "manual_grading.json",
+                "invocation.json",
+                "feedback.json",
+            ):
+                (report.parent / control_name).write_text(
+                    '{"status":"captured"}\n',
+                    encoding="utf-8",
+                )
+
+            benchmark = aggregate_results(root, "both")
+
+            self.assertEqual(set(benchmark["source_summaries"]), {"judge", "manual"})
+            self.assertEqual(report.read_text(encoding="utf-8"), '{"status":"captured"}\n')
+            self.assertEqual(generated.run_id, "run-candidate")
+
+    def test_root_replacement_during_atomic_outputs_fails_without_writing_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "results"
+            self._complete_workspace(root)
+            displaced = base / "displaced-results"
+            replacement_marker = root / "replacement-marker.txt"
+            real_link = os.link
+            replaced = False
+
+            def replace_root_before_output(source, target, *args, **kwargs):
+                nonlocal replaced
+                if not replaced:
+                    root.rename(displaced)
+                    root.mkdir()
+                    replacement_marker.write_text("replacement", encoding="utf-8")
+                    replaced = True
+                return real_link(source, target, *args, **kwargs)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.os.link",
+                new=replace_root_before_output,
+            ):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "results directory changed",
+                ):
+                    aggregate_results(root, "judge")
+
+            self.assertTrue(replaced)
+            self.assertEqual(
+                replacement_marker.read_text(encoding="utf-8"),
+                "replacement",
+            )
+            self.assertFalse((root / "benchmark.json").exists())
+            self.assertFalse((root / "summary.md").exists())
+            self.assertFalse((displaced / "benchmark.json").exists())
+            self.assertFalse((displaced / "summary.md").exists())
+
+    def test_second_aggregate_replacement_failure_rolls_back_both_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            with patch.object(
+                eval_core,
+                "_format_timestamp",
+                return_value="2026-07-20T10:00:00Z",
+            ):
+                aggregate_results(root, "judge")
+            original_pair = {
+                name: (root / name).read_bytes()
+                for name in ("benchmark.json", "summary.md")
+            }
+            real_exchange = eval_core._atomic_exchange_result_entries
+
+            def fail_summary_exchange(root_descriptor, first_name, second_name):
+                if second_name == "summary.md":
+                    raise ResultArtifactError("injected second replacement failure")
+                return real_exchange(root_descriptor, first_name, second_name)
+
+            with (
+                patch.object(
+                    eval_core,
+                    "_atomic_exchange_result_entries",
+                    side_effect=fail_summary_exchange,
+                ),
+                patch.object(
+                    eval_core,
+                    "_format_timestamp",
+                    return_value="2026-07-20T10:00:01Z",
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "second replacement failure",
+                ):
+                    aggregate_results(root, "judge")
+
+            self.assertEqual(
+                {
+                    name: (root / name).read_bytes()
+                    for name in ("benchmark.json", "summary.md")
+                },
+                original_pair,
+            )
+
+    def test_second_aggregate_creation_failure_removes_the_first_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            real_link = os.link
+
+            def fail_summary_link(source, target, *args, **kwargs):
+                if target == "summary.md":
+                    raise OSError("injected second creation failure")
+                return real_link(source, target, *args, **kwargs)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.os.link",
+                side_effect=fail_summary_link,
+            ):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "cannot write aggregate result artifacts",
+                ):
+                    aggregate_results(root, "judge")
+
+            self.assertFalse((root / "benchmark.json").exists())
+            self.assertFalse((root / "summary.md").exists())
+
+    def test_post_write_verification_failure_rolls_back_both_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            with patch.object(
+                eval_core,
+                "_format_timestamp",
+                return_value="2026-07-20T10:00:00Z",
+            ):
+                aggregate_results(root, "judge")
+            original_pair = {
+                name: (root / name).read_bytes()
+                for name in ("benchmark.json", "summary.md")
+            }
+            real_snapshot = eval_core._snapshot_result_tree
+            snapshot_calls = 0
+
+            def fail_post_write_verification(*args, **kwargs):
+                nonlocal snapshot_calls
+                snapshot_calls += 1
+                if snapshot_calls == 3:
+                    raise ResultArtifactError("injected aggregate verification failure")
+                return real_snapshot(*args, **kwargs)
+
+            with (
+                patch.object(
+                    eval_core,
+                    "_snapshot_result_tree",
+                    side_effect=fail_post_write_verification,
+                ),
+                patch.object(
+                    eval_core,
+                    "_format_timestamp",
+                    return_value="2026-07-20T10:00:01Z",
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "verification failure",
+                ):
+                    aggregate_results(root, "judge")
+
+            self.assertEqual(snapshot_calls, 3)
+            self.assertEqual(
+                {
+                    name: (root / name).read_bytes()
+                    for name in ("benchmark.json", "summary.md")
+                },
+                original_pair,
+            )
+
+    def test_ancestor_redirection_after_path_validation_cannot_enter_repository(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            repository.mkdir()
+            external_parent = base / "external"
+            root = external_parent / "results"
+            self._complete_workspace(root)
+            resolved_root = root.resolve(strict=True)
+            relocated_parent = repository / "external"
+            relocated = relocated_parent / "results"
+            real_open = os.open
+            redirected = False
+
+            def redirect_ancestor_before_open(path, flags, mode=0o777, *, dir_fd=None):
+                nonlocal redirected
+                if (
+                    not redirected
+                    and dir_fd is None
+                    and os.fspath(path) == os.fspath(resolved_root)
+                ):
+                    external_parent.rename(relocated_parent)
+                    external_parent.symlink_to(
+                        relocated_parent,
+                        target_is_directory=True,
+                    )
+                    redirected = True
+                return real_open(path, flags, mode, dir_fd=dir_fd)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.os.open",
+                new=redirect_ancestor_before_open,
+            ):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "outside the repository",
+                ):
+                    aggregate_results(
+                        root,
+                        "judge",
+                        repository_root=repository,
+                    )
+
+            self.assertTrue(redirected)
+            self.assertFalse((relocated / "benchmark.json").exists())
+            self.assertFalse((relocated / "summary.md").exists())
+
+    def test_injected_aggregate_target_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            injected_content = b"RAW_INJECTED_AGGREGATE_TARGET"
+            real_link = os.link
+            injected = False
+
+            def inject_target_before_install(source, target, *args, **kwargs):
+                nonlocal injected
+                if not injected and target == "benchmark.json":
+                    target_descriptor = os.open(
+                        target,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                        dir_fd=kwargs["dst_dir_fd"],
+                    )
+                    try:
+                        os.write(target_descriptor, injected_content)
+                    finally:
+                        os.close(target_descriptor)
+                    injected = True
+                return real_link(source, target, *args, **kwargs)
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.os.link",
+                new=inject_target_before_install,
+            ):
+                with self.assertRaises(ResultArtifactError) as raised:
+                    aggregate_results(root, "judge")
+
+            self.assertTrue(injected)
+            self.assertEqual((root / "benchmark.json").read_bytes(), injected_content)
+            self.assertNotIn("RAW_INJECTED_AGGREGATE_TARGET", str(raised.exception))
+
+    def test_existing_aggregate_target_mutation_is_not_silently_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            with patch.object(
+                eval_core,
+                "_format_timestamp",
+                return_value="2026-07-20T10:00:00Z",
+            ):
+                aggregate_results(root, "judge")
+
+            injected_content = b"RAW_MUTATED_AGGREGATE_TARGET"
+            real_stat = os.stat
+            mutated = False
+
+            def mutate_after_target_check(path, *args, **kwargs):
+                nonlocal mutated
+                observed = real_stat(path, *args, **kwargs)
+                if (
+                    not mutated
+                    and path == "benchmark.json"
+                    and kwargs.get("dir_fd") is not None
+                ):
+                    target_descriptor = os.open(
+                        path,
+                        os.O_WRONLY | os.O_TRUNC,
+                        dir_fd=kwargs["dir_fd"],
+                    )
+                    try:
+                        os.write(target_descriptor, injected_content)
+                    finally:
+                        os.close(target_descriptor)
+                    mutated = True
+                return observed
+
+            with (
+                patch(
+                    "scripts.ai_skills_lib.eval_core.os.stat",
+                    new=mutate_after_target_check,
+                ),
+                patch.object(
+                    eval_core,
+                    "_format_timestamp",
+                    return_value="2026-07-20T10:00:01Z",
+                ),
+            ):
+                with self.assertRaisesRegex(ResultArtifactError, "target changed") as raised:
+                    aggregate_results(root, "judge")
+
+            self.assertTrue(mutated)
+            self.assertEqual((root / "benchmark.json").read_bytes(), injected_content)
+            self.assertNotIn("RAW_MUTATED_AGGREGATE_TARGET", str(raised.exception))
+
+    def test_existing_target_replacement_at_atomic_exchange_is_restored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            with patch.object(
+                eval_core,
+                "_format_timestamp",
+                return_value="2026-07-20T10:00:00Z",
+            ):
+                aggregate_results(root, "judge")
+
+            injected_content = b"RAW_EXCHANGE_TARGET"
+            real_exchange = eval_core._atomic_exchange_result_entries
+            replaced = False
+
+            def replace_target_before_exchange(
+                root_descriptor,
+                first_name,
+                second_name,
+            ):
+                nonlocal replaced
+                if not replaced and second_name == "benchmark.json":
+                    os.unlink(second_name, dir_fd=root_descriptor)
+                    target_descriptor = os.open(
+                        second_name,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                        dir_fd=root_descriptor,
+                    )
+                    try:
+                        os.write(target_descriptor, injected_content)
+                    finally:
+                        os.close(target_descriptor)
+                    replaced = True
+                return real_exchange(root_descriptor, first_name, second_name)
+
+            with (
+                patch.object(
+                    eval_core,
+                    "_atomic_exchange_result_entries",
+                    new=replace_target_before_exchange,
+                ),
+                patch.object(
+                    eval_core,
+                    "_format_timestamp",
+                    return_value="2026-07-20T10:00:01Z",
+                ),
+            ):
+                with self.assertRaisesRegex(ResultArtifactError, "target changed") as raised:
+                    aggregate_results(root, "judge")
+
+            self.assertTrue(replaced)
+            self.assertEqual((root / "benchmark.json").read_bytes(), injected_content)
+            self.assertNotIn("RAW_EXCHANGE_TARGET", str(raised.exception))
+
+    def test_same_size_restored_mtime_mutation_after_exchange_restores_each_output(self):
+        for output_name in ("benchmark.json", "summary.md"):
+            with self.subTest(output_name=output_name):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / "results"
+                    self._complete_workspace(root)
+                    with patch.object(
+                        eval_core,
+                        "_format_timestamp",
+                        return_value="2026-07-20T10:00:00Z",
+                    ):
+                        aggregate_results(root, "judge")
+
+                    real_exchange = eval_core._atomic_exchange_result_entries
+                    mutated_content: bytes | None = None
+                    retained_ctime: int | None = None
+
+                    def mutate_retained_output_after_exchange(
+                        root_descriptor,
+                        first_name,
+                        second_name,
+                    ):
+                        nonlocal mutated_content, retained_ctime
+                        result = real_exchange(
+                            root_descriptor,
+                            first_name,
+                            second_name,
+                        )
+                        if mutated_content is None and second_name == output_name:
+                            retained = root / first_name
+                            original = retained.read_bytes()
+                            original_metadata = retained.stat()
+                            mutated_content = bytes([original[0] ^ 1]) + original[1:]
+                            retained.write_bytes(mutated_content)
+                            os.utime(
+                                retained,
+                                ns=(
+                                    original_metadata.st_atime_ns,
+                                    original_metadata.st_mtime_ns,
+                                ),
+                            )
+                            mutated_metadata = retained.stat()
+                            retained_ctime = mutated_metadata.st_ctime_ns
+                            self.assertEqual(mutated_metadata.st_size, len(original))
+                            self.assertEqual(
+                                mutated_metadata.st_mtime_ns,
+                                original_metadata.st_mtime_ns,
+                            )
+                            self.assertNotEqual(
+                                mutated_metadata.st_ctime_ns,
+                                original_metadata.st_ctime_ns,
+                            )
+                        return result
+
+                    with (
+                        patch.object(
+                            eval_core,
+                            "_atomic_exchange_result_entries",
+                            new=mutate_retained_output_after_exchange,
+                        ),
+                        patch.object(
+                            eval_core,
+                            "_format_timestamp",
+                            return_value="2026-07-20T10:00:01Z",
+                        ),
+                    ):
+                        with self.assertRaisesRegex(
+                            ResultArtifactError,
+                            "target changed",
+                        ):
+                            aggregate_results(root, "judge")
+
+                    self.assertIsNotNone(mutated_content)
+                    self.assertIsNotNone(retained_ctime)
+                    self.assertEqual((root / output_name).read_bytes(), mutated_content)
+
+    def test_ctime_only_mutation_before_retained_cleanup_restores_each_output(self):
+        for output_name in ("benchmark.json", "summary.md"):
+            with self.subTest(output_name=output_name):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / "results"
+                    self._complete_workspace(root)
+                    with patch.object(
+                        eval_core,
+                        "_format_timestamp",
+                        return_value="2026-07-20T10:00:00Z",
+                    ):
+                        aggregate_results(root, "judge")
+
+                    original_content = (root / output_name).read_bytes()
+                    real_stat = os.stat
+                    touched = False
+
+                    def touch_retained_output_after_stat(path, *args, **kwargs):
+                        nonlocal touched
+                        observed = real_stat(path, *args, **kwargs)
+                        if (
+                            not touched
+                            and isinstance(path, str)
+                            and path.startswith(f".{output_name}.")
+                            and path.endswith(".tmp")
+                            and kwargs.get("dir_fd") is not None
+                        ):
+                            os.utime(
+                                path,
+                                ns=(observed.st_atime_ns, observed.st_mtime_ns),
+                                dir_fd=kwargs["dir_fd"],
+                                follow_symlinks=False,
+                            )
+                            touched = True
+                            self.assertNotEqual(
+                                real_stat(path, *args, **kwargs).st_ctime_ns,
+                                observed.st_ctime_ns,
+                            )
+                        return observed
+
+                    with (
+                        patch(
+                            "scripts.ai_skills_lib.eval_core.os.stat",
+                            new=touch_retained_output_after_stat,
+                        ),
+                        patch.object(
+                            eval_core,
+                            "_format_timestamp",
+                            return_value="2026-07-20T10:00:01Z",
+                        ),
+                    ):
+                        with self.assertRaisesRegex(
+                            ResultArtifactError,
+                            "target changed",
+                        ):
+                            aggregate_results(root, "judge")
+
+                    self.assertTrue(touched)
+                    self.assertEqual((root / output_name).read_bytes(), original_content)
+
+    def test_same_size_mutation_during_existing_descriptor_read_fails_closed(self):
+        if not hasattr(os, "pread"):
+            self.skipTest("descriptor-positioned reads are unavailable")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            with patch.object(
+                eval_core,
+                "_format_timestamp",
+                return_value="2026-07-20T10:00:00Z",
+            ):
+                aggregate_results(root, "judge")
+
+            target = root / "benchmark.json"
+            target_inode = target.stat().st_ino
+            real_pread = os.pread
+            mutated_content: bytes | None = None
+
+            def mutate_during_descriptor_read(descriptor, count, offset):
+                nonlocal mutated_content
+                chunk = real_pread(descriptor, count, offset)
+                if (
+                    mutated_content is None
+                    and offset == 0
+                    and os.fstat(descriptor).st_ino == target_inode
+                ):
+                    original = target.read_bytes()
+                    original_metadata = target.stat()
+                    mutated_content = bytes([original[0] ^ 1]) + original[1:]
+                    target.write_bytes(mutated_content)
+                    os.utime(
+                        target,
+                        ns=(
+                            original_metadata.st_atime_ns,
+                            original_metadata.st_mtime_ns,
+                        ),
+                    )
+                return chunk
+
+            with (
+                patch(
+                    "scripts.ai_skills_lib.eval_core.os.pread",
+                    new=mutate_during_descriptor_read,
+                    create=True,
+                ),
+                patch.object(
+                    eval_core,
+                    "_format_timestamp",
+                    return_value="2026-07-20T10:00:01Z",
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "target changed",
+                ):
+                    aggregate_results(root, "judge")
+
+            self.assertIsNotNone(mutated_content)
+            self.assertEqual(target.read_bytes(), mutated_content)
+
+    def test_replaced_staging_name_is_not_removed_during_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            injected_content = b"RAW_REPLACED_STAGING_FILE"
+            real_link = os.link
+            replacement_name: str | None = None
+
+            def replace_staging_name_after_link(source, target, *args, **kwargs):
+                nonlocal replacement_name
+                result = real_link(source, target, *args, **kwargs)
+                if replacement_name is None and target == "benchmark.json":
+                    source_descriptor = kwargs["src_dir_fd"]
+                    os.unlink(source, dir_fd=source_descriptor)
+                    replacement_descriptor = os.open(
+                        source,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                        dir_fd=source_descriptor,
+                    )
+                    try:
+                        os.write(replacement_descriptor, injected_content)
+                    finally:
+                        os.close(replacement_descriptor)
+                    replacement_name = source
+                return result
+
+            with patch(
+                "scripts.ai_skills_lib.eval_core.os.link",
+                new=replace_staging_name_after_link,
+            ):
+                with self.assertRaisesRegex(ResultArtifactError, "temporary") as raised:
+                    aggregate_results(root, "judge")
+
+            self.assertIsNotNone(replacement_name)
+            replacement = root / replacement_name
+            self.assertEqual(replacement.read_bytes(), injected_content)
+            self.assertNotIn("RAW_REPLACED_STAGING_FILE", str(raised.exception))
+
+    def test_aggregate_descriptor_release_failure_is_sanitized(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            self._complete_workspace(root)
+            real_open = os.open
+            real_close = os.close
+            staging_descriptor: int | None = None
+            close_failed = False
+
+            def record_staging_descriptor(path, flags, mode=0o777, *, dir_fd=None):
+                nonlocal staging_descriptor
+                descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+                if (
+                    isinstance(path, str)
+                    and path.startswith(".benchmark.json.")
+                    and path.endswith(".tmp")
+                ):
+                    staging_descriptor = descriptor
+                return descriptor
+
+            def fail_staging_close(descriptor):
+                nonlocal close_failed
+                if not close_failed and descriptor == staging_descriptor:
+                    real_close(descriptor)
+                    close_failed = True
+                    raise OSError("RAW_DESCRIPTOR_RELEASE_FAILURE")
+                return real_close(descriptor)
+
+            with (
+                patch(
+                    "scripts.ai_skills_lib.eval_core.os.open",
+                    new=record_staging_descriptor,
+                ),
+                patch(
+                    "scripts.ai_skills_lib.eval_core.os.close",
+                    new=fail_staging_close,
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "release aggregate result handles",
+                ) as raised:
+                    aggregate_results(root, "judge")
+
+            self.assertTrue(close_failed)
+            self.assertNotIn("RAW_DESCRIPTOR_RELEASE_FAILURE", str(raised.exception))
+
+
 class JudgeBoundaryTests(unittest.TestCase):
     def test_parses_strict_judge_json_and_combines_deterministic_checks(self):
         judge_grading = parse_judge_response(
@@ -1381,6 +2833,13 @@ class JudgeBoundaryTests(unittest.TestCase):
                     parse_judge_response(response, expected_judge_context())
                 self.assertEqual(raised.exception.exit_code, 2)
 
+    def test_judge_response_rejects_duplicate_json_keys(self):
+        valid = json.dumps(sample_judge_response())
+        duplicate = '{"assertion_results": [],' + valid[1:]
+
+        with self.assertRaisesRegex(ResultArtifactError, "duplicate JSON key"):
+            parse_judge_response(duplicate, expected_judge_context())
+
     def test_judge_cannot_change_expected_assertions_or_aggregation_policy(self):
         malicious_documents = []
         omitted = sample_judge_response()
@@ -1406,6 +2865,28 @@ class JudgeBoundaryTests(unittest.TestCase):
         for document in (no_evidence, disallowed):
             with self.subTest(document=document):
                 with self.assertRaisesRegex(ResultArtifactError, "evidence"):
+                    parse_judge_response(
+                        json.dumps(document),
+                        expected_judge_context(),
+                        model="actual-judge-model",
+                        reasoning_effort="high",
+                    )
+
+    def test_judge_response_content_and_reference_counts_are_bounded(self):
+        oversized_evidence = sample_judge_response()
+        oversized_evidence["assertion_results"][0]["evidence"] = "x" * 4097
+        excessive_references = sample_judge_response()
+        reference = {
+            "artifact": "outputs/response.md",
+            "locator": "response paragraph",
+        }
+        excessive_references["assertion_results"][0]["evidence_refs"] = [
+            reference for _ in range(17)
+        ]
+
+        for document in (oversized_evidence, excessive_references):
+            with self.subTest(document=document):
+                with self.assertRaisesRegex(ResultArtifactError, "bounded"):
                     parse_judge_response(
                         json.dumps(document),
                         expected_judge_context(),
@@ -1492,6 +2973,54 @@ class JudgeBoundaryTests(unittest.TestCase):
 
 
 class AggregateCliTests(unittest.TestCase):
+    def _aggregate_cli(self, root: Path) -> tuple[int, str]:
+        output = StringIO()
+        with redirect_stdout(output):
+            result = cli.main(
+                [
+                    "evals",
+                    "aggregate",
+                    "--results-dir",
+                    str(root),
+                    "--grade-source",
+                    "judge",
+                ]
+            )
+        return result, output.getvalue()
+
+    def _complete_comparison_workspace(self, root: Path):
+        required = ("candidate", "reference")
+        workspace = create_test_result_workspace(
+            root,
+            preserved_run_manifest(
+                variant="candidate",
+                contributes_to_outcome=True,
+                required_variants=required,
+                compare_to="reference",
+            ),
+            preserved_run_manifest(
+                variant="reference",
+                contributes_to_outcome=False,
+                required_variants=required,
+            ),
+        )
+        candidate_paths, _ = write_preserved_run(
+            workspace,
+            variant="candidate",
+            contributes_to_outcome=True,
+            passed=True,
+            required_variants=required,
+            compare_to="reference",
+        )
+        reference_paths, _ = write_preserved_run(
+            workspace,
+            variant="reference",
+            contributes_to_outcome=False,
+            passed=False,
+            required_variants=required,
+        )
+        return workspace, candidate_paths, reference_paths
+
     def test_parser_returns_a_results_path_and_restricts_grade_source(self):
         parsed = build_parser().parse_args(
             [
@@ -1525,7 +3054,20 @@ class AggregateCliTests(unittest.TestCase):
             with self.subTest(candidate_passed=candidate_passed):
                 with tempfile.TemporaryDirectory() as directory:
                     root = Path(directory) / "results"
-                    workspace = create_test_result_workspace(root)
+                    workspace = create_test_result_workspace(
+                        root,
+                        preserved_run_manifest(
+                            variant="candidate",
+                            contributes_to_outcome=True,
+                            required_variants=required,
+                            compare_to="reference",
+                        ),
+                        preserved_run_manifest(
+                            variant="reference",
+                            contributes_to_outcome=False,
+                            required_variants=required,
+                        ),
+                    )
                     write_preserved_run(
                         workspace,
                         variant="candidate",
@@ -1577,10 +3119,111 @@ class AggregateCliTests(unittest.TestCase):
         self.assertIn("FAILED", output.getvalue())
         self.assertIn(f"Results: {missing.resolve()}", output.getvalue())
 
+    def test_aggregate_cli_rejects_missing_or_unreadable_invocation_and_artifacts(self):
+        for case in ("removed", "symlink", "directory", "non_utf8_grading"):
+            with self.subTest(case=case):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / "results"
+                    workspace, candidate_paths, _ = self._complete_comparison_workspace(root)
+                    if case == "removed":
+                        workspace.invocation_manifest.unlink()
+                    elif case == "symlink":
+                        external_manifest = root.parent / "external-invocation.json"
+                        external_manifest.write_bytes(workspace.invocation_manifest.read_bytes())
+                        workspace.invocation_manifest.unlink()
+                        workspace.invocation_manifest.symlink_to(external_manifest)
+                    elif case == "directory":
+                        workspace.invocation_manifest.unlink()
+                        workspace.invocation_manifest.mkdir()
+                    else:
+                        candidate_paths.grading.write_bytes(b"\xff")
+
+                    result, output = self._aggregate_cli(root)
+
+                    self.assertEqual(result, 2)
+                    self.assertIn("FAILED", output)
+                    if case == "non_utf8_grading":
+                        self.assertIn("cannot read trustworthy result", output)
+                    else:
+                        self.assertIn("regular invocation.json", output)
+
+    def test_aggregate_cli_rejects_missing_or_injected_complete_behavior_groups(self):
+        required = ("candidate", "reference")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "missing-group"
+            primary_group = "ticket-workflow/primary"
+            removed_group = "ticket-workflow/removed"
+            workspace = create_test_result_workspace(
+                root,
+                *(
+                    preserved_run_manifest(
+                        run_id=f"{group.rsplit('/', 1)[1]}-{variant}",
+                        group_id=group,
+                        variant=variant,
+                        contributes_to_outcome=variant == "candidate",
+                        required_variants=required,
+                        compare_to="reference" if variant == "candidate" else None,
+                    )
+                    for group in (primary_group, removed_group)
+                    for variant in required
+                ),
+            )
+            removed_paths = []
+            for group in (primary_group, removed_group):
+                for variant in required:
+                    paths, _ = write_preserved_run(
+                        workspace,
+                        run_id=f"{group.rsplit('/', 1)[1]}-{variant}",
+                        group_id=group,
+                        variant=variant,
+                        contributes_to_outcome=variant == "candidate",
+                        passed=True,
+                        required_variants=required,
+                        compare_to="reference" if variant == "candidate" else None,
+                    )
+                    if group == removed_group:
+                        removed_paths.append(paths)
+            for paths in removed_paths:
+                shutil.rmtree(paths.root)
+
+            result, output = self._aggregate_cli(root)
+
+            self.assertEqual(result, 2)
+            self.assertIn("attempt set does not match", output)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "injected-group"
+            workspace, candidate_paths, reference_paths = self._complete_comparison_workspace(root)
+            for source, run_id in (
+                (candidate_paths, "injected-candidate"),
+                (reference_paths, "injected-reference"),
+            ):
+                target = workspace.attempts / run_id
+                shutil.copytree(source.root, target)
+                for artifact_name in ("attempt.json", "timing.json", "grading.json"):
+                    artifact_path = target / artifact_name
+                    document = json.loads(artifact_path.read_text(encoding="utf-8"))
+                    document["run_id"] = run_id
+                    if "aggregation" in document:
+                        document["aggregation"]["group_id"] = "ticket-workflow/injected"
+                    artifact_path.write_text(json.dumps(document), encoding="utf-8")
+
+            result, output = self._aggregate_cli(root)
+
+            self.assertEqual(result, 2)
+            self.assertIn("immutable invocation manifest", output)
+
     def test_aggregate_cli_maps_benchmark_write_errors_to_exit_two(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "results"
-            workspace = create_test_result_workspace(root)
+            workspace = create_test_result_workspace(
+                root,
+                preserved_run_manifest(
+                    variant="candidate",
+                    contributes_to_outcome=True,
+                    required_variants=("candidate",),
+                ),
+            )
             write_preserved_run(
                 workspace,
                 variant="candidate",
@@ -1591,7 +3234,7 @@ class AggregateCliTests(unittest.TestCase):
             output = StringIO()
 
             with patch(
-                "scripts.ai_skills_lib.eval_core.os.replace",
+                "scripts.ai_skills_lib.eval_core.os.link",
                 side_effect=OSError("read-only result directory"),
             ):
                 with redirect_stdout(output):
@@ -1607,7 +3250,8 @@ class AggregateCliTests(unittest.TestCase):
                     )
 
             self.assertEqual(result, 2)
-            self.assertIn("read-only result directory", output.getvalue())
+            self.assertIn("cannot write aggregate result artifacts", output.getvalue())
+            self.assertNotIn("read-only result directory", output.getvalue())
 
     def test_aggregate_cli_maps_path_resolution_failures_to_exit_two(self):
         output = StringIO()

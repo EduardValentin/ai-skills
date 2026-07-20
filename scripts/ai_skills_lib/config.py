@@ -20,12 +20,16 @@ def build_parser() -> argparse.ArgumentParser:
     triggers.add_argument("--runs", type=int, choices=(1, 2, 3), default=1)
     triggers.add_argument("--query")
 
-    for target in ("evals", "all"):
-        model_backed = validation_targets.add_parser(target)
-        _add_model_backed_options(model_backed)
+    evals_target = validation_targets.add_parser("evals")
+    _add_model_backed_options(evals_target)
+    evals_target.add_argument("--case")
+
+    all_target = validation_targets.add_parser("all")
+    _add_model_backed_options(all_target)
+    all_target.add_argument("--runs", type=int, choices=(1, 2, 3), default=1)
 
     check_local_installs = commands.add_parser("check-local-installs")
-    check_local_installs.add_argument("--harness", required=True)
+    check_local_installs.add_argument("--harness", choices=("codex",), required=True)
 
     evals = commands.add_parser("evals")
     evals_commands = evals.add_subparsers(dest="evals_command", required=True)

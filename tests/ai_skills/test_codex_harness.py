@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
+import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
+import stat
 import tempfile
 import unittest
+from unittest import mock
 
+from scripts.ai_skills_lib import codex_harness
 from scripts.ai_skills_lib.codex_harness import (
     CodexHarnessAdapter,
     CodexOutputError,
@@ -320,6 +325,416 @@ class SkillProjectionTests(unittest.TestCase):
             with self.assertRaisesRegex(CodexOutputError, "evals"):
                 project_actor_skill(source, root / "projection")
 
+    def test_allows_external_urls_containing_an_evals_path_segment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "example"
+            source.mkdir()
+            (source / "SKILL.md").write_text(
+                "See https://docs.example.test/evals/authoring-guide.\n",
+                encoding="utf-8",
+            )
+
+            project_actor_skill(source, root / "projection")
+
+            self.assertTrue((root / "projection" / "SKILL.md").is_file())
+
+    def test_prepared_projection_uses_frozen_bytes_after_source_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "example"
+            source.mkdir()
+            skill_path = source / "SKILL.md"
+            original = b"---\nname: example\n---\nOriginal instructions.\n"
+            skill_path.write_bytes(original)
+            prepared = codex_harness.prepare_actor_skill_source(source)
+            skill_path.write_text("mutated after preparation\n", encoding="utf-8")
+
+            destination = root / "projection" / "example"
+            codex_harness.project_prepared_actor_skill(prepared, destination)
+
+            self.assertEqual((destination / "SKILL.md").read_bytes(), original)
+
+    def test_prepared_projection_uses_frozen_bytes_after_source_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "example"
+            source.mkdir()
+            original = b"---\nname: example\n---\nOriginal instructions.\n"
+            (source / "SKILL.md").write_bytes(original)
+            prepared = codex_harness.prepare_actor_skill_source(source)
+            shutil.rmtree(source)
+
+            destination = root / "projection" / "example"
+            codex_harness.project_prepared_actor_skill(prepared, destination)
+
+            self.assertEqual((destination / "SKILL.md").read_bytes(), original)
+
+
+class ActorWorkspaceCaptureTests(unittest.TestCase):
+    def snapshot(self, workspace: Path, **overrides):
+        limits = {
+            "maximum_bytes": 1024,
+            "maximum_file_bytes": 1024,
+            "maximum_entries": 16,
+            "maximum_directories": 8,
+            "maximum_depth": 4,
+        }
+        limits.update(overrides)
+        return codex_harness._snapshot_actor_workspace(workspace, **limits)
+
+    def test_snapshot_enforces_entry_directory_and_depth_limits(self) -> None:
+        cases = (
+            ("entry-count", {"maximum_entries": 1}, ("a.txt", "b.txt")),
+            ("directory-count", {"maximum_directories": 2}, ("a/", "b/")),
+            ("depth", {"maximum_depth": 1}, ("a/b.txt",)),
+        )
+        for label, limits, entries in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                workspace = Path(directory)
+                for relative in entries:
+                    path = workspace / relative.rstrip("/")
+                    if relative.endswith("/"):
+                        path.mkdir(parents=True)
+                    else:
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text("x", encoding="utf-8")
+
+                with self.assertRaisesRegex(CodexOutputError, "limit"):
+                    self.snapshot(workspace, **limits)
+
+    def test_snapshot_enforces_per_file_and_cumulative_byte_limits(self) -> None:
+        cases = (
+            ("per-file", {"maximum_file_bytes": 1}, (b"xx",)),
+            ("cumulative", {"maximum_bytes": 1}, (b"x", b"y")),
+        )
+        for label, limits, contents in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                workspace = Path(directory)
+                for index, content in enumerate(contents):
+                    (workspace / f"{index}.bin").write_bytes(content)
+
+                with self.assertRaisesRegex(CodexOutputError, "byte limit"):
+                    self.snapshot(workspace, **limits)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFOs")
+    def test_snapshot_rejects_special_files_without_reading_them(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            os.mkfifo(workspace / "pipe")
+
+            with self.assertRaisesRegex(CodexOutputError, "special files"):
+                self.snapshot(workspace)
+
+    def test_snapshot_rejects_a_file_replaced_between_stat_and_open(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            artifact = workspace / "artifact.txt"
+            artifact.write_text("original", encoding="utf-8")
+            real_open = os.open
+            replaced = False
+
+            def replace_before_open(path, flags, mode=0o777, *, dir_fd=None):
+                nonlocal replaced
+                if path == artifact.name and dir_fd is not None and not replaced:
+                    artifact.unlink()
+                    artifact.write_text("replacement", encoding="utf-8")
+                    replaced = True
+                return real_open(path, flags, mode, dir_fd=dir_fd)
+
+            with mock.patch.object(codex_harness.os, "open", side_effect=replace_before_open):
+                with self.assertRaisesRegex(CodexOutputError, "changed while snapshotting"):
+                    self.snapshot(workspace)
+
+    def test_snapshot_rejects_a_file_mutated_during_descriptor_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            artifact = workspace / "artifact.txt"
+            artifact.write_bytes(b"a" * 128)
+            real_read = os.read
+            mutated = False
+
+            def mutate_after_read(file_descriptor: int, size: int) -> bytes:
+                nonlocal mutated
+                content = real_read(file_descriptor, size)
+                if content and not mutated:
+                    artifact.write_bytes(b"b" * 128)
+                    mutated = True
+                return content
+
+            with mock.patch.object(codex_harness.os, "read", side_effect=mutate_after_read):
+                with self.assertRaisesRegex(CodexOutputError, "changed while snapshotting"):
+                    self.snapshot(workspace)
+
+    def test_snapshot_rejects_a_directory_changed_after_enumeration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            (workspace / "existing.txt").write_text("stable", encoding="utf-8")
+            real_scandir = os.scandir
+
+            @contextmanager
+            def mutate_after_enumeration(directory_descriptor: int):
+                with real_scandir(directory_descriptor) as iterator:
+                    yield iterator
+                (workspace / "late.txt").write_text("late", encoding="utf-8")
+
+            with mock.patch.object(
+                codex_harness.os,
+                "scandir",
+                side_effect=mutate_after_enumeration,
+            ):
+                with self.assertRaisesRegex(CodexOutputError, "changed while snapshotting"):
+                    self.snapshot(workspace)
+
+    def test_snapshot_rejects_a_file_changed_before_path_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            artifact = workspace / "artifact.txt"
+            artifact.write_bytes(b"original")
+            real_stat = os.stat
+            mutated = False
+
+            def mutate_before_path_stat(path, *, dir_fd=None, follow_symlinks=True):
+                nonlocal mutated
+                if path == artifact.name and dir_fd is not None and not mutated:
+                    artifact.write_bytes(b"changed!")
+                    mutated = True
+                return real_stat(
+                    path,
+                    dir_fd=dir_fd,
+                    follow_symlinks=follow_symlinks,
+                )
+
+            with mock.patch.object(
+                codex_harness.os,
+                "stat",
+                side_effect=mutate_before_path_stat,
+            ):
+                with self.assertRaisesRegex(CodexOutputError, "changed while snapshotting"):
+                    self.snapshot(workspace)
+
+    def test_capture_reserves_response_file_and_entire_subtree(self) -> None:
+        for relative in ("response.md", "response.md/evidence.txt"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                workspace = root / "workspace"
+                output_root = root / "results" / "outputs"
+                workspace.mkdir()
+                initial = self.snapshot(workspace)
+                target = workspace / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("actor-owned\n", encoding="utf-8")
+
+                with self.assertRaisesRegex(CodexOutputError, "response.md"):
+                    codex_harness._capture_actor_outputs(
+                        workspace,
+                        output_root,
+                        initial,
+                        maximum_bytes=1024,
+                    )
+
+    def test_capture_rejects_a_new_empty_response_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            output_root = root / "results" / "outputs"
+            workspace.mkdir()
+            initial = self.snapshot(workspace)
+            (workspace / "response.md").mkdir()
+
+            with self.assertRaisesRegex(CodexOutputError, "response.md"):
+                codex_harness._capture_actor_outputs(
+                    workspace,
+                    output_root,
+                    initial,
+                    maximum_bytes=1024,
+                )
+
+    def test_capture_omits_unchanged_inputs_in_the_reserved_namespace(self) -> None:
+        for relative in ("response.md", "response.md/context.txt"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                workspace = root / "workspace"
+                output_root = root / "results" / "outputs"
+                workspace.mkdir()
+                reserved_input = workspace / relative
+                reserved_input.parent.mkdir(parents=True, exist_ok=True)
+                reserved_input.write_text("unchanged input\n", encoding="utf-8")
+                initial = self.snapshot(workspace)
+                (workspace / "result.txt").write_text("actor output\n", encoding="utf-8")
+
+                codex_harness._capture_actor_outputs(
+                    workspace,
+                    output_root,
+                    initial,
+                    maximum_bytes=1024,
+                )
+
+                self.assertEqual(
+                    (output_root / "result.txt").read_text(encoding="utf-8"),
+                    "actor output\n",
+                )
+                self.assertFalse((output_root / "response.md").exists())
+
+    def test_capture_records_new_empty_directories_from_descriptor_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            output_root = root / "results" / "outputs"
+            workspace.mkdir()
+            initial = self.snapshot(workspace)
+            (workspace / "empty-result").mkdir()
+
+            captured = codex_harness._capture_actor_outputs(
+                workspace,
+                output_root,
+                initial,
+                maximum_bytes=1024,
+            )
+
+            self.assertTrue((output_root / "empty-result").is_dir())
+            self.assertIn(
+                (PurePosixPath("empty-result"), "directory"),
+                tuple((item.path, item.kind) for item in captured.paths),
+            )
+
+    def test_capture_quarantines_secret_bytes_with_bounded_references(self) -> None:
+        credential = "gh" + "p_" + ("a" * 36)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            output_root = root / "results" / "outputs"
+            workspace.mkdir()
+            initial = self.snapshot(
+                workspace,
+                maximum_bytes=4096,
+                maximum_entries=64,
+            )
+            for index in range(24):
+                (workspace / f"result-{index:02d}.txt").write_text(
+                    credential,
+                    encoding="utf-8",
+                )
+
+            captured = codex_harness._capture_actor_outputs(
+                workspace,
+                output_root,
+                initial,
+                maximum_bytes=4096,
+            )
+
+            durable = b"".join(
+                path.read_bytes() for path in sorted(output_root.iterdir())
+            )
+            serialized_trace = json.dumps(captured.trace)
+            secret_event = next(
+                event
+                for event in captured.trace
+                if event.get("event") == "actor_output_secret_quarantine"
+            )
+            self.assertNotIn(credential.encode("utf-8"), durable)
+            self.assertNotIn(credential, serialized_trace)
+            self.assertIsNotNone(captured.failure)
+            self.assertTrue(secret_event["finding_count_truncated"])
+            self.assertLessEqual(
+                len(secret_event["references"]),
+                codex_harness.MAX_SECRET_EVIDENCE_REFERENCES,
+            )
+            self.assertTrue(
+                all(
+                    path.read_text(encoding="utf-8").startswith("[QUARANTINED")
+                    for path in output_root.iterdir()
+                )
+            )
+
+    def test_quarantined_low_entropy_secret_omits_original_size_and_digest(self) -> None:
+        secret_content = b"Cookie: session=abc\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            output_root = root / "results" / "outputs"
+            workspace.mkdir()
+            initial = self.snapshot(workspace)
+            (workspace / "result.txt").write_bytes(secret_content)
+
+            captured = codex_harness._capture_actor_outputs(
+                workspace,
+                output_root,
+                initial,
+                maximum_bytes=1024,
+            )
+
+            file_event = next(
+                event
+                for event in captured.trace
+                if event.get("event") == "actor_output"
+                and event.get("kind") == "file"
+            )
+            serialized_trace = json.dumps(captured.trace)
+            self.assertTrue(file_event["quarantined"])
+            self.assertNotIn("bytes", file_event)
+            self.assertNotIn("sha256", file_event)
+            self.assertNotIn(
+                hashlib.sha256(secret_content).hexdigest(),
+                serialized_trace,
+            )
+            self.assertTrue(
+                (output_root / "result.txt")
+                .read_text(encoding="utf-8")
+                .startswith("[QUARANTINED")
+            )
+
+    def test_capture_redacts_secret_material_from_durable_paths(self) -> None:
+        credential = "gh" + "p_" + ("a" * 36)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            output_root = root / "results" / "outputs"
+            workspace.mkdir()
+            initial = self.snapshot(workspace)
+            (workspace / credential).write_text("otherwise safe", encoding="utf-8")
+
+            captured = codex_harness._capture_actor_outputs(
+                workspace,
+                output_root,
+                initial,
+                maximum_bytes=1024,
+            )
+
+            durable_paths = tuple(
+                path.relative_to(output_root).as_posix()
+                for path in output_root.rglob("*")
+            )
+            self.assertIsNotNone(captured.failure)
+            self.assertNotIn(credential, json.dumps(captured.trace))
+            self.assertTrue(all(credential not in path for path in durable_paths))
+            self.assertTrue(
+                any(path.startswith(".secret-quarantine-") for path in durable_paths)
+            )
+
+    def test_capture_rejects_changes_and_deletions_in_the_reserved_subtree(self) -> None:
+        for action in ("modify", "delete"):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                workspace = root / "workspace"
+                output_root = root / "results" / "outputs"
+                reserved_input = workspace / "response.md" / "context.txt"
+                reserved_input.parent.mkdir(parents=True)
+                reserved_input.write_text("original input\n", encoding="utf-8")
+                initial = self.snapshot(workspace)
+                if action == "modify":
+                    reserved_input.write_text("changed input\n", encoding="utf-8")
+                else:
+                    reserved_input.unlink()
+
+                with self.assertRaisesRegex(CodexOutputError, "response.md"):
+                    codex_harness._capture_actor_outputs(
+                        workspace,
+                        output_root,
+                        initial,
+                        maximum_bytes=1024,
+                    )
+
 
 class CodexHarnessAdapterTests(unittest.TestCase):
     def test_preflight_reports_pinned_codex_and_discovered_defaults(self) -> None:
@@ -426,6 +841,456 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertNotIn("--ignore-user-config", codex_argv)
         self.assertTrue(projected_skill_exists)
         self.assertEqual(len(runtime.sealed_catalogs), 1)
+
+    def test_actor_command_keeps_the_manifest_dangerous_profile_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+            adapter = CodexHarnessAdapter(runtime)
+
+            adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="actor-profile",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                ),
+                runtime.results_root / "actor-profile",
+            )
+
+        command = runtime.calls[-1][2]
+        expected_command = ["codex", "exec", *MANIFEST.codex.exec_flags]
+        expected_command.extend(("-c", "allow_login_shell=false"))
+        expected_command.extend(("-c", "shell_environment_policy.inherit=core"))
+        expected_command.extend(
+            ("-c", "shell_environment_policy.ignore_default_excludes=false")
+        )
+        for feature in codex_harness.DISABLED_FEATURES:
+            expected_command.extend(("--disable", feature))
+        expected_command.extend(
+            (
+                "-C",
+                str(runtime.last_case.workspace),
+                "--",
+                "Perform the scenario.",
+            )
+        )
+        self.assertEqual(command, tuple(expected_command))
+
+    def test_judge_stages_schema_and_uses_a_restricted_codex_profile(self) -> None:
+        response_schema = {
+            "type": "object",
+            "properties": {"passed": {"type": "boolean"}},
+            "required": ["passed"],
+            "additionalProperties": False,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+            adapter = CodexHarnessAdapter(runtime)
+            observed_schema: dict[str, object] = {}
+            original_execute = runtime.execute
+
+            def inspect_judge_profile(*args, **kwargs):
+                command = args[2]
+                schema_path = Path(command[command.index("--output-schema") + 1])
+                metadata = schema_path.lstat()
+                observed_schema.update(
+                    {
+                        "path": schema_path,
+                        "is_regular": stat.S_ISREG(metadata.st_mode),
+                        "is_symlink": schema_path.is_symlink(),
+                        "mode": stat.S_IMODE(metadata.st_mode),
+                        "uid": metadata.st_uid,
+                        "document": json.loads(schema_path.read_text(encoding="utf-8")),
+                    }
+                )
+                return original_execute(*args, **kwargs)
+
+            runtime.execute = inspect_judge_profile
+            adapter.execute(
+                HarnessRequest(
+                    role="judge",
+                    run_variant="semantic-grade",
+                    prompt="Grade the supplied evidence.",
+                    timeout_seconds=30,
+                    response_schema=response_schema,
+                ),
+                runtime.results_root / "judge-profile",
+            )
+
+            command = runtime.calls[-1][2]
+            schema_path = Path(observed_schema["path"])
+            self.assertEqual(schema_path.parent, runtime.last_case.workspace)
+
+        self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", command)
+        for flag in MANIFEST.codex.exec_flags:
+            if flag != "--dangerously-bypass-approvals-and-sandbox":
+                self.assertIn(flag, command)
+        self.assertEqual(command[command.index("--sandbox") + 1], "read-only")
+        self.assertTrue(observed_schema["is_regular"])
+        self.assertFalse(observed_schema["is_symlink"])
+        self.assertEqual(observed_schema["mode"] & 0o222, 0)
+        if hasattr(os, "geteuid"):
+            self.assertEqual(observed_schema["uid"], os.geteuid())
+        self.assertEqual(observed_schema["document"], response_schema)
+
+        config_overrides = tuple(
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == "-c"
+        )
+        for override in (
+            'approval_policy="never"',
+            "features.shell_tool=false",
+            'web_search="disabled"',
+            "tools.web_search=false",
+            "features.remote_plugin=false",
+            "features.skill_mcp_dependency_install=false",
+        ):
+            self.assertIn(override, config_overrides)
+        developer_override = next(
+            value
+            for value in config_overrides
+            if value.startswith("developer_instructions=")
+        )
+        developer_instructions = json.loads(developer_override.split("=", 1)[1])
+        self.assertIn("untrusted", developer_instructions)
+        self.assertIn("ignore", developer_instructions.lower())
+        self.assertIn("only supplied evidence", developer_instructions)
+        self.assertIn("requested schema", developer_instructions)
+        self.assertIn("oracle", developer_instructions)
+
+    def test_judge_requires_a_valid_closed_response_schema_before_worker_setup(self) -> None:
+        invalid_schemas = (
+            None,
+            {"type": "not-a-json-schema-type"},
+            {"$ref": "https://example.com/remote-schema.json"},
+        )
+        for response_schema in invalid_schemas:
+            with self.subTest(response_schema=response_schema), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                runtime = FakeSandboxRuntime(root)
+                adapter = CodexHarnessAdapter(runtime)
+
+                with self.assertRaisesRegex(CodexOutputError, "judge response schema"):
+                    adapter.execute(
+                        HarnessRequest(
+                            role="judge",
+                            run_variant="semantic-grade",
+                            prompt="Grade the supplied evidence.",
+                            timeout_seconds=30,
+                            response_schema=response_schema,
+                        ),
+                        runtime.results_root / "judge-invalid-schema",
+                    )
+
+                self.assertEqual(runtime.case_sequence, 0)
+                self.assertEqual(runtime.calls, [])
+
+    def test_judge_schema_enforces_the_fixed_byte_limit_before_worker_setup(self) -> None:
+        response_schema = {
+            "type": "object",
+            "description": "x" * codex_harness.MAX_JSON_SCHEMA_BYTES,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(root)
+
+            with mock.patch.object(
+                codex_harness.json,
+                "JSONEncoder",
+                side_effect=AssertionError(
+                    "oversized scalar must be rejected before encoder construction"
+                ),
+            ) as encoder:
+                with self.assertRaisesRegex(CodexOutputError, "256 KiB byte limit"):
+                    CodexHarnessAdapter(runtime).execute(
+                        HarnessRequest(
+                            role="judge",
+                            run_variant="oversized-schema",
+                            prompt="Grade the supplied evidence.",
+                            timeout_seconds=30,
+                            response_schema=response_schema,
+                        ),
+                        runtime.results_root / "oversized-schema",
+                    )
+
+            encoder.assert_not_called()
+            self.assertEqual(runtime.case_sequence, 0)
+            self.assertEqual(runtime.calls, [])
+
+    def test_judge_schema_resource_failures_are_bounded_domain_errors(self) -> None:
+        response_schema = {"type": "object", "additionalProperties": False}
+        failures = (
+            (
+                codex_harness,
+                "_materialize_bounded_judge_schema",
+                MemoryError(),
+            ),
+            (
+                codex_harness,
+                "_materialize_bounded_judge_schema",
+                SystemError("schema walker failed"),
+            ),
+            (codex_harness.json.JSONEncoder, "iterencode", MemoryError()),
+            (
+                codex_harness,
+                "build_safe_json_schema_validator",
+                SystemError("schema allocator failed"),
+            ),
+        )
+        for owner, attribute, resource_error in failures:
+            with self.subTest(resource_error=type(resource_error).__name__), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                runtime = FakeSandboxRuntime(root)
+                with mock.patch.object(owner, attribute, side_effect=resource_error):
+                    with self.assertRaises(CodexOutputError) as raised:
+                        CodexHarnessAdapter(runtime).execute(
+                            HarnessRequest(
+                                role="judge",
+                                run_variant="resource-failure",
+                                prompt="Grade the supplied evidence.",
+                                timeout_seconds=30,
+                                response_schema=response_schema,
+                            ),
+                            runtime.results_root / "resource-failure",
+                        )
+
+                self.assertIn("judge response schema", str(raised.exception))
+                self.assertLess(len(str(raised.exception)), 128)
+                self.assertEqual(runtime.case_sequence, 0)
+                self.assertEqual(runtime.calls, [])
+
+    def test_captures_only_created_or_modified_actor_workspace_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "workflows" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: example\n---\nFollow me.\n",
+                encoding="utf-8",
+            )
+            fixture_root = skill / "evals" / "fixtures" / "case"
+            inputs = fixture_root / "inputs"
+            inputs.mkdir(parents=True)
+            unchanged = inputs / "request.md"
+            changed = inputs / "draft.md"
+            unchanged.write_text("request\n", encoding="utf-8")
+            changed.write_text("draft\n", encoding="utf-8")
+            runtime = FakeSandboxRuntime(root)
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=root / "skills")
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "candidate")
+            expected_path = case.skills / "example" / "SKILL.md"
+            runtime.execution_results.append(command_result(codex_jsonl(expected_path)))
+            original_execute = runtime.execute
+
+            def execute_with_outputs(*args, **kwargs):
+                selected_case = args[1]
+                (selected_case.workspace / "draft.md").write_text(
+                    "completed\n", encoding="utf-8"
+                )
+                generated = selected_case.workspace / "reports" / "result.json"
+                generated.parent.mkdir()
+                generated.write_text('{"ok": true}\n', encoding="utf-8")
+                return original_execute(*args, **kwargs)
+
+            runtime.execute = execute_with_outputs
+            artifact_dir = runtime.results_root / "with-skill"
+            artifact_dir.mkdir()
+
+            execution = adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="candidate",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                    skill_sources=(skill,),
+                    expected_skill="example",
+                    actor_inputs=(
+                        ActorInput(unchanged, PurePosixPath("request.md")),
+                        ActorInput(changed, PurePosixPath("draft.md")),
+                    ),
+                    fixture_root=fixture_root,
+                    capture_outputs=True,
+                ),
+                artifact_dir,
+            )
+            outputs = artifact_dir / "outputs"
+            self.assertFalse((outputs / "request.md").exists())
+            self.assertEqual((outputs / "draft.md").read_text(), "completed\n")
+            self.assertEqual(
+                (outputs / "reports" / "result.json").read_text(),
+                '{"ok": true}\n',
+            )
+            self.assertIn(
+                "actor_output", {event.get("event") for event in execution.trace}
+            )
+
+    def test_actor_output_capture_rejects_reserved_or_unsafe_files(self) -> None:
+        for output_kind in ("reserved", "symlink"):
+            with self.subTest(output_kind=output_kind), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+                adapter = CodexHarnessAdapter(runtime)
+                original_execute = runtime.execute
+
+                def execute_with_unsafe_output(*args, **kwargs):
+                    selected_case = args[1]
+                    if output_kind == "reserved":
+                        (selected_case.workspace / "response.md").write_text(
+                            "collision\n", encoding="utf-8"
+                        )
+                    else:
+                        (selected_case.workspace / "escape").symlink_to(root)
+                    return original_execute(*args, **kwargs)
+
+                runtime.execute = execute_with_unsafe_output
+                artifact_dir = runtime.results_root / output_kind
+                (artifact_dir / "outputs").mkdir(parents=True)
+
+                execution = adapter.execute(
+                    HarnessRequest(
+                        role="actor",
+                        run_variant=output_kind,
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        capture_outputs=True,
+                    ),
+                    artifact_dir,
+                )
+                self.assertIn("actor output capture", execution.failure or "")
+                self.assertFalse(any((artifact_dir / "outputs").iterdir()))
+
+    def test_actor_output_secret_is_quarantined_and_marks_execution_untrustworthy(self) -> None:
+        credential = "gh" + "p_" + ("a" * 36)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+            adapter = CodexHarnessAdapter(runtime)
+            original_execute = runtime.execute
+
+            def execute_with_secret_output(*args, **kwargs):
+                selected_case = args[1]
+                (selected_case.workspace / "result.txt").write_text(
+                    credential,
+                    encoding="utf-8",
+                )
+                return original_execute(*args, **kwargs)
+
+            runtime.execute = execute_with_secret_output
+            artifact_dir = runtime.results_root / "secret-output"
+
+            execution = adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="secret-output",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                    capture_outputs=True,
+                ),
+                artifact_dir,
+            )
+
+            durable = (artifact_dir / "outputs" / "result.txt").read_text(
+                encoding="utf-8"
+            )
+            serialized_trace = json.dumps(execution.trace)
+            self.assertIn("high-confidence secret", execution.failure or "")
+            self.assertTrue(durable.startswith("[QUARANTINED"))
+            self.assertNotIn(credential, durable)
+            self.assertNotIn(credential, serialized_trace)
+
+    def test_actor_workspace_rejects_oversized_file_before_reading_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory) / "workspace"
+            workspace.mkdir()
+            (workspace / "large.bin").write_bytes(b"1234")
+
+            with mock.patch.object(
+                codex_harness.os,
+                "read",
+                side_effect=AssertionError("oversized file must not be read"),
+            ):
+                with self.assertRaisesRegex(CodexOutputError, "per-file byte limit"):
+                    codex_harness._snapshot_actor_workspace(
+                        workspace,
+                        maximum_bytes=100,
+                        maximum_file_bytes=3,
+                    )
+
+    def test_initial_actor_workspace_limit_fails_before_codex_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "workflows" / "example"
+            fixture_root = skill / "evals" / "fixtures" / "case"
+            inputs = fixture_root / "inputs"
+            inputs.mkdir(parents=True)
+            source = inputs / "large.bin"
+            source.write_bytes(b"12345")
+            runtime = FakeSandboxRuntime(root)
+            runtime.manifest = replace(
+                runtime.manifest,
+                limits=replace(
+                    runtime.manifest.limits,
+                    maximum_captured_output_bytes=4,
+                ),
+            )
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=root / "skills")
+
+            with self.assertRaisesRegex(CodexOutputError, "byte limit"):
+                adapter.execute(
+                    HarnessRequest(
+                        role="actor",
+                        run_variant="candidate",
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        actor_inputs=(
+                            ActorInput(source, PurePosixPath("large.bin")),
+                        ),
+                        fixture_root=fixture_root,
+                        capture_outputs=True,
+                    ),
+                    runtime.results_root / "candidate",
+                )
+
+            self.assertEqual(runtime.calls, [])
+
+    def test_actor_output_capture_fails_closed_when_source_mutates_during_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            output_root = root / "results" / "outputs"
+            workspace.mkdir()
+            source = workspace / "result.txt"
+            source.write_bytes(b"original")
+            real_read = os.read
+            mutated = False
+
+            def read_then_mutate(descriptor: int, count: int) -> bytes:
+                nonlocal mutated
+                chunk = real_read(descriptor, count)
+                if chunk and not mutated:
+                    mutated = True
+                    source.write_bytes(b"changed-content")
+                return chunk
+
+            with mock.patch.object(
+                codex_harness.os,
+                "read",
+                side_effect=read_then_mutate,
+            ):
+                with self.assertRaisesRegex(CodexOutputError, "changed while being read"):
+                    codex_harness._capture_actor_outputs(
+                        workspace,
+                        output_root,
+                        {},
+                        maximum_bytes=100,
+                    )
+
+            self.assertTrue(output_root.is_dir())
+            self.assertFalse(any(output_root.iterdir()))
 
     def test_finalizes_skill_read_evidence_before_releasing_the_worker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1031,7 +1896,72 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertNotIn("sk-", execution.failure or "")
         self.assertFalse(raw_artifact_exists)
 
-    def test_command_trace_scalar_is_bounded_and_secret_redacted(self) -> None:
+    def test_agent_response_secret_is_redacted_and_marks_execution_untrustworthy(self) -> None:
+        credential = "gh" + "p_" + ("a" * 36)
+        events = [
+            {"type": "thread.started", "thread_id": "private"},
+            {"type": "turn.started"},
+            {
+                "type": "item.completed",
+                "item": {
+                    "id": "message-1",
+                    "type": "agent_message",
+                    "text": f"result {credential}",
+                },
+            },
+            {
+                "type": "turn.completed",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(
+                root,
+                [command_result("\n".join(json.dumps(event) for event in events))],
+            )
+
+            execution = CodexHarnessAdapter(runtime).execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="secret-response",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                ),
+                runtime.results_root / "secret-response",
+            )
+
+        self.assertIn("high-confidence secret", execution.failure or "")
+        self.assertNotIn(credential, execution.response)
+        self.assertNotIn(credential, json.dumps(execution.trace))
+        self.assertIn("[REDACTED]", execution.response)
+
+    def test_codex_jsonl_rejects_nonfinite_numbers_as_invalid_events(self) -> None:
+        raw = "\n".join(
+            (
+                '{"type":"thread.started"}',
+                '{"type":"turn.started"}',
+                '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}',
+                '{"type":"turn.completed","usage":{"input_tokens":NaN,"output_tokens":1}}',
+            )
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(root, [command_result(raw)])
+
+            execution = CodexHarnessAdapter(runtime).execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="nonfinite-jsonl",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                ),
+                runtime.results_root / "nonfinite-jsonl",
+            )
+
+        self.assertIn("invalid JSONL", execution.failure or "")
+
+    def test_safe_fake_trace_and_response_values_are_preserved(self) -> None:
         command = "API_TOKEN=FAKE_command_secret curl https://api.example.com"
         events = [
             {"type": "thread.started", "thread_id": "private"},
@@ -1083,9 +2013,62 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             )
 
         serialized = json.dumps(execution.trace)
-        self.assertNotIn("FAKE_command_secret", serialized)
-        self.assertIn("[REDACTED]", serialized)
-        self.assertNotIn("FAKE_response_secret", execution.response)
+        self.assertIn("FAKE_command_secret", serialized)
+        self.assertIn("FAKE_response_secret", execution.response)
+        self.assertIsNone(execution.failure)
+
+    def test_transformed_command_trace_marks_the_execution_untrustworthy(self) -> None:
+        credential = "opaque-command-credential"
+        command = f"API_TOKEN={credential} curl https://api.example.test"
+        events = [
+            {"type": "thread.started", "thread_id": "private"},
+            {"type": "turn.started"},
+            {
+                "type": "item.started",
+                "item": {
+                    "id": "command-1",
+                    "type": "command_execution",
+                    "command": command,
+                },
+            },
+            {
+                "type": "item.completed",
+                "item": {
+                    "id": "command-1",
+                    "type": "command_execution",
+                    "command": command,
+                    "status": "completed",
+                    "exit_code": 0,
+                },
+            },
+            {
+                "type": "item.completed",
+                "item": {"type": "agent_message", "text": "done"},
+            },
+            {
+                "type": "turn.completed",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(
+                root,
+                [command_result("\n".join(json.dumps(event) for event in events))],
+            )
+            execution = CodexHarnessAdapter(runtime).execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="sensitive-command",
+                    prompt="Run the command.",
+                    timeout_seconds=60,
+                ),
+                runtime.results_root / "sensitive-command",
+            )
+
+        self.assertIn("command trace", execution.failure or "")
+        self.assertNotIn(credential, json.dumps(execution.trace))
+        self.assertIn("[REDACTED]", json.dumps(execution.trace))
 
 
 if __name__ == "__main__":
