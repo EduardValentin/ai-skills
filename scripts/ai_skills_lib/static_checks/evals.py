@@ -21,11 +21,7 @@ from scripts.ai_skills_lib.static_checks.context import (
     skill_scope,
 )
 from scripts.ai_skills_lib.static_checks.content import find_static_secret_issues
-
-
-_REPETITION_KEYS = frozenset(
-    {"runs", "run_count", "run-count", "repetitions", "repeat", "repeats", "attempts"}
-)
+from scripts.ai_skills_lib.trigger_definitions import validate_trigger_query_document
 
 
 def validate_eval_files(
@@ -83,7 +79,7 @@ def validate_eval_files(
                     issues.extend(_fixture_path_issues(skill, scope, item))
 
     if triggers_data is not None:
-        issues.extend(_trigger_schema_issues(scope, triggers_data))
+        issues.extend(validate_trigger_query_document(triggers_data, skill.name, scope))
     return issues
 
 
@@ -124,88 +120,6 @@ def _secret_issues(
         )
         for finding in find_static_secret_issues(text, source.logical_path)
     ]
-
-
-def _trigger_schema_issues(scope: str, data: Any) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-    if not isinstance(data, dict):
-        return [
-            ValidationIssue(
-                scope=scope,
-                message="evals/triggers.json must contain a 'queries' list",
-            )
-        ]
-
-    repetition_key = next(
-        (key for key in _iter_mapping_keys(data) if key.lower() in _REPETITION_KEYS), None
-    )
-    if repetition_key is not None:
-        issues.append(
-            ValidationIssue(
-                scope=scope,
-                message=(
-                    "evals/triggers.json must not contain runner repetition configuration "
-                    f"('{repetition_key}')"
-                ),
-            )
-        )
-
-    queries = data.get("queries")
-    if not isinstance(queries, list) or not queries:
-        issues.append(
-            ValidationIssue(
-                scope=scope,
-                message="evals/triggers.json must contain a 'queries' list",
-            )
-        )
-        return issues
-
-    decisions: list[bool] = []
-    for index, query in enumerate(queries):
-        if (
-            not isinstance(query, dict)
-            or not isinstance(query.get("query"), str)
-            or not query["query"].strip()
-            or not isinstance(query.get("should_trigger"), bool)
-        ):
-            issues.append(
-                ValidationIssue(
-                    scope=scope,
-                    message=(
-                        f"evals/triggers.json query {index} requires non-empty 'query' and "
-                        "boolean 'should_trigger'"
-                    ),
-                )
-            )
-            continue
-        decisions.append(query["should_trigger"])
-
-    if True not in decisions:
-        issues.append(
-            ValidationIssue(
-                scope=scope,
-                message="evals/triggers.json requires a should_trigger: true query",
-            )
-        )
-    if False not in decisions:
-        issues.append(
-            ValidationIssue(
-                scope=scope,
-                message="evals/triggers.json requires a should_trigger: false query",
-            )
-        )
-    return issues
-
-
-def _iter_mapping_keys(value: Any) -> Iterator[str]:
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if isinstance(key, str):
-                yield key
-            yield from _iter_mapping_keys(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _iter_mapping_keys(child)
 
 
 def _fixture_path_issues(skill: SkillRecord, scope: str, value: Any) -> list[ValidationIssue]:

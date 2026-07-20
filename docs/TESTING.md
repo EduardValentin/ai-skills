@@ -26,10 +26,16 @@ python3 scripts/ai_skills.py validate triggers --harness codex
 python3 scripts/ai_skills.py validate all --harness codex
 ```
 
+Model-backed commands select every skill by default. Trigger runs accept
+`--skill <name>`, `--query <id>`, `--runs 1|2|3`,
+`--max-concurrency 1|2|3|4`, and `--results-dir <external-path>`.
+
 These commands run only after explicit user approval. Before the first model
 call, the CLI prints actor and judge run counts, preflight calls, concurrency,
 and the durable result directory. Every attempted run is preserved; the runner
-does not hide instability with automatic retries.
+does not hide instability with automatic retries. The durable result path is
+printed again on every success or failure after a workspace has been created.
+Full offline static validation must pass before model-backed setup begins.
 
 ## Runtime Isolation
 
@@ -85,7 +91,14 @@ Each worker receives one invocation-owned staging root, mounted at the same
 absolute path inside the microVM. The canonical repository, durable result
 directory, host home, and another worker's staging root are never mounted.
 Actor projections contain only `SKILL.md`, `scripts/`, `references/`, and
-`assets/`; `evals/` and all grading material remain host-side.
+`assets/`; `evals/` and all grading material remain host-side. Before actor
+execution, the complete catalog becomes root-owned and read-only. Its
+`CODEX_HOME` parent is root-owned with sticky write permissions so Codex can
+create its own state but the case user cannot rename or replace the root-owned
+catalog entry. The case root is also root-owned and read-only, with actor-owned
+writable child directories prepared in advance. Rename probes for the catalog,
+`CODEX_HOME`, and case root must all fail before the model runs, anchoring the
+projection path at the non-actor-writable worker mount root.
 
 Codex authentication is managed by the Docker Sandboxes host proxy. The runner
 does not copy `~/.codex`, `auth.json`, API keys, browser sessions, or other
@@ -116,12 +129,25 @@ the full retained public skill catalog but are not told which skill should be
 selected. Positive and near-miss negative cases use the same result format as
 behavior evals.
 
+Each file names its skill and contains uniquely identified queries with a
+non-empty prompt and boolean `should_trigger`. At least one positive and one
+near-miss negative query are required. Run counts are CLI policy and never
+belong in the authored file. The file must be a contained non-symlink regular
+file, and high-confidence credential literals fail before workspace creation.
+
 For Codex, activation requires a successfully completed command that reads the
 exact installed target `SKILL.md`. A mention in prose is not activation proof.
 The target must exist in the runner-created projection before Codex starts; a
 file created by the actor during the run cannot become activation evidence.
+Missing expected-path evidence is an execution error, including for negative
+queries; failed setup cannot become a passing absence assertion.
 Queries run once by default; `--runs 2` and `--runs 3` apply the same repetition
-to every selected query.
+to every selected query. One, two, or three unanimous matching runs are stable.
+Two of three meets the threshold but is reported as unstable and requires
+investigation; every other non-unanimous result fails. Harness, timeout, and
+evidence errors are reported separately and never averaged into the threshold.
+Trigger grading is deterministic and cites exact normalized trace evidence; it
+does not spend a separate judge call.
 
 ## Fixtures
 
@@ -186,6 +212,7 @@ workspace for every declared run:
 ```text
 summary.md
 benchmark.json
+invocation.json
 attempts/<attempt>/attempt.json
 attempts/<attempt>/outputs/response.md
 attempts/<attempt>/transcript.md
@@ -194,13 +221,22 @@ attempts/<attempt>/timing.json
 attempts/<attempt>/grading.json
 ```
 
-The runner writes the immutable, schema-validated `attempt.json` before external
-execution. It anchors run identity, variant membership, contribution policy,
-required variants, and comparisons. Failed attempts preserve available
-response, transcript, normalized trace, and timing without inventing a grade.
+Once a result workspace exists, `summary.md` is always written with the terminal
+decision, including setup, preflight, execution, or aggregation errors and
+available attempt artifact paths. `benchmark.json` is written only when the
+complete declared attempt set can be aggregated as trustworthy evidence.
 
-The generated `grading.json` records every assertion result, concrete evidence,
-and judge model/reasoning metadata. A human may add a complete
+Before external execution, the runner writes schema-validated `invocation.json`
+with the exact expected attempt set, then writes each immutable `attempt.json`
+before its harness call. These declarations anchor run identity, variant
+membership, contribution policy, required variants, comparisons, repetition
+count, and ordinal. Aggregation rejects missing, injected, duplicate, or changed
+attempt declarations. Failed attempts preserve available response, transcript,
+normalized trace, and timing without inventing a grade.
+
+The generated `grading.json` records every assertion result and concrete
+evidence. Behavior grades include judge model/reasoning metadata; trigger grades
+identify the deterministic trigger runner. A human may add a complete
 `manual_grading.json` with the same schema; generated output remains unchanged.
 Aggregate preserved results offline with:
 
@@ -213,6 +249,12 @@ python3 scripts/ai_skills.py evals aggregate \
 Aggregation rejects undeclared, partial, failed, mismatched, or unbalanced
 attempts. It reports judge and manual summaries separately when `both` is used;
 the complete manual grade is the effective override for the command outcome.
+Repeated trigger attempts preserve every run while applying the declared
+runner threshold at query level. Every attempt records the configured run count
+and its ordinal, and aggregation requires the exact complete run set before
+applying that threshold. Per-skill benchmark summaries include the
+observed `trigger_rate` measurement, so actual pickup frequency remains visible
+even when the expected positive or negative outcome passed.
 Exit `0` means all contributing effective grades passed, exit `1` means a
 trusted contributing assertion failed, and exit `2` means the result set is
 invalid or untrustworthy.

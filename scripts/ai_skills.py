@@ -31,6 +31,7 @@ from scripts.ai_skills_lib.static_validation import (
     run_ci_validation,
     run_static_validation,
 )
+from scripts.ai_skills_lib.trigger_validation import run_trigger_query_harness
 
 
 def run_unit_tests(root: Path) -> int:
@@ -85,6 +86,16 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print("validate ci-all: OK")
         return 0
+    if args.command == "validate" and args.target == "triggers":
+        return run_trigger_query_harness(
+            REPOSITORY_ROOT,
+            harness=args.harness,
+            runs=args.runs,
+            skill_filter=args.skill,
+            query_filter=args.query,
+            results_dir=args.results_dir,
+            max_concurrency=args.max_concurrency,
+        )
     print(f"{command_label(args)}: not implemented")
     return 2
 

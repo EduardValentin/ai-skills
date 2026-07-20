@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import json
 import os
@@ -47,6 +47,7 @@ class ResultWorkspace:
 
     root: Path
     attempts: Path
+    invocation_manifest: Path
     benchmark: Path
     output_summary: Path
     repository_root: Path
@@ -184,6 +185,30 @@ class AggregationMetadata:
     contributes_to_outcome: bool
     required_variants: tuple[str, ...]
     compare_to: str | None = None
+    minimum_pass_rate: float | None = None
+    configured_runs: int | None = None
+    run_number: int | None = None
+
+    def __post_init__(self) -> None:
+        repeated_fields = (
+            self.minimum_pass_rate,
+            self.configured_runs,
+            self.run_number,
+        )
+        if any(value is not None for value in repeated_fields) and any(
+            value is None for value in repeated_fields
+        ):
+            raise ValueError(
+                "threshold aggregation requires pass rate, configured runs, and run number"
+            )
+        if self.minimum_pass_rate is not None and not 0 < self.minimum_pass_rate <= 1:
+            raise ValueError("minimum pass rate must be greater than zero and at most one")
+        if self.configured_runs is not None and (
+            self.configured_runs < 1
+            or self.run_number is None
+            or not 1 <= self.run_number <= self.configured_runs
+        ):
+            raise ValueError("aggregation run number must belong to the configured run set")
 
     def to_dict(self) -> dict[str, object]:
         value: dict[str, object] = {
@@ -194,6 +219,10 @@ class AggregationMetadata:
         }
         if self.compare_to is not None:
             value["compare_to"] = self.compare_to
+        if self.minimum_pass_rate is not None:
+            value["minimum_pass_rate"] = self.minimum_pass_rate
+            value["configured_runs"] = self.configured_runs
+            value["run_number"] = self.run_number
         return value
 
 
@@ -247,9 +276,10 @@ class GradingRecord:
     assertion_results: tuple[AssertionResult, ...]
     summary: GradingSummary
     aggregation: AggregationMetadata
+    measurements: Mapping[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        document: dict[str, object] = {
             "schema_version": "ai-skills.eval.grading.v1",
             "run_id": self.run_id,
             "skill_name": self.skill_name,
@@ -262,6 +292,9 @@ class GradingRecord:
             "summary": self.summary.to_dict(),
             "aggregation": self.aggregation.to_dict(),
         }
+        if self.measurements:
+            document["measurements"] = dict(self.measurements)
+        return document
 
 
 @dataclass(frozen=True)
@@ -352,10 +385,45 @@ def create_result_workspace(
     return ResultWorkspace(
         root=root,
         attempts=attempts,
+        invocation_manifest=root / "invocation.json",
         benchmark=root / "benchmark.json",
         output_summary=root / "summary.md",
         repository_root=resolved_repository,
     )
+
+
+def write_result_summary(workspace: ResultWorkspace, text: str) -> None:
+    """Atomically persist the invocation's terminal human-readable status."""
+    if not text.strip():
+        raise ResultArtifactError("result summary must be non-empty")
+    _write_text_atomic(
+        workspace.output_summary,
+        f"{text.rstrip()}\n",
+        workspace.root,
+        replace_existing=True,
+    )
+
+
+def declare_invocation(
+    workspace: ResultWorkspace,
+    command: str,
+    manifests: Sequence[AttemptManifest],
+) -> None:
+    """Persist the exact expected attempt set before external execution."""
+    if not command:
+        raise ResultArtifactError("invocation command must be non-empty")
+    if not manifests:
+        raise ResultArtifactError("invocation must declare at least one attempt")
+    run_ids = [manifest.run_id for manifest in manifests]
+    if len(run_ids) != len(set(run_ids)):
+        raise ResultArtifactError("invocation attempt run identifiers must be unique")
+    document = {
+        "schema_version": "ai-skills.eval.invocation.v1",
+        "command": command,
+        "attempts": [manifest.to_dict() for manifest in manifests],
+    }
+    validate_result_document(document, "invocation.schema.json")
+    _write_json_once(workspace.invocation_manifest, document, workspace.root)
 
 
 def create_attempt_workspace(
@@ -369,6 +437,21 @@ def create_attempt_workspace(
         raise ResultArtifactError(
             "attempt aggregation variant must be one of its required variants"
         )
+    if workspace.invocation_manifest.exists():
+        invocation = _read_result_document(
+            workspace.invocation_manifest,
+            "invocation.schema.json",
+            workspace.root,
+        )
+        declared = [
+            attempt
+            for attempt in invocation["attempts"]
+            if attempt["run_id"] == manifest.run_id
+        ]
+        if declared != [document]:
+            raise ResultArtifactError(
+                "attempt does not match the immutable invocation manifest"
+            )
     if workspace.root.is_symlink() or workspace.attempts.is_symlink():
         raise ResultArtifactError("invocation attempts directory must not be a symlink")
     try:
@@ -712,6 +795,22 @@ def aggregate_results(
     attempts_root = root / "attempts"
     if attempts_root.is_symlink() or not attempts_root.is_dir():
         raise ResultArtifactError(f"results directory has no attempts: {results_dir}")
+    invocation_path = root / "invocation.json"
+    declared_attempts: dict[str, dict[str, object]] | None = None
+    if invocation_path.exists() or invocation_path.is_symlink():
+        invocation = _read_result_document(
+            invocation_path,
+            "invocation.schema.json",
+            root,
+        )
+        declared_attempts = {}
+        for attempt in invocation["attempts"]:
+            run_id = attempt["run_id"]
+            if run_id in declared_attempts:
+                raise ResultArtifactError(
+                    f"duplicate run_id in invocation manifest: {run_id}"
+                )
+            declared_attempts[run_id] = attempt
 
     try:
         attempt_entries = sorted(attempts_root.iterdir())
@@ -749,13 +848,21 @@ def aggregate_results(
         source: [] for source in requested_sources
     }
     run_ids: set[str] = set()
+    thresholded_attempts = False
     for manifest_path in manifest_paths:
         manifest = _read_result_document(manifest_path, "attempt.schema.json", root)
         run_id = manifest["run_id"]
         if run_id in run_ids:
             raise ResultArtifactError(f"duplicate run_id in attempt manifests: {run_id}")
         run_ids.add(run_id)
+        if declared_attempts is not None and declared_attempts.get(run_id) != manifest:
+            raise ResultArtifactError(
+                f"attempt does not match the immutable invocation manifest: {run_id}"
+            )
         aggregation = manifest["aggregation"]
+        thresholded_attempts = thresholded_attempts or (
+            "minimum_pass_rate" in aggregation
+        )
         if aggregation["variant"] not in aggregation["required_variants"]:
             raise ResultArtifactError(
                 f"unexpected variant in attempt manifest: {aggregation['variant']}"
@@ -783,6 +890,15 @@ def aggregate_results(
             _validate_artifact_matches_manifest(manual, manifest, manual_path)
             _validate_complete_manual_override(generated, manual, manual_path)
             preserved["manual"].append((manual, timing))
+
+    if declared_attempts is not None and run_ids != set(declared_attempts):
+        raise ResultArtifactError(
+            "attempt set does not match the immutable invocation manifest"
+        )
+    if thresholded_attempts and declared_attempts is None:
+        raise ResultArtifactError(
+            "threshold aggregation requires an immutable invocation manifest"
+        )
 
     benchmark: dict[str, object] = {
         "schema_version": "ai-skills.eval.benchmark.v1",
@@ -842,6 +958,13 @@ def format_benchmark_summary(benchmark: Mapping[str, object]) -> str:
                     f"    {comparison['variant']} - {comparison['baseline_variant']} "
                     f"delta={comparison['pass_rate_delta']:+.4f}{label}"
                 )
+        for skill in source_summary["skill_summaries"]:
+            measurements = ", ".join(
+                f"{name}={details['mean']:.4f} (n={details['count']})"
+                for name, details in skill["measurements"].items()
+            )
+            if measurements:
+                lines.append(f"  {skill['skill_name']} measurements: {measurements}")
     return "\n".join(lines)
 
 
@@ -849,17 +972,19 @@ def _aggregate_source(
     records: Sequence[tuple[dict[str, object], dict[str, object]]],
 ) -> dict[str, object]:
     grouped: dict[str, list[tuple[dict[str, object], dict[str, object]]]] = defaultdict(list)
-    contributing: list[dict[str, object]] = []
     for grading, timing in records:
         grouped[grading["aggregation"]["group_id"]].append((grading, timing))
-        if grading["aggregation"]["contributes_to_outcome"]:
-            contributing.append(grading)
 
     groups = [_aggregate_group(group_id, grouped[group_id]) for group_id in sorted(grouped)]
-    if not contributing:
+    contributing_outcomes = [
+        outcome
+        for group_id in sorted(grouped)
+        for outcome in _contributing_outcomes(group_id, grouped[group_id])
+    ]
+    if not contributing_outcomes:
         raise ResultArtifactError("grading source has no contributing outcomes")
-    passed_cases = sum(_grading_passed(grading) for grading in contributing)
-    total_cases = len(contributing)
+    passed_cases = sum(contributing_outcomes)
+    total_cases = len(contributing_outcomes)
     return {
         "summary": {
             "total_cases": total_cases,
@@ -868,6 +993,7 @@ def _aggregate_source(
             "pass_rate": passed_cases / total_cases if total_cases else 0.0,
         },
         "groups": groups,
+        "skill_summaries": _aggregate_skill_summaries(grouped),
     }
 
 
@@ -910,6 +1036,8 @@ def _aggregate_group(
             (
                 grading["aggregation"]["contributes_to_outcome"],
                 grading["aggregation"].get("compare_to"),
+                grading["aggregation"].get("minimum_pass_rate"),
+                grading["aggregation"].get("configured_runs"),
                 grading["run_kind"],
             )
             for grading, _ in variant_records
@@ -949,6 +1077,92 @@ def _aggregate_group(
         "variants": variants,
         "comparisons": comparisons,
     }
+
+
+def _contributing_outcomes(
+    group_id: str,
+    records: Sequence[tuple[dict[str, object], dict[str, object]]],
+) -> list[bool]:
+    contributing = [
+        grading
+        for grading, _ in records
+        if grading["aggregation"]["contributes_to_outcome"]
+    ]
+    if not contributing:
+        return []
+    thresholds = {
+        grading["aggregation"].get("minimum_pass_rate") for grading in contributing
+    }
+    if thresholds == {None}:
+        return [_grading_passed(grading) for grading in contributing]
+    if None in thresholds or len(thresholds) != 1:
+        raise ResultArtifactError(
+            f"aggregation group {group_id!r} has inconsistent outcome thresholds"
+        )
+    variants = {grading["aggregation"]["variant"] for grading in contributing}
+    if len(variants) != 1:
+        raise ResultArtifactError(
+            f"aggregation group {group_id!r} applies one threshold to multiple variants"
+        )
+    threshold = next(iter(thresholds))
+    configured_runs = {
+        grading["aggregation"].get("configured_runs") for grading in contributing
+    }
+    if len(configured_runs) != 1 or None in configured_runs:
+        raise ResultArtifactError(
+            f"aggregation group {group_id!r} has inconsistent configured run counts"
+        )
+    configured_run_count = next(iter(configured_runs))
+    run_numbers = [grading["aggregation"].get("run_number") for grading in contributing]
+    if (
+        len(contributing) != configured_run_count
+        or len(set(run_numbers)) != configured_run_count
+        or set(run_numbers) != set(range(1, configured_run_count + 1))
+    ):
+        raise ResultArtifactError(
+            f"aggregation group {group_id!r} does not contain the complete configured run set"
+        )
+    pass_rate = sum(_grading_passed(grading) for grading in contributing) / len(contributing)
+    return [pass_rate >= threshold]
+
+
+def _aggregate_skill_summaries(
+    grouped: Mapping[str, Sequence[tuple[dict[str, object], dict[str, object]]]],
+) -> list[dict[str, object]]:
+    by_skill: dict[str, list[tuple[str, Sequence[tuple[dict[str, object], dict[str, object]]]]]] = defaultdict(list)
+    for group_id, records in grouped.items():
+        skill_names = {grading["skill_name"] for grading, _ in records}
+        if len(skill_names) != 1:
+            raise ResultArtifactError(f"aggregation group {group_id!r} mixes skills")
+        by_skill[next(iter(skill_names))].append((group_id, records))
+
+    summaries: list[dict[str, object]] = []
+    for skill_name in sorted(by_skill):
+        outcomes: list[bool] = []
+        measurements: dict[str, list[float]] = defaultdict(list)
+        for group_id, records in by_skill[skill_name]:
+            outcomes.extend(_contributing_outcomes(group_id, records))
+            for grading, _ in records:
+                for name, value in grading.get("measurements", {}).items():
+                    measurements[name].append(value)
+        summaries.append(
+            {
+                "skill_name": skill_name,
+                "total_outcomes": len(outcomes),
+                "passed_outcomes": sum(outcomes),
+                "failed_outcomes": len(outcomes) - sum(outcomes),
+                "pass_rate": sum(outcomes) / len(outcomes) if outcomes else 0.0,
+                "measurements": {
+                    name: {
+                        "count": len(values),
+                        "total": sum(values),
+                        "mean": sum(values) / len(values),
+                    }
+                    for name, values in sorted(measurements.items())
+                },
+            }
+        )
+    return summaries
 
 
 def _aggregate_variant(
@@ -1022,6 +1236,8 @@ def _validate_complete_manual_override(
 ) -> None:
     identity_fields = ("run_id", "skill_name", "case_id", "run_kind", "aggregation")
     if any(generated[field] != manual[field] for field in identity_fields):
+        raise ResultArtifactError(f"manual grading is not a complete override for {manual_path}")
+    if generated.get("measurements", {}) != manual.get("measurements", {}):
         raise ResultArtifactError(f"manual grading is not a complete override for {manual_path}")
     generated_assertions = [
         (result["id"], result["kind"], result["text"])

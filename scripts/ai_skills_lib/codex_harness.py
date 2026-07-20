@@ -201,6 +201,8 @@ class CodexHarnessAdapter:
                     _validate_skill_name(resolved.name)
                     project_actor_skill(resolved, case.skills / resolved.name)
 
+                self.runtime.seal_skill_catalog(worker, case)
+
                 if request.expected_skill:
                     _validate_skill_name(request.expected_skill)
                 candidate_expected_path = (
@@ -217,6 +219,10 @@ class CodexHarnessAdapter:
                     if expected_path is not None
                     else None
                 )
+                if request.expected_skill is not None and expected_path is None:
+                    raise CodexOutputError(
+                        "expected skill was not provisioned as an installed SKILL.md"
+                    )
                 shell_environment = request.shell_environment
                 if request.fixture_initialization is not None:
                     assert self.fixture_proxy is not None
@@ -290,25 +296,48 @@ class CodexHarnessAdapter:
                     lifecycle_failure = "\n".join(
                         item for item in (lifecycle_failure, *diagnostics) if item
                     )[:MAX_DIAGNOSTIC_CHARS]
+                successful_skill_reads = parsed.successful_skill_reads
+                projection_trace: tuple[Mapping[str, object], ...] = ()
+                projection_failure: str | None = None
+                if expected_path is not None and (
+                    expected_path.is_symlink()
+                    or not expected_path.is_file()
+                    or expected_digest is None
+                    or _file_sha256(expected_path) != expected_digest
+                ):
+                    successful_skill_reads = ()
+                    projection_failure = (
+                        "projected SKILL.md changed before post-run integrity verification"
+                    )
+                    projection_trace = (
+                        {"event": "projection_integrity_failure"},
+                    )
                 model, reasoning = self._selected_model(request)
                 failure = "\n".join(
-                    item for item in (parsed.failure, lifecycle_failure) if item
+                    item
+                    for item in (
+                        parsed.failure,
+                        lifecycle_failure,
+                        projection_failure,
+                    )
+                    if item
                 ) or None
                 execution = HarnessExecution(
                     response=parsed.response,
-                    trace=(*parsed.trace, *fixture_trace),
+                    trace=(*parsed.trace, *fixture_trace, *projection_trace),
                     duration_ms=duration_ms,
                     total_tokens=parsed.total_tokens,
                     input_tokens=parsed.input_tokens,
                     output_tokens=parsed.output_tokens,
                     cached_tokens=parsed.cached_tokens,
                     token_source="codex_jsonl" if parsed.has_usage else "unavailable",
-                    successful_skill_reads=parsed.successful_skill_reads,
+                    successful_skill_reads=successful_skill_reads,
                     exit_code=result.returncode,
                     failure=failure,
                     model=model,
                     reasoning_effort=reasoning,
                     timed_out=result.timed_out,
+                    expected_skill_path=expected_path,
                 )
             except Exception:
                 if fixture_session is not None:

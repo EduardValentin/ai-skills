@@ -170,6 +170,16 @@ def sample_benchmark() -> dict[str, object]:
                 ],
             }
         ],
+        "skill_summaries": [
+            {
+                "skill_name": "ticket-workflow",
+                "total_outcomes": 1,
+                "passed_outcomes": 1,
+                "failed_outcomes": 0,
+                "pass_rate": 1.0,
+                "measurements": {},
+            }
+        ],
     }
     return {
         "schema_version": "ai-skills.eval.benchmark.v1",

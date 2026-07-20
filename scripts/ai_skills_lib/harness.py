@@ -129,6 +129,7 @@ class HarnessExecution:
     model: str | None
     reasoning_effort: str | None
     timed_out: bool
+    expected_skill_path: Path | None = None
 
 
 @runtime_checkable

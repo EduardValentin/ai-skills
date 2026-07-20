@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from scripts.ai_skills_lib.sandbox_runtime import (
+    CATALOG_RENAME_PROBE_SCRIPT,
     CaseWorkspace,
     CommandResult,
     EvalRuntimeManifest,
@@ -46,6 +47,12 @@ class FakeProcessRunner:
             if len(argv) > 5 and argv[3] == "root" and argv[5] == "getent":
                 return CommandResult(returncode=2, stdout="", stderr="")
             if argv[3] == "root" or (len(argv) > 5 and argv[5] == "test"):
+                return completed()
+            if (
+                len(argv) > 7
+                and argv[5:7] == ("python3", "-c")
+                and argv[7] == CATALOG_RENAME_PROBE_SCRIPT
+            ):
                 return completed()
         if argv == ("sbx", "ls", "--json"):
             previous = self.calls[-2][0][:2] if len(self.calls) > 1 else ()
@@ -1343,6 +1350,160 @@ class SandboxRuntimeTests(unittest.TestCase):
         copy_argv = next(argv for argv, _ in process.calls if "cp" in argv)
         self.assertIn("/home/agent/.codex/config.toml", copy_argv)
         self.assertIn("/home/agent/.codex/auth.json", copy_argv)
+
+    def test_seals_the_complete_skill_catalog_against_case_user_mutation(self) -> None:
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            runtime.seal_skill_catalog(worker, case)
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertIn(
+            ("sbx", "exec", "--user", "root", "actor-id", "chown", "-R", "root:root", str(case.skills)),
+            commands,
+        )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "actor-id",
+                "chown",
+                "root:root",
+                str(case.codex_home),
+            ),
+            commands,
+        )
+        for writable_path in (
+            case.home,
+            case.codex_home,
+            case.tmpdir,
+            case.workspace,
+            case.bootstrap,
+        ):
+            self.assertIn(
+                (
+                    "sbx",
+                    "exec",
+                    "--user",
+                    case.user_name,
+                    "actor-id",
+                    "test",
+                    "-w",
+                    str(writable_path),
+                ),
+                commands,
+            )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "actor-id",
+                "chown",
+                "root:root",
+                str(case.root),
+            ),
+            commands,
+        )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "actor-id",
+                "chmod",
+                "0555",
+                str(case.root),
+            ),
+            commands,
+        )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "actor-id",
+                "chmod",
+                "1777",
+                str(case.codex_home),
+            ),
+            commands,
+        )
+        self.assertIn(
+            ("sbx", "exec", "--user", "root", "actor-id", "chmod", "0555", str(case.skills)),
+            commands,
+        )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                case.user_name,
+                "actor-id",
+                "test",
+                "!",
+                "-w",
+                str(case.skills),
+            ),
+            commands,
+        )
+        rename_probes = {
+            (argv[-2], argv[-1])
+            for argv in commands
+            if argv[:5]
+            == ("sbx", "exec", "--user", case.user_name, "actor-id")
+            and argv[5:7] == ("python3", "-c")
+            and argv[7] == CATALOG_RENAME_PROBE_SCRIPT
+        }
+        self.assertEqual(
+            rename_probes,
+            {
+                (
+                    str(case.skills),
+                    str(case.codex_home / ".skills-rename-probe"),
+                ),
+                (
+                    str(case.codex_home),
+                    str(case.root / ".codex-home-rename-probe"),
+                ),
+                (
+                    str(case.root),
+                    str(worker.host_root / ".case-rename-probe"),
+                ),
+            },
+        )
 
     def test_case_reset_failure_quarantines_the_worker_before_cleanup(self) -> None:
         process = FakeProcessRunner(

@@ -6,20 +6,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.ai_skills_lib.authored_content import (
+    AuthoredFile,
+    StrictPathResolution,
+    resolve_strict,
+)
 from scripts.ai_skills_lib.core import SkillRecord, discover_testable_skills
 from scripts.ai_skills_lib.issues import ValidationIssue
-
-
-@dataclass(frozen=True)
-class AuthoredFile:
-    logical_path: Path
-    resolved_path: Path
-
-
-@dataclass(frozen=True)
-class StrictPathResolution:
-    resolved_path: Path | None
-    error: OSError | RuntimeError | None
 
 
 @dataclass(frozen=True)
@@ -37,13 +30,6 @@ def build_validation_context(root: Path) -> ValidationContext:
         skills=skills,
         public_names=frozenset(skill.name for skill in skills),
     )
-
-
-def resolve_strict(path: Path) -> StrictPathResolution:
-    try:
-        return StrictPathResolution(path.resolve(strict=True), None)
-    except (OSError, RuntimeError) as error:
-        return StrictPathResolution(None, error)
 
 
 def skill_scope(context: ValidationContext, skill: SkillRecord) -> str:

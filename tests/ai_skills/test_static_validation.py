@@ -76,9 +76,18 @@ class TemporaryRepository:
             self.write_json(
                 evals_root / "triggers.json",
                 {
+                    "skill_name": name,
                     "queries": [
-                        {"query": "Perform the alpha workflow.", "should_trigger": True},
-                        {"query": "Summarize an unrelated note.", "should_trigger": False},
+                        {
+                            "id": f"{name}-positive",
+                            "query": f"Perform the {name} workflow.",
+                            "should_trigger": True,
+                        },
+                        {
+                            "id": f"{name}-negative",
+                            "query": "Summarize an unrelated note.",
+                            "should_trigger": False,
+                        },
                     ]
                 },
             )
@@ -262,11 +271,26 @@ class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
         trigger_path = skill_root / "evals" / "triggers.json"
 
         for queries, expected in (
-            ([{"query": "Use alpha.", "should_trigger": True}], "should_trigger: false"),
-            ([{"query": "Do something else.", "should_trigger": False}], "should_trigger: true"),
+            (
+                [{"id": "positive", "query": "Use alpha.", "should_trigger": True}],
+                "should_trigger: false",
+            ),
+            (
+                [
+                    {
+                        "id": "negative",
+                        "query": "Do something else.",
+                        "should_trigger": False,
+                    }
+                ],
+                "should_trigger: true",
+            ),
         ):
             with self.subTest(expected=expected):
-                self.repository.write_json(trigger_path, {"queries": queries})
+                self.repository.write_json(
+                    trigger_path,
+                    {"skill_name": "alpha", "queries": queries},
+                )
                 self.assert_issue(expected)
 
     def test_trigger_schema_rejects_runner_repetition_configuration(self):
@@ -276,7 +300,7 @@ class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
         data["runs"] = 3
         self.repository.write_json(trigger_path, data)
 
-        self.assert_issue("runner repetition configuration")
+        self.assert_issue("additionalProperties")
 
     def test_references_to_collaborators_require_metadata_opt_in(self):
         bodies = (
@@ -857,10 +881,22 @@ class CliValidationTests(TemporaryRepositoryTestCase):
     def test_validate_runs_default_once_and_accepts_uniform_supported_counts(self):
         parser = build_parser()
 
-        self.assertEqual(parser.parse_args(["validate", "triggers"]).runs, 1)
+        self.assertEqual(
+            parser.parse_args(["validate", "triggers", "--harness", "codex"]).runs,
+            1,
+        )
         for runs in (1, 2, 3):
             with self.subTest(runs=runs):
-                args = parser.parse_args(["validate", "triggers", "--runs", str(runs)])
+                args = parser.parse_args(
+                    [
+                        "validate",
+                        "triggers",
+                        "--harness",
+                        "codex",
+                        "--runs",
+                        str(runs),
+                    ]
+                )
                 self.assertEqual(args.runs, runs)
 
     def test_validate_static_uses_a_controlled_repository_root(self):

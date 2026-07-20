@@ -11,9 +11,18 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     validate = commands.add_parser("validate")
-    validate.add_argument("target", choices=("static", "runtime", "ci-all", "triggers", "evals", "all"))
-    validate.add_argument("--harness")
-    validate.add_argument("--runs", type=int, choices=(1, 2, 3), default=1)
+    validation_targets = validate.add_subparsers(dest="target", required=True)
+    for target in ("static", "runtime", "ci-all"):
+        validation_targets.add_parser(target)
+
+    triggers = validation_targets.add_parser("triggers")
+    _add_model_backed_options(triggers)
+    triggers.add_argument("--runs", type=int, choices=(1, 2, 3), default=1)
+    triggers.add_argument("--query")
+
+    for target in ("evals", "all"):
+        model_backed = validation_targets.add_parser(target)
+        _add_model_backed_options(model_backed)
 
     check_local_installs = commands.add_parser("check-local-installs")
     check_local_installs.add_argument("--harness", required=True)
@@ -25,6 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
     aggregate.add_argument("--grade-source", choices=("judge", "manual", "both"), required=True)
 
     return parser
+
+
+def _add_model_backed_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--harness", choices=("codex", "claude"), required=True)
+    parser.add_argument("--skill")
+    parser.add_argument("--results-dir", type=Path)
+    parser.add_argument("--max-concurrency", type=int, choices=(1, 2, 3, 4), default=2)
 
 
 def command_label(args: argparse.Namespace) -> str:

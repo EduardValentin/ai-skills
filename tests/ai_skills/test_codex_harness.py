@@ -118,6 +118,7 @@ class FakeSandboxRuntime:
         self.last_case: CaseWorkspace | None = None
         self.invalidated_workers: list[SandboxWorker] = []
         self.quiesced_cases: list[tuple[SandboxWorker, CaseWorkspace]] = []
+        self.sealed_catalogs: list[tuple[SandboxWorker, CaseWorkspace]] = []
         self.case_sequence = 0
         self.remove_case_on_lease_release = False
         self.quiesce_error: Exception | None = None
@@ -184,6 +185,10 @@ class FakeSandboxRuntime:
             json.dumps({"auth_mode": "host-proxy-placeholder"}),
             encoding="utf-8",
         )
+
+    def seal_skill_catalog(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
+        self.sealed_catalogs.append((worker, case))
+        case.skills.chmod(0o555)
 
     def invalidate_worker(self, worker: SandboxWorker) -> None:
         self.invalidated_workers.append(worker)
@@ -420,6 +425,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertEqual(codex_argv[-2:], ("--", "Perform the scenario."))
         self.assertNotIn("--ignore-user-config", codex_argv)
         self.assertTrue(projected_skill_exists)
+        self.assertEqual(len(runtime.sealed_catalogs), 1)
 
     def test_finalizes_skill_read_evidence_before_releasing_the_worker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -448,6 +454,49 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             )
 
         self.assertEqual(execution.successful_skill_reads, (expected_path,))
+
+    def test_expected_projection_integrity_is_verified_even_without_a_skill_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "source" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: example\n---\nFollow me.\n",
+                encoding="utf-8",
+            )
+            runtime = FakeSandboxRuntime(root)
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skill.parent)
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "candidate")
+            expected_path = case.skills / "example" / "SKILL.md"
+            runtime.execution_results.append(command_result(codex_jsonl()))
+            original_quiesce = runtime.quiesce_case
+
+            def remove_projection(
+                selected_worker: SandboxWorker,
+                selected_case: CaseWorkspace,
+            ) -> None:
+                original_quiesce(selected_worker, selected_case)
+                selected_case.skills.chmod(0o755)
+                expected_path.parent.chmod(0o755)
+                expected_path.unlink()
+
+            runtime.quiesce_case = remove_projection
+
+            execution = adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="candidate",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                    skill_sources=(skill,),
+                    expected_skill="example",
+                ),
+                runtime.results_root / "without-read",
+            )
+
+        self.assertIn("projected SKILL.md changed", execution.failure or "")
+        self.assertEqual(execution.successful_skill_reads, ())
 
     def test_fixture_environment_is_applied_only_to_codex_shell_subprocesses(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -772,8 +821,14 @@ class CodexHarnessAdapterTests(unittest.TestCase):
     def test_failed_or_ambiguous_commands_are_not_activation_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            skill = root / "source" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: example\n---\nFollow me.\n",
+                encoding="utf-8",
+            )
             runtime = FakeSandboxRuntime(root)
-            adapter = CodexHarnessAdapter(runtime)
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skill.parent)
             worker = runtime.acquire_worker("actor")
             case = runtime.prepare_case(worker, "candidate")
             expected = case.skills / "example" / "SKILL.md"
@@ -805,6 +860,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 run_variant="candidate",
                 prompt="Perform the scenario.",
                 timeout_seconds=60,
+                skill_sources=(skill,),
                 expected_skill="example",
             )
             artifact_dir = runtime.results_root / "ambiguous"

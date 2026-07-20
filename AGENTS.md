@@ -51,6 +51,11 @@ never edit installed or generated copies.
   run; every other non-unanimous result fails. Preserve every discordant run;
   Codex activation requires an exact successful read of the installed
   `SKILL.md`.
+- Keep trigger files runner-free: `skill_name` matches the skill, query IDs are
+  unique, every query has `query` and boolean `should_trigger`, and each skill
+  includes positive and near-miss negative coverage. Require a contained
+  non-symlink file and complete static validation before model-backed setup;
+  negative pickup passes only after the expected installed path is proven.
 - Never run `validate triggers`, `validate evals`, `validate all`, or real
   Docker Sandboxes/Codex integration smoke tests unless the user explicitly
   requests them. A skill change, review, implementation workflow, or PR request
@@ -58,7 +63,9 @@ never edit installed or generated copies.
 - Before requested model-backed runs, print run counts, preflight calls,
   concurrency, and the durable result path. Default concurrency is `2`;
   supported values are `1` through `4`. Hidden retries are forbidden; preserve
-  every attempted run outside the repository.
+  every attempted run outside the repository. Declare the exact immutable
+  invocation attempt set before preflight so aggregation can reject missing or
+  injected runs.
 - Create skill-local fixtures only when a case needs them, preferably at
   `evals/fixtures/<eval-id>/`, and reference them from `evals/evals.json`.
   For production-shaped private-integration HTTP(S), use

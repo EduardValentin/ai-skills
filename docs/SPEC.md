@@ -32,6 +32,13 @@ selection without preloading the target skill body into the prompt. Fixtures
 are optional and belong under `evals/fixtures/<eval-id>/` only when a case needs
 them.
 
+`evals/triggers.json` declares the exact skill name and a `queries` array. Each
+query has a unique path-safe `id`, a non-whitespace `query`, and boolean
+`should_trigger`. Every skill has at least one positive query and one near-miss
+negative query. Do not put run counts or other runner configuration in the
+file. It must be a contained non-symlink regular file and must pass the shared
+high-confidence secret checks before any model-backed setup.
+
 Model actors receive a generated runtime projection containing only
 `SKILL.md`, `scripts/`, `references/`, and `assets/`. Runtime material must not
 reference `evals/`; definitions, expected results, assertions, trigger answers,
@@ -56,12 +63,17 @@ complete ordered-call verification, bounded redacted request evidence, and
 proxy environment injection.
 
 Model-backed invocations preserve results outside the repository. Each run is
-declared by an immutable `attempt.json` before execution; that declaration owns
-its identity and generic aggregation policy. Aggregation requires every
+listed in an immutable invocation manifest, then declared by its own
+`attempt.json` before execution. Those declarations own the exact attempt set,
+run identity, and generic aggregation policy. Aggregation requires every
 declared attempt, required variant, timing record, and requested grade source to
 be complete and mutually consistent. A complete manual grade overrides the
 generated grade when manual or both sources are requested, without replacing
-the generated artifact. Aggregate exit codes are `0` for pass, `1` for a
+the generated artifact. Repeated trigger attempts declare their query-level
+threshold, configured run count, and ordinal in immutable aggregation metadata.
+Aggregation rejects missing, duplicate, or injected attempts and run ordinals;
+the benchmark preserves each run and reports observed trigger rate by skill.
+Aggregate exit codes are `0` for pass, `1` for a
 trusted evaluated failure, and `2` for invalid or untrustworthy evidence.
 
 The schemas and validation commands are documented in [Testing](TESTING.md).

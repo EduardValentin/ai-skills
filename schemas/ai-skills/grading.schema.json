@@ -53,7 +53,12 @@
       "items": {"$ref": "#/$defs/assertion_result"}
     },
     "summary": {"$ref": "#/$defs/grading_summary"},
-    "aggregation": {"$ref": "#/$defs/aggregation_metadata"}
+    "aggregation": {"$ref": "#/$defs/aggregation_metadata"},
+    "measurements": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "additionalProperties": {"type": "number"}
+    }
   },
   "allOf": [
     {
@@ -134,7 +139,15 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
         },
-        "compare_to": {"type": "string", "minLength": 1}
+        "compare_to": {"type": "string", "minLength": 1},
+        "minimum_pass_rate": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "configured_runs": {"type": "integer", "minimum": 1},
+        "run_number": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {
+        "minimum_pass_rate": ["configured_runs", "run_number"],
+        "configured_runs": ["minimum_pass_rate", "run_number"],
+        "run_number": ["minimum_pass_rate", "configured_runs"]
       }
     }
   }

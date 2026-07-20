@@ -82,6 +82,25 @@ if any(queue.lstat().st_uid == uid for queue in queue_root.iterdir()):
     raise SystemExit("UID-owned POSIX message queues remain")
 """
 
+CATALOG_RENAME_PROBE_SCRIPT = """import errno
+import os
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1])
+target = pathlib.Path(sys.argv[2])
+try:
+    os.rename(source, target)
+except OSError as error:
+    if error.errno not in (errno.EACCES, errno.EPERM):
+        raise
+    if not source.is_dir() or target.exists():
+        raise SystemExit("catalog rename probe left an unexpected filesystem state")
+else:
+    os.rename(target, source)
+    raise SystemExit("catalog directory entry is replaceable by the case user")
+"""
+
 
 class ManifestError(ValueError):
     """The immutable evaluation runtime manifest is invalid."""
@@ -1085,6 +1104,82 @@ class SandboxRuntime:
             ("chown", f"{case.uid}:{case.uid}", str(config_path), str(auth_path)),
         )
         self._admin_checked(worker, ("chmod", "0600", str(config_path), str(auth_path)))
+
+    def seal_skill_catalog(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
+        """Make the complete projected catalog runner-owned and actor-immutable."""
+        self._require_owned_worker(worker)
+        if self._active_cases.get(worker.id) != case:
+            raise SandboxRuntimeError("skill catalog belongs to an inactive case")
+        self._admin_checked(
+            worker,
+            ("chown", "-R", "root:root", str(case.skills)),
+        )
+        self._admin_checked(worker, ("chmod", "0555", str(case.skills)))
+        self._admin_checked(worker, ("chown", "root:root", str(case.codex_home)))
+        self._admin_checked(worker, ("chmod", "1777", str(case.codex_home)))
+        self._admin_checked(worker, ("chown", "root:root", str(case.root)))
+        self._admin_checked(worker, ("chmod", "0555", str(case.root)))
+        self._case_user_checked(
+            worker,
+            case,
+            ("test", "!", "-w", str(worker.host_root)),
+            "case user can mutate the worker mount root",
+        )
+        for writable_path in (
+            case.home,
+            case.codex_home,
+            case.tmpdir,
+            case.workspace,
+            case.bootstrap,
+        ):
+            self._case_user_checked(
+                worker,
+                case,
+                ("test", "-w", str(writable_path)),
+                "case user cannot write a required case workspace",
+            )
+        self._case_user_checked(
+            worker,
+            case,
+            ("test", "!", "-w", str(case.skills)),
+            "case user can mutate the projected skill catalog",
+        )
+        self._case_user_checked(
+            worker,
+            case,
+            (
+                "python3",
+                "-c",
+                CATALOG_RENAME_PROBE_SCRIPT,
+                str(case.skills),
+                str(case.codex_home / ".skills-rename-probe"),
+            ),
+            "case user can replace the projected skill catalog",
+        )
+        self._case_user_checked(
+            worker,
+            case,
+            (
+                "python3",
+                "-c",
+                CATALOG_RENAME_PROBE_SCRIPT,
+                str(case.codex_home),
+                str(case.root / ".codex-home-rename-probe"),
+            ),
+            "case user can replace the Codex home containing the skill catalog",
+        )
+        self._case_user_checked(
+            worker,
+            case,
+            (
+                "python3",
+                "-c",
+                CATALOG_RENAME_PROBE_SCRIPT,
+                str(case.root),
+                str(worker.host_root / ".case-rename-probe"),
+            ),
+            "case user can replace the case root containing the skill catalog",
+        )
 
     def close(self) -> None:
         with self._worker_condition:
