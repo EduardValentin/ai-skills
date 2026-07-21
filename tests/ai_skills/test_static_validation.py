@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 import scripts.ai_skills as cli
+import scripts.ai_skills_lib.static_validation as static_validation
 from scripts.ai_skills_lib.config import build_parser
 from scripts.ai_skills_lib.core import discover_testable_skills
 from scripts.ai_skills_lib.authored_content import (
@@ -191,6 +192,56 @@ class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
 
         self.assertEqual([skill.name for skill in skills], ["alpha"])
         self.assertEqual(skills[0].root, skill_root)
+
+    def test_discovery_requires_an_exact_regular_non_symlink_skill_document(self):
+        malformed_entries = (
+            "missing",
+            "directory",
+            "broken-symlink",
+            "regular-file-symlink",
+            "wrong-case",
+        )
+        expected = (
+            "skills/workflows/alpha requires an exact regular non-symlink SKILL.md"
+        )
+        valid_document = (
+            "---\n"
+            "name: alpha\n"
+            "description: Use for alpha workflows.\n"
+            "metadata:\n"
+            "  status: public-ready\n"
+            "---\n"
+            "Follow the workflow.\n"
+        )
+
+        for malformed_entry in malformed_entries:
+            with self.subTest(entry=malformed_entry):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.root / "skills" / "workflows" / "alpha"
+                skill_root.mkdir(parents=True)
+                skill_document = skill_root / "SKILL.md"
+                if malformed_entry == "directory":
+                    skill_document.mkdir()
+                elif malformed_entry == "broken-symlink":
+                    skill_document.symlink_to(skill_root / "missing.md")
+                elif malformed_entry == "regular-file-symlink":
+                    target = repository.root / "linked-skill.md"
+                    target.write_text(valid_document, encoding="utf-8")
+                    skill_document.symlink_to(target)
+                elif malformed_entry == "wrong-case":
+                    (skill_root / "Skill.md").write_text(
+                        valid_document,
+                        encoding="utf-8",
+                    )
+
+                with self.assertRaisesRegex(ValueError, expected):
+                    discover_testable_skills(repository.root)
+
+                messages = [
+                    issue.message for issue in run_static_validation(repository.root)
+                ]
+                self.assertTrue(any(expected in message for message in messages), messages)
 
     def test_rejects_direct_skill_layout(self):
         direct_root = self.repository.root / "skills" / "legacy"
@@ -1305,6 +1356,9 @@ class SecretPatternTests(unittest.TestCase):
             'curl -H "Authorization: Bearer $JWT"',
             "curl -H 'Authorization: Bearer ${JWT}'",
             '  -H "Authorization: Bearer $JWT" \\',
+            'headers={"Authorization": f"Bearer {oauth_token}"}',
+            'headers={"Authorization": f"Basic {credentials}"}',
+            '"Authorization": f"Bearer {jwt}",',
         )
 
         for header in safe_headers:
@@ -1317,6 +1371,7 @@ class SecretPatternTests(unittest.TestCase):
             f'curl -H "Authorization: Bearer {literal}"',
             f"curl -H 'Authorization: Bearer {literal}'",
             f'  -H "Authorization: Bearer {literal}" \\',
+            f'headers={{"Authorization": f"Bearer {literal}"}}',
         )
 
         for header in unsafe_headers:
@@ -1361,6 +1416,35 @@ class ReferenceConformanceTests(TemporaryRepositoryTestCase):
         self.assertIn("alpha", issues[0].scope)
         self.assertEqual(issues[0].message, reference_message)
         validate.assert_called_once_with(skill_root.resolve())
+
+    def test_pre_model_gate_runs_static_then_reference_from_one_context(self):
+        self.repository.add_skill("alpha")
+        order: list[str] = []
+        gate = getattr(static_validation, "run_pre_model_validation", None)
+        self.assertIsNotNone(gate, "shared pre-model validation gate is missing")
+
+        with (
+            patch.object(
+                static_validation,
+                "_run_static_context",
+                side_effect=lambda context, issues: order.append("static") or [],
+            ),
+            patch.object(
+                static_validation,
+                "validate_reference_conformance",
+                side_effect=lambda context: order.append("reference") or [],
+            ),
+            patch.object(
+                static_validation,
+                "build_validation_context",
+                wraps=static_validation.build_validation_context,
+            ) as build_context,
+        ):
+            issues = gate(self.repository.root)
+
+        self.assertEqual(issues, [])
+        self.assertEqual(order, ["static", "reference"])
+        build_context.assert_called_once_with(self.repository.root.resolve())
 
 
 class CliValidationTests(TemporaryRepositoryTestCase):

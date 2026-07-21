@@ -35,7 +35,7 @@ def _duration_fact(
     *,
     start: str,
     end: str,
-    value: float,
+    value: object,
     fiscal_year: int,
     fiscal_period: str,
     form: str,
@@ -51,7 +51,12 @@ def _duration_fact(
     }
 
 
-def _quarterly_company_facts() -> dict:
+def _quarterly_company_facts(
+    *,
+    diluted_shares: list[object] | None = None,
+    diluted_eps: list[object] | None = None,
+) -> dict:
+    diluted_shares = diluted_shares or [10.0, 10.0, 10.0, 10.0]
     periods = [
         ("2024-01-01", "2024-03-31", "Q1", "10-Q"),
         ("2024-04-01", "2024-06-30", "Q2", "10-Q"),
@@ -82,12 +87,12 @@ def _quarterly_company_facts() -> dict:
                 _duration_fact(
                     start=start,
                     end=end,
-                    value=10.0,
+                    value=value,
                     fiscal_year=2024,
                     fiscal_period=fp,
                     form=form,
                 )
-                for start, end, fp, form in periods
+                for (start, end, fp, form), value in zip(periods, diluted_shares)
             ]
         }
     }
@@ -102,32 +107,56 @@ def _quarterly_company_facts() -> dict:
         }
         for (_, end, fp, form), value in zip(periods, [5.0, 6.0, 7.0, 8.0])
     ]
+    us_gaap = {
+        "Revenues": flow([10.0, 20.0, 30.0, 100.0]),
+        "GrossProfit": flow([5.0, 10.0, 15.0, 50.0]),
+        "OperatingIncomeLoss": flow([2.0, 4.0, 6.0, 20.0]),
+        "NetIncomeLoss": flow([1.0, 2.0, 3.0, 10.0]),
+        "NetCashProvidedByUsedInOperatingActivities": flow(
+            [11.0, 21.0, 31.0, 100.0]
+        ),
+        "PaymentsToAcquirePropertyPlantAndEquipment": flow(
+            [1.0, 1.0, 1.0, 10.0]
+        ),
+        "WeightedAverageNumberOfDilutedSharesOutstanding": shares,
+        "CashAndCashEquivalentsAtCarryingValue": {"units": {"USD": instants}},
+        "LongTermDebt": {"units": {"USD": instants}},
+    }
+    if diluted_eps is not None:
+        standalone_periods = [
+            ("2024-01-01", "2024-03-31", "Q1", "10-Q"),
+            ("2024-04-01", "2024-06-30", "Q2", "10-Q"),
+            ("2024-07-01", "2024-09-30", "Q3", "10-Q"),
+            ("2024-10-01", "2024-12-31", "FY", "10-K"),
+        ]
+        us_gaap["EarningsPerShareDiluted"] = {
+            "units": {
+                "USD/shares": [
+                    _duration_fact(
+                        start=start,
+                        end=end,
+                        value=value,
+                        fiscal_year=2024,
+                        fiscal_period=fp,
+                        form=form,
+                    )
+                    for (start, end, fp, form), value in zip(
+                        standalone_periods, diluted_eps
+                    )
+                ]
+            }
+        }
+
     return {
         "cik": 1,
         "entityName": "Example Corp",
-        "facts": {
-            "us-gaap": {
-                "Revenues": flow([10.0, 20.0, 30.0, 100.0]),
-                "GrossProfit": flow([5.0, 10.0, 15.0, 50.0]),
-                "OperatingIncomeLoss": flow([2.0, 4.0, 6.0, 20.0]),
-                "NetIncomeLoss": flow([1.0, 2.0, 3.0, 10.0]),
-                "NetCashProvidedByUsedInOperatingActivities": flow(
-                    [11.0, 21.0, 31.0, 100.0]
-                ),
-                "PaymentsToAcquirePropertyPlantAndEquipment": flow(
-                    [1.0, 1.0, 1.0, 10.0]
-                ),
-                "WeightedAverageNumberOfDilutedSharesOutstanding": shares,
-                "CashAndCashEquivalentsAtCarryingValue": {
-                    "units": {"USD": instants}
-                },
-                "LongTermDebt": {"units": {"USD": instants}},
-            }
-        },
+        "facts": {"us-gaap": us_gaap},
     }
 
 
-def _write_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
+def _write_inputs(
+    tmp_path: Path, *, company_facts: dict | None = None
+) -> tuple[Path, Path, Path]:
     baseline_path = tmp_path / "financials.json"
     annual_path = tmp_path / "staged-annual.json"
     facts_path = tmp_path / "company-facts.json"
@@ -190,7 +219,9 @@ def _write_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
             indent=2,
         )
     )
-    facts_path.write_text(json.dumps(_quarterly_company_facts(), indent=2))
+    facts_path.write_text(
+        json.dumps(company_facts or _quarterly_company_facts(), indent=2)
+    )
     return baseline_path, annual_path, facts_path
 
 
@@ -245,6 +276,96 @@ def test_refresh_preserves_prior_state_and_merges_quarterly_ttm(
     assert latest_ttm["revenue"] == 100.0
     assert latest_ttm["fcf"] == 90.0
     assert latest_ttm["eps"] == 1.0
+    assert latest_ttm["diluted_shares"] == 10.0
+    assert latest_ttm["eps_basis"] == (
+        "net-income-over-duration-weighted-diluted-shares"
+    )
+    assert latest_ttm["eps_data_quality"]["status"] == "derived"
+
+
+def test_ttm_eps_sums_reported_quarterly_diluted_eps_with_changing_shares(
+    tmp_path: Path,
+) -> None:
+    refresh = _load_script()
+    company_facts = _quarterly_company_facts(
+        diluted_shares=[10.0, 8.0, 6.0, 7.5],
+        diluted_eps=[0.10, 0.25, 0.50, 0.67],
+    )
+    baseline_path, annual_path, facts_path = _write_inputs(
+        tmp_path, company_facts=company_facts
+    )
+
+    assert refresh.main(_main_args(baseline_path, annual_path, facts_path)) == 0
+
+    latest_ttm = json.loads(baseline_path.read_text())["ttm"][-1]
+    assert latest_ttm["eps"] == pytest.approx(1.52)
+    assert latest_ttm["eps_basis"] == "sum-quarterly-diluted-eps"
+    assert latest_ttm["eps_data_quality"] == {
+        "status": "reported",
+        "missing_or_invalid_reported_eps_periods": [],
+        "missing_or_invalid_diluted_shares_periods": [],
+    }
+    assert latest_ttm["diluted_shares"] == pytest.approx(7.5)
+    latest_quarter = next(
+        quarter
+        for quarter in json.loads(baseline_path.read_text())["quarters"]
+        if quarter["period"] == "2024-Q4"
+    )
+    assert latest_ttm["eps"] != pytest.approx(
+        latest_ttm["net_income"] / latest_quarter["diluted_shares"]
+    )
+
+
+@pytest.mark.parametrize("unusable_eps", [None, "invalid"])
+def test_ttm_eps_uses_duration_weighted_shares_when_reported_eps_is_incomplete(
+    tmp_path: Path, unusable_eps: object
+) -> None:
+    refresh = _load_script()
+    company_facts = _quarterly_company_facts(
+        diluted_shares=[10.0, 8.0, 6.0, 7.5],
+        diluted_eps=[0.10, unusable_eps, 0.50, 0.67],
+    )
+    baseline_path, annual_path, facts_path = _write_inputs(
+        tmp_path, company_facts=company_facts
+    )
+
+    assert refresh.main(_main_args(baseline_path, annual_path, facts_path)) == 0
+
+    latest_ttm = json.loads(baseline_path.read_text())["ttm"][-1]
+    assert latest_ttm["diluted_shares"] == pytest.approx(7.5)
+    assert latest_ttm["eps"] == pytest.approx(10.0 / 7.5)
+    assert latest_ttm["eps_basis"] == (
+        "net-income-over-duration-weighted-diluted-shares"
+    )
+    assert latest_ttm["eps_data_quality"]["status"] == "derived"
+    assert latest_ttm["eps_data_quality"][
+        "missing_or_invalid_reported_eps_periods"
+    ] == ["2024-Q2"]
+
+
+@pytest.mark.parametrize("invalid_share", [None, 0, "invalid"])
+def test_ttm_eps_marks_missing_or_invalid_share_data_unavailable(
+    tmp_path: Path, invalid_share: object
+) -> None:
+    refresh = _load_script()
+    company_facts = _quarterly_company_facts(
+        diluted_shares=[10.0, invalid_share, 6.0, 7.5]
+    )
+    baseline_path, annual_path, facts_path = _write_inputs(
+        tmp_path, company_facts=company_facts
+    )
+
+    assert refresh.main(_main_args(baseline_path, annual_path, facts_path)) == 0
+
+    latest_ttm = json.loads(baseline_path.read_text())["ttm"][-1]
+    assert latest_ttm["diluted_shares"] is None
+    assert latest_ttm["eps"] is None
+    assert latest_ttm["eps_basis"] == "unavailable"
+    assert latest_ttm["eps_data_quality"]["status"] == "unavailable"
+    assert "2024-Q2" in latest_ttm["eps_data_quality"][
+        "missing_or_invalid_diluted_shares_periods"
+    ]
+    assert {"diluted_shares", "eps"} <= set(latest_ttm["missing_metrics"])
 
 
 def test_second_refresh_preserves_documented_nested_manual_financial_state(

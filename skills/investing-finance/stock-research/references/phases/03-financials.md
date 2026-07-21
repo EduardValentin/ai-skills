@@ -29,7 +29,7 @@ The worker return must explicitly include the `validate_financials.py` status an
 Run `compute_financials.py` if `financials.json` doesn't already exist (Phase 2 may have produced it):
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/compute_financials.py <ticker> \
+<skill-python> -B <scripts_dir>/compute_financials.py <ticker> \
   --years 10 \
   --out <ticker_dir>/financials.json
 ```
@@ -39,7 +39,7 @@ Re-read the JSON. Use the data for the markdown companion.
 Then run the financial validation gate:
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/validate_financials.py \
+<skill-python> -B <scripts_dir>/validate_financials.py \
   <ticker_dir>/financials.json \
   --out <ticker_dir>/.raw/financials-validation.json
 ```

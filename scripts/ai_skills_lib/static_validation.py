@@ -53,8 +53,8 @@ def run_reference_conformance(root: Path) -> list[ValidationIssue]:
     return validate_reference_conformance(context)
 
 
-def run_ci_validation(root: Path) -> list[ValidationIssue]:
-    """Run static then reference checks from a single discovery pass."""
+def run_pre_model_validation(root: Path) -> list[ValidationIssue]:
+    """Run the complete deterministic trust gate before model-backed setup."""
     resolved_root = root.resolve()
     repository_issues = validate_repository_shape(resolved_root)
     try:
@@ -65,6 +65,11 @@ def run_ci_validation(root: Path) -> list[ValidationIssue]:
     issues = _run_static_context(context, repository_issues)
     issues.extend(validate_reference_conformance(context))
     return deduplicate_issues(issues)
+
+
+def run_ci_validation(root: Path) -> list[ValidationIssue]:
+    """Use the same deterministic trust gate as model-backed commands."""
+    return run_pre_model_validation(root)
 
 
 def _run_static_context(
@@ -93,6 +98,7 @@ __all__ = [
     "find_static_secret_issues",
     "preflight_reference_conformance",
     "run_ci_validation",
+    "run_pre_model_validation",
     "run_reference_conformance",
     "run_static_validation",
 ]

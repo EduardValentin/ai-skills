@@ -1,7 +1,7 @@
 """Select a downloaded SEC filing from fetch_sec.py's durable index.
 
 Usage:
-    select_filing.py --index <path> --form 10-K [--rank N]
+    <skill-python> -B <scripts-dir>/select_filing.py --index <path> --form 10-K [--rank N]
                      --field path|report-year
 
 Rank 0 is the newest reporting period. Ties are resolved by filing date and

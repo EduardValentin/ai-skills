@@ -2,7 +2,7 @@
 name: github-bot-interaction
 description: Use when a task requires commits or GitHub mutations under the user's configured GitHub App bot identity, including branch pushes, pull request creation or updates, comments, reviews, labels, merges, or direct API writes.
 compatibility: >-
-  Uses GH_BOT_APP_ID, GH_BOT_INSTALLATION_ID, GH_BOT_PRIVATE_KEY_PATH, GH_BOT_GIT_NAME, GH_BOT_GIT_EMAIL, and optional GH_BOT_KEYCHAIN_ACCOUNT. Non-empty values override ai-skills.gh-bot Keychain fallbacks; the key path points to a PEM file. Requires Bash, Git, curl, openssl, Python 3, date, grep, and GitHub API access; Keychain fallback adds macOS security and xxd. Token config, tooling, permission, minting, or write failure blocks remote mutation; missing git identity blocks only commit flows.
+  Uses GH_BOT_APP_ID, GH_BOT_INSTALLATION_ID, GH_BOT_PRIVATE_KEY_PATH, GH_BOT_GIT_NAME, GH_BOT_GIT_EMAIL, and optional GH_BOT_KEYCHAIN_ACCOUNT. Non-empty values override ai-skills.gh-bot Keychain fallbacks; the key path points to a PEM file. Requires Bash, Git, openssl, Python 3, date, grep, and GitHub API access; Keychain fallback adds macOS security and xxd. Token config, tooling, permission, minting, or write failure blocks remote mutation; missing git identity blocks only commit flows.
 metadata:
   status: config-required
   allows_tool_references: "true"
@@ -16,7 +16,7 @@ Use the configured GitHub App for remote GitHub mutations and the configured bot
 
 ## Required Capabilities
 
-Requires shell execution, `git`, `curl`, `openssl`, `python3`, `date`, `grep`, and a GitHub CLI or API client that honors `GH_TOKEN`. Keychain fallback additionally requires macOS `security` and `xxd`.
+Requires shell execution, `git`, `openssl`, `python3`, `date`, `grep`, and a GitHub CLI or API client that honors `GH_TOKEN`. Keychain fallback additionally requires macOS `security` and `xxd`.
 
 ## Configuration
 

@@ -40,7 +40,7 @@ mkdir -p \
 ## Step 2: Download SEC filing
 
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_sec.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/fetch_sec.py <ticker> \
   --forms <form_type> \
   --since <quarter_end_date> \
   --out <ticker_dir>/.raw/recap-<quarter>/filing/
@@ -64,7 +64,7 @@ Find the entry whose `report_date` equals `<quarter_end_date>`. Join that entry'
 If `form_type == "10-Q"`:
 
 ```bash
-<skill-python> <skill-scripts-dir>/extract_10q_sections.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/extract_10q_sections.py <ticker> \
   --html <raw_filing_path> \
   --quarter <quarter> \
   --out <ticker_dir>/.raw/recap-<quarter>/sections/
@@ -73,7 +73,7 @@ If `form_type == "10-Q"`:
 If `form_type == "10-K"`:
 
 ```bash
-<skill-python> <skill-scripts-dir>/extract_10k_sections.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/extract_10k_sections.py <ticker> \
   --html <raw_filing_path> \
   --year <fiscal-year> \
   --out <ticker_dir>/.raw/recap-<quarter>/sections/
@@ -88,7 +88,7 @@ Read `sections/_10q_sections_index.json` or `sections/_10k_sections_index.json` 
 **Step 4a — first dispatch (no `manual_transcript_path` in your context):**
 
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_transcript.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/fetch_transcript.py <ticker> \
   --quarter <quarter> \
   --company-slug <company_slug> \
   --out <ticker_dir>/earnings-calls/
@@ -101,7 +101,7 @@ This script's fallback chain is: Motley Fool scraper → IR-page guess → manua
 When you are re-dispatched after a paste, skip the scraper attempt entirely and pipe the staged file directly into the script:
 
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_transcript.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/fetch_transcript.py <ticker> \
   --quarter <quarter> \
   --manual \
   --out <ticker_dir>/earnings-calls/ < <manual_transcript_path>

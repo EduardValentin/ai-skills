@@ -17,7 +17,11 @@ from scripts.ai_skills_lib.authored_content import (
     SecretScanLimitError,
     strict_bounded_json_loads,
 )
-from scripts.ai_skills_lib.eval_core import AssertionResult, ResultArtifactError
+from scripts.ai_skills_lib.eval_core import (
+    AssertionResult,
+    ResultArtifactError,
+    completed_attempt_control_evidence_reference,
+)
 from scripts.ai_skills_lib.eval_definitions import BehaviorCheck
 from scripts.ai_skills_lib.harness import HarnessExecution, PreparedFile
 from scripts.ai_skills_lib.json_schema_policy import (
@@ -90,11 +94,19 @@ def _file_exists(
     path = _required_path(check)
     target = _output_path(outputs_root, path)
     passed = target.is_file() and not target.is_symlink()
+    if not passed:
+        return _control_result(
+            check_id,
+            f"The actor creates the regular output file {path}.",
+            False,
+            f"outputs/{path} is not a regular file.",
+            f"status=completed; outputs/{path} is not a captured regular file",
+        )
     return _result(
         check_id,
         f"The actor creates the regular output file {path}.",
-        passed,
-        f"outputs/{path} {'is a regular file' if passed else 'is not a regular file'}.",
+        True,
+        f"outputs/{path} is a regular file.",
         f"outputs/{path}",
         "regular-file check",
     )
@@ -118,13 +130,24 @@ def _path_absent(
         and not target.exists()
         and not target.is_symlink()
     )
-    return _result(
+    if not passed and target.is_file():
+        return _result(
+            check_id,
+            f"The actor does not create outputs/{path}.",
+            False,
+            f"outputs/{path} exists.",
+            f"outputs/{path}",
+            "path exists as a regular file",
+        )
+    return _control_result(
         check_id,
         f"The actor does not create outputs/{path}.",
         passed,
         f"outputs/{path} {'is absent' if passed else 'exists'}.",
-        "outputs/",
-        f"absence of {path}",
+        (
+            f"status=completed; outputs/{path} "
+            f"{'is absent' if passed else 'was observed as a non-file path'}"
+        ),
     )
 
 
@@ -139,13 +162,12 @@ def _json_schema(
     schema_path = _required_schema(check)
     target = _output_path(outputs_root, path)
     if not target.is_file():
-        return _result(
+        return _control_result(
             check_id,
             f"The output {path} conforms to {schema_path}.",
             False,
             f"outputs/{path} is not a regular file.",
-            f"outputs/{path}",
-            "regular-file check",
+            f"status=completed; outputs/{path} is not a captured regular file",
         )
     try:
         document = strict_bounded_json_loads(
@@ -235,7 +257,12 @@ def _no_secret_patterns(
             "locator": f"line {line}; {pattern}; value redacted",
         }
         for artifact, line, pattern in findings
-    ) or ({"artifact": "outputs/", "locator": "high-confidence secret scan"},)
+    ) or (
+        {
+            "artifact": "outputs/response.md",
+            "locator": "response and captured-output high-confidence secret scan",
+        },
+    )
     return AssertionResult(
         id=check_id,
         kind="check",
@@ -552,4 +579,22 @@ def _result(
         checked_by="deterministic",
         evidence=evidence,
         evidence_refs=({"artifact": artifact, "locator": locator},),
+    )
+
+
+def _control_result(
+    check_id: str,
+    text: str,
+    passed: bool,
+    evidence: str,
+    locator: str,
+) -> AssertionResult:
+    return AssertionResult(
+        id=check_id,
+        kind="check",
+        text=text,
+        passed=passed,
+        checked_by="deterministic",
+        evidence=evidence,
+        evidence_refs=(completed_attempt_control_evidence_reference(locator),),
     )

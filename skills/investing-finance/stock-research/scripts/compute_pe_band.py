@@ -1,7 +1,7 @@
 """Compute date-aware historical P/E percentile bands.
 
 Usage:
-    compute_pe_band.py --prices <path> --financials <path> --out <path>
+    <skill-python> -B <scripts-dir>/compute_pe_band.py --prices <path> --financials <path> --out <path>
                        [--windows 5,10] [--ttm-eps <value>]
 
 Historical observations use the most recent dated EPS point available in

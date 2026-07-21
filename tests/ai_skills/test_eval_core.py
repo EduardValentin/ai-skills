@@ -798,6 +798,59 @@ class ResultWorkspaceTests(unittest.TestCase):
             with self.assertRaisesRegex(ResultArtifactError, "already exists"):
                 write_eval_run_artifacts(paths, record)
 
+    def test_complete_writer_rejects_unsafe_evidence_paths_before_persisting(self):
+        timing = record_harness_timing(
+            run_id="run-with-skill",
+            skill_name="ticket-workflow",
+            case_id="intake",
+            run_kind="with_skill",
+            harness_name="codex",
+            started_at=datetime(2026, 7, 19, 10, 0, tzinfo=timezone.utc),
+            ended_at=datetime(2026, 7, 19, 10, 0, 1, tzinfo=timezone.utc),
+            execution=completed_harness_execution(),
+        )
+        grading = generated_grading_record()
+        grading = replace(
+            grading,
+            assertion_results=(
+                replace(
+                    grading.assertion_results[0],
+                    evidence_refs=(
+                        {"artifact": "../outside.txt", "locator": "untrusted path"},
+                    ),
+                ),
+            ),
+        )
+        record = EvalRunRecord(
+            response="Please provide the acceptance criteria.",
+            transcript="# Transcript\n",
+            execution_trace=({"event": "harness.completed", "exit_code": 0},),
+            timing=timing,
+            grading=grading,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = sample_attempt_manifest(
+                run_id="run-with-skill",
+                variant="with_skill",
+                required_variants=("with_skill", "without_skill"),
+                compare_to="without_skill",
+            )
+            workspace = create_test_result_workspace(Path(directory) / "run", manifest)
+            paths = create_attempt_workspace(workspace, manifest)
+
+            with self.assertRaisesRegex(
+                ResultArtifactError,
+                "grading evidence artifact path is invalid",
+            ):
+                write_eval_run_artifacts(paths, record)
+
+            self.assertFalse(paths.timing.exists())
+            self.assertFalse(paths.response.exists())
+            self.assertFalse(paths.transcript.exists())
+            self.assertFalse(paths.execution_trace.exists())
+            self.assertFalse(paths.grading.exists())
+
 
 class InvocationAttemptWorkspaceTests(unittest.TestCase):
     def test_attempt_creation_requires_a_declared_invocation_membership(self):
@@ -1821,6 +1874,133 @@ class UntrustedAggregationBoundaryTests(unittest.TestCase):
             f'{leading_whitespace}{{"{key}": "RAW_DUPLICATE_VALUE",{document[1:]}',
             encoding="utf-8",
         )
+
+    def _set_evidence_artifact(self, grading_path: Path, artifact: str) -> None:
+        document = json.loads(grading_path.read_text(encoding="utf-8"))
+        document["assertion_results"][0]["evidence_refs"][0]["artifact"] = artifact
+        grading_path.write_text(json.dumps(document), encoding="utf-8")
+
+    def test_aggregation_requires_every_gradable_attempt_artifact(self):
+        required_artifacts = (
+            ("manifest", "attempt.json"),
+            ("timing", "timing.json"),
+            ("grading", "grading.json"),
+            ("response", "outputs/response.md"),
+            ("transcript", "transcript.md"),
+            ("execution_trace", "execution_trace.jsonl"),
+        )
+        for path_attribute, relative_path in required_artifacts:
+            with self.subTest(artifact=relative_path), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "results"
+                _, paths, _ = self._complete_workspace(root)
+                aggregate_results(root, "judge")
+                benchmark_before = (root / "benchmark.json").read_bytes()
+                summary_before = (root / "summary.md").read_bytes()
+                getattr(paths, path_attribute).unlink()
+
+                with self.assertRaises(ResultArtifactError) as raised:
+                    aggregate_results(root, "judge")
+
+                self.assertIn(relative_path, str(raised.exception))
+                self.assertEqual((root / "benchmark.json").read_bytes(), benchmark_before)
+                self.assertEqual((root / "summary.md").read_bytes(), summary_before)
+
+    def test_aggregation_rejects_dangling_generated_and_manual_evidence(self):
+        cases = (
+            ("judge", "grading"),
+            ("manual", "manual_grading"),
+        )
+        for grade_source, grading_attribute in cases:
+            with self.subTest(grade_source=grade_source), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "results"
+                _, paths, _ = self._complete_workspace(root, with_manual=True)
+                self._set_evidence_artifact(
+                    getattr(paths, grading_attribute),
+                    "outputs/missing-evidence.txt",
+                )
+
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "evidence artifact does not resolve to a regular snapshotted artifact",
+                ):
+                    aggregate_results(root, grade_source)
+
+    def test_aggregation_rejects_noncanonical_or_disallowed_evidence_paths(self):
+        invalid_artifacts = (
+            "../timing.json",
+            "/etc/passwd",
+            "outputs/../timing.json",
+            "outputs//response.md",
+            "outputs\\response.md",
+            "outputs",
+            "attempt.json",
+            "grading.json",
+            "timing.json/child",
+            "execution_trace.jsonl/child",
+            "outputs/response.md/child",
+        )
+        for artifact in invalid_artifacts:
+            with self.subTest(artifact=artifact), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "results"
+                _, paths, _ = self._complete_workspace(root)
+                self._set_evidence_artifact(paths.grading, artifact)
+
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "grading evidence artifact",
+                ):
+                    aggregate_results(root, "judge")
+
+    def test_aggregation_rejects_symlinked_evidence_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "results"
+            _, paths, _ = self._complete_workspace(root)
+            outside = base / "outside-evidence.txt"
+            outside.write_text("outside\n", encoding="utf-8")
+            cited = paths.root / "outputs" / "cited.txt"
+            cited.symlink_to(outside)
+            self._set_evidence_artifact(paths.grading, "outputs/cited.txt")
+
+            with self.assertRaisesRegex(ResultArtifactError, "symlink"):
+                aggregate_results(root, "judge")
+
+    def test_aggregation_accepts_regular_snapshotted_output_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            _, paths, _ = self._complete_workspace(root)
+            cited = paths.root / "outputs" / "reports" / "result.txt"
+            cited.parent.mkdir()
+            cited.write_text("captured evidence\n", encoding="utf-8")
+            self._set_evidence_artifact(
+                paths.grading,
+                "outputs/reports/result.txt",
+            )
+
+            benchmark = aggregate_results(root, "judge")
+
+            self.assertEqual(benchmark_exit_code(benchmark), 0)
+
+    def test_aggregation_accepts_regular_snapshotted_control_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            _, paths, _ = self._complete_workspace(root)
+            self._set_evidence_artifact(paths.grading, "timing.json")
+
+            benchmark = aggregate_results(root, "judge")
+
+            self.assertEqual(benchmark_exit_code(benchmark), 0)
+
+    def test_aggregation_rejects_control_evidence_replaced_with_a_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "results"
+            _, paths, _ = self._complete_workspace(root)
+            self._set_evidence_artifact(paths.grading, "timing.json")
+            paths.timing.unlink()
+            paths.timing.mkdir()
+
+            with self.assertRaisesRegex(ResultArtifactError, "attempt entry"):
+                aggregate_results(root, "judge")
 
     def test_every_parsed_result_artifact_rejects_duplicate_json_keys(self):
         cases = (

@@ -48,6 +48,7 @@ def _activate_script_root(
     tmp_path: Path,
 ) -> None:
     _clear_script_modules()
+    monkeypatch.setattr(sys, "pycache_prefix", str(tmp_path / "python-pycache"))
     monkeypatch.syspath_prepend(str(scripts_root))
     ticker_resolver = importlib.import_module("_lib.ticker_resolver")
     monkeypatch.setattr(

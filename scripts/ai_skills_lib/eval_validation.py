@@ -64,7 +64,7 @@ from scripts.ai_skills_lib.harness import (
     PreparedSkillSource,
 )
 from scripts.ai_skills_lib.issues import ValidationIssue, print_grouped_issues
-from scripts.ai_skills_lib.static_validation import run_static_validation
+from scripts.ai_skills_lib.static_validation import run_pre_model_validation
 
 
 BehaviorVariant = Literal["with_skill", "without_skill"]
@@ -184,10 +184,14 @@ def run_behavior_eval_harness(
     max_concurrency: int,
 ) -> int:
     """Validate, announce, execute, aggregate, and summarize behavior evals."""
-    static_issues = run_static_validation(root)
-    if static_issues:
-        print_grouped_issues(static_issues)
-        print("validate evals: INVALID STATIC CONTRACT")
+    try:
+        validation_issues = run_pre_model_validation(root)
+    except RuntimeError as error:
+        print(f"validate evals: DETERMINISTIC GATE FAILED: {error}")
+        return 2
+    if validation_issues:
+        print_grouped_issues(validation_issues)
+        print("validate evals: INVALID DETERMINISTIC CONTRACT")
         return 2
     workspace: ResultWorkspace | None = None
     try:

@@ -24,7 +24,7 @@ Return the Worker Return Contract requested by the top-level orchestrator. Keep 
 ## Step 1: Fetch prices and analyst data
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/fetch_prices.py <ticker> \
+<skill-python> -B <scripts_dir>/fetch_prices.py <ticker> \
   --years 10 \
   --out <ticker_dir>/.raw/prices/
 ```
@@ -34,7 +34,7 @@ If exit code 2 (no data — delisted, halted), the entire Phase 6 fails. Report 
 ## Step 2: Compute P/E band
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/compute_pe_band.py \
+<skill-python> -B <scripts_dir>/compute_pe_band.py \
   --prices <ticker_dir>/.raw/prices/prices.json \
   --financials <ticker_dir>/financials.json \
   --out <ticker_dir>/.raw/pe_band.json
@@ -48,7 +48,7 @@ Get the current price from `prices.json` (the latest dated bar's close):
 
 ```bash
 current_price=$(
-  <scripts_dir>/.venv/bin/python - "<ticker_dir>/.raw/prices/prices.json" <<'PY'
+  <skill-python> -B - "<ticker_dir>/.raw/prices/prices.json" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -68,7 +68,7 @@ PY
 Then:
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/compute_reverse_dcf.py \
+<skill-python> -B <scripts_dir>/compute_reverse_dcf.py \
   --financials <ticker_dir>/financials.json \
   --price "$current_price" \
   --discount-rate 0.10 \

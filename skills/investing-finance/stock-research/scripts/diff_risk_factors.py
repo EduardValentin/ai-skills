@@ -1,7 +1,7 @@
 """Diff two 10-K Item 1A risk factor sections paragraph-by-paragraph.
 
 Usage:
-    diff_risk_factors.py --file-a <path> --file-b <path> --ticker T
+    <skill-python> -B <scripts-dir>/diff_risk_factors.py --file-a <path> --file-b <path> --ticker T
                          --out <json> [--out-md <md>]
 """
 from __future__ import annotations

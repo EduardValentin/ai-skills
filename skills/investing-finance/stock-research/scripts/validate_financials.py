@@ -1,7 +1,7 @@
 """Validate financials.json for unsafe missing-data interpretations.
 
 Usage:
-    validate_financials.py <financials.json> [--out <report.json>]
+    <skill-python> -B <scripts-dir>/validate_financials.py <financials.json> [--out <report.json>]
 
 This is a checkpoint guard for the stock-research workflow. It does not try to
 fix values. It flags cases where the orchestrator or Phase 3 worker must inspect

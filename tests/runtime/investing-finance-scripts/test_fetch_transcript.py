@@ -9,7 +9,10 @@ import responses
 
 @responses.activate
 def test_fetch_from_motley_fool(
-    fixtures_dir: Path, tmp_path: Path, fetch_transcript
+    fixtures_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fetch_transcript,
 ) -> None:
     html = (fixtures_dir / "transcript_motley_sample.html").read_text()
     # We don't know the exact URL pattern at runtime; the script tries known
@@ -23,6 +26,8 @@ def test_fetch_from_motley_fool(
         body=html,
         status=200,
     )
+    session = fetch_transcript.requests.sessions.Session()
+    monkeypatch.setattr(fetch_transcript.requests, "Session", lambda: session)
     out_dir = tmp_path / "calls"
     rc = fetch_transcript.main(
         [
@@ -40,6 +45,7 @@ def test_fetch_from_motley_fool(
     assert "ticker: AAPL" in text
     assert "Tim Cook" in text
     assert "85.8 billion" in text
+    assert session.trust_env is False
 
 
 def test_manual_paste_path(monkeypatch, tmp_path: Path, fetch_transcript) -> None:

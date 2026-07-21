@@ -1,7 +1,7 @@
 """Extract the most-referenced sections from a 10-K HTML.
 
 Usage:
-    extract_10k_sections.py <TICKER> --html <path-to-10k.html> --year <YYYY> --out <dir>
+    <skill-python> -B <scripts-dir>/extract_10k_sections.py <TICKER> --html <path-to-10k.html> --year <YYYY> --out <dir>
 """
 from __future__ import annotations
 

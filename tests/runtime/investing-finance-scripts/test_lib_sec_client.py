@@ -57,6 +57,12 @@ def test_get_user_agent_header_is_sent(fixtures_dir: Path, sec) -> None:
     assert "Test Suite" in responses.calls[0].request.headers["User-Agent"]
 
 
+def test_sec_client_does_not_inherit_ambient_request_settings(sec) -> None:
+    client = sec.SECClient()
+
+    assert client._session.trust_env is False
+
+
 def test_rate_limiter_blocks_when_over_limit(sec) -> None:
     """RateLimiter sleeps when more than max_per_second calls are attempted."""
     import time

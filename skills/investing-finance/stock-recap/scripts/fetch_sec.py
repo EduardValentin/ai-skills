@@ -1,7 +1,7 @@
 """Download SEC filings for a ticker into a directory.
 
 Usage:
-    fetch_sec.py <TICKER> [--forms 10-K,10-Q,8-K]
+    <skill-python> -B <scripts-dir>/fetch_sec.py <TICKER> [--forms 10-K,10-Q,8-K]
                  [--since YYYY-MM-DD] [--report-after YYYY-MM-DD]
                  [--list-only] [--out <dir>]
 

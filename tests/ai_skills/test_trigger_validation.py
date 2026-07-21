@@ -1149,7 +1149,7 @@ class TriggerCliTests(unittest.TestCase):
         for runs, expected in ((1, "128-query"), (3, "384-call")):
             with (
                 self.subTest(runs=runs),
-                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(trigger_validation, "run_pre_model_validation", return_value=[]),
                 patch.object(
                     trigger_validation,
                     "load_trigger_queries",
@@ -1172,20 +1172,28 @@ class TriggerCliTests(unittest.TestCase):
             create_results.assert_not_called()
             self.assertIn(expected, output.getvalue())
 
-    def test_model_runner_stops_on_static_trust_boundary_issues(self) -> None:
+    def test_model_runner_stops_on_pre_model_trust_boundary_issues(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             output = StringIO()
             with (
                 patch.object(
                     trigger_validation,
-                    "run_static_validation",
+                    "run_pre_model_validation",
                     return_value=[
-                        ValidationIssue(scope="skills/alpha", message="unsafe topology")
+                        ValidationIssue(
+                            scope="reference conformance",
+                            message="pinned conformance failed",
+                        )
                     ],
                     create=True,
-                ),
+                ) as gate,
+                patch.object(trigger_validation, "load_trigger_queries") as load_definitions,
                 patch.object(trigger_validation, "create_result_workspace") as create_results,
+                patch.object(
+                    trigger_validation.CodexEvaluationRuntime,
+                    "create",
+                ) as create_runtime,
                 redirect_stdout(output),
             ):
                 result = trigger_validation.run_trigger_query_harness(
@@ -1199,8 +1207,11 @@ class TriggerCliTests(unittest.TestCase):
                 )
 
         self.assertEqual(result, 2)
+        gate.assert_called_once_with(root)
+        load_definitions.assert_not_called()
         create_results.assert_not_called()
-        self.assertIn("unsafe topology", output.getvalue())
+        create_runtime.assert_not_called()
+        self.assertIn("pinned conformance failed", output.getvalue())
 
     def test_trigger_command_requires_harness_and_exposes_bounded_runner_options(self) -> None:
         parser = build_parser()
@@ -1252,7 +1263,7 @@ class TriggerCliTests(unittest.TestCase):
             output = StringIO()
 
             with (
-                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(trigger_validation, "run_pre_model_validation", return_value=[]),
                 patch.object(
                     trigger_validation.CodexEvaluationRuntime,
                     "create",
@@ -1302,7 +1313,7 @@ class TriggerCliTests(unittest.TestCase):
                 )
             )
             with (
-                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(trigger_validation, "run_pre_model_validation", return_value=[]),
                 patch(
                     "scripts.ai_skills_lib.sandbox_runtime.EvalRuntimeManifest.load",
                     return_value=manifest,
@@ -1353,7 +1364,7 @@ class TriggerCliTests(unittest.TestCase):
             output = StringIO()
 
             with (
-                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(trigger_validation, "run_pre_model_validation", return_value=[]),
                 patch.object(
                     trigger_validation.CodexEvaluationRuntime,
                     "create",
@@ -1393,7 +1404,7 @@ class TriggerCliTests(unittest.TestCase):
             output = StringIO()
 
             with (
-                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(trigger_validation, "run_pre_model_validation", return_value=[]),
                 patch.object(
                     trigger_validation,
                     "declare_trigger_plan",
@@ -1465,7 +1476,7 @@ class TriggerCliTests(unittest.TestCase):
                 )
 
             with (
-                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(trigger_validation, "run_pre_model_validation", return_value=[]),
                 patch(
                     "scripts.ai_skills_lib.sandbox_runtime.EvalRuntimeManifest.load",
                     return_value=manifest,
@@ -1537,7 +1548,7 @@ class TriggerCliTests(unittest.TestCase):
             )
 
             with (
-                patch.object(trigger_validation, "run_static_validation", return_value=[]),
+                patch.object(trigger_validation, "run_pre_model_validation", return_value=[]),
                 patch(
                     "scripts.ai_skills_lib.sandbox_runtime.EvalRuntimeManifest.load",
                     return_value=manifest,

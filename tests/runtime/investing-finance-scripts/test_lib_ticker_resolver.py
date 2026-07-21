@@ -40,3 +40,20 @@ def test_resolve_uses_cache_on_second_call(fixtures_dir: Path, tmp_path, tr) -> 
     tr.resolve("MSFT", cache_dir=tmp_path)  # second call should hit cache
     assert len(responses.calls) == 1
     assert (tmp_path / "company_tickers.json").exists()
+
+
+@responses.activate
+def test_download_does_not_inherit_ambient_request_settings(
+    fixtures_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    tr,
+) -> None:
+    body = (fixtures_dir / "company_tickers_sample.json").read_text()
+    responses.add(responses.GET, tr.COMPANY_TICKERS_URL, body=body, status=200)
+    session = tr.requests.sessions.Session()
+    monkeypatch.setattr(tr.requests, "Session", lambda: session)
+
+    tr.resolve("AAPL", cache_dir=tmp_path)
+
+    assert session.trust_env is False

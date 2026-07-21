@@ -81,7 +81,7 @@ Active sell triggers (from `verdict.json.sell_triggers`):
 Use the bundled runtime's SEC client to list 10-Q and 10-K filings with period-end strictly after `financials.json.latest_report_date`:
 
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_sec.py <TICKER> \
+<skill-python> -B <skill-scripts-dir>/fetch_sec.py <TICKER> \
   --forms 10-Q,10-K \
   --report-after <financials.json.latest_report_date> \
   --list-only
@@ -584,7 +584,7 @@ diff_threshold_overrides: <from session if any, else omit>
 Run from anywhere (the `--repo` flag points at the research repo root):
 
 ```bash
-<skill-python> <skill-scripts-dir>/upsert_ticker.py <TICKER> \
+<skill-python> -B <skill-scripts-dir>/upsert_ticker.py <TICKER> \
   --repo ${SR_RESEARCH_REPO} \
   --field last_updated=<YYYY-MM-DD> \
   --field current_status=<verdict.classification> \
@@ -606,7 +606,7 @@ Run from anywhere (the `--repo` flag points at the research repo root):
 ### Step 7.3 — Regenerate `INDEX.md`
 
 ```bash
-<skill-python> <skill-scripts-dir>/update_index.py \
+<skill-python> -B <skill-scripts-dir>/update_index.py \
   --repo ${SR_RESEARCH_REPO}
 ```
 

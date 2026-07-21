@@ -6,9 +6,13 @@ fundamentals from SEC EDGAR and yfinance. Used by the `stock-research` skill.
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+runtime_home="$(
+  PYTHONPATH="<installed-skill>/scripts" python3 -B -c \
+    'from _lib.config import ai_skills_runtime_home; print(ai_skills_runtime_home())'
+)"
+finance_venv="${runtime_home}/investing-finance/venv"
+python3 -B -m venv "${finance_venv}"
+"${finance_venv}/bin/python" -B -m pip install --requirement "<installed-skill>/scripts/requirements.txt"
 export SR_SEC_USER_AGENT="Your Name you@example.com"
 export SR_REPO_PATH="/path/to/investing-research"
 # Optional overrides:
@@ -16,6 +20,12 @@ export SR_REPO_PATH="/path/to/investing-research"
 # export SR_TERMINAL_GROWTH="0.025"
 # export SR_YEARS_OF_HISTORY="10"
 ```
+
+Use Python 3.10 or newer. Keep the environment outside the installed skill;
+the helper applies `AI_SKILLS_RUNTIME_HOME`, XDG, and home-cache precedence.
+Pass `-B` to every bundled script or inline helper invocation. If a subprocess
+cannot add interpreter flags, set its `PYTHONPYCACHEPREFIX` to
+`${runtime_home}/investing-finance/pycache`.
 
 `SR_SEC_USER_AGENT` is required for any script that hits SEC EDGAR — SEC rejects
 requests without a proper User-Agent header. `SR_REPO_PATH` is required and must
@@ -40,4 +50,5 @@ point to the target investing research repository.
 | `upsert_ticker.py` | Atomic update of `tickers.json` |
 | `update_index.py` | Render `INDEX.md` from `tickers.json` |
 
-Run any script with `--help` for its exact CLI.
+Run any script as `"${finance_venv}/bin/python" -B <script>.py --help` for its
+exact CLI.

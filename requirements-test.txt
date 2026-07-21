@@ -1,4 +1,9 @@
 -r requirements.txt
+requests==2.34.2
+yfinance==0.2.40
+beautifulsoup4==4.12.0
+lxml==5.0.0
+PyYAML==6.0
 pytest==9.1.1
 responses==0.26.2
 skills-ref @ git+https://github.com/agentskills/agentskills.git@38a2ff82958afee88dadf4831509e6f7e9d8ef4e#subdirectory=skills-ref

@@ -26,7 +26,7 @@ Dispatch the right bundled runtime script for `fetch_kind`, write the output to 
 ### `fetch_kind == "latest-8K"`
 
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_sec.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/fetch_sec.py <ticker> \
   --forms 8-K \
   --since <extra_args.since-date> \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/
@@ -38,8 +38,8 @@ Dispatch the right bundled runtime script for `fetch_kind`, write the output to 
 
 Run both in sequence:
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_prices.py <ticker> --years 2 --out <ticker_dir>/prices/
-<skill-python> <skill-scripts-dir>/fetch_analyst_estimates.py <ticker> --out <ticker_dir>/
+<skill-python> -B <skill-scripts-dir>/fetch_prices.py <ticker> --years 2 --out <ticker_dir>/prices/
+<skill-python> -B <skill-scripts-dir>/fetch_analyst_estimates.py <ticker> --out <ticker_dir>/
 ```
 
 Return the latest close, the day-over-event-day price reaction (if `extra_args.event-date` is set: close on event_date+1 vs close on event_date-1), and analyst-consensus drift (if a prior `market-expectations.json` existed).
@@ -49,7 +49,7 @@ Return the latest close, the day-over-event-day price reaction (if `extra_args.e
 If `extra_args.target_ticker` is US-listed:
 ```bash
 mkdir -p <ticker_dir>/.raw/news-<YYYY-MM-DD>/
-<skill-python> <skill-scripts-dir>/compute_financials.py <extra_args.target_ticker> \
+<skill-python> -B <skill-scripts-dir>/compute_financials.py <extra_args.target_ticker> \
   --years 5 \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/target-<extra_args.target_ticker>.json
 ```
@@ -67,24 +67,24 @@ mkdir -p \
   <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/prior/ \
   <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/current/
 
-<skill-python> <skill-scripts-dir>/fetch_sec.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/fetch_sec.py <ticker> \
   --forms 10-K \
   --since <extra_args.prior-year>-01-01 \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/filings/
 
 # Step 2: extract each selected raw filing to a distinct section directory
-<skill-python> <skill-scripts-dir>/extract_10k_sections.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/extract_10k_sections.py <ticker> \
   --html <prior-raw-html-path> \
   --year <prior-report-date-year> \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/prior/
 
-<skill-python> <skill-scripts-dir>/extract_10k_sections.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/extract_10k_sections.py <ticker> \
   --html <current-raw-html-path> \
   --year <current-report-date-year> \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/current/
 
 # Step 3: diff the extracted Item 1A Markdown bodies, oldest then newest
-<skill-python> <skill-scripts-dir>/diff_risk_factors.py \
+<skill-python> -B <skill-scripts-dir>/diff_risk_factors.py \
   --ticker <ticker> \
   --file-a <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/prior/item_1a_risk_factors.md \
   --file-b <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/current/item_1a_risk_factors.md \
@@ -102,7 +102,7 @@ Pull one competitor's five-year financial history into the event workspace. Args
 
 ```bash
 mkdir -p <ticker_dir>/.raw/news-<YYYY-MM-DD>/
-<skill-python> <skill-scripts-dir>/compute_financials.py <extra_args.competitor_ticker> \
+<skill-python> -B <skill-scripts-dir>/compute_financials.py <extra_args.competitor_ticker> \
   --years 5 \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/competitor-<extra_args.competitor_ticker>.json
 ```

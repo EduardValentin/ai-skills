@@ -47,7 +47,7 @@ MARKDOWN_STAGE=<ticker_dir>/.raw/recap-financials-<session_date>/financials.md
 ## Step 2: Pull annual XBRL and raw facts into staging
 
 ```bash
-<skill-python> <skill_scripts_dir>/compute_financials.py <ticker> \
+<skill-python> -B <skill_scripts_dir>/compute_financials.py <ticker> \
   --years 10 \
   --company-facts-out <COMPANY_FACTS_RAW> \
   --out <ANNUAL_STAGE>
@@ -66,7 +66,7 @@ Determine any supported manual resolution and retain its exact metric, source co
 Invoke the merger with one `--period` argument for every accepted pair, in chronological order:
 
 ```bash
-<skill-python> <skill_scripts_dir>/refresh_quarterly_financials.py \
+<skill-python> -B <skill_scripts_dir>/refresh_quarterly_financials.py \
   --baseline <FINANCIALS_CANONICAL> \
   --annual-refresh <ANNUAL_STAGE> \
   --company-facts <COMPANY_FACTS_RAW> \
@@ -77,12 +77,14 @@ Invoke the merger with one `--period` argument for every accepted pair, in chron
 
 Repeat `--period` exactly once per `new_periods` item; do not infer dates from labels. The runtime preserves unknown/manual top-level fields, nested `tag_resolution` and `data_quality` metadata, manual fields on dated annual/quarterly/TTM points, and prior dated points. Generated fields from the annual and quarterly refresh take precedence while retained manual fields remain alongside them. It adds or replaces points by `report_date`, derives a 10-K fourth quarter from annual less the first three quarters when needed, and computes each new TTM point from four dated quarters. It writes `<MERGED_STAGE>` atomically; `<FINANCIALS_CANONICAL>` is still unchanged.
 
+TTM diluted EPS uses this order: sum four finite standalone quarterly `EarningsPerShareDiluted` facts when all four are available; otherwise divide four-quarter net income by diluted shares weighted by each quarter's actual covered-day count. When a 10-K supplies only the fiscal-year weighted share average, derive the fourth-quarter share average as the covered-day residual after the first three standalone quarters. Never divide TTM net income by the latest quarter's shares or silently reuse an annual share value. Missing, nonnumeric, nonfinite, nonpositive-share, or invalid-duration inputs make the fallback unavailable; keep `eps` or `diluted_shares` null as applicable, name them in `missing_metrics`, and preserve the reported/derived/unavailable basis plus gap periods under `eps_data_quality`.
+
 The merged schema contract is:
 
 - `latest_report_date`: maximum covered SEC period end in ISO form.
 - `years[]`: annual points, each with `fiscal_year` and `report_date`.
-- `quarters[]`: dated points with `period`, `report_date`, `form`, reported/derived metrics, source concepts, and explicit missing metrics.
-- `ttm[]`: dated points with `period`, `report_date`, `source_periods`, TTM metrics, TTM EPS, and explicit missing metrics.
+- `quarters[]`: dated points with `period`, `report_date`, `form`, reported/derived metrics, source concepts, diluted-share duration/basis, EPS basis, and explicit missing metrics.
+- `ttm[]`: dated points with `period`, `report_date`, `source_periods`, TTM metrics, duration-weighted diluted shares, TTM EPS, EPS basis/data quality, and explicit missing metrics.
 - `quarterly_tag_resolution.<period>` and `quarterly_data_quality.<period>`: source and gap evidence for each refreshed period.
 
 ## Step 5: Apply manual resolutions, then validate
@@ -95,7 +97,7 @@ After those edits, read `<MERGED_STAGE>` and require all of the following:
 2. `latest_report_date` equals the maximum `report_date` from the staged annual and requested recap periods.
 3. Every `new_periods` pair has exactly one matching entry in both `quarters[]` and `ttm[]`.
 4. Every pre-existing quarter and TTM point outside the refreshed dates remains present.
-5. TTM revenue, gross profit, operating income, net income, FCF, and EPS are numeric or are named under that point's `missing_metrics`; no missing value is silently treated as zero.
+5. TTM revenue, gross profit, operating income, net income, diluted shares, FCF, and EPS are numeric or are named under that point's `missing_metrics`; `eps_basis` and `eps_data_quality` agree with the documented method, and no missing value is silently treated as zero.
 6. Every pre-existing manual entry under `tag_resolution`, `data_quality`, and dated financial points remains present, and every Step 3 resolution is recorded at its documented nested path.
 
 If any structural check fails, return `BLOCKED` and leave both canonical files untouched. Data genuinely absent from SEC facts produces `DONE_WITH_CONCERNS`, not invented values.

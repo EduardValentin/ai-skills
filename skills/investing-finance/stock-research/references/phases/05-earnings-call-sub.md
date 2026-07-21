@@ -27,7 +27,7 @@ Return a compact summary for the parent Phase 5 worker: tone read, key prepared-
 ## Step 1: Fetch the transcript
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/fetch_transcript.py <ticker> \
+<skill-python> -B <scripts_dir>/fetch_transcript.py <ticker> \
   --quarter <quarter_label> \
   --company-slug <company_slug> \
   --out <out_dir>
@@ -43,7 +43,7 @@ Transcript not found via scraper for <ticker> <quarter_label>. Please paste the 
 The Phase 5 orchestrator handles user paste and re-dispatches with `--manual` mode. Your re-dispatch will receive the transcript via stdin; pass `--manual` to `fetch_transcript.py` and pipe stdin through:
 
 ```bash
-echo "$pasted_transcript" | <scripts_dir>/.venv/bin/python <scripts_dir>/fetch_transcript.py <ticker> \
+echo "$pasted_transcript" | <skill-python> -B <scripts_dir>/fetch_transcript.py <ticker> \
   --quarter <quarter_label> \
   --manual \
   --out <out_dir>

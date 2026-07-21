@@ -189,6 +189,10 @@ profile from changing between cases; neither schema validation nor a first-seen
 digest establishes baseline trust. The case identity cannot read the immutable
 proxy source or access the worker-private Docker socket.
 
+Actor commands can use the same OpenAI eval principal as Codex. This trust model
+intentionally does not claim endpoint-level principal separation. When isolation
+from a personal account matters, use a dedicated quota-limited eval principal.
+
 Oracle isolation is a runner boundary, not a claim that committed public files
 are confidential. Expected outputs, assertions, trigger answers, schemas,
 grades, and fixture control data are omitted from actor prompts, projections,

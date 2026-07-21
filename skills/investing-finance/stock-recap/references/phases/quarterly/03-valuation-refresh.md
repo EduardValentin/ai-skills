@@ -33,7 +33,7 @@ In quarterly catch-up, this runs only after financials refresh has completed its
 ## Step 1: Prices + dividends + splits
 
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_prices.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/fetch_prices.py <ticker> \
   --years 10 \
   --out <ticker_dir>/prices/
 ```
@@ -43,7 +43,7 @@ If exit code 2 (yfinance empty — delisted / halted), return status `BLOCKED` w
 ## Step 2: Analyst consensus
 
 ```bash
-<skill-python> <skill-scripts-dir>/fetch_analyst_estimates.py <ticker> \
+<skill-python> -B <skill-scripts-dir>/fetch_analyst_estimates.py <ticker> \
   --out <ticker_dir>/
 ```
 
@@ -56,7 +56,7 @@ If exit code != 0, return status `DONE_WITH_CONCERNS` with the message; the orch
 Read `<financials_path>.ttm[]`, keep entries with an ISO `report_date`, sort chronologically, and select the latest record first. Never walk backward to an older profitable period. When that latest record has numeric `.eps`, pass it verbatim as `<latest-ttm-eps>`, including zero or a negative value; the script then emits `current_pe_ttm: null` with `current_eps_basis: ttm-not-meaningful`. When the latest record has missing or nonnumeric EPS, omit `--ttm-eps`; in quarterly catch-up return `DONE_WITH_CONCERNS`, while valuation-only may continue with the saved-data fallback. In either case, label TTM P/E `cannot-compute` for missing EPS or `not-meaningful` for nonpositive EPS, and never relabel latest fiscal-year EPS as TTM.
 
 ```bash
-<skill-python> <skill-scripts-dir>/compute_pe_band.py \
+<skill-python> -B <skill-scripts-dir>/compute_pe_band.py \
   --prices <ticker_dir>/prices/prices.json \
   --financials <financials_path> \
   --windows 5,10 \
@@ -71,7 +71,7 @@ Omit the `--ttm-eps` pair only when the selected latest TTM record has no numeri
 Read today's close from `<ticker_dir>/prices/prices.json` (latest bar; written by Step 1).
 
 ```bash
-<skill-python> <skill-scripts-dir>/compute_reverse_dcf.py \
+<skill-python> -B <skill-scripts-dir>/compute_reverse_dcf.py \
   --financials <financials_path> \
   --price <today-close> \
   --discount-rate 0.10 \

@@ -1,7 +1,7 @@
 """Fetch OHLCV + dividends + splits from yfinance.
 
 Usage:
-    fetch_prices.py <TICKER> [--years N] --out <dir>
+    <skill-python> -B <scripts-dir>/fetch_prices.py <TICKER> [--years N] --out <dir>
 """
 from __future__ import annotations
 

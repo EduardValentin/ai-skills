@@ -69,6 +69,7 @@ class SECClient:
         self._rl = RateLimiter(rate_limit)
         self._timeout = timeout
         self._session = requests.Session()
+        self._session.trust_env = False
         self._session.headers.update({"User-Agent": sec_user_agent()})
 
     def _get(self, url: str) -> requests.Response:

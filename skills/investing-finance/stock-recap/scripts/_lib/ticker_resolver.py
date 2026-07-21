@@ -11,10 +11,10 @@ from pathlib import Path
 
 import requests
 
-from _lib.config import sec_user_agent
+from _lib.config import finance_cache_dir, sec_user_agent
 
 COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
-DEFAULT_CACHE_DIR = Path.home() / ".cache" / "stock-research"
+DEFAULT_CACHE_DIR = finance_cache_dir() / "sec"
 CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
@@ -44,13 +44,15 @@ def _load_cached(cache_dir: Path) -> dict | None:
 
 
 def _download(cache_dir: Path) -> dict:
-    response = requests.get(
-        COMPANY_TICKERS_URL,
-        headers={"User-Agent": sec_user_agent()},
-        timeout=30,
-    )
-    response.raise_for_status()
-    data = response.json()
+    with requests.Session() as session:
+        session.trust_env = False
+        response = session.get(
+            COMPANY_TICKERS_URL,
+            headers={"User-Agent": sec_user_agent()},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
     cache_dir.mkdir(parents=True, exist_ok=True)
     (cache_dir / "company_tickers.json").write_text(json.dumps(data))
     return data

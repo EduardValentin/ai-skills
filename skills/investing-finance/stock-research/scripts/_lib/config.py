@@ -1,8 +1,9 @@
 """Environment-driven config for stock-research scripts.
 
 All settings come from env vars. Required: SR_SEC_USER_AGENT (SEC blocks empty
-or default user agents) and SR_REPO_PATH. Optional: SR_DISCOUNT_RATE,
-SR_TERMINAL_GROWTH, and SR_YEARS_OF_HISTORY.
+or default user agents) and SR_REPO_PATH. AI_SKILLS_RUNTIME_HOME optionally
+selects external mutable runtime state. Optional financial settings are
+SR_DISCOUNT_RATE, SR_TERMINAL_GROWTH, and SR_YEARS_OF_HISTORY.
 """
 from __future__ import annotations
 
@@ -12,6 +13,57 @@ from pathlib import Path
 
 class ConfigError(RuntimeError):
     pass
+
+
+def _validated_external_runtime_home(path: Path) -> Path:
+    expanded = path.expanduser()
+    if not expanded.is_absolute():
+        raise ConfigError("Finance runtime paths must be absolute.")
+
+    resolved = expanded.resolve()
+    installed_skill_root = Path(__file__).resolve().parents[2]
+    if resolved == installed_skill_root or installed_skill_root in resolved.parents:
+        raise ConfigError("Finance runtime state must stay outside the installed skill.")
+    return resolved
+
+
+def ai_skills_runtime_home() -> Path:
+    explicit = os.environ.get("AI_SKILLS_RUNTIME_HOME")
+    if explicit:
+        return _validated_external_runtime_home(Path(explicit))
+
+    xdg_cache = os.environ.get("XDG_CACHE_HOME")
+    if xdg_cache:
+        return _validated_external_runtime_home(Path(xdg_cache) / "ai-skills")
+
+    home = os.environ.get("HOME")
+    if home:
+        return _validated_external_runtime_home(
+            Path(home) / ".cache" / "ai-skills"
+        )
+
+    raise ConfigError(
+        "Set AI_SKILLS_RUNTIME_HOME, XDG_CACHE_HOME, or HOME so finance "
+        "runtime state can live outside the installed skill."
+    )
+
+
+def finance_runtime_dir() -> Path:
+    return ai_skills_runtime_home() / "investing-finance"
+
+
+def finance_virtualenv_path() -> Path:
+    return finance_runtime_dir() / "venv"
+
+
+def finance_python_path() -> Path:
+    executable_dir = "Scripts" if os.name == "nt" else "bin"
+    executable_name = "python.exe" if os.name == "nt" else "python"
+    return finance_virtualenv_path() / executable_dir / executable_name
+
+
+def finance_cache_dir() -> Path:
+    return finance_runtime_dir() / "cache"
 
 
 def sec_user_agent() -> str:

@@ -6,7 +6,7 @@ Order:
   3. If --manual passed, read transcript text from stdin.
 
 Usage:
-    fetch_transcript.py <TICKER> --quarter YYYY-Qn
+    <skill-python> -B <scripts-dir>/fetch_transcript.py <TICKER> --quarter YYYY-Qn
         [--company-slug <slug>] [--manual] --out <dir>
 """
 from __future__ import annotations
@@ -36,17 +36,19 @@ def _quarter_components(quarter_label: str) -> tuple[int, int]:
 
 def _fetch_motley(slug: str, year: int, quarter: int) -> str | None:
     url = MOTLEY_CANDIDATES_PATTERN.format(slug=slug, year=year, quarter=quarter)
-    try:
-        r = requests.get(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (stock-research)"},
-            timeout=30,
-        )
-    except requests.RequestException:
-        return None
-    if r.status_code != 200:
-        return None
-    soup = BeautifulSoup(r.text, "lxml")
+    with requests.Session() as session:
+        session.trust_env = False
+        try:
+            response = session.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (stock-research)"},
+                timeout=30,
+            )
+        except requests.RequestException:
+            return None
+        if response.status_code != 200:
+            return None
+        soup = BeautifulSoup(response.text, "lxml")
     article = soup.find("article") or soup.body
     if not article:
         return None

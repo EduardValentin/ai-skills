@@ -1,7 +1,7 @@
 """Extract MD&A + supporting sections from a 10-Q HTML.
 
 Usage:
-    extract_10q_sections.py <TICKER> --html <path> --quarter YYYY-Qn --out <dir>
+    <skill-python> -B <scripts-dir>/extract_10q_sections.py <TICKER> --html <path> --quarter YYYY-Qn --out <dir>
 """
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 """Pull XBRL company-facts into dated annual financial history and margins.
 
 Usage:
-    compute_financials.py <TICKER> [--years N] --out <path>
+    <skill-python> -B <scripts-dir>/compute_financials.py <TICKER> [--years N] --out <path>
                           [--company-facts-out <path>]
 
 Companies report the same business metric under different `us-gaap` concept

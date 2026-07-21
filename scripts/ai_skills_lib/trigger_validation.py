@@ -38,7 +38,7 @@ from scripts.ai_skills_lib.harness import (
 )
 from scripts.ai_skills_lib.issues import ValidationIssue, print_grouped_issues
 from scripts.ai_skills_lib.secret_patterns import bounded_redacted_runtime_text
-from scripts.ai_skills_lib.static_validation import run_static_validation
+from scripts.ai_skills_lib.static_validation import run_pre_model_validation
 from scripts.ai_skills_lib.trigger_definitions import (
     SkillTriggerQueries,
     TriggerDefinitionError,
@@ -557,10 +557,14 @@ def run_trigger_query_harness(
     max_concurrency: int,
 ) -> int:
     """Validate, announce, execute, aggregate, and summarize one trigger invocation."""
-    static_issues = run_static_validation(root)
-    if static_issues:
-        print_grouped_issues(static_issues)
-        print("validate triggers: INVALID STATIC CONTRACT")
+    try:
+        validation_issues = run_pre_model_validation(root)
+    except RuntimeError as error:
+        print(f"validate triggers: DETERMINISTIC GATE FAILED: {error}")
+        return 2
+    if validation_issues:
+        print_grouped_issues(validation_issues)
+        print("validate triggers: INVALID DETERMINISTIC CONTRACT")
         return 2
     workspace: ResultWorkspace | None = None
     try:

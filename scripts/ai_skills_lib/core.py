@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+import stat
 
 from scripts.ai_skills_lib.frontmatter import parse_skill_frontmatter
 
@@ -84,11 +85,21 @@ def iter_skill_files(root: Path) -> Iterator[Path]:
             for path in inspection.invalid_boundaries
         )
         raise ValueError("; ".join(messages))
-    yield from (
-        skill_root / "SKILL.md"
-        for skill_root in inspection.skill_roots
-        if (skill_root / "SKILL.md").is_file()
-    )
+    skill_files: list[Path] = []
+    invalid_skill_roots: list[Path] = []
+    for skill_root in inspection.skill_roots:
+        skill_file = _exact_regular_skill_document(skill_root)
+        if skill_file is None:
+            invalid_skill_roots.append(skill_root)
+        else:
+            skill_files.append(skill_file)
+    if invalid_skill_roots:
+        messages = (
+            f"{skill_root.relative_to(root)} requires an exact regular non-symlink SKILL.md"
+            for skill_root in invalid_skill_roots
+        )
+        raise ValueError("; ".join(messages))
+    yield from skill_files
 
 
 def discover_testable_skills(root: Path) -> list[SkillRecord]:
@@ -116,3 +127,18 @@ def _is_contained_non_symlink_directory(path: Path, resolved_root: Path) -> bool
         return path.resolve(strict=True).is_relative_to(resolved_root)
     except (OSError, RuntimeError):
         return False
+
+
+def _exact_regular_skill_document(skill_root: Path) -> Path | None:
+    try:
+        exact_matches = tuple(
+            path for path in skill_root.iterdir() if path.name == "SKILL.md"
+        )
+        if len(exact_matches) != 1:
+            return None
+        skill_file = exact_matches[0]
+        if not stat.S_ISREG(skill_file.lstat().st_mode):
+            return None
+    except OSError:
+        return None
+    return skill_file

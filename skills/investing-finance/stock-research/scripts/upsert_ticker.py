@@ -1,7 +1,7 @@
 """Atomically upsert a single ticker entry in tickers.json.
 
 Usage:
-    upsert_ticker.py <TICKER> --repo <path>
+    <skill-python> -B <scripts-dir>/upsert_ticker.py <TICKER> --repo <path>
                      [--field key=value ...]
                      [--list-field key=value ...]
 """

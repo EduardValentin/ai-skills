@@ -1,7 +1,7 @@
 """Merge SEC quarter facts into a saved financials document atomically.
 
 Usage:
-    refresh_quarterly_financials.py \
+    <skill-python> -B <scripts-dir>/refresh_quarterly_financials.py \
       --baseline <financials.json> \
       --annual-refresh <staged-annual.json> \
       --company-facts <raw-company-facts.json> \
@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import os
 import re
 import sys
@@ -90,6 +91,8 @@ FLOW_CONCEPTS: dict[str, tuple[list[str], str]] = {
 AVERAGE_CONCEPTS: dict[str, tuple[list[str], str]] = {
     "diluted_shares": (["WeightedAverageNumberOfDilutedSharesOutstanding"], "shares")
 }
+
+DILUTED_EPS_CONCEPTS = (["EarningsPerShareDiluted"], "USD/shares")
 
 INSTANT_CONCEPTS: dict[str, tuple[list[str], str]] = {
     "cash": (
@@ -188,9 +191,23 @@ def _load_json(path: Path) -> dict:
 
 
 def _safe_div(numerator: float | None, denominator: float | None) -> float | None:
-    if numerator is None or denominator in (None, 0):
+    finite_numerator = _finite_float(numerator)
+    finite_denominator = _finite_float(denominator)
+    if finite_numerator is None or finite_denominator in (None, 0):
         return None
-    return numerator / denominator
+    return finite_numerator / finite_denominator
+
+
+def _finite_float(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    converted = float(value)
+    return converted if math.isfinite(converted) else None
+
+
+def _positive_float(value: object) -> float | None:
+    converted = _finite_float(value)
+    return converted if converted is not None and converted > 0 else None
 
 
 def _pct(numerator: float | None, denominator: float | None) -> float | None:
@@ -222,7 +239,8 @@ def _short_duration_item(items: list[dict]) -> dict | None:
     candidates = [
         item
         for item in items
-        if _duration_days(item) is not None and _duration_days(item) <= 130
+        if _duration_days(item) is not None
+        and 0 < _duration_days(item) <= 130
     ]
     if not candidates:
         return None
@@ -238,14 +256,22 @@ def _period_items(items: list[dict], report_date: str) -> list[dict]:
     ]
 
 
-def _standalone_for_fp(items: list[dict], fiscal_year: int, fiscal_period: str) -> float | None:
+def _standalone_item_for_fp(
+    items: list[dict], fiscal_year: int, fiscal_period: str
+) -> dict | None:
     matching = [
         item
         for item in items
         if item.get("fy") == fiscal_year and item.get("fp") == fiscal_period
     ]
-    selected = _short_duration_item(matching)
-    return float(selected["val"]) if selected and selected.get("val") is not None else None
+    return _short_duration_item(matching)
+
+
+def _standalone_for_fp(
+    items: list[dict], fiscal_year: int, fiscal_period: str
+) -> float | None:
+    selected = _standalone_item_for_fp(items, fiscal_year, fiscal_period)
+    return _finite_float(selected.get("val")) if selected else None
 
 
 def _flow_value_for_items(
@@ -253,8 +279,9 @@ def _flow_value_for_items(
 ) -> float | None:
     exact = _period_items(items, report_date)
     short = _short_duration_item(exact)
-    if short and short.get("val") is not None:
-        return float(short["val"])
+    short_value = _finite_float(short.get("val")) if short else None
+    if short_value is not None:
+        return short_value
 
     if quarter_number == 4:
         annual_candidates = [
@@ -263,7 +290,8 @@ def _flow_value_for_items(
             if item.get("form") == "10-K" and item.get("fp") == "FY"
         ]
         annual = _latest(annual_candidates)
-        if annual is None or annual.get("val") is None or not isinstance(annual.get("fy"), int):
+        annual_value = _finite_float(annual.get("val")) if annual else None
+        if annual_value is None or not isinstance(annual.get("fy"), int):
             return None
         prior_quarters = [
             _standalone_for_fp(items, annual["fy"], fiscal_period)
@@ -271,7 +299,9 @@ def _flow_value_for_items(
         ]
         if any(value is None for value in prior_quarters):
             return None
-        return float(annual["val"]) - sum(value for value in prior_quarters if value is not None)
+        return annual_value - sum(
+            value for value in prior_quarters if value is not None
+        )
 
     cumulative = [
         item
@@ -279,10 +309,13 @@ def _flow_value_for_items(
         if _duration_days(item) is not None and _duration_days(item) > 130
     ]
     current_ytd = _latest(cumulative)
-    if current_ytd is None or current_ytd.get("val") is None:
+    current_ytd_value = (
+        _finite_float(current_ytd.get("val")) if current_ytd else None
+    )
+    if current_ytd_value is None:
         return None
     if quarter_number == 1:
-        return float(current_ytd["val"])
+        return current_ytd_value
     fiscal_year = current_ytd.get("fy")
     if not isinstance(fiscal_year, int):
         return None
@@ -297,18 +330,24 @@ def _flow_value_for_items(
         key=lambda item: (_duration_days(item) or 0, str(item.get("filed", ""))),
         default=None,
     )
-    if previous_ytd is None or previous_ytd.get("val") is None:
+    previous_ytd_value = (
+        _finite_float(previous_ytd.get("val")) if previous_ytd else None
+    )
+    if previous_ytd_value is None:
         return None
-    return float(current_ytd["val"]) - float(previous_ytd["val"])
+    return current_ytd_value - previous_ytd_value
 
 
-def _average_value_for_items(
+def _average_details_for_items(
     items: list[dict], report_date: str, quarter_number: int
-) -> float | None:
+) -> tuple[float | None, int | None, str]:
     exact = _period_items(items, report_date)
     short = _short_duration_item(exact)
-    if short and short.get("val") is not None:
-        return float(short["val"])
+    short_value = _positive_float(short.get("val")) if short else None
+    short_days = _duration_days(short) if short else None
+    if short_value is not None and short_days is not None and short_days > 0:
+        return short_value, short_days, "reported-quarter"
+
     if quarter_number == 4:
         annual = _latest(
             [
@@ -317,14 +356,59 @@ def _average_value_for_items(
                 if item.get("form") == "10-K" and item.get("fp") == "FY"
             ]
         )
-        if annual and annual.get("val") is not None:
-            return float(annual["val"])
-    return None
+        annual_value = _positive_float(annual.get("val")) if annual else None
+        annual_days = _duration_days(annual) if annual else None
+        fiscal_year = annual.get("fy") if annual else None
+        if (
+            annual_value is None
+            or annual_days is None
+            or annual_days <= 0
+            or not isinstance(fiscal_year, int)
+        ):
+            return None, None, "unavailable"
+
+        prior_weighted_shares = 0.0
+        prior_days = 0
+        for fiscal_period in ("Q1", "Q2", "Q3"):
+            prior = _standalone_item_for_fp(items, fiscal_year, fiscal_period)
+            prior_value = _positive_float(prior.get("val")) if prior else None
+            duration = _duration_days(prior) if prior else None
+            if prior_value is None or duration is None or duration <= 0:
+                return None, None, "unavailable"
+            prior_weighted_shares += prior_value * duration
+            prior_days += duration
+
+        fourth_quarter_days = annual_days - prior_days
+        if fourth_quarter_days <= 0:
+            return None, None, "unavailable"
+        fourth_quarter_shares = (
+            annual_value * annual_days - prior_weighted_shares
+        ) / fourth_quarter_days
+        if _positive_float(fourth_quarter_shares) is None:
+            return None, None, "unavailable"
+        return (
+            fourth_quarter_shares,
+            fourth_quarter_days,
+            "fiscal-year-duration-residual",
+        )
+    return None, None, "unavailable"
+
+
+def _average_value_for_items(
+    items: list[dict], report_date: str, quarter_number: int
+) -> float | None:
+    value, _, _ = _average_details_for_items(items, report_date, quarter_number)
+    return value
+
+
+def _diluted_eps_for_items(items: list[dict], report_date: str) -> float | None:
+    selected = _short_duration_item(_period_items(items, report_date))
+    return _finite_float(selected.get("val")) if selected else None
 
 
 def _instant_value_for_items(items: list[dict], report_date: str) -> float | None:
     selected = _latest(_period_items(items, report_date))
-    return float(selected["val"]) if selected and selected.get("val") is not None else None
+    return _finite_float(selected.get("val")) if selected else None
 
 
 def _concept_value(
@@ -356,14 +440,45 @@ def _build_quarter(us_gaap: dict, period: str, report_date: str) -> dict:
         values[metric], sources[metric] = _concept_value(
             us_gaap, candidates, unit, report_date, quarter_number, "flow"
         )
-    for metric, (candidates, unit) in AVERAGE_CONCEPTS.items():
-        values[metric], sources[metric] = _concept_value(
-            us_gaap, candidates, unit, report_date, quarter_number, "average"
+    diluted_share_candidates, diluted_share_unit = AVERAGE_CONCEPTS[
+        "diluted_shares"
+    ]
+    diluted_shares = None
+    diluted_shares_duration_days = None
+    diluted_shares_basis = "unavailable"
+    diluted_shares_source = None
+    for concept in diluted_share_candidates:
+        items = (
+            us_gaap.get(concept, {})
+            .get("units", {})
+            .get(diluted_share_unit, [])
         )
+        value, duration_days, basis = _average_details_for_items(
+            items, report_date, quarter_number
+        )
+        if value is not None:
+            diluted_shares = value
+            diluted_shares_duration_days = duration_days
+            diluted_shares_basis = basis
+            diluted_shares_source = concept
+            break
+    values["diluted_shares"] = diluted_shares
+    sources["diluted_shares"] = diluted_shares_source
     for metric, (candidates, unit) in INSTANT_CONCEPTS.items():
         values[metric], sources[metric] = _concept_value(
             us_gaap, candidates, unit, report_date, quarter_number, "instant"
         )
+
+    reported_diluted_eps = None
+    reported_diluted_eps_source = None
+    diluted_eps_candidates, diluted_eps_unit = DILUTED_EPS_CONCEPTS
+    for concept in diluted_eps_candidates:
+        items = us_gaap.get(concept, {}).get("units", {}).get(diluted_eps_unit, [])
+        reported_diluted_eps = _diluted_eps_for_items(items, report_date)
+        if reported_diluted_eps is not None:
+            reported_diluted_eps_source = concept
+            break
+    sources["eps"] = reported_diluted_eps_source
 
     revenue = values["revenue"]
     cfo = values["cfo"]
@@ -371,9 +486,22 @@ def _build_quarter(us_gaap: dict, period: str, report_date: str) -> dict:
     fcf = cfo - capex if cfo is not None and capex is not None else None
     cash = values["cash"]
     debt = values["long_term_debt"]
+    derived_eps = _safe_div(values["net_income"], diluted_shares)
+    eps = reported_diluted_eps
+    eps_basis = "reported-diluted-eps"
+    if eps is None:
+        eps = derived_eps
+        eps_basis = (
+            "net-income-over-quarterly-diluted-shares"
+            if derived_eps is not None
+            else "unavailable"
+        )
+
     missing = sorted(metric for metric, value in values.items() if value is None)
     if fcf is None:
         missing.append("fcf")
+    if eps is None:
+        missing.append("eps")
     return {
         "period": period,
         "report_date": report_date,
@@ -392,8 +520,11 @@ def _build_quarter(us_gaap: dict, period: str, report_date: str) -> dict:
         "operating_margin_pct": _pct(values["operating_income"], revenue),
         "net_margin_pct": _pct(values["net_income"], revenue),
         "fcf_margin_pct": _pct(fcf, revenue),
-        "diluted_shares": values["diluted_shares"],
-        "eps": _safe_div(values["net_income"], values["diluted_shares"]),
+        "diluted_shares": diluted_shares,
+        "diluted_shares_duration_days": diluted_shares_duration_days,
+        "diluted_shares_basis": diluted_shares_basis,
+        "eps": eps,
+        "eps_basis": eps_basis,
         "sbc": values["sbc"],
         "buybacks": values["buybacks"],
         "dividends_paid": values["dividends_paid"],
@@ -425,10 +556,10 @@ def _discover_periods(us_gaap: dict, requested: dict[str, str]) -> dict[str, str
 
 
 def _sum_complete(records: list[dict], field: str) -> float | None:
-    values = [record.get(field) for record in records]
-    if len(values) != 4 or any(not isinstance(value, (int, float)) for value in values):
+    values = [_finite_float(record.get(field)) for record in records]
+    if len(values) != 4 or any(value is None for value in values):
         return None
-    return float(sum(values))
+    return float(sum(value for value in values if value is not None))
 
 
 def _annual_for_date(annual: dict, report_date: str) -> dict:
@@ -442,27 +573,92 @@ def _annual_for_date(annual: dict, report_date: str) -> dict:
     )
 
 
+def _duration_weighted_diluted_shares(
+    records: list[dict],
+) -> tuple[float | None, list[str]]:
+    invalid_periods: list[str] = []
+    weighted_shares = 0.0
+    covered_days = 0.0
+    if len(records) != 4:
+        invalid_periods.extend(str(record.get("period", "unknown")) for record in records)
+
+    for record in records:
+        shares = _positive_float(record.get("diluted_shares"))
+        duration_days = _positive_float(record.get("diluted_shares_duration_days"))
+        if shares is None or duration_days is None:
+            period = str(record.get("period", "unknown"))
+            if period not in invalid_periods:
+                invalid_periods.append(period)
+            continue
+        weighted_shares += shares * duration_days
+        covered_days += duration_days
+
+    if invalid_periods or len(records) != 4 or covered_days <= 0:
+        return None, invalid_periods
+    return weighted_shares / covered_days, []
+
+
+def _ttm_eps(
+    records: list[dict],
+    net_income: float | None,
+    diluted_shares: float | None,
+    diluted_share_gaps: list[str],
+) -> tuple[float | None, str, dict]:
+    reported_eps: list[float] = []
+    reported_eps_gaps: list[str] = []
+    for record in records:
+        value = (
+            _finite_float(record.get("eps"))
+            if record.get("eps_basis") == "reported-diluted-eps"
+            else None
+        )
+        if value is None:
+            reported_eps_gaps.append(str(record.get("period", "unknown")))
+        else:
+            reported_eps.append(value)
+
+    quality = {
+        "status": "unavailable",
+        "missing_or_invalid_reported_eps_periods": reported_eps_gaps,
+        "missing_or_invalid_diluted_shares_periods": diluted_share_gaps,
+    }
+    if len(records) == 4 and not reported_eps_gaps:
+        quality["status"] = "reported"
+        return float(sum(reported_eps)), "sum-quarterly-diluted-eps", quality
+
+    finite_net_income = _finite_float(net_income)
+    if finite_net_income is not None and diluted_shares is not None:
+        quality["status"] = "derived"
+        return (
+            finite_net_income / diluted_shares,
+            "net-income-over-duration-weighted-diluted-shares",
+            quality,
+        )
+    return None, "unavailable", quality
+
+
 def _build_ttm(period: str, records: list[dict], annual: dict) -> dict:
     target = records[-1]
     values = {field: _sum_complete(records, field) for field in TTM_FLOW_FIELDS}
     annual_point = _annual_for_date(annual, target["report_date"])
     if period.endswith("Q4"):
         for field in TTM_FLOW_FIELDS:
-            if values[field] is None and isinstance(annual_point.get(field), (int, float)):
-                values[field] = float(annual_point[field])
+            annual_value = _finite_float(annual_point.get(field))
+            if values[field] is None and annual_value is not None:
+                values[field] = annual_value
 
     revenue = values["revenue"]
-    diluted_shares = next(
-        (
-            record["diluted_shares"]
-            for record in reversed(records)
-            if isinstance(record.get("diluted_shares"), (int, float))
-        ),
-        annual_point.get("diluted_shares"),
+    diluted_shares, diluted_share_gaps = _duration_weighted_diluted_shares(records)
+    eps, eps_basis, eps_data_quality = _ttm_eps(
+        records, values["net_income"], diluted_shares, diluted_share_gaps
     )
     cash = target.get("cash")
     debt = target.get("long_term_debt")
     missing = sorted(field for field, value in values.items() if value is None)
+    if diluted_shares is None:
+        missing.append("diluted_shares")
+    if eps is None:
+        missing.append("eps")
     return {
         "period": period,
         "report_date": target["report_date"],
@@ -475,9 +671,16 @@ def _build_ttm(period: str, records: list[dict], annual: dict) -> dict:
         "net_margin_pct": _pct(values["net_income"], revenue),
         "fcf_margin_pct": _pct(values["fcf"], revenue),
         "diluted_shares": diluted_shares,
-        "eps": _safe_div(values["net_income"], diluted_shares),
+        "diluted_shares_basis": (
+            "duration-weighted-quarterly"
+            if diluted_shares is not None
+            else "unavailable"
+        ),
+        "eps": eps,
+        "eps_basis": eps_basis,
+        "eps_data_quality": eps_data_quality,
         "source_periods": [record["period"] for record in records],
-        "missing_metrics": missing,
+        "missing_metrics": sorted(set(missing)),
     }
 
 

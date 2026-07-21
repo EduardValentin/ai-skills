@@ -26,7 +26,7 @@ You are a worker dispatched by the Phase 4 worker. Your job is to pull one compe
 
 ```bash
 mkdir -p <raw_dir>
-<scripts_dir>/.venv/bin/python <scripts_dir>/compute_financials.py <competitor_ticker> \
+<skill-python> -B <scripts_dir>/compute_financials.py <competitor_ticker> \
   --years 5 \
   --out <raw_dir>/financials.json
 ```
@@ -36,7 +36,7 @@ If `compute_financials.py` exits non-zero (e.g., the competitor isn't on EDGAR â
 ## Step 2: Pull price + market cap
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/fetch_prices.py <competitor_ticker> \
+<skill-python> -B <scripts_dir>/fetch_prices.py <competitor_ticker> \
   --years 2 \
   --out <raw_dir>/prices/
 ```

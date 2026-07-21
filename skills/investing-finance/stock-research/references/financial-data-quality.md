@@ -77,7 +77,7 @@ Raw inline XBRL HTML is often a huge single-line document. Avoid raw text search
 Run:
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/validate_financials.py \
+<skill-python> -B <scripts_dir>/validate_financials.py \
   <ticker_dir>/financials.json \
   --out <ticker_dir>/.raw/financials-validation.json
 ```

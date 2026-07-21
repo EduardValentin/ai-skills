@@ -24,7 +24,7 @@ Return the Worker Return Contract requested by the top-level orchestrator. Keep 
 ## Step 1: Fetch analyst estimates
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/fetch_analyst_estimates.py <ticker> \
+<skill-python> -B <scripts_dir>/fetch_analyst_estimates.py <ticker> \
   --out <ticker_dir>/
 ```
 

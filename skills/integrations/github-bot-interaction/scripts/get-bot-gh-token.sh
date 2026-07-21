@@ -79,12 +79,35 @@ NOW=$(date +%s)
 EXP=$((NOW + 540))
 
 b64url() {
-  python3 -c 'import sys, base64; sys.stdout.write(base64.urlsafe_b64encode(sys.stdin.buffer.read()).rstrip(b"=").decode())'
+  python3 -I -S -c 'import sys, base64; sys.stdout.write(base64.urlsafe_b64encode(sys.stdin.buffer.read()).rstrip(b"=").decode())'
 }
 
-HEADER_B64=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
-PAYLOAD_B64=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$NOW" "$EXP" "$APP_ID" | b64url)
-SIGNING_INPUT="${HEADER_B64}.${PAYLOAD_B64}"
+SIGNING_INPUT=$(
+  GH_BOT_JWT_IAT="$NOW" \
+    GH_BOT_JWT_EXP="$EXP" \
+    GH_BOT_JWT_ISS="$APP_ID" \
+    python3 -I -S -c '
+import base64
+import json
+import os
+
+def encode(value):
+    raw = json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+header = {"alg": "RS256", "typ": "JWT"}
+payload = {
+    "iat": int(os.environ["GH_BOT_JWT_IAT"]),
+    "exp": int(os.environ["GH_BOT_JWT_EXP"]),
+    "iss": os.environ["GH_BOT_JWT_ISS"],
+}
+print(f"{encode(header)}.{encode(payload)}", end="")
+'
+)
 
 # Sign with openssl. The private key is fed via process substitution so it
 # never lands on disk as a temp file. Wrap in an `if !` so set -e doesn't
@@ -105,34 +128,124 @@ fi
 JWT="${SIGNING_INPUT}.${SIG}"
 
 # Exchange the JWT for an installation access token (~1h lifetime).
-# --connect-timeout caps the TCP handshake; --max-time caps total request
-# time. Without these, a flaky network can hang the agent indefinitely.
-RESPONSE=$(curl -sS -X POST \
-  --connect-timeout 10 \
-  --max-time 30 \
-  -H "Authorization: Bearer $JWT" \
-  -H "Accept: application/vnd.github+json" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  "https://api.github.com/app/installations/${INSTALLATION_ID}/access_tokens")
+# Python reads the JWT from stdin, keeping it out of the child process argv.
+RESPONSE=$(
+  printf '%s' "$JWT" \
+    | GH_BOT_HTTP_INSTALLATION_ID="$INSTALLATION_ID" python3 -I -S -c '
+import base64
+import http.client
+import json
+import os
+import re
+import sys
+import urllib.error
+import urllib.request
+
+installation_id = os.environ["GH_BOT_HTTP_INSTALLATION_ID"]
+if re.fullmatch(r"[1-9][0-9]*", installation_id, flags=re.ASCII) is None:
+    print(
+        "GH_BOT_INSTALLATION_ID must be a positive decimal integer.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+try:
+    jwt = sys.stdin.buffer.read().decode("ascii")
+except UnicodeDecodeError:
+    print("Generated GitHub App JWT was not ASCII.", file=sys.stderr)
+    raise SystemExit(1)
+if not jwt:
+    print("Generated GitHub App JWT was empty.", file=sys.stderr)
+    raise SystemExit(1)
+
+
+class RejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        raise urllib.error.HTTPError(
+            request.full_url,
+            code,
+            "GitHub token exchange redirects are disabled",
+            headers,
+            response,
+        )
+
+
+request = urllib.request.Request(
+    f"https://api.github.com/app/installations/{installation_id}/access_tokens",
+    data=b"",
+    headers={
+        "Authorization": f"Bearer {jwt}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "ai-skills-github-app-token-helper/1",
+        "X-GitHub-Api-Version": "2022-11-28",
+    },
+    method="POST",
+)
+opener = urllib.request.build_opener(RejectRedirects())
+try:
+    with opener.open(request, timeout=30) as response:
+        status = response.status
+        response_body = response.read()
+except urllib.error.HTTPError as error:
+    status = error.code
+    response_body = error.read()
+    error.close()
+except (OSError, urllib.error.URLError, http.client.HTTPException):
+    print("GitHub token exchange request failed.", file=sys.stderr)
+    raise SystemExit(1)
+
+# Frame status and bytes so the structured parser can reject token-like error bodies.
+envelope = {
+    "status": status,
+    "body": base64.b64encode(response_body).decode("ascii"),
+}
+sys.stdout.write(json.dumps(envelope, separators=(",", ":")))
+'
+)
 
 # Extract the token via python3 (no jq dependency).
-TOKEN=$(printf '%s' "$RESPONSE" | python3 -c '
-import json, sys
+TOKEN=$(printf '%s' "$RESPONSE" | python3 -I -S -c '
+import base64
+import json
+import sys
+
 try:
-    data = json.load(sys.stdin)
+    envelope = json.load(sys.stdin)
+    status = envelope["status"]
+    encoded_body = envelope["body"]
+    if type(status) is not int or not isinstance(encoded_body, str):
+        raise ValueError("invalid response envelope shape")
+    response_body = base64.b64decode(encoded_body, validate=True)
 except Exception as e:
+    print(f"Failed to parse GitHub response envelope: {e}", file=sys.stderr)
+    sys.exit(1)
+
+if not 200 <= status < 300:
+    print(
+        f"GitHub token exchange returned HTTP {status}; "
+        "no installation token was accepted.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+try:
+    data = json.loads(response_body)
+except (UnicodeDecodeError, json.JSONDecodeError) as e:
     print(f"Failed to parse GitHub response: {e}", file=sys.stderr)
     sys.exit(1)
-if "token" not in data:
-    print("GitHub did not return a token. Response:", file=sys.stderr)
-    print(json.dumps(data, indent=2), file=sys.stderr)
+
+token = data.get("token") if isinstance(data, dict) else None
+if not isinstance(token, str) or not token:
+    print(
+        "GitHub token exchange successful response did not contain a usable token.",
+        file=sys.stderr,
+    )
     sys.exit(1)
-print(data["token"])
+print(token)
 ') || exit 3
 
 if [[ -z "$TOKEN" ]]; then
-  echo "Empty token from GitHub. Raw response:" >&2
-  echo "$RESPONSE" >&2
+  echo "Empty token from GitHub." >&2
   exit 3
 fi
 

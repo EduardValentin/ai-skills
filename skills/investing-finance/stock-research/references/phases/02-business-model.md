@@ -40,7 +40,7 @@ Run these scripts (already at `<scripts_dir>/`) before writing the file:
 1. **Fetch the latest 10-K and recent 8-Ks:**
    ```bash
    cutoff_date=$(
-     <scripts_dir>/.venv/bin/python - <<'PY'
+     <skill-python> -B - <<'PY'
    from datetime import date
 
    today = date.today()
@@ -52,7 +52,7 @@ Run these scripts (already at `<scripts_dir>/`) before writing the file:
    PY
    )
 
-   <scripts_dir>/.venv/bin/python <scripts_dir>/fetch_sec.py <ticker> \
+   <skill-python> -B <scripts_dir>/fetch_sec.py <ticker> \
      --forms 10-K,8-K,DEF\ 14A,4 \
      --since "$cutoff_date" \
      --out <raw_dir>
@@ -62,15 +62,15 @@ Run these scripts (already at `<scripts_dir>/`) before writing the file:
    ```bash
    filings_index="<raw_dir>/_filings_index.json"
    tenk=$(
-     <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+     <skill-python> -B <scripts_dir>/select_filing.py \
        --index "$filings_index" --form 10-K --rank 0 --field path
    )
    tenk_year=$(
-     <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+     <skill-python> -B <scripts_dir>/select_filing.py \
        --index "$filings_index" --form 10-K --rank 0 --field report-year
    )
 
-   <scripts_dir>/.venv/bin/python <scripts_dir>/extract_10k_sections.py <ticker> \
+   <skill-python> -B <scripts_dir>/extract_10k_sections.py <ticker> \
      --html "$tenk" \
      --year "$tenk_year" \
      --out <raw_dir>/10k-sections/
@@ -86,7 +86,7 @@ Run these scripts (already at `<scripts_dir>/`) before writing the file:
 
 5. **Compute financials** (we'll use ROIC and margin trends in the moat section):
    ```bash
-   <scripts_dir>/.venv/bin/python <scripts_dir>/compute_financials.py <ticker> \
+   <skill-python> -B <scripts_dir>/compute_financials.py <ticker> \
      --years 10 \
      --out <ticker_dir>/financials.json
    ```

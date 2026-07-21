@@ -51,14 +51,14 @@ If `<raw_dir>/10k-sections/` has Item 1A from the most recent 10-K, also find th
 ```bash
 filings_index="<raw_dir>/_filings_index.json"
 prior_tenk=$(
-  <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+  <skill-python> -B <scripts_dir>/select_filing.py \
     --index "$filings_index" --form 10-K --rank 1 --field path
 )
 prior_year=$(
-  <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+  <skill-python> -B <scripts_dir>/select_filing.py \
     --index "$filings_index" --form 10-K --rank 1 --field report-year
 )
-<scripts_dir>/.venv/bin/python <scripts_dir>/extract_10k_sections.py <ticker> \
+<skill-python> -B <scripts_dir>/extract_10k_sections.py <ticker> \
   --html "$prior_tenk" --year "$prior_year" \
   --out <raw_dir>/10k-sections-prior/
 ```
@@ -68,7 +68,7 @@ prior_year=$(
 Then run the diff:
 
 ```bash
-<scripts_dir>/.venv/bin/python <scripts_dir>/diff_risk_factors.py \
+<skill-python> -B <scripts_dir>/diff_risk_factors.py \
   --file-a <raw_dir>/10k-sections-prior/item_1a_risk_factors.md \
   --file-b <raw_dir>/10k-sections/item_1a_risk_factors.md \
   --ticker <TICKER> \

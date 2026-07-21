@@ -1112,7 +1112,7 @@ class BehaviorRunnerTests(unittest.TestCase):
                 with (
                     patch.object(
                         eval_validation,
-                        "run_static_validation",
+                        "run_pre_model_validation",
                         return_value=[],
                     ),
                     patch.object(
@@ -1189,6 +1189,104 @@ class BehaviorRunnerTests(unittest.TestCase):
                 set(source["groups"][0]["variants"]),
                 {"with_skill", "without_skill"},
             )
+
+    def test_missing_output_checks_persist_control_evidence_and_aggregate(self) -> None:
+        cases = (
+            (
+                "path_absent",
+                {"type": "path_absent", "path": "missing.txt"},
+                True,
+            ),
+            (
+                "file_exists",
+                {"type": "file_exists", "path": "missing.txt"},
+                False,
+            ),
+            (
+                "json_schema",
+                {
+                    "type": "json_schema",
+                    "path": "missing.json",
+                    "schema": "fixtures/alpha-core/report.schema.json",
+                },
+                False,
+            ),
+        )
+        for check_type, check, expected_passed in cases:
+            with (
+                self.subTest(check_type=check_type),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                base = Path(directory)
+                repository = self._repository(base)
+                alpha = repository.root / "skills" / "workflows" / "alpha"
+                definition_path = alpha / "evals" / "evals.json"
+                definition = json.loads(definition_path.read_text(encoding="utf-8"))
+                definition["evals"][0]["checks"] = [check]
+                definition_path.write_text(json.dumps(definition), encoding="utf-8")
+                if check_type == "json_schema":
+                    schema_path = (
+                        alpha
+                        / "evals"
+                        / "fixtures"
+                        / "alpha-core"
+                        / "report.schema.json"
+                    )
+                    schema_path.parent.mkdir(parents=True)
+                    schema_path.write_text('{"type":"object"}', encoding="utf-8")
+                workspace = create_result_workspace(
+                    "validate-evals",
+                    results_dir=base / "results",
+                    repository_root=repository.root,
+                )
+                adapter = RecordingBehaviorHarness()
+
+                result = execute_behavior_evals(
+                    repository.root,
+                    adapter,
+                    workspace,
+                    skill_filter="alpha",
+                    case_filter=None,
+                    max_concurrency=2,
+                    actor_timeout_seconds=60,
+                    judge_timeout_seconds=30,
+                )
+
+                self.assertEqual(result.exit_code, 0 if expected_passed else 1)
+                attempts = tuple(workspace.attempts.iterdir())
+                self.assertEqual(len(attempts), 2)
+                for attempt in attempts:
+                    grading = json.loads(
+                        (attempt / "grading.json").read_text(encoding="utf-8")
+                    )
+                    deterministic = next(
+                        assertion
+                        for assertion in grading["assertion_results"]
+                        if assertion["checked_by"] == "deterministic"
+                    )
+                    self.assertEqual(deterministic["passed"], expected_passed)
+                    self.assertEqual(
+                        deterministic["evidence_refs"][0]["artifact"],
+                        "timing.json",
+                    )
+                    evidence_path = attempt / deterministic["evidence_refs"][0][
+                        "artifact"
+                    ]
+                    self.assertTrue(evidence_path.is_file())
+                    self.assertFalse(evidence_path.is_symlink())
+
+                benchmark = aggregate_results(
+                    workspace.root,
+                    "judge",
+                    repository_root=repository.root,
+                )
+
+                self.assertEqual(
+                    benchmark["source_summaries"]["judge"]["summary"][
+                        "failed_cases"
+                    ],
+                    0 if expected_passed else 1,
+                )
 
     def test_only_with_skill_grading_controls_behavior_exit_one(self) -> None:
         for failed_variants, expected_exit in (
@@ -2475,7 +2573,7 @@ class BehaviorCliTests(unittest.TestCase):
                 output = StringIO()
 
                 with (
-                    patch.object(eval_validation, "run_static_validation", return_value=[]),
+                    patch.object(eval_validation, "run_pre_model_validation", return_value=[]),
                     patch.object(
                         eval_validation.CodexEvaluationRuntime,
                         "create",
@@ -2549,25 +2647,32 @@ class BehaviorCliTests(unittest.TestCase):
             max_concurrency=2,
         )
 
-    def test_model_runner_stops_before_results_on_static_contract_issues(self) -> None:
+    def test_model_runner_stops_before_setup_on_pre_model_contract_issues(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
             output = StringIO()
             with (
                 patch.object(
                     eval_validation,
-                    "run_static_validation",
+                    "run_pre_model_validation",
                     return_value=[
                         eval_validation.ValidationIssue(
-                            scope="skills/alpha", message="unsafe topology"
+                            scope="reference conformance",
+                            message="pinned conformance failed",
                         )
                     ],
                     create=True,
-                ),
+                ) as gate,
+                patch.object(eval_validation, "load_behavior_evals") as load_definitions,
                 patch.object(eval_validation, "create_result_workspace") as create_results,
+                patch.object(
+                    eval_validation.CodexEvaluationRuntime,
+                    "create",
+                ) as create_runtime,
                 redirect_stdout(output),
             ):
                 result = eval_validation.run_behavior_eval_harness(
-                    Path(directory),
+                    root,
                     harness="codex",
                     skill_filter=None,
                     case_filter=None,
@@ -2576,8 +2681,11 @@ class BehaviorCliTests(unittest.TestCase):
                 )
 
         self.assertEqual(result, 2)
+        gate.assert_called_once_with(root)
+        load_definitions.assert_not_called()
         create_results.assert_not_called()
-        self.assertIn("unsafe topology", output.getvalue())
+        create_runtime.assert_not_called()
+        self.assertIn("pinned conformance failed", output.getvalue())
 
     def test_post_workspace_declaration_failure_writes_summary_and_result_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2588,7 +2696,7 @@ class BehaviorCliTests(unittest.TestCase):
             output = StringIO()
 
             with (
-                patch.object(eval_validation, "run_static_validation", return_value=[]),
+                patch.object(eval_validation, "run_pre_model_validation", return_value=[]),
                 patch.object(
                     eval_validation,
                     "declare_behavior_plan",

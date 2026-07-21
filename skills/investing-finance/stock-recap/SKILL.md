@@ -2,7 +2,7 @@
 name: stock-recap
 description: "Use when recapping an existing US-listed stock thesis — catching up on every quarter (10-Q/10-K) filed since the last analysis, or analyzing the impact of a material event (M&A, CEO change, regulatory ruling, restated guidance). Triggers on phrases like \"catch me up on NVDA\", \"recap MSFT since last quarter\", \"how does this acquisition affect my AAPL thesis\", \"new earnings just dropped for TSLA\". Mechanically diffs actuals vs saved bull/base/bear projections, LLM-evaluates the saved English sell triggers in 4 states (🔴 fired / 🟡 flashing / 🟢 clear / ⚪ cannot-evaluate), and optionally proposes a surgical or reclassifying thesis update. Not for: initial deep dive on a brand-new ticker (that's stock-research), portfolio P&L tracking, short-term trading, or non-US listings."
 compatibility: >-
-  Requires SR_SEC_USER_AGENT, SR_RESEARCH_REPO, a prior stock-research baseline, the target research repo's AGENTS.md, market-source network access, a skill-local Python runtime, and writable Git state. Native agent dispatch and structured-input tools are optional: fall back to sequential prompts and numbered text choices. If stock-research artifacts are missing, route to stock-research; if that skill or required runtime capabilities are unavailable, stop and report the blocker.
+  Requires SR_SEC_USER_AGENT, SR_RESEARCH_REPO, prior stock-research artifacts, the target repo's AGENTS.md, market-data access, writable Git, and an external Python 3.10+ finance runtime under AI_SKILLS_RUNTIME_HOME, falling back to XDG_CACHE_HOME/HOME. Without workers or structured input, use sequential prompts and numbered choices. Missing baseline artifacts route to stock-research; stop if it or required runtime capabilities are unavailable.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -43,7 +43,19 @@ When beginning a recap, the response must preserve these gates before any recap 
    export SR_SEC_USER_AGENT="Research User contact@example.com"
    ```
 
-3. **Bundled financial runtime is ready.** Resolve scripts from `<skill-root>/scripts/`; do not depend on a repository-level toolkit or another harness install. Its `.venv` must already be set up from the bundled `requirements.txt`. If `<skill-python> --version` fails or a required bundled script is missing, stop and report the setup blocker.
+3. **Bundled financial runtime is ready.** Resolve scripts from `<skill-root>/scripts/`; do not depend on a repository-level toolkit or another harness install, and never create mutable runtime state under the installed skill. Resolve the absolute external `<runtime-home>` from the first non-empty location: `AI_SKILLS_RUNTIME_HOME`, `${XDG_CACHE_HOME}/ai-skills`, or `${HOME}/.cache/ai-skills`. Set `<finance-venv>` to `<runtime-home>/investing-finance/venv` and `<skill-python>` to that environment's Python executable. Both finance skills share this external environment because their bundled requirements are synchronized. Set it up with Python 3.10 or newer:
+
+   ```bash
+   runtime_home="$(
+     PYTHONPATH="<installed-skill>/scripts" python3 -B -c \
+       'from _lib.config import ai_skills_runtime_home; print(ai_skills_runtime_home())'
+   )"
+   finance_venv="${runtime_home}/investing-finance/venv"
+   python3 -B -m venv "${finance_venv}"
+   "${finance_venv}/bin/python" -B -m pip install --requirement "<installed-skill>/scripts/requirements.txt"
+   ```
+
+   Always pass `-B` to bundled scripts and inline helper invocations, including calls assembled for subprocesses. If an integration cannot pass interpreter flags, set `PYTHONPYCACHEPREFIX="${runtime_home}/investing-finance/pycache"` in that subprocess environment. If `<skill-python> -B --version` fails, it is older than Python 3.10, it cannot import the bundled dependencies, or a required script is missing, stop and report the setup blocker using these external paths.
 
 4. **Research repo exists.** `SR_RESEARCH_REPO` is the only repository-path variable; it is required and has no machine-specific default. Open `${SR_RESEARCH_REPO}/AGENTS.md` before resolving repo-owned paths or writes. If the repo root or instructions are missing, stop and ask for the configured repo path.
 

@@ -2,7 +2,7 @@
 name: stock-research
 description: "Use when researching a US-listed company end-to-end for a long-horizon fundamentals deep dive on a US-listed ticker, building a new investment thesis, or evaluating whether to buy/watch/avoid at the current price. Triggers on \"research AAPL\", \"deep dive on Microsoft\", \"should I buy NVDA\", \"analyze TSLA's fundamentals\". Do not use, or select as a closest fit, for technical analysis, chart patterns, options strategy, day-trading entry levels, \"update existing thesis\", \"latest quarter\", \"compare against prior thesis\", or stock-recap."
 compatibility: >-
-  Requires SR_REPO_PATH pointing to a local US-equity research repository with AGENTS.md, a Python scripts environment with pinned runtime dependencies, SR_SEC_USER_AGENT, SEC and market-data network access, and Git. Without workers, run phases sequentially; without structured input, use numbered choices. Existing-thesis and latest-quarter requests route only to stock-recap; if unavailable, decline and report the missing handoff.
+  Requires SR_REPO_PATH pointing to a local US-equity research repo with AGENTS.md; SR_SEC_USER_AGENT; an external Python 3.10+ finance runtime under AI_SKILLS_RUNTIME_HOME, falling back to XDG_CACHE_HOME/HOME; SEC and market-data access; and Git. Without workers or structured input, use sequential phases and numbered choices. Route existing-thesis and latest-quarter requests only to stock-recap; decline if unavailable.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -44,7 +44,21 @@ Do not ask for the GVD lens or session context, preview the phase plan or artifa
 
 ## Setup Gates
 
-Use scripts from this skill's installed `scripts/` directory. The scripts are part of the skill installation; do not hardcode an agent-specific or machine-specific install path.
+Use scripts from this skill's installed `scripts/` directory. The scripts are part of the skill installation; do not hardcode an agent-specific or machine-specific install path, and never create mutable runtime state under the installed skill.
+
+Resolve the absolute external `<runtime-home>` from the first non-empty location: `AI_SKILLS_RUNTIME_HOME`, `${XDG_CACHE_HOME}/ai-skills`, or `${HOME}/.cache/ai-skills`. Set `<finance-venv>` to `<runtime-home>/investing-finance/venv` and `<skill-python>` to that environment's Python executable. Both finance skills share this external environment because their bundled requirements are synchronized. To set it up with Python 3.10 or newer:
+
+```bash
+runtime_home="$(
+  PYTHONPATH="<installed-skill>/scripts" python3 -B -c \
+    'from _lib.config import ai_skills_runtime_home; print(ai_skills_runtime_home())'
+)"
+finance_venv="${runtime_home}/investing-finance/venv"
+python3 -B -m venv "${finance_venv}"
+"${finance_venv}/bin/python" -B -m pip install --requirement "<installed-skill>/scripts/requirements.txt"
+```
+
+Always pass `-B` to bundled scripts and inline helper invocations, including calls assembled for subprocesses. If an integration cannot pass interpreter flags, set `PYTHONPYCACHEPREFIX="${runtime_home}/investing-finance/pycache"` in that subprocess environment.
 
 Resolve the investing research repo from `SR_REPO_PATH`, open its `AGENTS.md`, and follow that file for canonical paths, allowed writes, layout, repo-owned setup checks, existing-folder handling, index files, commit convention, and remote-push policy.
 
@@ -52,7 +66,7 @@ Before any durable work, verify these gates separately:
 
 - Ticker/company identity: resolve the ticker and CIK, confirm the company, and confirm that the security meets the eligibility rule above.
 - SEC identity: `SR_SEC_USER_AGENT` is set.
-- Script runtime: the installed skill-local Python executable exists and can run the needed scripts.
+- Script runtime: `<skill-python>` is Python 3.10 or newer, is outside the installed skill, and can import the pinned bundled dependencies and run the needed scripts.
 - Target repo: `SR_REPO_PATH` is set and its research repo root and `AGENTS.md` are available.
 - Ticker folder state: determine whether the repo-defined ticker folder exists, then follow repo instructions for create, refresh, archive/restart, or abort.
 
@@ -156,7 +170,7 @@ If the user pushes back, keep the follow-up free-form, re-dispatch or revise the
 - Phase prompts: `references/phases/02-business-model.md` through `references/phases/07-market-expectations.md`.
 - Phase 8 references: `references/gvd-tailoring.md`, `references/projection-kpis.md`.
 - Phase 9 references: `references/sizing-matrix.md`, `references/investor-gates.md`, `references/sell-trigger-templates.md`, `references/watch-kpis-by-gvd.md`.
-- Scripts: call with `<scripts_dir>/.venv/bin/python <script>.py`.
+- Scripts: call with `<skill-python> -B <scripts_dir>/<script>.py`.
 - Repo-specific paths, artifact layout, index files, commit/tag convention, allowed writes, and push policy: target investing research repo `AGENTS.md`.
 
 ## Quick Reference
@@ -178,11 +192,11 @@ If the user pushes back, keep the follow-up free-form, re-dispatch or revise the
 Render setup errors as short Markdown with the exact command to fix:
 
 - Missing `SR_SEC_USER_AGENT`: show `export SR_SEC_USER_AGENT="<Name> <email>"`.
-- Missing scripts venv: show `cd <installed-skill>/scripts`, `python -m venv .venv`, and `.venv/bin/pip install -r requirements.txt`.
+- Missing scripts runtime: show the external `runtime_home` / `finance_venv` setup commands from **Setup Gates** and never create an environment under `<installed-skill>`.
 - Missing research repo variable: show `export SR_REPO_PATH="<path-to-investing-research>"` and stop before writing.
 - Missing repo `AGENTS.md`: report the resolved `SR_REPO_PATH`, ask for a valid investing research repo root, and stop before writing.
 - Unknown ticker: stop with "Ticker not found on SEC EDGAR. Confirm spelling."
 
 ## Hard Stop
 
-This skill writes only to the target investing research repo allowed by that repo's `AGENTS.md`, the skill's own caches, and stdout. It does not write to user code projects, git config, or arbitrary paths.
+This skill writes only to the target investing research repo allowed by that repo's `AGENTS.md`, the external finance runtime directories resolved above, and stdout. It never writes mutable state inside its installed root or writes to user code projects, git config, or arbitrary paths.

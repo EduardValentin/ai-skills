@@ -1,7 +1,7 @@
 """Regenerate INDEX.md from tickers.json.
 
 Usage:
-    update_index.py --repo <path>
+    <skill-python> -B <scripts-dir>/update_index.py --repo <path>
 """
 from __future__ import annotations
 

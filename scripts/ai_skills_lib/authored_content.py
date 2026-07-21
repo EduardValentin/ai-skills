@@ -25,6 +25,12 @@ _PURE_REFERENCE_PATTERN = re.compile(
     r"|\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}"
     r")\Z"
 )
+_PYTHON_FSTRING_AUTHORIZATION_PATTERN = re.compile(
+    r"f(?P<quote>[\"'])(?:Bearer|Basic)[ \t]+"
+    r"\{[A-Za-z_][A-Za-z0-9_]*\}(?P=quote)[ \t]*[,}]?\Z",
+    re.IGNORECASE,
+)
+_FORMAT_REFERENCE_PATTERN = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}\Z")
 _FAKE_VALUE_PATTERN = re.compile(r"FAKE_[A-Za-z0-9][A-Za-z0-9_.:/-]*\Z")
 _BUNDLED_PATH_PATTERN = re.compile(
     r"(?<![A-Za-z0-9_])(?P<target>(?:scripts|references|assets)/"
@@ -873,6 +879,11 @@ def _classify_pattern_value(
     match: re.Match[str],
     value: str,
 ) -> str:
+    if (
+        pattern.name == "authorization-value"
+        and _PYTHON_FSTRING_AUTHORIZATION_PATTERN.fullmatch(value.strip())
+    ):
+        return "safe"
     if pattern.name in {
         "authorization-value",
         "cookie-value",
@@ -1057,7 +1068,11 @@ def _is_safe_assigned_value(raw_value: str) -> bool:
         value = value[1:-1].strip()
     if not value:
         return True
-    if _PURE_REFERENCE_PATTERN.fullmatch(value) or _FAKE_VALUE_PATTERN.fullmatch(value):
+    if (
+        _PURE_REFERENCE_PATTERN.fullmatch(value)
+        or _FORMAT_REFERENCE_PATTERN.fullmatch(value)
+        or _FAKE_VALUE_PATTERN.fullmatch(value)
+    ):
         return True
     if value.upper() in {
         "[REDACTED]",

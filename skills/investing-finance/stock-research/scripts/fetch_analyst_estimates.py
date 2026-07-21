@@ -1,7 +1,7 @@
 """Fetch analyst consensus from yfinance into market-expectations.json.
 
 Usage:
-    fetch_analyst_estimates.py <TICKER> --out <dir>
+    <skill-python> -B <scripts-dir>/fetch_analyst_estimates.py <TICKER> --out <dir>
 """
 from __future__ import annotations
 

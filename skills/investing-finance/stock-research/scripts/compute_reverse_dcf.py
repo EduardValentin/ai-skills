@@ -5,7 +5,7 @@ terminal at ``terminal_growth``. Discount everything back at
 ``discount_rate``.
 
 Usage:
-    compute_reverse_dcf.py --financials <path> --price <p>
+    <skill-python> -B <scripts-dir>/compute_reverse_dcf.py --financials <path> --price <p>
                            [--discount-rate 0.10] [--terminal-growth 0.025]
                            [--years 10] --out <path>
 """

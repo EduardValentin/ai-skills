@@ -57,24 +57,116 @@ _RESULT_READ_CHUNK_BYTES = 64 * 1024
 _ROOT_RESULT_FILES = frozenset(
     {"invocation.json", "benchmark.json", "summary.md"}
 )
-_ATTEMPT_RESULT_FILES = frozenset(
-    {
-        "attempt.json",
-        "timing.json",
-        "grading.json",
-        "manual_grading.json",
-        "feedback.json",
-        "transcript.md",
-        "execution_trace.jsonl",
-    }
+
+
+@dataclass(frozen=True)
+class _PersistedAttemptArtifact:
+    path_attribute: str
+    relative_parts: tuple[str, ...]
+    content_kind: str
+    schema_name: str | None
+    required_for_gradable_attempt: bool
+    allowed_as_evidence: bool
+    write_as_completion_marker: bool = False
+
+
+_PERSISTED_ATTEMPT_ARTIFACT_CONTRACT = (
+    _PersistedAttemptArtifact(
+        path_attribute="manifest",
+        relative_parts=("attempt.json",),
+        content_kind="json",
+        schema_name="attempt.schema.json",
+        required_for_gradable_attempt=True,
+        allowed_as_evidence=False,
+    ),
+    _PersistedAttemptArtifact(
+        path_attribute="timing",
+        relative_parts=("timing.json",),
+        content_kind="json",
+        schema_name="timing.schema.json",
+        required_for_gradable_attempt=True,
+        allowed_as_evidence=True,
+    ),
+    _PersistedAttemptArtifact(
+        path_attribute="grading",
+        relative_parts=("grading.json",),
+        content_kind="json",
+        schema_name="grading.schema.json",
+        required_for_gradable_attempt=True,
+        allowed_as_evidence=False,
+        write_as_completion_marker=True,
+    ),
+    _PersistedAttemptArtifact(
+        path_attribute="response",
+        relative_parts=("outputs", "response.md"),
+        content_kind="text",
+        schema_name=None,
+        required_for_gradable_attempt=True,
+        allowed_as_evidence=True,
+    ),
+    _PersistedAttemptArtifact(
+        path_attribute="transcript",
+        relative_parts=("transcript.md",),
+        content_kind="text",
+        schema_name=None,
+        required_for_gradable_attempt=True,
+        allowed_as_evidence=True,
+    ),
+    _PersistedAttemptArtifact(
+        path_attribute="execution_trace",
+        relative_parts=("execution_trace.jsonl",),
+        content_kind="text",
+        schema_name=None,
+        required_for_gradable_attempt=True,
+        allowed_as_evidence=True,
+    ),
+    _PersistedAttemptArtifact(
+        path_attribute="manual_grading",
+        relative_parts=("manual_grading.json",),
+        content_kind="json",
+        schema_name="grading.schema.json",
+        required_for_gradable_attempt=False,
+        allowed_as_evidence=False,
+    ),
+    _PersistedAttemptArtifact(
+        path_attribute="feedback",
+        relative_parts=("feedback.json",),
+        content_kind="json",
+        schema_name=None,
+        required_for_gradable_attempt=False,
+        allowed_as_evidence=False,
+    ),
 )
-_REQUIRED_ATTEMPT_RESULT_FILES = frozenset(
-    {"attempt.json"}
+_ATTEMPT_ARTIFACT_BY_ATTRIBUTE = {
+    artifact.path_attribute: artifact
+    for artifact in _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT
+}
+_FIXED_EVIDENCE_ARTIFACT_PATHS = frozenset(
+    artifact.relative_parts
+    for artifact in _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT
+    if artifact.allowed_as_evidence
 )
+
+
 class ResultArtifactError(RuntimeError):
     """Raised when preserved evaluation evidence cannot be trusted."""
 
     exit_code = 2
+
+
+def completed_attempt_control_evidence_reference(
+    locator: str,
+) -> Mapping[str, str]:
+    """Reference the required runner-owned record for a completed attempt."""
+    artifact = _ATTEMPT_ARTIFACT_BY_ATTRIBUTE["timing"]
+    if not artifact.required_for_gradable_attempt or not artifact.allowed_as_evidence:
+        raise ResultArtifactError(
+            "completed-attempt control evidence is not a required evidence artifact"
+        )
+    return {
+        "artifact": "/".join(artifact.relative_parts),
+        "locator": locator,
+    }
 
 
 class JudgeExecutionError(ResultArtifactError):
@@ -139,6 +231,56 @@ class AttemptPaths:
     grading: Path
     manual_grading: Path
     feedback: Path
+
+
+def _attempt_paths(root: Path) -> AttemptPaths:
+    return AttemptPaths(
+        root=root,
+        **{
+            artifact.path_attribute: root.joinpath(*artifact.relative_parts)
+            for artifact in _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT
+        },
+    )
+
+
+def _attempt_artifact_parts(
+    attempt_parts: tuple[str, ...], path_attribute: str
+) -> tuple[str, ...]:
+    artifact = _ATTEMPT_ARTIFACT_BY_ATTRIBUTE[path_attribute]
+    return (*attempt_parts, *artifact.relative_parts)
+
+
+def _attempt_artifact_schema(path_attribute: str) -> str:
+    schema_name = _ATTEMPT_ARTIFACT_BY_ATTRIBUTE[path_attribute].schema_name
+    if schema_name is None:
+        raise ResultArtifactError("attempt artifact has no declared JSON schema")
+    return schema_name
+
+
+def _write_persisted_attempt_artifacts(
+    paths: AttemptPaths,
+    values: Mapping[str, object],
+) -> None:
+    unknown = set(values) - set(_ATTEMPT_ARTIFACT_BY_ATTRIBUTE)
+    if unknown:
+        raise ResultArtifactError("attempt writer received an undeclared artifact")
+    artifacts = sorted(
+        _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT,
+        key=lambda artifact: artifact.write_as_completion_marker,
+    )
+    for artifact in artifacts:
+        if artifact.path_attribute not in values:
+            continue
+        path = getattr(paths, artifact.path_attribute)
+        value = values[artifact.path_attribute]
+        if artifact.content_kind == "json":
+            if not isinstance(value, Mapping):
+                raise ResultArtifactError("attempt JSON artifact must be an object")
+            _write_json_once(path, value, paths.root)
+        else:
+            if not isinstance(value, str):
+                raise ResultArtifactError("attempt text artifact must be text")
+            _write_text_once(path, value, paths.root)
 
 
 @dataclass(frozen=True)
@@ -510,7 +652,7 @@ def create_attempt_workspace(
 ) -> AttemptPaths:
     """Declare one attempt durably before any external execution."""
     document = manifest.to_dict()
-    validate_result_document(document, "attempt.schema.json")
+    validate_result_document(document, _attempt_artifact_schema("manifest"))
     if manifest.aggregation.variant not in manifest.aggregation.required_variants:
         raise ResultArtifactError(
             "attempt aggregation variant must be one of its required variants"
@@ -549,7 +691,13 @@ def create_attempt_workspace(
             directory_flags,
             dir_fd=attempts_descriptor,
         )
-        os.mkdir("outputs", dir_fd=attempt_descriptor)
+        output_directories = {
+            artifact.relative_parts[0]
+            for artifact in _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT
+            if len(artifact.relative_parts) > 1
+        }
+        for directory in sorted(output_directories):
+            os.mkdir(directory, dir_fd=attempt_descriptor)
     except FileExistsError as error:
         raise ResultArtifactError(f"attempt workspace already exists: {root}") from error
     except OSError as error:
@@ -559,19 +707,8 @@ def create_attempt_workspace(
             os.close(attempt_descriptor)
         if attempts_descriptor is not None:
             os.close(attempts_descriptor)
-    outputs = root / "outputs"
-    paths = AttemptPaths(
-        root=root,
-        manifest=root / "attempt.json",
-        response=outputs / "response.md",
-        transcript=root / "transcript.md",
-        execution_trace=root / "execution_trace.jsonl",
-        timing=root / "timing.json",
-        grading=root / "grading.json",
-        manual_grading=root / "manual_grading.json",
-        feedback=root / "feedback.json",
-    )
-    _write_json_once(paths.manifest, document, paths.root)
+    paths = _attempt_paths(root)
+    _write_persisted_attempt_artifacts(paths, {"manifest": document})
     return paths
 
 
@@ -672,15 +809,21 @@ def write_eval_run_artifacts(paths: AttemptPaths, record: EvalRunRecord) -> None
     _require_declared_attempt_paths(paths)
     timing = record.timing.to_dict()
     grading = record.grading.to_dict()
-    validate_result_document(timing, "timing.schema.json")
-    validate_result_document(grading, "grading.schema.json")
+    validate_result_document(timing, _attempt_artifact_schema("timing"))
+    validate_result_document(grading, _attempt_artifact_schema("grading"))
+    _grading_evidence_artifact_parts(grading)
 
     trace_text = _serialize_execution_trace(record.execution_trace)
-    _write_json_once(paths.timing, timing, paths.root)
-    _write_text_once(paths.response, record.response, paths.root)
-    _write_text_once(paths.transcript, record.transcript, paths.root)
-    _write_text_once(paths.execution_trace, trace_text, paths.root)
-    _write_json_once(paths.grading, grading, paths.root)
+    _write_persisted_attempt_artifacts(
+        paths,
+        {
+            "timing": timing,
+            "response": record.response,
+            "transcript": record.transcript,
+            "execution_trace": trace_text,
+            "grading": grading,
+        },
+    )
 
 
 def write_incomplete_attempt_artifacts(
@@ -694,14 +837,22 @@ def write_incomplete_attempt_artifacts(
     """Preserve available failed-attempt evidence without inventing a grade."""
     _require_declared_attempt_paths(paths)
     timing_document = timing.to_dict()
-    validate_result_document(timing_document, "timing.schema.json")
-    _write_json_once(paths.timing, timing_document, paths.root)
+    validate_result_document(
+        timing_document,
+        _attempt_artifact_schema("timing"),
+    )
+    values: dict[str, object] = {
+        "timing": timing_document,
+    }
     if response is not None:
-        _write_text_once(paths.response, response, paths.root)
+        values["response"] = response
     if transcript is not None:
-        _write_text_once(paths.transcript, transcript, paths.root)
-    trace_text = _serialize_execution_trace(execution_trace)
-    _write_text_once(paths.execution_trace, trace_text, paths.root)
+        values["transcript"] = transcript
+    _write_persisted_attempt_artifacts(paths, values)
+    _write_persisted_attempt_artifacts(
+        paths,
+        {"execution_trace": _serialize_execution_trace(execution_trace)},
+    )
 
 
 def parse_judge_response(
@@ -938,14 +1089,14 @@ def aggregate_results(
         run_ids: set[str] = set()
         for directory_name in attempt_directories:
             attempt_parts = ("attempts", directory_name)
-            manifest_parts = (*attempt_parts, "attempt.json")
+            manifest_parts = _attempt_artifact_parts(attempt_parts, "manifest")
             manifest_path = root.joinpath(*manifest_parts)
             manifest = _read_snapshotted_result_document(
                 root_descriptor,
                 snapshot,
                 manifest_parts,
                 manifest_path,
-                "attempt.schema.json",
+                _attempt_artifact_schema("manifest"),
             )
             run_id = manifest["run_id"]
             if run_id in run_ids:
@@ -962,26 +1113,38 @@ def aggregate_results(
                 raise ResultArtifactError(
                     f"unexpected variant in attempt manifest: {aggregation['variant']}"
                 )
+            _validate_gradable_attempt_artifacts(
+                snapshot,
+                attempt_parts,
+            )
 
-            timing_parts = (*attempt_parts, "timing.json")
+            timing_parts = _attempt_artifact_parts(attempt_parts, "timing")
             timing_path = root.joinpath(*timing_parts)
             timing = _read_snapshotted_result_document(
                 root_descriptor,
                 snapshot,
                 timing_parts,
                 timing_path,
-                "timing.schema.json",
+                _attempt_artifact_schema("timing"),
             )
-            generated_parts = (*attempt_parts, "grading.json")
+            generated_parts = _attempt_artifact_parts(attempt_parts, "grading")
             generated_path = root.joinpath(*generated_parts)
             generated = _read_snapshotted_result_document(
                 root_descriptor,
                 snapshot,
                 generated_parts,
                 generated_path,
-                "grading.schema.json",
+                _attempt_artifact_schema("grading"),
             )
-            _validate_grading_semantics(generated, expected_source="judge")
+            generated_evidence = _validate_grading_semantics(
+                generated,
+                expected_source="judge",
+            )
+            _validate_snapshotted_grading_evidence(
+                generated_evidence,
+                snapshot,
+                attempt_parts,
+            )
             _validate_artifact_matches_manifest(timing, manifest, timing_path)
             _validate_artifact_matches_manifest(generated, manifest, generated_path)
             if timing["status"] != "completed":
@@ -993,16 +1156,27 @@ def aggregate_results(
             if "judge" in preserved:
                 preserved["judge"].append((generated, timing))
             if "manual" in preserved:
-                manual_parts = (*attempt_parts, "manual_grading.json")
+                manual_parts = _attempt_artifact_parts(
+                    attempt_parts,
+                    "manual_grading",
+                )
                 manual_path = root.joinpath(*manual_parts)
                 manual = _read_snapshotted_result_document(
                     root_descriptor,
                     snapshot,
                     manual_parts,
                     manual_path,
-                    "grading.schema.json",
+                    _attempt_artifact_schema("manual_grading"),
                 )
-                _validate_grading_semantics(manual, expected_source="manual")
+                manual_evidence = _validate_grading_semantics(
+                    manual,
+                    expected_source="manual",
+                )
+                _validate_snapshotted_grading_evidence(
+                    manual_evidence,
+                    snapshot,
+                    attempt_parts,
+                )
                 _validate_artifact_matches_manifest(manual, manifest, manual_path)
                 _validate_complete_manual_override(generated, manual, manual_path)
                 preserved["manual"].append((manual, timing))
@@ -2967,21 +3141,46 @@ def _validate_result_tree(
             for relative in snapshot.directories
             if relative[:-1] == attempt_prefix
         }
-        missing = sorted(_REQUIRED_ATTEMPT_RESULT_FILES - direct_files)
-        if missing:
+        manifest_artifact = _ATTEMPT_ARTIFACT_BY_ATTRIBUTE["manifest"]
+        if (*attempt_prefix, *manifest_artifact.relative_parts) not in snapshot.files:
             raise ResultArtifactError(
-                "attempt entry must contain required control artifact "
-                f"{missing[0]}"
+                "attempt entry must contain required persisted artifact "
+                f"{'/'.join(manifest_artifact.relative_parts)}"
             )
-        if not direct_files.issubset(_ATTEMPT_RESULT_FILES):
+        allowed_direct_files = {
+            artifact.relative_parts[0]
+            for artifact in _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT
+            if len(artifact.relative_parts) == 1
+        }
+        if not direct_files.issubset(allowed_direct_files):
             raise ResultArtifactError(
                 "result tree contains an undeclared result entry"
             )
-        if direct_directories != {"outputs"}:
+        required_directories = {
+            artifact.relative_parts[0]
+            for artifact in _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT
+            if len(artifact.relative_parts) > 1
+        }
+        if direct_directories != required_directories:
             raise ResultArtifactError(
                 "attempt entry must contain only its outputs directory"
             )
     return attempt_directories
+
+
+def _validate_gradable_attempt_artifacts(
+    snapshot: _ResultTreeSnapshot,
+    attempt_parts: tuple[str, ...],
+) -> None:
+    for artifact in _PERSISTED_ATTEMPT_ARTIFACT_CONTRACT:
+        if not artifact.required_for_gradable_attempt:
+            continue
+        persisted_path = (*attempt_parts, *artifact.relative_parts)
+        if persisted_path not in snapshot.files:
+            raise ResultArtifactError(
+                "attempt entry must contain required persisted artifact "
+                f"{'/'.join(artifact.relative_parts)}"
+            )
 
 
 def _read_snapshotted_result_document(
@@ -3141,17 +3340,7 @@ def _require_declared_attempt_paths(paths: AttemptPaths) -> None:
     """Confirm attempt writers operate only on one invocation-declared attempt."""
     attempts_root = paths.root.parent
     workspace_root = attempts_root.parent
-    expected_paths = AttemptPaths(
-        root=paths.root,
-        manifest=paths.root / "attempt.json",
-        response=paths.root / "outputs" / "response.md",
-        transcript=paths.root / "transcript.md",
-        execution_trace=paths.root / "execution_trace.jsonl",
-        timing=paths.root / "timing.json",
-        grading=paths.root / "grading.json",
-        manual_grading=paths.root / "manual_grading.json",
-        feedback=paths.root / "feedback.json",
-    )
+    expected_paths = _attempt_paths(paths.root)
     try:
         resolved_workspace = workspace_root.resolve(strict=True)
         resolved_attempts = attempts_root.resolve(strict=True)
@@ -3169,7 +3358,11 @@ def _require_declared_attempt_paths(paths: AttemptPaths) -> None:
         or resolved_attempts != resolved_workspace / "attempts"
     ):
         raise ResultArtifactError("attempt artifact paths are not owned by an invocation workspace")
-    manifest = _read_result_document(paths.manifest, "attempt.schema.json", workspace_root)
+    manifest = _read_result_document(
+        paths.manifest,
+        _attempt_artifact_schema("manifest"),
+        workspace_root,
+    )
     declared_attempts = _read_declared_attempts(workspace_root)
     if declared_attempts.get(manifest["run_id"]) != manifest:
         raise ResultArtifactError(
@@ -3179,7 +3372,7 @@ def _require_declared_attempt_paths(paths: AttemptPaths) -> None:
 
 def _validate_grading_semantics(
     grading: Mapping[str, object], *, expected_source: str
-) -> None:
+) -> tuple[tuple[str, ...], ...]:
     if grading["grade_source"] != expected_source:
         raise ResultArtifactError(
             f"expected {expected_source} grading for run {grading['run_id']}, "
@@ -3206,6 +3399,51 @@ def _validate_grading_semantics(
         raise ResultArtifactError(
             f"aggregation variant is not declared as required for run {grading['run_id']}"
         )
+    return _grading_evidence_artifact_parts(grading)
+
+
+def _grading_evidence_artifact_parts(
+    grading: Mapping[str, object],
+) -> tuple[tuple[str, ...], ...]:
+    artifact_paths: list[tuple[str, ...]] = []
+    for result in grading["assertion_results"]:
+        for reference in result["evidence_refs"]:
+            artifact = reference["artifact"]
+            if (
+                len(artifact) > _MAX_JUDGE_ARTIFACT_NAME_CHARS
+                or artifact.startswith("/")
+                or "\\" in artifact
+                or "\x00" in artifact
+            ):
+                raise ResultArtifactError(
+                    "grading evidence artifact path is invalid"
+                )
+            parts = tuple(artifact.split("/"))
+            if not parts or any(part in ("", ".", "..") for part in parts):
+                raise ResultArtifactError(
+                    "grading evidence artifact path is invalid"
+                )
+            if parts not in _FIXED_EVIDENCE_ARTIFACT_PATHS and not (
+                len(parts) > 1 and parts[0] == "outputs"
+            ):
+                raise ResultArtifactError(
+                    "grading evidence artifact is not allowed"
+                )
+            artifact_paths.append(parts)
+    return tuple(artifact_paths)
+
+
+def _validate_snapshotted_grading_evidence(
+    artifact_paths: Sequence[tuple[str, ...]],
+    snapshot: _ResultTreeSnapshot,
+    attempt_parts: tuple[str, ...],
+) -> None:
+    for artifact_parts in artifact_paths:
+        if (*attempt_parts, *artifact_parts) not in snapshot.files:
+            raise ResultArtifactError(
+                "grading evidence artifact does not resolve to a regular "
+                "snapshotted artifact"
+            )
 
 
 def _validate_complete_manual_override(
