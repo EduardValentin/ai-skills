@@ -98,9 +98,9 @@ Are they raising / lowering / holding guidance? Note any "we don't give guidance
 
 If management mentions specific operational KPIs (customer count, ARPU, store count, capacity utilization, take rate, etc.), list them across the 3 calls in a small table — same KPI mentioned each time with its values. This becomes a candidate watchlist for Phase 9.
 
-### 5. What to surface at Checkpoint 2
+### 5. What to surface at Checkpoint 3
 
-A short "things worth discussing at Checkpoint 2" list — 3–5 items that you think the user should weigh in on before projections. Examples:
+A short "things worth discussing at Checkpoint 3" list — 3–5 items that you think the user should weigh in on before projections. Examples:
 - "Mgmt is suddenly cautious about Q1 next year — they didn't explain why. Worth pressing."
 - "AI capex is doubling but they haven't shown the revenue contribution. Bull case has to assume this pays off."
 

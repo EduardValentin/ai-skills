@@ -1,6 +1,6 @@
 ---
 artifact: reference
-purpose: GVD-bucket tailoring rules for Phase 7 (projections) and Phase 8 (verdict)
+purpose: GVD-bucket tailoring rules for Phase 8 (projections) and Phase 9 (verdict)
 schema_version: 1
 ---
 

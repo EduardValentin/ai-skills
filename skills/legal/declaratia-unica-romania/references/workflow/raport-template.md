@@ -13,10 +13,11 @@ Secțiunea critică e **§4 "Instrucțiuni completare manuală în DUF"** — ut
 persoana: <nume complet>
 cnp: <13 cifre>
 an_fiscal: <YYYY>
-scenarii: <PF investiții | PFA real | combinat>
+categorii_pf: <dividende | titluri/instrumente financiare | dobânzi | cripto; listă>
 agent: <claude | codex>
 data_generare: <YYYY-MM-DD HH:MM>
-conversie_valutara: V2 — media anuală cursbnr.ro (cross-check BNR 3 puncte)
+conversie_valutara_metoda: <metoda susținută oficial>
+conversie_valutara_ref: <_legi/{an}/conversie-valutara.md#ancora>
 duf_platform_version: <V-x.y.z>
 ---
 
@@ -43,8 +44,8 @@ duf_platform_version: <V-x.y.z>
 
 | Câmp | Valoare raw | Conversie | Valoare RON |
 |---|---|---|---|
-| Venit brut | {USD} USD | × {curs_USD} (cursbnr.ro 2025) | {RON} |
-| Impozit reținut străinătate | {USD} USD | × {curs_USD} | {RON} |
+| Venit brut | {valoare} {moneda} | {metoda; curs(uri) oficial(e); dată/an; referință oficială} | {RON} |
+| Impozit reținut străinătate | {valoare} {moneda} | {metoda; curs(uri) oficial(e); dată/an; referință oficială} | {RON} |
 
 **Citații lege:**
 - [cota impozit: `_legi/{an}/impozit-castig-capital.md#cota-art-94`]
@@ -52,13 +53,13 @@ duf_platform_version: <V-x.y.z>
 
 **Calcul:**
 ```
-str_venit_net_anual = 149.655 RON
-str_pierdere_precedenta = 21.812 RON (din D212 anul trecut)
-str_pierdere_compensata = 21.812 RON
-str_venit_recalculat = 127.843 RON
-str_impozit_datorat_Ro = 127.843 × 10% = 12.784 RON
-str_credit_fiscal = 0 RON (broker US nu reține pe câștig capital)
-str_dif_impozit_datorat = 12.784 RON
+str_venit_net_anual = {valoare verificată} RON
+str_pierdere_precedenta = {valoare din D212 anterior} RON
+str_pierdere_compensata = {valoare calculată conform regulii verificate} RON
+str_venit_recalculat = {valoare calculată} RON
+str_impozit_datorat_Ro = {bază} × {cotă verificată} = {valoare} RON
+str_credit_fiscal = {valoare susținută de documente și tratat} RON
+str_dif_impozit_datorat = {valoare calculată} RON
 ```
 
 [Repeta pentru fiecare linie cap14.]
@@ -69,9 +70,9 @@ str_dif_impozit_datorat = 12.784 RON
 
 ```
 cass_total_ven = {suma venituri investiții brute} RON
-plafon = 12 × salariu_minim = {valoare} RON  [_legi/{an}/plafoane-cass.md]
+plafon = {formula oficială verificată} = {valoare} RON  [_legi/{an}/plafoane-cass.md]
 cass_baza = min(cass_total_ven, plafon) = {valoare} RON
-cass_anuala = cass_baza × 10% = {valoare} RON
+cass_anuala = cass_baza × {cotă CASS verificată} = {valoare} RON
 cass_retinut = {valoare} RON
 cass_dif_plus = max(0, cass_anuala - cass_retinut) = {valoare} RON
 ```
@@ -80,7 +81,7 @@ cass_dif_plus = max(0, cass_anuala - cass_retinut) = {valoare} RON
 
 Deschide `https://www.anaf.ro/declaratii/duf` într-un browser nou. **Mediu: Public** — nu necesită autentificare pentru completare și export XML.
 
-> **Notă:** dacă preferi import automat în loc de completare manuală, sari direct la §6 "Pași finali" — XML-ul `outputs/D212.xml` poate fi importat în DUF cu un click. Această secțiune e pentru completare manuală câmp-cu-câmp (sau ca dublu-check după import).
+> **Notă:** dacă preferi importul în loc de completarea manuală, sari direct la §6 "Pași finali" și selectează candidatul `outputs/D212.xml` în DUF. Numai DUF poate confirma importul. Această secțiune este pentru completare manuală câmp-cu-câmp sau pentru verificarea datelor după import.
 
 ### Pasul 1 — Date de identificare
 
@@ -142,15 +143,15 @@ Click pe tab-ul **"Date privind CASS"**.
 | Regim CASS | Regim real (bifa_cass_real = 1) |
 | Tip venit | Venituri din investiții (bifa_cass_datorat_ai = 1) |
 | Venituri totale (RON) | {cass_total_ven} |
-| Bază CASS (RON) | {cass_baza} (plafonat la 12 × salariu minim) |
-| Cotă | 10% (constant) |
+| Bază CASS (RON) | {cass_baza} ({formula plafonului verificată pentru an}) |
+| Cotă | {cota CASS verificată pentru an} |
 | CASS anuală (RON) | **{cass_anuala}** |
 | CASS reținut la sursă (RON) | {cass_retinut} |
 | Diferență CASS de plată (RON) | _auto-calculat: {cass_dif_plus}_ |
 
 ### Pasul 4 — Date privind CAS
 
-[Pentru PFA real cu venit ≥ plafon CAS — vezi `references/pfa-real.md` pentru calcul. Pentru PF investiții, sari pasul.]
+Pentru domeniul PF investiții acoperit de acest skill, sari acest pas. Dacă datele indică o obligație dintr-un domeniu exclus, oprește și cere asistență fiscală adecvată.
 
 ### Pasul 5 — Sumar fiscal (verificare)
 
@@ -170,9 +171,10 @@ DUF afișează în partea de jos a paginii sumarul calculat:
 
 | Fapt | Sursă | Accessed | Tip |
 |---|---|---|---|
-| Cota impozit câștig capital 10% | https://legislatie.just.ro/... | 2026-05-12 | pagina-oficiala |
-| Plafon CASS 12×salariu_min | https://anaf.ro/... | 2026-05-12 | pdf-oficial |
-| Curs mediu USD 2025 | https://www.cursbnr.ro/curs-valutar-mediu | 2026-05-12 | pagina-convenience (cross-check BNR) |
+| Cota impozit câștig capital {valoare} | {URL oficial} | {YYYY-MM-DD} | {tip sursă oficială} |
+| Plafon CASS {formula și valoare} | {URL oficial} | {YYYY-MM-DD} | {tip sursă oficială} |
+| Regula de conversie {categorie, an} | {URL oficial ANAF/legislatie.just.ro} | {YYYY-MM-DD} | {instrucțiune sau normă oficială} |
+| Curs {monedă, dată/an} | {URL oficial al autorității cerute; BNR pentru cursurile BNR} | {YYYY-MM-DD} | publicație oficială |
 | ... | | | |
 
 ## 6. Pași finali (după completare în DUF)
@@ -181,19 +183,20 @@ DUF afișează în partea de jos a paginii sumarul calculat:
    - Click **"Descarcă XML"** în DUF după salvarea tuturor secțiunilor.
    - Salvează ca `outputs/D212.canonical.xml` (NU înlocui `D212.xml`).
    - Vezi `references/workflow/duf-roundtrip.md` pentru detalii și diff de atribute față de XML-ul brut.
+   - Dacă DUF este indisponibil, consemnează blocajul și nu continua la depunerea electronică.
 
 2. **Submit electronic prin SPV:**
    - Login la `https://www.anaf.ro/spv/` cu certificat digital sau credențiale ANAF.
-   - Upload `D212.canonical.xml`.
+   - Upload numai `D212.canonical.xml`; `D212.xml` este candidat de import, nu fișier sigur pentru submit.
    - Confirmă submit.
 
 3. **Plată diferență:**
    - {dif_de_plata} RON la cont ANAF — vezi cont destinație în Instrucțiunile anuale ANAF (`_legi/{an}/`).
-   - Termen: 25 mai {an_fiscal+1}.
+   - Termen: {termen verificat pentru anul fiscal, cu referință oficială}.
 
 ## 7. Avertismente
 
-- **Conversie V2:** Acest raport folosește media anuală cursbnr.ro pentru conversia USD/EUR → RON, nu cursul BNR per tranzacție prevăzut de art. 76 alin. (2) din Codul Fiscal. Vezi `references/workflow/currency-conversion.md` și `_legi/{an}/curs-bnr-mediu.md` pentru cross-check BNR și implicații la control fiscal.
+- **Conversie valutară:** metoda fiscală folosită este `{metoda}`, susținută de `{sursa oficială și ancora}` pentru `{categorie}` și `{an}`; fiecare curs provine din `{autoritatea oficială și URL}`, inclusiv direct din BNR pentru cursurile BNR. Orice calcul alternativ este etichetat separat drept comparație și nu alimentează valorile D212.
 
 - **Bifele root XML:** valorile finale (`bifa121`, `bifa122`, `bifa132`) sunt setate de DUF la re-export, nu de skill. Vezi `references/workflow/duf-roundtrip.md`.
 
@@ -214,7 +217,7 @@ DUF afișează în partea de jos a paginii sumarul calculat:
 
 4. **§5 (Surse citate):** generează automat din frontmatter-ele `_legi/{an}/*.md` folosite efectiv în calcul. Fiecare fapt are exact o linie în tabel.
 
-5. **§7 (Avertismente):** include cele 3 avertismente standard (V2, bife, totalPlata_A) plus orice altele specifice sesiunii (waivere preflight, asumări de date, etc.).
+5. **§7 (Avertismente):** include cele 3 avertismente standard (metoda și dovezile conversiei, bife, `totalPlata_A`) plus orice altele specifice sesiunii (waivere preflight, asumări de date etc.).
 
 6. **Limba:** română peste tot. Numele coduri de categorie și atributelor XML rămân ca în sursa oficială (ex. `str_categ_venit`, `2012`, `str_dif_impozit_datorat`).
 

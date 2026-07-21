@@ -1,8 +1,8 @@
 ---
 name: ui-verification
-description: Use when a request asks for UI verification, UI/UX verification, frontend UI review, visual parity, or visual consistency of implemented UI and needs a structured CLEAN/FINDINGS/BLOCKED verdict, matched-element inventory, DOM computed-style or bounding-rect evidence, accessibility states, or scoped reruns after visual findings. Do not use for general QA against acceptance criteria unless the request specifically asks for visual parity, visual consistency, UI/UX review, or visual evidence.
+description: Verifies implemented frontend UI for visual parity or consistency with DOM-backed style, geometry, state, and accessibility evidence. Use when a request asks for UI/UX verification, frontend visual review, prototype parity, production-pattern consistency, or a scoped visual rerun. Do not use for general functional QA unless visual evidence is explicitly required.
 compatibility: >-
-  Requires shell execution plus live-browser navigation, viewport control, JavaScript evaluation, screenshots, keyboard and focus exercise, and readable runnable production and reference UIs for parity. Prefer host-native browser automation, then Playwright with the bundled extractor, then degraded manual evidence or BLOCKED when neither is available. A delegated UI/UX gate is optional; use explicitly requested best-effort in-session scoping or return BLOCKED when it is unavailable.
+  Requires shell execution and browser automation that supports navigation, viewport control, JavaScript injection and evaluation, screenshots, and keyboard and focus exercise. Prefer host browser tools, with Playwright as fallback. Parity also requires readable runnable implementation and reference UIs. The optional `uiux-verifier` native agent may supply delegated scoping; if unavailable, continue only with caller-authorized in-session scoping or return BLOCKED.
 metadata:
   status: local-required
   allows_tool_references: "true"
@@ -10,119 +10,134 @@ metadata:
 
 # UI Verification
 
-## Overview
+## Purpose
 
-Visual review is evidence work, not taste work. Verify rendered UI by pairing visible elements, extracting DOM computed styles and bounding boxes, checking screenshots only as secondary evidence, and reporting a compact inventory with findings. Visual verification checks the rendered user-visible outcome and every visually meaningful state, not hidden templates or implementation proxies.
+Verify the integrated, user-visible UI with rendered evidence. Pair affected elements with a runnable reference or a credible production analog, compare DOM styles and geometry, exercise meaningful states and accessibility, and report findings without modifying the implementation.
 
-## When To Use
+Use this skill for visual evidence. Use functional QA for roles, persistence, redirects, API behavior, and other acceptance criteria unless the request also requires visual verification.
 
-- A frontend change needs to match a runnable prototype, reference app, design implementation, or `designs/` React app.
-- A frontend change has no runnable reference but should match existing production sibling or analog elements.
-- A visual review needs matched-element inventory coverage, computed-style comparison, bounding-rect comparison, accessibility checks, or a scoped rerun after fixes.
+## Inputs And Scope
 
-## Required Capabilities
+Collect the available task requirements, approved design notes and divergences, changed UI files or diff, implementation URL and routes, meaningful states, viewport conditions, and comparison basis. Parity also needs a runnable reference URL. Consistency needs credible production siblings, analog routes, reusable component contracts, or documented design constraints.
 
-- Ability to execute shell commands for app startup or browser automation fallback.
-- Ability to inspect a live browser page by navigating, changing viewport, evaluating JavaScript in the page, capturing element screenshots, and exercising keyboard/focus states.
-- Read access to the production UI. Parity mode also requires read access to the runnable reference UI.
+An affected-element inventory is required before normal verification:
 
-If a capability is unavailable, follow the fallback chain below. Do not replace DOM evidence with visual impressions.
+1. Start with a caller-supplied affected surface map when available.
+2. When delegated to the `uiux-verifier` native agent, treat its implementation and reference URLs, approved requirements and design, changed files, affected surface map, reference rows, and implementation locators as starting inputs.
+3. If no inventory exists, use delegated scoping when available. Without it, continue only when the caller explicitly authorizes best-effort in-session scoping from the task, approved artifacts, changed files, routes, states, comparison basis, and live DOM.
+4. Otherwise return `BLOCKED` and name the minimum missing scope input or authorization. Never invent scope from screenshots or visual impressions alone.
 
-## Inputs
+Refine the inventory during live inspection. Record visible in-scope elements omitted from supplied artifacts as inventory provenance gaps and add them to the inventory.
 
-Expect as many of these as the caller can provide:
+## Modes
 
-- Task context: title, description, requirements, acceptance criteria, non-goals, and approved design or implementation notes.
-- Review mode if known: `parity` or `consistency`.
-- Full diff or changed UI file list.
-- Production route/URL and important states to exercise.
-- For parity mode: reference route/URL, prototype/reference element rows, and any approved divergences.
-- For consistency mode: expected production siblings, analog routes, reusable component patterns, or design-system constraints if known.
-- Caller-supplied affected surface map if available, production locators or changed UI files, relevant routes/states, and prior local evidence such as screenshots, a11y scans, or manual notes.
+- **Parity**: a runnable prototype, reference app, design implementation, or `designs/` app is the visual source of truth.
+- **Consistency**: no runnable reference exists; compare with the closest credible production analog by component family, route region, interaction pattern, or documented component or token contract.
 
-Treat prior evidence as context, not as gate completion.
+Choose parity when a runnable reference is supplied. In consistency mode, a row with no credible analog is `BLOCKED`; never invent a comparison basis.
 
-Important states means every visually meaningful user-visible state named by the task, approved artifacts, runnable reference, changed UI, or adjacent feature surface. Hidden templates, implementation-only component variants, and proxy render targets do not count as state coverage.
+## Browser And Evidence Setup
 
-## Inventory Scoping
+Use the host's browser automation when it can navigate, set viewport, capture element screenshots, evaluate JavaScript, and exercise keyboard and focus states. Otherwise use Playwright through the shell. Match route, state, viewport, device scale factor, and browser zoom before each comparison.
 
-UI verification requires an affected-element inventory before normal verification starts.
+For Playwright, inject `scripts/extract-element-style.browser.js` unchanged, then pass the selector as a serialized evaluation argument:
 
-If the caller did not provide an affected-element or matched-element inventory, produce or obtain one before normal verification. Prefer delegated scoping when available; otherwise return `BLOCKED` unless the caller explicitly requests best-effort in-session scoping from the ticket description, acceptance criteria, approved artifacts, diff or changed UI files, routes and states, and the reference or production comparison basis. The verifier may refine the scoped inventory during live DOM inspection, but must not skip the scoping step or invent an inventory from visual impressions alone.
+```js
+await page.addScriptTag({ path: extractorPath });
+const evidence = await page.evaluate(
+  (selector) => globalThis.uiVerificationExtractElementStyle(selector),
+  selector,
+);
+```
 
-When a delegated UI/UX gate provides production and prototype URLs, approved requirements/design, changed UI files, and an affected surface map with reference rows and production locators, the response must name all of those as starting inputs. It must state that every in-scope inventory row gets font, color/background, box, layout, size, state/accessibility, and verdict evidence, and that observed production or reference elements missing from the supplied inventory are recorded under inventory provenance gaps.
+Do not interpolate selectors into script text. The helper returns rendered font, color, box, layout, transform, and geometry evidence. Its geometry contract is `x`, `y`, `top`, `right`, `bottom`, `left`, `width`, and `height`. Gather parent and sibling geometry with separate helper calls when relative placement matters.
 
-## Mode Selection
+Screenshots are secondary evidence for context and visual cross-checking. Source files, hidden templates, static mockups, Storybook-only renders, Lighthouse, accessibility scans, and screenshots alone do not establish complete visual verification of the integrated surface.
 
-- **Parity mode**: use when a runnable prototype, reference app, design implementation, or `designs/` React app is available. The reference is the visual source of truth.
-- **Consistency mode**: use when no runnable reference is available. Existing production siblings, analog elements, reusable components, and documented design constraints are the comparison basis.
+## Inventory Contract
 
-If the caller does not name a mode, choose parity when a runnable reference URL/path is supplied; otherwise choose consistency. If neither a reference nor credible production analogs can be identified, return `BLOCKED` or a clearly degraded evidence status instead of inventing a visual basis.
+Create one row per affected element and meaningful state. Every row must contain:
 
-## Browser Bootstrap
+| Field | Required evidence |
+| --- | --- |
+| Row | Stable ID, element name, route, viewport, and state |
+| Pair | Implementation locator and reference locator or named consistency basis |
+| Font | Family, size, weight, style, line height, letter spacing, transform, and decoration |
+| Color | Foreground, effective background, and opacity |
+| Box | Padding, margin, border, radius, shadow, and outline |
+| Layout | Display, flex or grid properties, gap, position, and relevant overflow |
+| Geometry | `x`, `y`, `top`, `right`, `bottom`, `left`, `width`, and `height` for the element and relevant relatives |
+| Transform | Rendered transform value |
+| Accessibility | Semantics, accessible name, keyboard and focus result, contrast result, and relevant state |
+| Verdict | `MATCH`, `DRIFT`, `MISSING`, or `BLOCKED`, with an explanation when not `MATCH` |
 
-Prefer the host's native browser automation if it can navigate, set viewport, capture element screenshots, and evaluate JavaScript in the page. If that is unavailable, drive Playwright through the shell and inject `scripts/extract-element-style.browser.js` via page evaluation. If neither is available, save the renderable page or screenshots to disk and ask the user for visual confirmation; mark the evidence status **degraded manual evidence**. CLEAN requires complete DOM evidence; degraded evidence returns BLOCKED unless the caller explicitly requested best-effort. If even that fallback cannot run, return `UI verification cannot proceed` with the blocker and required input.
+Use explicit `not applicable` plus a reason where a field truly does not apply; never leave required cells blank. An approved divergence is documented in the row and does not become `DRIFT` when every non-approved property matches.
 
-Any visual finding flips the verdict to FINDINGS. Do not create a "recommendations only" bucket for visual drift.
+Row verdicts mean:
 
-## Parity Mode
+- `MATCH`: complete evidence matches the comparison basis, allowing only documented approved divergences.
+- `DRIFT`: an unapproved rendered difference exists.
+- `MISSING`: a required rendered element exists on only one side or is absent from the implementation.
+- `BLOCKED`: evidence or a credible comparison basis is unavailable, so the row cannot be decided.
 
-Use when a runnable prototype/reference app exists.
+## Verification Procedure
 
-1. Start or open both production and reference apps. Match route, state, viewport, device scale, and browser zoom before each comparison.
-2. Use the supplied inventory, or the scoped inventory produced from the ticket description and diff, as the starting matched-element inventory. Refine it with prototype/reference rows, changed UI files, approved artifacts, and live DOM inspection. Do not ask the caller to prebuild it.
-3. For each inventory row and state, locate the rendered DOM atoms in both apps, capture element-level screenshots, evaluate `scripts/extract-element-style.browser.js`, fill every computed-style cell, and set verdict to MATCH, DRIFT, or MISSING.
-4. Compare font, color/background, padding/margin/border/radius/shadow/outline, display/flex/gap/position, width/height, and transform. Different numbers mean rendered drift unless an approved artifact explicitly accepted the divergence.
-5. Compare parent and sibling geometry with bounding rects, especially for rows sharing a parent declaration.
-6. While verifying, cross-check both DOMs for visible elements absent from the caller-supplied affected surface map or approved artifacts. Add those to `Inventory provenance gaps`; never silently drop them.
-7. Use screenshots as a redundant visual check after numeric extraction, not as primary evidence.
+### Parity
 
-Parity mode is clean only when the inventory covers caller-supplied affected surfaces if any and observed changed elements, every row has non-blank computed values, no unexplained observed rows are missing from the report, all drift has findings, and accessibility checks are complete.
+1. Open the integrated implementation and runnable reference under matched conditions.
+2. Exercise every meaningful state named by the task, approved artifacts, changed surface, or adjacent affected interaction.
+3. Extract both sides of every inventory row with the bundled helper and gather separate accessibility evidence.
+4. Compare numeric and computed values. Treat unexplained differences as `DRIFT`; do not override the runnable reference with local preferences.
+5. Cross-check both live DOMs for inventory provenance gaps.
+6. Capture element screenshots after DOM extraction as redundant evidence.
 
-## Consistency Mode
+### Consistency
 
-Use when there is no runnable reference and the implemented UI should fit existing production patterns.
+1. Open the integrated implementation and relevant production analog routes under matched conditions.
+2. Pair each row with the closest credible analog by role and purpose.
+3. Extract both sides and compare typography, spacing, color, borders, radii, shadow, focus treatment, density, and responsive geometry.
+4. Mark a row `BLOCKED` when no credible analog or documented contract exists.
 
-Every consistency-mode response must state that rows without a credible production sibling or analog are marked BLOCKED or degraded instead of inventing a comparison basis.
+## Accessibility Evidence
 
-1. Start or open the production app and any relevant analog routes/states. Match viewport, device scale, and browser zoom before comparing.
-2. Use the supplied inventory, or the scoped inventory produced from the ticket description and diff, as the starting matched-element inventory. Refine it with changed UI files, live DOM inspection, reusable component usage, and credible production sibling or analog elements.
-3. For each implemented element, pair it with the closest production analog by role and purpose: same component family, same route region, same interaction pattern, or same documented token/component contract.
-4. Extract DOM computed styles and bounding rects for both the implemented element and its analog. Fill every inventory cell; do not rely on "looks consistent" prose.
-5. Treat unexplained differences in typography, spacing, color, borders, radii, shadow, focus style, density, or responsive geometry as findings when they break the local production pattern.
-6. If no credible analog exists for an in-scope element, mark that row BLOCKED or degraded and explain what comparison basis is missing. Do not invent one.
+Always verify semantic structure and heading hierarchy, accessible names and roles, keyboard reachability and order, visible focus, keyboard traps, image alternatives, icon-only control names, and relevant ARIA state only where native semantics are insufficient.
 
-Consistency mode is clean only when changed visible elements are paired with credible production analogs, every row has non-blank DOM evidence and a verdict, any missing comparison basis is named, visual drift has findings, and accessibility checks are complete.
+Record every confirmed accessibility failure as a finding, even when the implementation matches the reference or production analog. Keep inconclusive or unavailable accessibility checks `BLOCKED` instead of treating them as failures.
 
-## Accessibility
+Check WCAG AA contrast at 4.5:1 for normal text and 3:1 for large text and UI components. Resolve inherited and transparent solid backgrounds through ancestors and alpha-composite them before computing a ratio. For gradients, images, blend modes, backdrop filters, or other non-solid backgrounds, use a browser contrast analyzer that can evaluate the rendered background. If no reliable ratio is available, mark that accessibility cell `BLOCKED`, lower the evidence status, and do not return `CLEAN`. Never estimate contrast by eye.
 
-Always check:
+## Evidence Status And Global Verdict
 
-- Semantic HTML structure and heading hierarchy.
-- ARIA names, roles, and labels only where native semantics are insufficient.
-- Keyboard reachability, focus order, visible focus indicator, and absence of keyboard traps.
-- Contrast at WCAG AA thresholds: 4.5:1 normal text, 3:1 large text and UI components.
-- Text alternatives for images and icon-only controls.
+Report evidence status independently from verdict:
 
-Extract DOM properties where possible; do not eyeball accessibility.
+- **complete DOM evidence**: every required row, state, geometry field, and accessibility check is complete.
+- **partial DOM evidence**: some DOM evidence exists, but one or more required rows or checks are blocked.
+- **degraded manual evidence**: only screenshots or manual observation are available.
 
-## Rerun Scope
+Aggregate the global verdict in this order:
 
-After fixes, rerun only the affected rows and affected states unless the fix touches shared layout primitives or global styles. Affected rows are previous finding rows plus rows whose production files changed in the fix. Return a delta inventory with updated computed-style cells and verdicts.
+1. `FINDINGS` when any row is `DRIFT` or `MISSING`, or any accessibility check confirms a failure. This takes precedence over blocked rows; list those rows or checks as remaining evidence gaps. With caller-authorized best-effort degraded evidence, a clearly visible defect may produce `FINDINGS`, but label it provisional and identify missing DOM confirmation.
+2. `BLOCKED` when no finding is established and any required row or check is `BLOCKED`, or when only degraded manual evidence exists.
+3. `CLEAN` only with complete DOM evidence, all rows `MATCH`, every required accessibility check complete and passing, zero accessibility findings, and no unresolved provenance gap.
 
-## Forbidden Behaviors
+Degraded manual evidence can never produce `CLEAN`.
 
-- Declaring CLEAN from full-page screenshots, Lighthouse, an a11y scan, or manual browser comparison alone.
-- Accepting hidden templates, implementation proxies, storybook-only renders, static mockups, or source inspection as substitutes for the integrated rendered surface the user actually sees.
-- Skipping DOM evaluation because screenshots "look the same."
-- Accepting or returning a report with blank computed-style cells for in-scope rows.
-- Starting normal verification without a caller-supplied inventory, delegated scoped inventory, or explicitly requested best-effort in-session scoped inventory.
-- Asking the caller to construct the matched-element inventory instead of using available scoping support.
-- Inventing a prototype, reference, or production analog when none is available.
-- Treating local design-system preferences as a reason to override parity mode's runnable reference.
-- Asking low-value questions whose answer is already determined by the comparison basis, approved artifacts, or concrete visual finding.
-- Fixing the implementation yourself. Report findings; the caller handles fixes and reruns.
+## Reruns
 
-## Stop Conditions
+After fixes, rerun prior finding rows, rows whose implementation files changed, and their affected states. Expand to the full inventory only when shared layout primitives, global styles, or shared components changed. Recollect DOM evidence under the same comparison conditions and return a delta inventory; do not accept the fix description as proof.
 
-Stop when the result has a verdict, review mode, evidence status, comparison basis, states covered, completed inventory rows, findings or explicit empty findings, accessibility result, out-of-scope flags or explicit empty flags, and patterns-to-codify or explicit empty patterns.
+## Report Contract
+
+Return:
+
+- Global verdict, mode, and evidence status.
+- Comparison basis and matched route, viewport, device scale, zoom, and states.
+- Completed inventory rows.
+- Findings with stable IDs such as `UV-1`, affected row and state, expected basis, observed result, evidence, and user impact. Severity is optional and must be justified by impact.
+- Accessibility result and any blocked checks.
+- Inventory provenance gaps, including explicit `None`.
+- Out-of-scope flags: nearby surfaces or states intentionally excluded, with reason and residual risk, or explicit `None`.
+- Patterns to codify: repeated drift that suggests a reusable component, token, or regression check, or explicit `None`. Do not promote one-off differences as patterns.
+- Blockers and the minimum next input, or explicit `None`.
+
+Do not create a recommendations-only bucket for visual drift. Do not fix the implementation during verification; report findings for a separate implementation step.

@@ -49,12 +49,21 @@ If a competitor isn't on EDGAR (foreign, private, ETF, etc.), the worker reports
 If `<raw_dir>/10k-sections/` has Item 1A from the most recent 10-K, also find the prior-year 10-K (it should be in `<raw_dir>` from Phase 2's `fetch_sec.py --since 2y`). Extract its Item 1A:
 
 ```bash
-prior_tenk=$(ls -t <raw_dir>/*10-K*.html | sed -n '2p')
-prior_year=$(echo "$prior_tenk" | grep -oE '[0-9]{4}' | tail -1)
+filings_index="<raw_dir>/_filings_index.json"
+prior_tenk=$(
+  <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+    --index "$filings_index" --form 10-K --rank 1 --field path
+)
+prior_year=$(
+  <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+    --index "$filings_index" --form 10-K --rank 1 --field report-year
+)
 <scripts_dir>/.venv/bin/python <scripts_dir>/extract_10k_sections.py <ticker> \
   --html "$prior_tenk" --year "$prior_year" \
   --out <raw_dir>/10k-sections-prior/
 ```
+
+`select_filing.py` ranks filings by indexed report date, then filing date and accession; rank 0 is the current 10-K used in Phase 2 and rank 1 is the prior filing. If rank 1 is unavailable, skip the diff and return `DONE_WITH_CONCERNS` as described below.
 
 Then run the diff:
 

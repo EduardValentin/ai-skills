@@ -1,8 +1,8 @@
 ---
 name: prototype-work
-description: Use when working in a prototype reference application, usually a React app under designs/, to add or change prototype pages, user flows, mocked business rules, mocked integrations, backend-facing behavior, or PRD/DESIGN/brand-voice alignment.
+description: Use when changing a prototype reference application, usually a React app under designs/, updating its PRD, design, or voice companions, or using a finished prototype as the reference for production scope mapping, parity planning, implementation preparation, or review.
 compatibility: >-
-  Requires a writable local worktree, Bash and Git, a React application with usable Node and npm, pnpm, or yarn tooling, and native browser tooling that can navigate and capture screenshots. Optional parallel collaborators may be unavailable because the four compact reports can be produced inline. If no browser evidence capability is available, stop and report the blocker.
+  Requires writable worktree, Bash/Git, React app, active Node runtime, and app-selected npm, pnpm, or yarn tooling (nvm/corepack can provision them). PROTOTYPE_WORK_PORT defaults to 5173 (--port overrides); PROTOTYPE_WORK_SKIP_INSTALL=1 skips install; PROTOTYPE_WORK_SKIP_NODE_CHECK=1 skips Node activation/check (both default 0). Package-registry or Node-download access is conditional on install/provisioning. Use Browser tool for screenshots if available; otherwise return a manual plan/blocker.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -12,12 +12,13 @@ metadata:
 
 ## Purpose
 
-Prototype reference applications define product UX before production work: user flows, mocked business rules, mocked integrations, and backend-facing behavior. They are usually React apps under `designs/` with root-level `PRD.md`, `DESIGN.md`, and `brandvoice.md` or `brand-voice.md`.
+Prototype reference applications define product UX before production work: user flows, mocked business rules, mocked integrations, and backend-facing behavior. They are usually React apps under `designs/` with root-level `PRD.md`, `DESIGN.md`, and `brandvoice.md` or `brand-voice.md`. A finished prototype can also anchor production scope mapping without authorizing production edits.
 
 ## When To Use
 
 - Adding or changing prototype reference app pages, routes, flows, states, mocks, mocked integrations, or backend-facing behavior.
 - Updating companion product/design/voice docs because prototype behavior or direction changed.
+- Mapping a finished prototype's routes, states, accessible UI contracts, mocks, and integration boundaries for production planning, implementation preparation, visual parity, or review.
 
 ## Forbidden Behavior
 
@@ -29,17 +30,33 @@ Prototype reference applications define product UX before production work: user 
 - Ability to run the reference React app with its existing JavaScript tooling.
 - Native browser tooling to navigate the app, click through flows, and capture screenshots or browser evidence.
 
+Helper environment variables:
+
+| Variable | Accepted value and default |
+| --- | --- |
+| `PROTOTYPE_WORK_PORT` | Preview port; defaults to `5173` and is overridden by `--port`. |
+| `PROTOTYPE_WORK_SKIP_INSTALL` | Set to `1` to skip dependency installation; defaults to `0`. |
+| `PROTOTYPE_WORK_SKIP_NODE_CHECK` | Set to `1` to skip Node activation and validation; defaults to `0`. |
+
 ## Preparation
 
-1. Prepare the prototype app:
+Bundled paths in this skill resolve from the skill root.
+
+1. Prepare the prototype app. When the user's request or repository context identifies the reference app path, pass its absolute path on the first run:
 
 ```bash
-<skill-dir>/scripts/prepare-prototype-work.sh --project-root <abs-path>
+scripts/prepare-prototype-work.sh --project-root <abs-project-path> --app-root <abs-app-path>
 ```
 
-The script only auto-detects React apps under `designs/`. If it cannot find one, stop and ask the user for the reference app path. Then rerun with `--app-root <abs-path>`.
+Only when the reference app path is unknown, allow discovery:
 
-When stopping for a missing reference app path, the response must include both parts: ask for the path and state that preparation will be rerun with `--app-root <abs-path>` after the user provides it. Do not edit code or docs while this path is unknown.
+```bash
+scripts/prepare-prototype-work.sh --project-root <abs-project-path>
+```
+
+The script auto-detects a React app under `designs/` only when exactly one candidate exists. If it finds none or more than one, stop and ask the user for the reference app path. Then rerun with `--app-root <abs-app-path>`.
+
+When stopping for an unknown or ambiguous reference app path, the response must include both parts: ask for the path and state that preparation will be rerun with `--app-root <abs-app-path>` after the user provides it. Do not edit code or docs while this path is unknown.
 
 2. Start the dev server from the command printed by the script.
 
@@ -80,7 +97,7 @@ Do not treat codebase scope mapping as permission to edit production code. It is
 
 ## PRD Consolidation
 
-If the change adds or alters a user flow, page, component, business rule, data field, permission, branch, mocked integration, or backend-facing behavior even slightly, update `PRD.md`.
+Update `PRD.md` when a prototype change adds or alters product behavior or a business rule, including a user flow, permission, data semantics, routed branch, mocked integration contract, or backend-facing behavior. A page or component change requires a PRD update only when it changes product behavior or business rules; do not make no-op PRD edits for visual-only changes.
 
 Keep PRD edits concise and non-redundant. The PRD contains business rules and product behavior only: no code, component names, design decisions, token names, layout details, or implementation mechanics.
 

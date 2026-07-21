@@ -1,0 +1,31 @@
+{
+  "ticker": "TEST",
+  "years": [
+    {
+      "fiscal_year": 2023,
+      "cash": 1000,
+      "long_term_debt": null,
+      "net_debt": -1000,
+      "dividends_paid": null,
+      "diluted_shares": 206,
+      "eps": 4.0
+    },
+    {
+      "fiscal_year": 2024,
+      "cash": 1200,
+      "long_term_debt": null,
+      "net_debt": -1200,
+      "dividends_paid": null,
+      "diluted_shares": 1042,
+      "eps": 0.8
+    }
+  ],
+  "missing_concepts": [
+    "long_term_debt",
+    "dividends_paid"
+  ],
+  "available_us_gaap_concepts": [
+    "DebtInstrumentFaceAmount",
+    "LongTermDebtNoncurrent"
+  ]
+}

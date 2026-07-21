@@ -1,44 +1,81 @@
-// Browser-context extraction snippet for matched-element visual review.
-//
-// Evaluate this in the page against a CSS selector for the element being
-// inspected. It returns the computed-style and bounding-rect fields needed to
-// fill the ui-verification matched-element inventory. The global `uiux-verifier`
-// agent uses this same evidence contract when it delegates visual checks.
+// Inject this file into the inspected page, then call
+// globalThis.uiVerificationExtractElementStyle(selector).
 
-((selector) => {
-  const el = document.querySelector(selector);
-  if (!el) return { missing: true, selector };
-  const cs = getComputedStyle(el);
-  const rect = el.getBoundingClientRect();
-  return {
-    font: {
-      family: cs.fontFamily,
-      size: cs.fontSize,
-      weight: cs.fontWeight,
-      style: cs.fontStyle,
-      lineHeight: cs.lineHeight,
-      letterSpacing: cs.letterSpacing,
-      textTransform: cs.textTransform,
-      textDecoration: cs.textDecorationLine,
-    },
-    color: { fg: cs.color, bg: cs.backgroundColor, opacity: cs.opacity },
-    box: {
-      padding: cs.padding,
-      margin: cs.margin,
-      border: cs.border,
-      borderRadius: cs.borderRadius,
-      boxShadow: cs.boxShadow,
-      outline: cs.outline,
-    },
-    layout: {
-      display: cs.display,
-      flexDirection: cs.flexDirection,
-      alignItems: cs.alignItems,
-      justifyContent: cs.justifyContent,
-      gap: cs.gap,
-      position: cs.position,
-    },
-    size: { width: rect.width, height: rect.height },
-    transform: cs.transform,
-  };
-})('YOUR_SELECTOR');
+(() => {
+  "use strict";
+
+  function extractElementStyle(selector) {
+    if (typeof selector !== "string" || selector.trim() === "") {
+      return {
+        error: "Selector must be a non-empty string.",
+        selector,
+      };
+    }
+
+    let element;
+    try {
+      element = document.querySelector(selector);
+    } catch (error) {
+      return {
+        error: `Invalid selector: ${error.message}`,
+        selector,
+      };
+    }
+
+    if (!element) return { missing: true, selector };
+
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+
+    return {
+      selector,
+      font: {
+        family: style.fontFamily,
+        size: style.fontSize,
+        weight: style.fontWeight,
+        style: style.fontStyle,
+        lineHeight: style.lineHeight,
+        letterSpacing: style.letterSpacing,
+        textTransform: style.textTransform,
+        textDecoration: style.textDecorationLine,
+      },
+      color: {
+        foreground: style.color,
+        background: style.backgroundColor,
+        opacity: style.opacity,
+      },
+      box: {
+        padding: style.padding,
+        margin: style.margin,
+        border: style.border,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow,
+        outline: style.outline,
+      },
+      layout: {
+        display: style.display,
+        flexDirection: style.flexDirection,
+        alignItems: style.alignItems,
+        justifyContent: style.justifyContent,
+        gridTemplateColumns: style.gridTemplateColumns,
+        gridTemplateRows: style.gridTemplateRows,
+        gap: style.gap,
+        position: style.position,
+        overflow: style.overflow,
+      },
+      geometry: {
+        x: rect.x,
+        y: rect.y,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      },
+      transform: style.transform,
+    };
+  }
+
+  globalThis.uiVerificationExtractElementStyle = extractElementStyle;
+})();

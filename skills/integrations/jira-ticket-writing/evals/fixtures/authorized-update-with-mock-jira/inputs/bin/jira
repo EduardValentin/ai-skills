@@ -1,0 +1,176 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+workspace=$(CDPATH= cd "$script_dir/.." && pwd)
+state_dir="$workspace/jira-ticket-writing-fixture-state"
+mkdir -p "$state_dir"
+printf 'jira %s\n' "$*" >> "$state_dir/tool-invocations.log"
+
+show_help() {
+  cat <<'HELP'
+Fake Jira collaborator commands:
+  jira metadata --project MAP --issue-type Story
+  jira issue view MAP-42
+  jira issue update MAP-42 --fields-file PATH --expected-version 7 --dry-run
+  jira issue update MAP-42 --fields-file PATH --expected-version 7
+
+The update payload must be JSON with fields.summary, fields.description, and
+fields.customfield_10091. This fake collaborator never makes network requests.
+HELP
+}
+
+validate_payload() {
+  payload_path=$1
+  python3 - "$payload_path" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    payload = json.load(handle)
+
+fields = payload.get("fields")
+required = {"summary", "description", "customfield_10091"}
+if not isinstance(fields, dict) or set(fields) != required:
+    raise SystemExit(
+        "payload fields must be exactly summary, description, and customfield_10091"
+    )
+if not isinstance(fields["summary"], str) or not fields["summary"].strip():
+    raise SystemExit("summary must be a non-empty string")
+
+for field_name in ("description", "customfield_10091"):
+    document = fields[field_name]
+    if not isinstance(document, dict):
+        raise SystemExit(f"{field_name} must be an ADF document")
+    if document.get("type") != "doc" or document.get("version") != 1:
+        raise SystemExit(f"{field_name} must be an ADF version 1 doc")
+    if not isinstance(document.get("content"), list) or not document["content"]:
+        raise SystemExit(f"{field_name} must have non-empty content")
+
+acceptance = fields["customfield_10091"]
+task_lists = [
+    node for node in acceptance["content"] if node.get("type") == "taskList"
+]
+if not task_lists:
+    raise SystemExit("customfield_10091 must contain an ADF taskList")
+
+local_ids = []
+task_count = 0
+for task_list in task_lists:
+    list_id = task_list.get("attrs", {}).get("localId")
+    if not isinstance(list_id, str) or not list_id.strip():
+        raise SystemExit("every taskList must have a non-empty localId")
+    local_ids.append(list_id)
+    for task in task_list.get("content", []):
+        if task.get("type") != "taskItem":
+            raise SystemExit("taskList content must contain only taskItem nodes")
+        task_count += 1
+        attrs = task.get("attrs", {})
+        task_id = attrs.get("localId")
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise SystemExit("every taskItem must have a non-empty localId")
+        if attrs.get("state") != "TODO":
+            raise SystemExit("every taskItem must have TODO state")
+        local_ids.append(task_id)
+        content = task.get("content", [])
+        if not content or any(
+            node.get("type") != "text" or not node.get("text", "").strip()
+            for node in content
+        ):
+            raise SystemExit("every taskItem must contain non-empty text nodes")
+
+if task_count < 2:
+    raise SystemExit("customfield_10091 must contain at least two taskItem nodes")
+if len(local_ids) != len(set(local_ids)):
+    raise SystemExit("taskList and taskItem localId values must be unique")
+PY
+}
+
+case "${1:-}" in
+  --help|help)
+    show_help
+    ;;
+  metadata)
+    if [ "$*" != "metadata --project MAP --issue-type Story" ]; then
+      printf '%s\n' 'Unsupported fake metadata request. Run jira --help.' >&2
+      exit 2
+    fi
+    : > "$state_dir/metadata-read"
+    cat <<'JSON'
+{"project":{"key":"MAP","name":"Fake Maps"},"issueType":{"id":"10001","name":"Story"},"fields":[{"id":"summary","name":"Summary","required":true,"representation":"string"},{"id":"description","name":"Description","required":true,"representation":"ADF"},{"id":"customfield_10091","name":"Acceptance & Testing Criteria","required":true,"representation":"ADF","supportedNodes":["taskList","taskItem"]},{"id":"parent","name":"Parent","required":false,"representation":"issue-key"},{"id":"labels","name":"Labels","required":false,"representation":"string-array"}],"issueLinkTypes":[{"id":"10000","name":"Blocks","inward":"is blocked by","outward":"blocks"},{"id":"10003","name":"Relates","inward":"relates to","outward":"relates to"}]}
+JSON
+    ;;
+  issue)
+    action=${2:-}
+    issue_key=${3:-}
+    if [ "$action" = "view" ]; then
+      if [ "$issue_key" != "MAP-42" ] || [ "$#" -ne 3 ]; then
+        printf '%s\n' 'Only fake issue MAP-42 can be read.' >&2
+        exit 2
+      fi
+      : > "$state_dir/issue-read"
+      cat <<'JSON'
+{"key":"MAP-42","project":"MAP","issueType":"Story","version":7,"fields":{"summary":"Investigate saved layer behavior","description":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"Saved layer state is unreliable after reopening the map."}]}]},"customfield_10091":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"Acceptance coverage needs revision."}]}]},"parent":null,"labels":[],"issuelinks":[]}}
+JSON
+      exit 0
+    fi
+
+    if [ "$action" != "update" ] || [ "$issue_key" != "MAP-42" ]; then
+      printf '%s\n' 'Unsupported fake issue command. Run jira --help.' >&2
+      exit 2
+    fi
+    shift 3
+    fields_file=
+    expected_version=
+    dry_run=false
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --fields-file)
+          fields_file=${2:-}
+          shift 2
+          ;;
+        --expected-version)
+          expected_version=${2:-}
+          shift 2
+          ;;
+        --dry-run)
+          dry_run=true
+          shift
+          ;;
+        *)
+          printf 'Unsupported fake update argument: %s\n' "$1" >&2
+          exit 2
+          ;;
+      esac
+    done
+    if [ ! -f "$state_dir/metadata-read" ] || [ ! -f "$state_dir/issue-read" ]; then
+      printf '%s\n' 'Project metadata and current issue must be read before update.' >&2
+      exit 3
+    fi
+    if [ "$expected_version" != "7" ]; then
+      printf '%s\n' 'The update must use current fake issue version 7.' >&2
+      exit 3
+    fi
+    if [ -z "$fields_file" ] || [ ! -f "$fields_file" ]; then
+      printf '%s\n' 'A readable --fields-file is required.' >&2
+      exit 3
+    fi
+    validate_payload "$fields_file"
+    if [ "$dry_run" = true ]; then
+      : > "$state_dir/dry-run-passed"
+      printf '%s\n' '{"dryRun":true,"valid":true,"key":"MAP-42","expectedVersion":7}'
+      exit 0
+    fi
+    if [ ! -f "$state_dir/dry-run-passed" ]; then
+      printf '%s\n' 'A successful dry run is required before the fake update.' >&2
+      exit 3
+    fi
+    : > "$state_dir/updated"
+    printf '%s\n' '{"updated":true,"key":"MAP-42","previousVersion":7,"version":8}'
+    ;;
+  *)
+    printf '%s\n' 'Unsupported fake Jira invocation. Run jira --help.' >&2
+    exit 2
+    ;;
+esac

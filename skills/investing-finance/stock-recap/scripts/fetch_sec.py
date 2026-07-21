@@ -1,9 +1,12 @@
 """Download SEC filings for a ticker into a directory.
 
 Usage:
-    fetch_sec.py <TICKER> [--forms 10-K,10-Q,8-K] [--since YYYY-MM-DD] --out <dir>
+    fetch_sec.py <TICKER> [--forms 10-K,10-Q,8-K]
+                 [--since YYYY-MM-DD] [--report-after YYYY-MM-DD]
+                 [--list-only] [--out <dir>]
 
-Writes one file per filing plus _filings_index.json listing what was fetched.
+Writes one file per filing plus _filings_index.json, or prints the filing index
+as JSON without downloading filing bodies when --list-only is used.
 """
 from __future__ import annotations
 
@@ -25,14 +28,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Comma-separated SEC form types to fetch (default: 10-K,10-Q,8-K)",
     )
     parser.add_argument("--since", help="Earliest filing date (YYYY-MM-DD)")
-    parser.add_argument("--out", required=True, help="Output directory")
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--report-after",
+        help="Keep filings whose covered report date is later than YYYY-MM-DD",
+    )
+    parser.add_argument(
+        "--list-only",
+        action="store_true",
+        help="Print matching filing metadata as JSON without downloading bodies",
+    )
+    parser.add_argument("--out", help="Output directory (required unless --list-only)")
+    args = parser.parse_args(argv)
+    if not args.list_only and not args.out:
+        parser.error("--out is required unless --list-only is used")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         info = resolve(args.ticker)
@@ -43,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
     client = SECClient()
     forms = {f.strip() for f in args.forms.split(",") if f.strip()}
     filings = client.list_filings(cik=info.cik_padded, forms=forms, since=args.since)
+    if args.report_after:
+        filings = [filing for filing in filings if filing.report_date > args.report_after]
 
     index = {
         "ticker": info.ticker,
@@ -51,6 +66,22 @@ def main(argv: list[str] | None = None) -> int:
         "name": info.name,
         "filings": [],
     }
+    if args.list_only:
+        for filing in filings:
+            index["filings"].append(
+                {
+                    "accession": filing.accession,
+                    "form": filing.form,
+                    "filing_date": filing.filing_date,
+                    "report_date": filing.report_date,
+                }
+            )
+        print(json.dumps(index, indent=2))
+        return 0
+
+    assert args.out is not None
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
     for f in filings:
         body = client.get_filing_html(f)
         filename = f"{f.accession}-{f.form.replace('/', '_')}-{f.filing_date}.html"

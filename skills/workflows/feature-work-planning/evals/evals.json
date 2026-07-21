@@ -1,0 +1,46 @@
+{
+  "skill_name": "feature-work-planning",
+  "evals": [
+    {
+      "id": "rough-idea-requirements-alignment",
+      "prompt": "Help me plan future work for team invitations. We have no PRD, ticket, or prototype yet, only the idea that organization admins should be able to invite teammates. I need a planning packet that exposes the decisions we must make before implementation.",
+      "expected_output": "A draft planning packet that proceeds from the rough idea, performs complete requirements alignment, marks unknowns for decision, proposes provisional outcome-oriented slices when no high-impact blocker prevents slicing, and requests approval before downstream use.",
+      "assertions": [
+        "The response treats the absence of a PRD, ticket, or prototype as workable context rather than as a blocker.",
+        "Before presenting any work slices, the response provides requirements alignment covering users, flow, data/entities/lifecycle, permissions, integrations, edge cases, non-goals, and success criteria.",
+        "Unknown product or technical facts are framed as open questions or assumptions requiring approval rather than invented as settled facts.",
+        "The response either pauses slicing for a high-impact unresolved decision or clearly labels proposed slices as provisional and organizes them around user outcomes or delivery risks.",
+        "The response remains a planning artifact rather than polished ticket prose, implementation work, or an edit to a source-of-truth document.",
+        "The response explicitly asks the user to resolve blockers and approve the draft before it is treated as ready for implementation or backlog drafting."
+      ],
+      "checks": []
+    },
+    {
+      "id": "checkout-outcome-sliced-plan",
+      "prompt": "Plan the future work for a checkout eligibility feature. Known touchpoints are a billing API rule, a checkout banner, a migration for existing customer data, analytics, rollout controls, and QA. Break this into a compact plan that the team can review before we draft tickets.",
+      "expected_output": "A compact, reviewable draft planning packet that incorporates every known touchpoint but slices delivery by customer outcome or risk, with sequencing, dependencies, technical invariants, rollout, and verification.",
+      "assertions": [
+        "The response captures the goal and source context and distinguishes confirmed information from assumptions or open questions.",
+        "The delivery slices are named and grouped by user outcome or delivery risk rather than simply reproducing API, UI, migration, analytics, rollout, and QA as separate layer-based work items.",
+        "The known API, UI, data migration, analytics, rollout, and QA concerns are all accounted for as scope or integration points within the outcome- or risk-based slices.",
+        "Each proposed slice provides enough planning evidence to understand its outcome, scope, dependencies, relative order, and integration points.",
+        "The packet identifies relevant acceptance themes and verification surfaces, including migration safety, eligibility behavior, user-visible messaging, observability, and controlled rollout.",
+        "The response preserves important technical notes for downstream work and asks for plan approval before ticket drafting."
+      ],
+      "checks": []
+    },
+    {
+      "id": "source-of-truth-gap-follow-up",
+      "prompt": "We are updating the future-work plan for checkout eligibility. During planning, a stakeholder proposed that tax-exempt customers should bypass eligibility checks, but the proposal is not yet confirmed and the product documentation does not define that exception. Show how this proposal should affect the plan; do not edit the docs or create tickets.",
+      "expected_output": "An updated draft plan that treats the exemption as an unresolved product decision, separates the product-documentation follow-up from implementation slices, and keeps the plan pending approval.",
+      "assertions": [
+        "The response identifies the undocumented tax-exempt behavior as a product source-of-truth gap that requires confirmation rather than silently treating it as an established rule.",
+        "A documentation decision or update is recommended as a distinct follow-up and is not hidden inside an implementation slice.",
+        "The response does not claim to edit the product documentation or produce final backlog items.",
+        "Implementation planning for the exception is conditional on the product decision and calls out affected behavior, data, verification, and rollout considerations where relevant.",
+        "The response asks for approval or resolution of the open product decision before treating the plan as downstream-ready."
+      ],
+      "checks": []
+    }
+  ]
+}

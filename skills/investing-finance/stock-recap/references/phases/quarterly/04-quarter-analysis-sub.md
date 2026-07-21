@@ -16,14 +16,16 @@ You are a sub-agent dispatched by the Quarterly Phase 4 orchestrator. Your job i
 - `quarter_end_date`: the period-end date for this quarter (`YYYY-MM-DD`).
 - `ticker_dir`: absolute path.
 - `skill_scripts_dir`: absolute path to bundled financial runtime.
-- `filing_path`: absolute path to the cleaned filing extracts written by Phase 2 (in `.raw/recap-<quarter>/`).
+- `raw_filing_path`: absolute path to the raw SEC HTML retained for provenance; do not analyze this when cleaned sections are available.
+- `filing_sections_index_path`: absolute path to Phase 2's `_10q_sections_index.json` or `_10k_sections_index.json`.
+- `extracted_section_paths`: absolute paths to every cleaned Markdown section named by the extractor index.
 - `transcript_path`: absolute path to the cleaned transcript (`earnings-calls/<quarter>.md`).
 - `projection_kpis`: the list of KPI names tracked in `projections.json.scenarios.base.years[N]` (excluding `year`). Example: `["revenue", "revenue_growth_pct", "gross_margin_pct", "operating_margin_pct", "net_income", "fcf", "shares_diluted", "eps", "net_debt", "roic_pct", ...]`.
 - `thesis_year_for_quarter`: 1-based index into `projections.json.scenarios.<scenario>.years` that this quarter maps to (a quarter ending ~12 months after thesis creation = thesis-year 1; ~24 months = thesis-year 2; etc.).
 
 ## Your job
 
-1. Read the filing extracts + transcript.
+1. Read every path in `extracted_section_paths` plus the transcript. Use `raw_filing_path` only to diagnose an extractor problem; never treat whole-filing HTML as a cleaned section.
 2. Write `earnings-calls/<quarter>-analysis.md` using the complete local template below: prepared-remarks summary, Q&A themes, forward-looking statements, KPI mentions, and tone (confidence / hedging / defensiveness).
 3. For each KPI in `projection_kpis`, find the actual reported value in the filing (or "not reported this quarter") and compute the TTM-equivalent where applicable. Compare it to the bull / base / bear projection for `thesis_year_for_quarter` and tag the row.
 4. Return a structured summary.
@@ -103,4 +105,4 @@ NOTES: <one sentence on anything unusual or unique to this quarter>
 STATUS: <DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT>
 ```
 
-`STATUS` is `NEEDS_CONTEXT` if the filing or transcript file at the injected paths is missing or unreadable (the orchestrator handles re-fetch); `DONE_WITH_CONCERNS` if some KPIs couldn't be resolved (tag = `cannot-evaluate` for >25% of `projection_kpis`); `DONE` otherwise.
+`STATUS` is `NEEDS_CONTEXT` if the section index, any indexed extracted section, or the transcript is missing or unreadable (the orchestrator handles re-fetch); `DONE_WITH_CONCERNS` if some KPIs couldn't be resolved (tag = `cannot-evaluate` for >25% of `projection_kpis`); `DONE` otherwise.

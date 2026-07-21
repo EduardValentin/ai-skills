@@ -1,94 +1,62 @@
-# Currency conversion protocol — V2 (media anuală cu cross-check BNR)
+# Currency conversion protocol - metoda susținută oficial
 
-Strategia confirmată: **V2 — media anuală pe totaluri** prin `cursbnr.ro/curs-valutar-mediu`, cu cross-check 3-puncte împotriva arhivei BNR.
+Nu există o metodă implicită pentru toate veniturile. Înainte de orice conversie destinată D212, stabilește din dovezi oficiale regula aplicabilă categoriei de venit, anului fiscal, sursei venitului și monedei.
+
+Media anuală poate fi folosită atunci când instrucțiunile sau norma aplicabilă o cer explicit. Cursul BNR din data realizării se folosește atunci când aceasta este regula oficială verificată. `cursbnr.ro`, o medie pe trei date sau preferința utilizatorului nu stabilesc metoda fiscală și nu sunt dovezi pentru valoarea finală.
 
 ## Aplicabilitate
 
-- Aplică pentru: venituri în valută (USD, EUR, GBP, etc.) de la brokeri internaționali, conturi străinătate, obligațiuni străinătate, dividende străinătate.
-- **NU aplică** pentru: venituri deja în RON (Tradeville/BVB, dobânzi bănci RO, dividende companii RO). Cursul = 1.0.
+- Pentru o sumă documentată deja în RON, nu aplica o conversie suplimentară.
+- Pentru orice sumă în valută, tratează separat venitul brut, costul, impozitul reținut și fiecare altă componentă care intră în calcul.
+- Nu presupune că toate categoriile sau toate sursele de venit din aceeași sesiune au aceeași regulă.
 
-## Procedura anuală
+## Procedură
 
-La Faza 3 (cache check), pentru fiecare an fiscal nou sau cache `curs-bnr-mediu.md` cu `last_verified > 90 zile`:
+1. **Identifică faptul de convertit.** Înregistrează categoria de venit, țara sau sursa, moneda, data ori perioada realizării și documentul utilizatorului din care provine suma.
 
-1. **Fetch cursbnr.ro:** `https://www.cursbnr.ro/curs-valutar-mediu` (filtrează pentru anul fiscal). Extrage valorile pentru USD, EUR (și alte valute dacă sesiunea le cere).
+2. **Determină regula oficială.** Verifică pentru anul fiscal relevant, în această ordine:
+   - ordinul și instrucțiunile ANAF aplicabile formularului D212;
+   - Codul fiscal și normele aplicabile în forma valabilă pentru anul și categoria respectivă, prin `legislatie.just.ro`;
+   - publicația sau seria oficială BNR necesară pentru cursul cerut de regula fiscală și, numai dacă regula cere o conversie intermediară pentru o monedă necotată de BNR, sursa oficială a autorității monetare relevante.
 
-2. **Fetch BNR sample** — 3 cursuri spot din `bnr.ro` (sau API-ul BNR XML):
-   - 15 ianuarie {an}
-   - 15 iunie {an}
-   - 15 decembrie {an}
-   
-   Dacă o dată e weekend, ia ziua lucrătoare imediat anterioară.
-
-3. **Recalculează media simplă a celor 3** pentru fiecare valută:
-   ```
-   media_3 = (curs_jan + curs_iun + curs_dec) / 3
-   ```
-
-4. **Comparare cu valoarea cursbnr.ro:**
-   ```
-   delta_pct = abs(media_anuala_cursbnr - media_3) / media_3 * 100
-   ```
-   - `delta_pct < 0.5%` → accept, scrie în cache
-   - `delta_pct >= 0.5%` → hard-stop. Întreabă user:
-     ```
-     Discrepanță conversie {valuta} pentru anul {an}:
-     - cursbnr.ro media anuală: {X}
-     - BNR sample (3 puncte) media: {Y}
-     - delta: {delta_pct}%
-     
-     Vreți să folosesc media BNR sample, valoarea cursbnr.ro, sau să cer
-     arhiva BNR completă pentru calcul exact?
-     ```
-
-5. **Scrie `_legi/{an}/curs-bnr-mediu.md`** cu frontmatter complet:
+3. **Creează sau re-verifică `_legi/{an}/conversie-valutara.md`.** Pentru fiecare categorie folosită, păstrează cel puțin:
 
    ```yaml
-   ---
-   fapt: curs_valutar_mediu_anual
-   valori:
-     USD: 4.6612
-     EUR: 4.9745
-   sursa_primara_url: https://www.bnr.ro/Cursul-de-schimb-3544.aspx
-   sursa_convenience_url: https://www.cursbnr.ro/curs-valutar-mediu
-   accessed_on: 2026-05-11
-   last_verified: 2026-05-11
-   verification_method: sample_3_dates_BNR
-   verification_status: match    # sau mismatch (cu detalii)
-   sample_BNR:
-     USD: [4.5500, 4.6700, 4.7800]
-     EUR: [4.9200, 4.9700, 5.0400]
-   citat_verbatim: |
-     (Cursul oficial BNR per data — preluat din arhiva publică. Media anuală
-     calculată ca medie aritmetică simplă a tuturor cursurilor publicate în
-     zilele lucrătoare ale anului fiscal.)
-   ---
-   
-   # Avertisment vs per-tranzacție
-   
-   Această sesiune folosește **V2 — media anuală pe totaluri**, nu per-tranzacție.
-   Codul Fiscal art. 76 alin. (2) prevede curs BNR la data realizării venitului
-   (per-tranzacție). În practica ANAF, media anuală e tolerată pentru sume mici;
-   pentru volume mari sau control fiscal, divergența poate fi discutabilă.
-   
-   În `raport-completare.md` din sesiunea curentă, secțiunea **"Avertismente"**
-   menționează explicit această divergență.
+   categorie_venit: <categorie>
+   an_fiscal: <YYYY>
+   metoda: <curs_mediu_anual_bnr | curs_bnr_data_realizarii | alta_metoda_oficiala>
+   granularitate: <total_anual | data_realizarii | alta>
+   source_url_regula: <URL oficial>
+   source_anchor_or_excerpt: <articol, punct sau extras scurt>
+   source_url_curs: <URL oficial al autorității cerute de regulă>
+   source_authority_curs: <BNR | altă autoritate monetară oficială cerută>
+   accessed_on: <YYYY-MM-DD>
+   last_verified: <YYYY-MM-DD>
    ```
 
-## Aplicare în calcul
+4. **Aplică hard-gate-ul de dovezi.** Dacă sursa oficială nu determină clar metoda sau dacă modulul cache nu leagă metoda de categoria și anul curent, oprește calculul destinat depunerii. Spune ce regulă lipsește și ce sursă oficială trebuie verificată; nu înlocui dovada cu un site agregator sau cu alegerea utilizatorului.
 
-Pentru fiecare sumă în valută din inputs broker:
+5. **Preia fiecare curs din autoritatea oficială cerută de regulă.** Orice curs BNR provine direct dintr-o publicație sau serie BNR. Dacă regula verificată cere o conversie intermediară pentru o monedă necotată de BNR, folosește sursa oficială indicată de acea regulă. Păstrează autoritatea, URL-ul, data accesării, moneda, data sau anul cursului și valoarea exactă în modulul cache.
 
-```
-suma_RON = round(suma_VALUTA * curs_valuta)
-```
+6. **Calculează la granularitatea cerută:**
 
-unde `curs_valuta` se citește din `_legi/{an}/curs-bnr-mediu.md` (atributul `valori.VALUTA` din frontmatter).
+   ```text
+   dacă metoda = curs_bnr_data_realizarii:
+     suma_RON_linie = rotunjire_conform_regulii(suma_valuta_linie * curs_BNR_data_linie)
+     suma_RON = suma(suma_RON_linie)
+
+   dacă metoda = curs_mediu_anual_bnr:
+     suma_RON = rotunjire_conform_regulii(suma_valuta_eligibila * curs_mediu_anual_BNR)
+   ```
+
+   Regula de rotunjire trebuie și ea susținută de instrucțiunile aplicabile sau de comportamentul DUF verificat; nu o presupune din exemplul de mai sus.
+
+7. **Separă comparațiile de valoarea fiscală.** O metodă alternativă poate apărea în raport numai ca estimare comparativă etichetată clar. Nu o transfera în câmpurile D212 decât dacă există dovadă oficială aplicabilă.
 
 ## Loguri
 
-Fiecare conversie aplicată în calcul se înregistrează în `worklog.md`:
+Fiecare conversie folosită în calcul se înregistrează în `worklog.md` cu proveniența metodei și a cursului:
 
-```
-[YYYY-MM-DD HH:MM] currency-convert: 1.234,56 USD * 4.6612 = 5.755 RON (cap 2012, broker IBKR)
+```text
+[YYYY-MM-DD HH:MM] currency-convert: category=<>, amount=<valoare moneda>, method=<>, rate=<>, rate_date_or_year=<>, result_RON=<>, rule_ref=_legi/{an}/conversie-valutara.md#<ancora>, input_ref=<fișier:pagină/rând>
 ```

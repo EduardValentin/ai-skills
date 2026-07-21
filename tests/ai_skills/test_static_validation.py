@@ -13,6 +13,10 @@ from unittest.mock import patch
 import scripts.ai_skills as cli
 from scripts.ai_skills_lib.config import build_parser
 from scripts.ai_skills_lib.core import discover_testable_skills
+from scripts.ai_skills_lib.authored_content import (
+    SENSITIVE_TEXT_REDACTION,
+    scan_static_secret_issues,
+)
 from scripts.ai_skills_lib.static_validation import (
     SecretMatch,
     find_static_secret_issues,
@@ -1295,6 +1299,34 @@ class SecretPatternTests(unittest.TestCase):
                 self.assertEqual(
                     find_static_secret_issues(line, Path("authored.txt")), []
                 )
+
+    def test_quoted_authorization_headers_allow_exact_shell_variable_expansions(self):
+        safe_headers = (
+            'curl -H "Authorization: Bearer $JWT"',
+            "curl -H 'Authorization: Bearer ${JWT}'",
+            '  -H "Authorization: Bearer $JWT" \\',
+        )
+
+        for header in safe_headers:
+            with self.subTest(header=header):
+                self.assertEqual(find_static_secret_issues(header, Path("script.sh")), [])
+
+    def test_quoted_authorization_headers_reject_and_redact_literal_credentials(self):
+        literal = "opaque-authorization-value"
+        unsafe_headers = (
+            f'curl -H "Authorization: Bearer {literal}"',
+            f"curl -H 'Authorization: Bearer {literal}'",
+            f'  -H "Authorization: Bearer {literal}" \\',
+        )
+
+        for header in unsafe_headers:
+            with self.subTest(header=header):
+                result = scan_static_secret_issues(header, Path("script.sh"))
+                self.assertEqual(
+                    [match.pattern for match in result.findings], ["authorization-value"]
+                )
+                self.assertNotIn(literal, result.durable_text)
+                self.assertIn(SENSITIVE_TEXT_REDACTION, result.durable_text)
 
     def test_encrypted_private_key_blocks_always_fail_redacted(self):
         private_key = (

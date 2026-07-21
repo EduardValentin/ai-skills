@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "post-implementation-review-needed",
+      "query": "The approved API and UI changes are implemented and automated tests pass, but nobody has independently reviewed them or manually verified the acceptance criteria yet. Carry the implementation workflow through review, fixes, QA, and reporting.",
+      "should_trigger": true
+    },
+    {
       "id": "requirements-still-unapproved",
       "query": "Turn these rough customer notes about billing retries into a scoped user story, acceptance criteria, design options, and an implementation plan for approval before anyone starts coding.",
+      "should_trigger": false
+    },
+    {
+      "id": "pr-publication-after-completion",
+      "query": "Implementation, independent review, and manual QA are complete. Check whether the branch is ready for a pull request, draft the PR description, publish it, and update the tracker status.",
       "should_trigger": false
     }
   ]

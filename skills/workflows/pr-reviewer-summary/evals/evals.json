@@ -1,0 +1,47 @@
+{
+  "skill_name": "pr-reviewer-summary",
+  "evals": [
+    {
+      "id": "accounts-filter-pr-body",
+      "prompt": "In this mock review scenario, generate a ready-to-paste PR description from the context below. Use the bundled references/pr-body-workflow.md as the format contract.\n\nThe React Router v7 application runs in SSR mode and uses route loaders as its MVC controller boundary. The final diff adds customer-status, account-tier, and created-date-range controls to the Accounts table; serializes the selected filters into the URL; parses them in the route loader; applies them in the database query; and updates the result count, loading state, and empty state. Account managers need to narrow accounts without leaving the table. Changed areas are the table controls, loader query parsing, database query builder, state copy, and route tests. Do not describe the earlier false start.\n\nAutomated commands:\n- npm test -- accounts-filter-loader\n- npm test -- accounts-table-filters\n- npm run test:e2e -- accounts-table-filters.spec.ts\n\nManual setup:\n- npm run mock:vault -- --fixture test/fixtures/vault/accounts-filter-secrets.json --port 8201\n- VAULT_ADDR=http://localhost:8201 VAULT_TOKEN=FAKE_DEV_TOKEN npm run dev\n\nPublic browser route: http://localhost:3000/accounts\nPublic server-rendered route check: curl \"http://localhost:3000/accounts?status=active&tier=enterprise&createdAfter=2026-01-01&createdBefore=2026-06-01\"\n\nObserved reviewer outcomes: selecting Active changes the rows and result count; selecting Enterprise persists tier=enterprise in the URL; a 2026-01-01 through 2026-06-01 date range survives refresh; combining filters shows matching rows; clearing restores the default table; and an unmatched combination shows the empty state. The only mocked external boundary is Vault at http://localhost:8201 because real Vault is unavailable locally. The UI, route loader, database-filtering path, and browser workflow remain real.",
+      "expected_output": "Only a paste-ready Markdown PR body that follows the bundled PR Body Workflow: a concise final-state summary, automated commands, command-backed manual verification of the public Accounts workflow, and explicit treatment of the mocked Vault boundary.",
+      "assertions": [
+        "The response is the PR body itself and uses Summary of Changes, Automated Tests, and Manual Verification in the required order; Technical Details appears only if it adds useful review context.",
+        "The summary leads with the account-manager purpose and accurately covers the final table filters, URL persistence, route-loader parsing, database filtering, result-count behavior, and empty state without recounting iteration history.",
+        "Automated Tests contains the three supplied test commands and keeps reviewer-run setup, mock, browser, and curl actions out of that section.",
+        "Manual Verification gives an actionable public-entry-point flow that starts the mock and app, opens the Accounts table, exercises each filter and combinations, refreshes and clears filters, and identifies the expected rows, result count, URL persistence, and empty-state outcomes.",
+        "The manual instructions separately label Vault as the mocked external boundary, explain why it is mocked, identify its local address, and state that the UI, loader, database filtering, and browser workflow remain real.",
+        "Commands, URLs, paths, query strings, and other code-like values are presented in fenced blocks with real line breaks, consistent with the bundled reference.",
+        "The body describes only reliable final-state evidence and does not mention the false start, agent process, screenshots, environment limitations beyond the named external boundary, or personal testing claims."
+      ],
+      "checks": []
+    },
+    {
+      "id": "opsbridge-cli-rest-pr-body",
+      "prompt": "In this mock review scenario, write the PR body for OpsBridge, a Go service whose opsctl CLI invokes its REST API. The final diff adds transaction reconciliation, audit export, and webhook replay to both public entry points. REST handlers validate payloads, call the shared service layer, and persist command audit records. Operators need equivalent CLI and REST capabilities so humans and automation use the same path. Changed areas include cmd/opsctl, cmd/opsbridge-server, REST handlers, the three services, a Vault-backed secret loader, and Go tests.\n\nAutomated commands:\n- go test ./cmd/opsctl ./internal/commands ./internal/service\n- go test ./...\n- go test ./test/integration -run TestCLIRESTBridge\n\nManual setup:\n- go run ./cmd/mock-vault --listen 127.0.0.1:8201 --fixture testdata/vault/opsbridge.json\n- VAULT_ADDR=http://127.0.0.1:8201 VAULT_TOKEN=FAKE_DEV_TOKEN go run ./cmd/opsbridge-server --addr :8088\n\nPublic CLI checks:\n- go run ./cmd/opsctl reconcile --account acct_123 --date 2026-06-01 --server http://127.0.0.1:8088\n- go run ./cmd/opsctl export-audit --batch batch_20260601 --format json --server http://127.0.0.1:8088\n- go run ./cmd/opsctl replay-webhook --event evt_789 --dry-run --server http://127.0.0.1:8088\n\nEquivalent REST checks are POST requests to /v1/commands/reconcile with {\"account\":\"acct_123\",\"date\":\"2026-06-01\"}, /v1/commands/audit-export with {\"batch\":\"batch_20260601\",\"format\":\"json\"}, and /v1/commands/webhook-replay with {\"event\":\"evt_789\",\"dryRun\":true} at http://127.0.0.1:8088.\n\nExisting public audit lookup: set COMMAND_ID to the command ID returned by each reconciliation invocation, then run curl \"http://127.0.0.1:8088/v1/command-audits/$COMMAND_ID\". A successful lookup returns the persisted record's command ID, source, operation, status, account, and date. The CLI and REST records have different command IDs and sources, but both show operation reconcile, status completed, account acct_123, and date 2026-06-01.\n\nExpected reviewer outcomes: reconciliation returns a completed command ID and writes an audit record; export returns JSON for the requested batch and a generated file path; replay dry-run validates the payload and reports a plan without publishing; CLI and REST reconciliation reach the same service path and create matching audit records. Vault at http://127.0.0.1:8201 is the only mocked external boundary because real Vault is unavailable. CLI, HTTP handling, services, and audit persistence stay real.",
+      "expected_output": "Only a reviewer-useful Markdown PR body with the required section structure, a final-state explanation of the shared CLI and REST flow, supplied automated commands, and manual verification across both public entry points and the public audit lookup while clearly isolating the Vault mock.",
+      "assertions": [
+        "The response is a paste-ready PR body with Summary of Changes, Automated Tests, Manual Verification, and a useful Technical Details section in the contract order for this multi-module flow.",
+        "The summary starts from the operator need and accurately describes the final reconciliation, audit-export, and webhook-replay capabilities shared by the CLI and REST API.",
+        "Automated Tests contains only the supplied Go test commands, places the focused command before the broad suite, and does not claim unprovided pass results.",
+        "Manual Verification starts the Vault mock and server, exercises all three capabilities through the public CLI and their REST equivalents, and uses the supplied public audit lookup with each returned reconciliation command ID to inspect the expected persisted record fields.",
+        "The body makes the shared CLI-to-REST-to-service-to-audit path understandable without becoming a file-by-file changelog.",
+        "The manual instructions separately identify Vault as a mocked external boundary, explain the local-only reason, and state that the CLI, REST handlers, services, and audit persistence remain real.",
+        "Commands, addresses, endpoint paths, flags, payloads, identifiers, and outputs are placed in fenced blocks with real line breaks as required by the bundled reference.",
+        "The response stays in final-state, reviewer-facing language and omits agent process, tooling narration, screenshots, and personal testing claims."
+      ],
+      "checks": []
+    },
+    {
+      "id": "missing-review-context",
+      "prompt": "In this mock review scenario, please write the PR body for the current branch. No diff, changed-file summary, commit summary, ticket details, accessible PR URL, repository context, or hosting context is available.",
+      "expected_output": "A concise request for reliable review evidence rather than an invented PR body.",
+      "assertions": [
+        "The response does not fabricate shipped behavior, tests, verification steps, or a completed PR body.",
+        "The response clearly asks for a branch or PR diff, changed-file summary, accessible PR URL, or equivalent reliable review evidence as the required next input.",
+        "The request is concise and gives the user a practical way to unblock drafting without implying that unavailable repository or hosting access was used."
+      ],
+      "checks": []
+    }
+  ]
+}

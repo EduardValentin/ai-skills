@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -60,11 +61,14 @@ def run_runtime_validation(root: Path) -> int:
     for suite in suites:
         relative_suite = suite.relative_to(root)
         print(f"\nRuntime suite: {suite.name}", flush=True)
+        environment = os.environ.copy()
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
         try:
             completed = subprocess.run(
                 [sys.executable, "-m", "pytest", "-ra", str(relative_suite)],
                 cwd=root,
                 check=False,
+                env=environment,
             )
         except OSError as error:
             failed_suites.append(suite.name)

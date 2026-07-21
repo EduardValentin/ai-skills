@@ -16,13 +16,13 @@ You are a sub-agent dispatched by the Quarterly Phase 2 orchestrator. Your job i
 - `quarter_end_date`: the period-end date in `YYYY-MM-DD` form (e.g., `2026-06-30`). Same date as the filing's `report_date` in SEC EDGAR's manifest.
 - `form_type`: `10-Q` or `10-K`.
 - `ticker_dir`: absolute path to `tickers/<TICKER>/`.
-- `skill_scripts_dir`: absolute path to the `bundled financial runtime` install (`<skill-root>/scripts/` or `<skill-root>/scripts/`).
+- `skill_scripts_dir`: absolute path to the bundled financial runtime install (`<skill-root>/scripts/`).
 - `company_slug`: lowercase, hyphen-separated company name (for transcript scraper URL guessing; best-effort).
 - `manual_transcript_path` *(optional, only set on a re-dispatch after the user pasted a transcript)*: absolute path to a temp file containing the pasted transcript text. When this is set, skip the scraper and feed this file into `fetch_transcript.py --manual` via stdin (see Step 4b).
 
 ## Your job
 
-1. Create per-quarter scratch dir.
+1. Create distinct per-quarter raw-filing and extracted-section scratch dirs.
 2. Download the SEC filing (full HTML) into the scratch dir.
 3. Run the right section extractor (`extract_10q_sections.py` or `extract_10k_sections.py`).
 4. Fetch the earnings-call transcript with the standard scraper → IR-page → manual-paste fallback chain.
@@ -31,7 +31,10 @@ You are a sub-agent dispatched by the Quarterly Phase 2 orchestrator. Your job i
 ## Step 1: Create scratch dir
 
 ```bash
-mkdir -p <ticker_dir>/.raw/recap-<quarter>/ <ticker_dir>/earnings-calls/
+mkdir -p \
+  <ticker_dir>/.raw/recap-<quarter>/filing/ \
+  <ticker_dir>/.raw/recap-<quarter>/sections/ \
+  <ticker_dir>/earnings-calls/
 ```
 
 ## Step 2: Download SEC filing
@@ -40,21 +43,21 @@ mkdir -p <ticker_dir>/.raw/recap-<quarter>/ <ticker_dir>/earnings-calls/
 <skill-python> <skill-scripts-dir>/fetch_sec.py <ticker> \
   --forms <form_type> \
   --since <quarter_end_date> \
-  --out <ticker_dir>/.raw/recap-<quarter>/
+  --out <ticker_dir>/.raw/recap-<quarter>/filing/
 ```
 
 `fetch_sec.py` downloads every filing matching `<form_type>` with `filing_date >= --since`. Companies typically file 10-Qs within ~45 days of quarter-end and 10-Ks within ~75 days, so setting `--since` to `<quarter_end_date>` is enough to catch the right filing without pulling unrelated later filings.
 
-**Identify the right filing.** `fetch_sec.py` writes a manifest at `<ticker_dir>/.raw/recap-<quarter>/_filings_index.json` with shape:
+**Identify the right filing.** `fetch_sec.py` writes a manifest at `<ticker_dir>/.raw/recap-<quarter>/filing/_filings_index.json` with shape:
 ```json
 { "ticker": "...", "cik": "...", "filings": [
     { "accession": "...", "form": "10-Q", "filing_date": "2026-08-01",
       "report_date": "2026-06-30", "filename": "..." }
   ] }
 ```
-Find the entry whose `report_date` equals `<quarter_end_date>`. That entry's `filename` (joined to the `--out` dir) is the filing HTML to feed into the section extractor in Step 3. Set `FILING_PATH` in your return summary (Step 5) to that absolute path.
+Find the entry whose `report_date` equals `<quarter_end_date>`. Join that entry's `filename` to the `--out` directory and call the result `<raw_filing_path>`. This is the raw SEC HTML passed to the section extractor; it is not a cleaned analysis input.
 
-**Failure detection.** `fetch_sec.py` returns exit 0 even when zero filings match `--since`. If the resulting `_filings_index.json.filings` array is empty, OR no entry's `report_date` matches `<quarter_end_date>`, return status `NEEDS_CONTEXT_FILING` (see Step 5 for the enum split) with the message `"No <form_type> with report_date=<quarter_end_date> found in SEC EDGAR for <ticker>"`. Exit code 2 from `fetch_sec.py` means the ticker is not on EDGAR at all — also return `NEEDS_CONTEXT_FILING` in that case.
+**Failure detection.** `fetch_sec.py` returns exit 0 even when zero filings match `--since`. If `filing/_filings_index.json.filings` is empty, OR no entry's `report_date` matches `<quarter_end_date>`, return status `NEEDS_CONTEXT_FILING` (see Step 5 for the enum split) with the message `"No <form_type> with report_date=<quarter_end_date> found in SEC EDGAR for <ticker>"`. Exit code 2 from `fetch_sec.py` means the ticker is not on EDGAR at all — also return `NEEDS_CONTEXT_FILING` in that case.
 
 ## Step 3: Extract sections
 
@@ -62,21 +65,23 @@ If `form_type == "10-Q"`:
 
 ```bash
 <skill-python> <skill-scripts-dir>/extract_10q_sections.py <ticker> \
+  --html <raw_filing_path> \
   --quarter <quarter> \
-  --out <ticker_dir>/.raw/recap-<quarter>/
+  --out <ticker_dir>/.raw/recap-<quarter>/sections/
 ```
 
 If `form_type == "10-K"`:
 
 ```bash
 <skill-python> <skill-scripts-dir>/extract_10k_sections.py <ticker> \
+  --html <raw_filing_path> \
   --year <fiscal-year> \
-  --out <ticker_dir>/.raw/recap-<quarter>/
+  --out <ticker_dir>/.raw/recap-<quarter>/sections/
 ```
 
 Where `<fiscal-year>` is the 4-digit year prefix of `<quarter>` (so `2026-Q4` → `2026`); `extract_10k_sections.py` interprets it as the fiscal year covered by the 10-K.
 
-If the extractor exits non-zero, return status `DONE_WITH_CONCERNS` and note in the summary which sections couldn't be extracted (so Phase 4 knows what's missing).
+Read `sections/_10q_sections_index.json` or `sections/_10k_sections_index.json` after extraction. Resolve each name in its `sections[]` array to `<sections-dir>/<name>.md`; those are the cleaned paths Phase 4 receives. If the extractor exits non-zero, or an indexed Markdown file is missing, return status `DONE_WITH_CONCERNS` and name the absent sections so Phase 4 does not fall back to raw HTML.
 
 ## Step 4: Fetch earnings-call transcript
 
@@ -112,7 +117,9 @@ Return a structured paragraph the orchestrator can compose. Required fields:
 
 ```
 QUARTER: <quarter>
-FILING_PATH: <ticker_dir>/.raw/recap-<quarter>/<filename>
+RAW_FILING_PATH: <ticker_dir>/.raw/recap-<quarter>/filing/<filename>
+FILING_SECTIONS_INDEX_PATH: <ticker_dir>/.raw/recap-<quarter>/sections/<_10q_sections_index.json | _10k_sections_index.json>
+EXTRACTED_SECTION_PATHS: <comma-list of absolute .md paths from the extractor index>
 SECTIONS_EXTRACTED: <comma-list, e.g., "MD&A, Item 1A, segment-reporting" or "all">
 TRANSCRIPT_PATH: <ticker_dir>/earnings-calls/<quarter>.md
 TRANSCRIPT_SOURCE: <"motley-fool" | "ir-page" | "manual-paste">

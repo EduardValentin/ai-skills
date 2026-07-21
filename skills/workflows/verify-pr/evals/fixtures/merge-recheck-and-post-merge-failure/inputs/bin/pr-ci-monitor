@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+workspace=$(CDPATH= cd "$script_dir/.." && pwd)
+state_dir="$workspace/verify-pr-fixture-state"
+mkdir -p "$state_dir"
+printf 'pr-ci-monitor %s\n' "$*" >> "$state_dir/tool-invocations.log"
+
+case " $* " in
+  *" --help "*|*" help "*)
+    printf '%s\n' 'Usage: pr-ci-monitor start --commit COMMIT --branch BRANCH'
+    ;;
+  *" start "*|*" watch "*)
+    if [ ! -f "$state_dir/merged" ]; then
+      printf '%s\n' '{"started":false,"error":"merge evidence is missing"}' >&2
+      exit 4
+    fi
+    : > "$state_dir/monitor-started"
+    cat <<'JSON'
+{"monitorId":"FAKE_MONITOR_99","owner":"fixture-background-monitor","target":{"commit":"abc123","branch":"main"},"checks":["deploy-smoke"],"continuation":"pr-ci-monitor status FAKE_MONITOR_99","started":true,"final":{"status":"failed","job":"deploy-smoke","commit":"abc123","branch":"main"}}
+JSON
+    ;;
+  *)
+    printf '%s\n' 'Start the fake monitor with pr-ci-monitor start --commit abc123 --branch main.' >&2
+    exit 2
+    ;;
+esac

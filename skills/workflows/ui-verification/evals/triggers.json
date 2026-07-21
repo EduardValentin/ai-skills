@@ -7,6 +7,11 @@
       "should_trigger": true
     },
     {
+      "id": "review-production-consistency",
+      "query": "There is no prototype for the new notification settings panel. Review whether it is visually consistent with the existing profile and billing panels, including typography, spacing, borders, responsive geometry, focus states, and accessibility, and include DOM evidence for each affected element.",
+      "should_trigger": true
+    },
+    {
       "id": "verify-settings-behavior",
       "query": "Manually verify the notification-settings acceptance criteria: an editor can save preferences, a viewer cannot edit them, saved values survive reload, validation errors are shown, and the success redirect reaches the correct route. Report pass or fail evidence for each scenario.",
       "should_trigger": false

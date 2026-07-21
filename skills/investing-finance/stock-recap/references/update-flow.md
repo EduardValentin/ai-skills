@@ -22,11 +22,11 @@ Typical edits:
 - Retire a sell trigger that's no longer relevant; add a new one based on a risk that emerged.
 - Update one projection-year lever (e.g., revenue growth in Y2 drops from 14% to 11% given the trajectory).
 - Swap one watch KPI for another that better captures the current story.
-- Adjust the target position % within the same conviction tier.
+- Record an explicit user-directed target-position change without deriving sizing math.
 
 Workflow:
 
-1. Show the user the current values of the fields they're allowed to edit, one section at a time (sell triggers, buy zone, projection levers per year, watch KPIs, target position %). Use native interactive-input — 2 options per section: **Edit this section** / **Leave unchanged**.
+1. Show the user the current values of the fields they're allowed to edit, one section at a time (sell triggers, buy zone, projection levers per year, watch KPIs, target position %). Use native interactive-input — 2 options per section: **Edit this section** / **Leave unchanged**. For target position, preserve the saved value unless the user supplies an explicit replacement; this skill does not recommend or derive position size.
 2. On "Edit this section": engage free-form dialogue. The user describes what changes; the agent proposes specific replacement values. Agent confirms each change.
 3. After all sections are walked, write the unified diff (see Checkpoint 3) and ask for final approval.
 4. On approval: rewrite `verdict.{md,json}` and (if any projection lever moved) `projections.{md,json}` in place. The prior versions remain in git history; no separate archive file.
@@ -47,7 +47,7 @@ Workflow:
    - **Classification** — propose the new one with evidence (e.g., "Saved was BUY at $X buy zone. Today's price is +30% above the bull-case Y5 fair value; one sell trigger has fired; cumulative deviation is -28% on EPS. Recommendation: WATCH or trim. Discuss.").
    - **Conviction** — re-rate (high / medium / low) given the new picture.
    - **GVD bucket** — if drift was detected, propose the new bucket. The user can dispute.
-   - **Position sizing** — re-derive from the sizing matrix using new conviction × new bucket.
+   - **Target position** — preserve `verdict.json.position_plan.target_position_if_buy_zones_hit_pct`. There is no sizing matrix or position-sizing collaborator in this self-contained skill, and position-sizing math is outside its advertised scope. If the user requires a newly derived target, stop that sub-step with an explicit unavailable-capability blocker; continue only with the saved target or an authoritative value supplied by the user.
    - **Buy zone** — re-derive from the refreshed valuation and the new bull/base/bear projections (which may need surgical adjustment in this same phase).
    - **Sell triggers** — full re-walk. Replace the entire list as needed.
    - **Watch KPIs** — full re-walk if the bucket changed, using the five defaults for the new bucket in `investment-classification-contracts.md#watch-kpi-defaults` and tailoring them to the company.

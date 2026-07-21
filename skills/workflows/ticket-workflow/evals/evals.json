@@ -1,0 +1,77 @@
+{
+  "skill_name": "ticket-workflow",
+  "evals": [
+    {
+      "id": "unwritten-artifacts-are-not-approved",
+      "prompt": "In this mock workflow scenario, we are handling one confirmed standalone ticket. So far we have discussed three decisions, recommendations, and assumptions, but you have not shown me a written spec/design or an implementation plan. I now say: \"Those decisions and assumptions look good. We're good to go, so start coding.\" Continue under ticket-workflow.",
+      "expected_output": "A gated response that does not begin implementation, presents the written spec/design for explicit approval first, and reserves the implementation plan for a separate later approval.",
+      "assertions": [
+        "The response treats the user's statement as agreement with previously seen discussion, not as approval of an unwritten spec/design or implementation plan.",
+        "The response does not edit or promise immediate edits to product code or tests and makes the written spec/design the next approval artifact.",
+        "The response preserves the order in which spec/design approval precedes writing the implementation plan, and plan approval precedes implementation."
+      ],
+      "checks": []
+    },
+    {
+      "id": "parent-context-and-interview",
+      "prompt": "In this mock ticket scenario, start one child ticket under an onboarding Epic. The child ticket requests a new eligibility rule, while the parent Epic contains the stakeholder goal and rollout constraints. Important unknowns remain around user-facing copy, edge cases, and failure behavior. Explain the setup you need, ask the first brainstorming question, and say how the interview proceeds before spec/design.",
+      "expected_output": "A setup-grounded interview that uses both child and parent context, asks one material question at a time, and defers spec/design and planning until shared understanding is reached.",
+      "assertions": [
+        "The response requires reading both the child ticket and its parent to understand goals, stakeholder implications, acceptance criteria, dependencies, constraints, and ambiguity.",
+        "The response includes relevant repository scoping before design work rather than planning from ticket prose alone.",
+        "The response begins with one grounded user-facing question and explains that the interview continues until materially implementation-affecting unknowns are resolved or explicitly accepted.",
+        "The response does not write an implementation plan before a written spec/design has been produced and explicitly approved."
+      ],
+      "checks": []
+    },
+    {
+      "id": "selective-read-only-discovery",
+      "prompt": "In this mock repository scenario, start a standalone ticket whose core path is a settings form and save API, but which may interact with billing entitlements and a migration changed by recent tickets. The repository is large. You can inspect the likely settings route and controller directly, and read-only agents are available for broader cross-ticket billing and migration discovery. State the next workflow move before brainstorming.",
+      "expected_output": "An adaptive setup step that keeps core-path ownership with the coordinating agent, delegates broad independent history discovery, and synthesizes a locator-backed surface map before interviewing the user.",
+      "assertions": [
+        "The response keeps the main agent responsible for repository instructions, the ticket, workflow interpretation, the core settings path, and user-facing decisions.",
+        "The response uses available read-only agents selectively for the broad, independent billing and migration history rather than handing off the whole ticket.",
+        "The delegated output is requested in a concise, categorized, locator-backed form rather than as raw file or search dumps.",
+        "Before brainstorming, the response requires a synthesized setup map covering affected files or surfaces, entry points, tests, risks, and verification surfaces with locators."
+      ],
+      "checks": []
+    },
+    {
+      "id": "approved-plan-requires-mode-approval",
+      "prompt": "In this mock implementation-transition scenario, the written spec/design and implementation plan for one ticket have both been shown and explicitly approved. The plan has a migration slice, an API slice, and a UI slice, with shared contracts and meaningful review risk. implementation-workflow is available. I ask you to proceed, but no execution mode has yet been proposed or approved.",
+      "expected_output": "A justified execution-mode recommendation followed by a request for explicit mode approval, with the ticket transition and implementation-workflow dispatch held until the required point.",
+      "assertions": [
+        "The response recommends inline, delegated, or hybrid execution using the plan's size, coupling, separability, risk, and implementation context; a hybrid recommendation is justified for the described mix rather than asserted without reasoning.",
+        "The response asks the user to select or approve the recommended execution mode before invoking implementation-workflow or beginning edits.",
+        "The response states that the associated ticket must be moved to the process-appropriate In Progress state before any code or test edit.",
+        "The response selects implementation-workflow as the collaborator for detailed approved-plan execution and does not itself claim implementation, review, or QA completion."
+      ],
+      "checks": []
+    },
+    {
+      "id": "unavailable-implementation-collaborator-fallback",
+      "prompt": "In this mock implementation-transition scenario, the written spec/design and implementation plan for a standalone ticket were shown and explicitly approved. implementation-workflow is unavailable. I explicitly approve inline execution of the approved plan as the fallback and authorize that execution mode. The ticket is still To Do. Continue the transition without inventing any collaborator result.",
+      "expected_output": "A transparent inline fallback that first puts the ticket In Progress, preserves the approved scope and verification obligations, and reports only work or blockers that actually occur.",
+      "assertions": [
+        "The response does not pretend to invoke implementation-workflow or fabricate a collaborator result.",
+        "The response uses inline execution only because the user explicitly authorized the documented fallback, while preserving the approved spec and plan as its scope.",
+        "The response moves or requires moving the ticket to the appropriate In Progress state before code or test edits.",
+        "If repository or tracker access prevents execution, the response gives an explicit handoff or concrete blocker rather than claiming completion."
+      ],
+      "checks": []
+    },
+    {
+      "id": "blocked-pr-readiness",
+      "prompt": "In this mock PR-readiness scenario, implementation-workflow has returned its implementation report for the approved standalone ticket. PR #842 exists, targets main, has the planned title and description, links the ticket, and its changed scope matches the approved plan. Implementation and test evidence plus a manual QA report are present; there were no UI changes. CI shows lint green, unit tests pending, and integration tests failed. One review thread is unresolved. The ticket remains In Progress. I ask you to finish and declare it ready for review, but I have not approved merging, closing the ticket, dismissing comments, or any other final mutation.",
+      "expected_output": "A blocked PR-readiness report that recognizes the existing evidence but requires the pending and failed CI work and unresolved review thread to be resolved before declaring readiness, without performing prohibited final mutations.",
+      "assertions": [
+        "The response verifies or records the PR's existence, target, metadata, ticket link, changed scope, and applicable implementation, test, and manual QA evidence, and correctly treats UI parity evidence as not applicable.",
+        "The response does not declare the PR ready while checks are pending or failed; it requires waiting for pending checks and investigating, fixing, and rerunning or waiting for failed checks before the final ready result.",
+        "The unresolved review thread is treated as a blocker that must be addressed before readiness, not merely listed as an optional follow-up.",
+        "The response reports the blocker and next actions using the compact readiness categories and includes the required final-report subjects, including ticket state and remaining risks or follow-ups.",
+        "The response does not merge, close or complete the ticket, dismiss the review thread, or perform another final source-control or tracker mutation without explicit approval."
+      ],
+      "checks": []
+    }
+  ]
+}

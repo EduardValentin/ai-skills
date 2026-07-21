@@ -7,22 +7,25 @@ This phase runs in the main agent. No subagent dispatch.
 ### Step 1.1 — Resolve ticker and load saved thesis
 
 1. The user has invoked the skill with a `<TICKER>` argument (via the slash command or by mention). Echo the ticker back in plain Markdown so any typo is caught immediately.
-2. Resolve `<ticker_dir>` = `${SR_RESEARCH_REPO}/tickers/<TICKER>/` (uppercase).
+2. Require `SR_RESEARCH_REPO`, open `${SR_RESEARCH_REPO}/AGENTS.md`, then resolve `<ticker_dir>` from the target repo's documented ticker layout (uppercase ticker key). The bundled default layout is `${SR_RESEARCH_REPO}/tickers/<TICKER>/`.
 3. **Hard preconditions** — abort immediately if any fail:
+   - `${SR_RESEARCH_REPO}/AGENTS.md` exists and is readable.
+   - `${SR_RESEARCH_REPO}/tickers.json` has top-level `schema_version: 1`, a `tickers` object, and `tickers.<TICKER>`.
    - `<ticker_dir>/verdict.json` exists.
    - `<ticker_dir>/projections.json` exists.
    - `<ticker_dir>/financials.json` exists.
    - `<ticker_dir>/market-expectations.json` exists.
    - Every file above has `schema_version: 1` at top-level (read the JSON and assert).
+   - `<ticker_dir>/financials.json.latest_report_date` is an ISO `YYYY-MM-DD` period-end date, and every entry in `financials.json.years[]` has its own ISO `report_date`. Do not infer either field from `generated_at` or `fiscal_year`.
 
-   On any failure, abort with:
+   If `SR_RESEARCH_REPO`, the repo root, or `AGENTS.md` is missing, stop with a setup blocker and ask for the configured repo path. If the ticker entry or ticker-local baseline fails, abort with:
 
    ```
    stock-recap requires a prior stock-research session for <TICKER>. Missing: <list>.
    Run stock-research for <TICKER> first to produce the initial thesis.
    ```
 
-4. Load the saved thesis into memory. Note: the data lives in TWO files — `verdict.json` carries the canonical structured thesis, and `tickers.json[<TICKER>]` carries a flat mirror of selected fields for index display. Load:
+4. Load the saved thesis into memory. Note: the data lives in TWO files — `verdict.json` carries the canonical structured thesis, and `tickers.json.tickers.<TICKER>` carries a flat mirror of selected fields for index display. Load:
 
    **From `verdict.json` (canonical):**
    - `classification` (`BUY` / `WATCH` / `AVOID`)
@@ -33,7 +36,11 @@ This phase runs in the main agent. No subagent dispatch.
    - `sell_triggers` (dict with three keys: `materially_overvalued` (list of strings), `thesis_broken` (list of strings), `better_opportunity` (string or null))
    - `watch_kpis` (dict with two keys: `generic` (list of strings), `story_custom` (list of strings))
 
-   **From `tickers.json[<TICKER>]` (flat mirror for at-a-glance use):**
+   **From `tickers.json.tickers.<TICKER>` (flat mirror for at-a-glance use):**
+   - `current_status` (mirror of `verdict.json.classification`)
+   - `current_conviction` (mirror of `verdict.json.conviction`)
+   - `gvd_category` (mirror of `verdict.json.gvd_bucket`)
+   - `current_target_position_pct` (mirror of the target in `verdict.json.position_plan`)
    - `thesis_version` (e.g., `"v1"`)
    - `last_updated` (`YYYY-MM-DD`)
    - `active_sell_triggers` (flat list — this is the user-facing summary; the canonical structured triggers live in `verdict.json.sell_triggers` above)
@@ -53,8 +60,8 @@ Render a compact Markdown summary directly to the user. The block below is the *
 | Target position (if all buy zones hit) | <position_plan.target_position_if_buy_zones_hit_pct>% |
 | Current position | <position_plan.position_now_pct>% |
 | Buy zones | <comma-joined list of "<name> @ <price_range>" from buy_zones> |
-| Last touched | <tickers.json[<TICKER>].last_updated> |
-| Thesis version | <tickers.json[<TICKER>].thesis_version> |
+| Last touched | <tickers.json.tickers.<TICKER>.last_updated> |
+| Thesis version | <tickers.json.tickers.<TICKER>.thesis_version> |
 
 Active sell triggers (from `verdict.json.sell_triggers`):
 
@@ -71,19 +78,18 @@ Active sell triggers (from `verdict.json.sell_triggers`):
 
 ### Step 1.3 — Gap detection
 
-Use the bundled runtime's SEC client to list 10-Q and 10-K filings with period-end after `financials.json`'s latest period:
+Use the bundled runtime's SEC client to list 10-Q and 10-K filings with period-end strictly after `financials.json.latest_report_date`:
 
 ```bash
 <skill-python> <skill-scripts-dir>/fetch_sec.py <TICKER> \
   --forms 10-Q,10-K \
-  --since <latest-period-in-financials-json> \
-  --list-only \
-  --out <ticker_dir>/.raw/recap-gap-detection/
+  --report-after <financials.json.latest_report_date> \
+  --list-only
 ```
 
 Resolve `<skill-scripts-dir>` to this installed skill's `<skill-root>/scripts/` directory.
 
-The `--list-only` flag (already supported by `fetch_sec.py`) returns the matching filings as JSON to stdout without downloading the full filings. Parse the JSON, build a list `[("<YYYY-Qn>", "<filing-date>", "<form-type>"), ...]` sorted chronologically.
+The `--list-only` flag returns matching filing metadata as JSON to stdout without downloading filing bodies. `--report-after` applies a strict comparison to each filing's SEC `report_date`; do not use `filing_date` as the saved-period boundary. Parse `stdout.filings[]`, require each entry's `report_date`, `filing_date`, `form`, and `accession`, and build a list `[("<YYYY-Qn>", "<report-date>", "<filing-date>", "<form-type>"), ...]` sorted by `report_date`. This includes delayed filings for a new covered period and excludes filings or amendments for an already-saved period.
 
 ### Step 1.4 — Mode picker
 
@@ -131,7 +137,7 @@ Capture the answer verbatim into a session variable `session_context` (used late
 ### Step 1.6 — Branch to the chosen mode
 
 - **Quarterly catch-up** → proceed to Quarterly Phase 2.
-- **News mode** → proceed to News Phase 1.5 (event capture, since news mode skips per-quarter fetch).
+- **News mode** → proceed to News Phase 1.7 (event capture, since news mode skips per-quarter fetch).
 - **Valuation-only recap** → proceed to Quarterly Phase 3 (only the valuation-refresh sub-agent), skip Phases 2 and 4, then jump to Phase 5's sell-trigger evaluation (no trajectory synthesis since no new filings).
 
 ---
@@ -172,25 +178,25 @@ Issue all dispatches using the runtime's native parallelism primitive (in Claude
 
 Wait for any required user input and any re-dispatches to complete before moving to Phase 3.
 
-## Quarterly Phase 3: Refresh trailing financials + valuation (parallel batch)
+## Quarterly Phase 3: Refresh trailing financials, then valuation
 
-Dispatch TWO sub-agents in parallel — issue both dispatches in a single message:
+The valuation reads refreshed TTM EPS and cash-flow data, so these jobs have an explicit dependency and must not run in parallel.
 
-- `references/phases/quarterly/03-financials-refresh.md` with the standard context block + `new_quarters` (from Phase 2's accepted output) + `latest_period_before_recap` (read from the pre-recap `financials.json`).
-- `references/phases/quarterly/03-valuation-refresh.md` with the standard context block + `saved_buy_zone_overall_low`, `saved_buy_zone_overall_high` (computed by the orchestrator: parse the `price_range` string of each entry in `verdict.json.buy_zones`, take `min(low)` and `max(high)`), and `saved_reverse_dcf_implied_growth` (parsed from `valuation.md` if present, else `null`).
+1. Dispatch `references/phases/quarterly/03-financials-refresh.md` with the standard context block + `new_periods` (the accepted Phase 2 `period` and `report_date` pairs) + `latest_period_before_recap` (read from the pre-recap `financials.json.latest_report_date`). Wait for it to finish.
+2. Only after financials returns `DONE` or `DONE_WITH_CONCERNS`, dispatch `references/phases/quarterly/03-valuation-refresh.md` with `financials_path: <ticker_dir>/financials.json`, `financials_basis: refreshed-quarterly`, the standard context block, `saved_buy_zone_overall_low`, `saved_buy_zone_overall_high` (computed by parsing all saved `verdict.json.buy_zones[].price_range` values), and `saved_reverse_dcf_implied_growth` (parsed from `valuation.md` if present, else `null`).
 
-Wait for both to return.
+Never dispatch valuation while the financials worker is writing or before its atomic replacement completes.
 
 **Failure handling:**
 
 | Returned status mix | Action |
 |---|---|
-| Both `DONE` | Proceed to Phase 4 |
-| financials = `DONE_WITH_CONCERNS` (data-quality gaps) | Proceed; surface the gap list in Checkpoint 1 |
-| valuation = `DONE_WITH_CONCERNS` (no analyst coverage) | Proceed; the reverse-DCF-drift auto-recommend rule is skipped in Phase 5 |
-| Either `BLOCKED` | Surface to the user via native interactive-input — 2 options: **Retry** / **Abort the recap**. Phase 5 cannot run without refreshed financials and a current price. |
+| financials = `DONE`, then valuation = `DONE` | Proceed to Phase 4 |
+| financials = `DONE_WITH_CONCERNS` (data-quality gaps) | Dispatch valuation from the completed canonical file; proceed and surface the gap list in Checkpoint 1 |
+| valuation = `DONE_WITH_CONCERNS` (no analyst coverage or no usable TTM EPS) | Proceed; skip only the rules whose required valuation input is unavailable and label the missing basis explicitly |
+| Either worker = `BLOCKED` | Surface to the user via native interactive-input — 2 options: **Retry the blocked step** / **Abort the recap**. Do not dispatch downstream work from an incomplete file. |
 
-**Valuation-only recap branch:** if Phase 1 routed here directly (no new filings, user picked "Valuation-only recap"), only dispatch the valuation-refresh sub-agent. After it returns, skip Phase 4 and jump to Phase 5's sell-trigger evaluation; the trajectory-synthesis sub-section of Phase 5 becomes "No new filings to synthesize trajectory across — this is a price/consensus-only recap."
+**Valuation-only recap branch:** if Phase 1 routed here directly (no new filings, user picked "Valuation-only recap"), do not dispatch financials. Dispatch only the valuation-refresh sub-agent with `financials_path: <ticker_dir>/financials.json` and `financials_basis: saved-valuation-only`. After it returns, skip Phase 4 and jump to Phase 5's sell-trigger evaluation; the trajectory-synthesis sub-section of Phase 5 becomes "No new filings to synthesize trajectory across — this is a price/consensus-only recap." If the saved document has no usable `ttm[].eps`, report current TTM P/E as unavailable rather than relabeling fiscal-year EPS.
 
 ## Quarterly Phase 4: Per-quarter analysis fan-out (parallel)
 
@@ -199,7 +205,9 @@ For each quarter Phase 2 accepted (excluding any dropped via `NEEDS_CONTEXT_FILI
 Inject the standard context block plus:
 
 - `quarter_end_date`: from Phase 1's gap-detection list.
-- `filing_path`: from Phase 2's return for this quarter.
+- `raw_filing_path`: the raw SEC HTML path from Phase 2's return, retained for provenance only.
+- `filing_sections_index_path`: the extractor index path from Phase 2's return.
+- `extracted_section_paths`: the cleaned Markdown section paths from Phase 2's return; Phase 4 analyzes these paths, not the raw HTML.
 - `transcript_path`: from Phase 2's return.
 - `projection_kpis`: list of KPI keys from `projections.json.scenarios.base.years[0]`, excluding `year` (e.g., `revenue`, `revenue_growth_pct`, `gross_margin_pct`, ..., `cumulative_dividends`).
 - `thesis_year_for_quarter`: 1-based integer. Compute `(quarter_end_date - thesis_creation_date) // 365 days + 1`, then clamp to `[1, len(projections.json.scenarios.base.years)]` (typically 5). Read `thesis_creation_date` from `verdict.json.date` (or, as a fallback, `tickers.json.tickers.<TICKER>.research_started`).
@@ -418,9 +426,9 @@ If sub-mode 3 → render the recommendation, set a session variable `update_appl
 
 Follow the workflow in `update-flow.md` for the chosen sub-mode. Capture every change into staging variables; do NOT write to disk yet.
 
-For surgical: walk each section (sell triggers, buy zone, projection levers, watch KPIs, position size) with native interactive-input (**Edit this section** / **Leave unchanged**). On "Edit," engage free-form.
+For surgical: walk each section (sell triggers, buy zone, projection levers, watch KPIs, position target) with native interactive-input (**Edit this section** / **Leave unchanged**). The skill may record an explicit user-provided target but must not derive position-sizing math; otherwise preserve the saved target. On "Edit," engage free-form.
 
-For reclassification: re-walk classification, conviction, GVD bucket (if drifted), position sizing, buy zone, full sell-trigger list, full watch-KPI list. Free-form dialogue.
+For reclassification: re-walk classification, conviction, GVD bucket (if drifted), buy zone, full sell-trigger list, and full watch-KPI list. Preserve the saved position target unless the user supplies an authoritative replacement; do not invent a sizing matrix or derive a target. Free-form dialogue.
 
 ### Step 6.3 — Render the diff
 
@@ -497,31 +505,40 @@ This phase runs in the main agent, sync. It writes the recap doc, updates `ticke
 
 ### Step 7.1 — Compose the recap doc
 
-Write `<ticker_dir>/recaps/recap-<YYYY-MM-DD>-quarterly.md` (create the `recaps/` directory if it doesn't exist) using this local frontmatter and section contract:
+Create the `recaps/` directory if needed, then resolve every branch variable before writing:
+
+| Branch | `recap_path` | `recap_mode` | `recap_session` | Window and periods |
+|---|---|---|---|---|
+| Quarterly catch-up | `<ticker_dir>/recaps/recap-<YYYY-MM-DD>-quarterly.md` | `quarterly` | `quarterly-recap` | Phase 2's earliest/latest report dates and accepted periods |
+| Valuation-only | `<ticker_dir>/recaps/recap-<YYYY-MM-DD>-valuation-only.md` | `valuation-only` | `valuation-only-recap` | Both dates equal valuation as-of; `periods_processed: []` |
+
+Write `<recap_path>` using this local frontmatter and section contract. For valuation-only, replace the quarters-ingested table with `No filings were processed.` State the latest saved financial period in the financials section, and state that trajectory and actuals-versus-projections were not refreshed. Keep the sell-trigger evaluation and update/checkpoint sections.
 
 ```yaml
 ---
 ticker: <TICKER>
 artifact: recap
-mode: quarterly
-session: quarterly-recap
+mode: <recap_mode>
+session: <recap_session>
 session_date: <YYYY-MM-DD>
-window_start: <earliest-period-end-date-from-Phase2>
-window_end: <latest-period-end-date-from-Phase2>
-periods_processed: ["<YYYY-Qn>", ...]
+window_start: <branch-resolved-window-start>
+window_end: <branch-resolved-window-end>
+periods_processed: <branch-resolved-list>
 thesis_version_before: <vN>
 thesis_version_after: <vN | vN+1 if reclassification | vN if surgical>
 schema_version: 1
 diff_threshold_overrides: <from session if any, else omit>
 ---
 
-# <TICKER> — Quarterly recap, <YYYY-MM-DD>
+# <TICKER> — <Quarterly | Valuation-only> recap, <YYYY-MM-DD>
 
 ## Session context
 
 <Phase 1's free-form session_context, or "(none)" if empty.>
 
-## Quarters ingested
+## <Quarters ingested | Filing ingestion>
+
+<For valuation-only, write `No filings were processed.` and omit the table. Otherwise render:>
 
 | Period | Filed | Form | Landed | Tone |
 |---|---|---|---|---|
@@ -570,16 +587,17 @@ Run from anywhere (the `--repo` flag points at the research repo root):
 <skill-python> <skill-scripts-dir>/upsert_ticker.py <TICKER> \
   --repo ${SR_RESEARCH_REPO} \
   --field last_updated=<YYYY-MM-DD> \
-  --field status=<verdict.classification> \
-  --field classification=<verdict.classification> \
-  --field conviction=<verdict.conviction> \
+  --field current_status=<verdict.classification> \
+  --field current_conviction=<verdict.conviction> \
+  --field gvd_category=<verdict.gvd_bucket> \
+  --field current_target_position_pct=<verdict.position_plan.target_position_if_buy_zones_hit_pct> \
   --field thesis_version=<thesis_version_after> \
   --field next_review_trigger=earnings:~<YYYY-MM-DD> \
   --list-field active_sell_triggers="<flat trigger 1>" \
   --list-field active_sell_triggers="<flat trigger 2>"
   # (one --list-field per trigger; the script appends to the list,
   #  but the script's CLI accepts only "key=value" — for replace
-  #  semantics, manually rewrite tickers.json[<TICKER>].active_sell_triggers
+  #  semantics, manually rewrite tickers.json.tickers.<TICKER>.active_sell_triggers
   #  before calling upsert_ticker.py, OR use --list-field for adds only.)
 ```
 
@@ -607,8 +625,8 @@ Compose the commit message using this skill-local structured trailer contract:
   - `recap` if `update_applied ∈ {"none", "surgical"}`.
   - `pivot` if `update_applied == "reclassification"`.
   - `update` if the only change was administrative (unlikely in this flow).
-- `session`: `quarterly-recap`.
-- `trigger`: `10-Q-<latest-period>` (or `10-K-<year>` if the window includes a 10-K).
+- `session`: `quarterly-recap` for quarterly catch-up; `valuation-only-recap` for the valuation-only branch.
+- `trigger`: `10-Q-<latest-period>` (or `10-K-<year>` if the quarterly window includes a 10-K). For valuation-only, use `valuation-<valuation-as-of-date>`; do not claim a filing trigger.
 - `verdict`: the (possibly updated) classification, or `UNCHANGED` if unchanged.
 - `verdict-prior`: prior classification, included only if changed.
 - `conviction`: current.
@@ -665,18 +683,20 @@ Use native interactive-input — 2 options:
 
 Render a closing summary in the main agent's chat:
 
+Set `<recap_kind>` to `quarterly` and `<recap_path>` to the quarterly filename for quarterly catch-up. For valuation-only, set `<recap_kind>` to `valuation-only`, `<recap_path>` to `tickers/<TICKER>/recaps/recap-<YYYY-MM-DD>-valuation-only.md`, and replace the integrated-quarter bullet with `No quarters ingested; financials remain at <financials.json.latest_report_date>.` Never render a zero-quarter session as a quarterly recap.
+
 ```markdown
 ## Recap committed
 
-**<TICKER> — <YYYY-MM-DD> quarterly recap**
+**<TICKER> — <YYYY-MM-DD> <recap_kind> recap**
 
-- <N> quarter(s) integrated: <YYYY-Qn>, ...
+- <Quarterly: "<N> quarter(s) integrated: <YYYY-Qn>, ..." | Valuation-only: "No quarters ingested; financials remain at <latest_report_date>.">
 - Verdict: <UNCHANGED at <classification> | <OLD> → <NEW>>
 - Thesis version: <vN | vN → vN+1>
 - Sell triggers: <X clear, Y flashing, Z fired, W cannot-evaluate>
 - Next review: <next_review_trigger>
 
-Recap doc: `tickers/<TICKER>/recaps/recap-<YYYY-MM-DD>-quarterly.md`
+Recap doc: `<recap_path>`
 Commit: `<short-sha>`
 Tag: <`<TICKER>/v<N+1>` | no tag this session>
 ```

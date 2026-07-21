@@ -1,6 +1,6 @@
 ---
 name: design-direction-brainstorming
-description: Use whenever a UI or UX task adds or changes a visual part of an application, screen, flow, feature, or product surface, especially when the request does not provide a specific design direction.
+description: Use when a UI or UX task adds or changes a visual part of an application, screen, flow, feature, or product surface and needs its audience, intent, constraints, or visual language aligned before implementation, especially when the request lacks a specific design direction.
 metadata:
   status: experimental
   allows_tool_references: "false"
@@ -10,7 +10,7 @@ metadata:
 
 ## Overview
 
-Align on design direction before changing visual UI. The goal is shared, common understanding: the user and implementer agree on audience, intent, constraints, desired reaction, and the design direction before layout or styling decisions are chosen.
+Align audience, intent, constraints, desired reaction, and visual language before changing visual UI. Scale the alignment to uncertainty: preserve a specific supplied direction, and collaboratively narrow an ambiguous one.
 
 ## When To Use
 
@@ -23,17 +23,29 @@ Use before implementation whenever the user wants to add or modify a visual part
 - Several aesthetics, layouts, densities, interaction models, or emotional tones could reasonably fit.
 - The change affects first impression, trust, perceived quality, product positioning, or user confidence.
 
-## Direction Alignment
+Do not use this skill when the request changes only copy, semantics, data, or nonvisual behavior while explicitly preserving the existing appearance and layout.
 
-Scale the depth to the request:
+## Choose Alignment Depth
 
-- If the user gives a specific design direction, briefly restate the direction, note any meaningful tradeoff or constraint, and proceed unless something important is ambiguous.
-- If the user does not give a specific direction, pause for a collaborative interview before implementing.
-- If the direction is fuzzy, do not treat the first answer as enough. Keep interviewing, synthesizing, and narrowing until the next design choices are constrained.
-- Before enough context is gathered, do not state a current lean, recommend a direction, or choose final styling. Naming possible tradeoff dimensions is fine; picking one side is not.
-- The first response to an ambiguous visual request is incomplete unless it also says the answers will be synthesized into two or three distinct directions with tradeoffs and visual language, then narrowed into a shared brief before implementation.
+### Specific Direction
 
-Ask targeted questions that change the design decision:
+A supplied direction is specific enough when it meaningfully constrains the intended impression, hierarchy or density, product context, and important limits or references.
+
+The user's supplied direction already confirms that baseline. Briefly reflect it, identify a meaningful tradeoff or constraint, and proceed toward implementation in the same turn. Ask only about an ambiguity or conflict that could materially change the result. Do not require a full interview, option synthesis, complete shared brief, or separate confirmation turn.
+
+### Ambiguous Direction
+
+An ambiguous direction includes broad requests such as "premium," "cleaner," or "friendlier," even when the user says "you decide." Begin an adaptive interview before choosing styling or implementing:
+
+1. Explain that the answers will be synthesized into two or three distinct directions with tradeoffs and visual language, then narrowed into a shared brief before implementation.
+2. Ask the highest-leverage question that changes the design decision.
+3. Reflect the current read after each answer and continue narrowing until the next design choices are constrained.
+
+Before enough context is gathered, name relevant tradeoff dimensions but do not state a current lean, recommend a direction, choose final styling, or implement. Permission to "use your judgment" means lead the alignment process; it does not remove the need for shared understanding.
+
+## Decision-Shaping Questions
+
+Ask only questions that change the direction:
 
 1. Who is the primary audience and what are they trying to do?
 2. What should the surface make them feel or believe?
@@ -41,8 +53,6 @@ Ask targeted questions that change the design decision:
 4. What constraints matter: density, speed, brand, accessibility, content length, device, or parity?
 5. What should this avoid feeling like?
 6. What existing product surfaces, references, or competitors should it resemble or reject?
-
-Interview adaptively. After each answer, reflect back the current read and ask the next highest-leverage question. If the user says "you decide", treat that as permission to lead the alignment process, not permission to skip it. Name the tradeoff dimensions, gather the minimum context needed, then synthesize options before recommending one unless the direction is already unambiguous.
 
 ## Options And Recommendation
 
@@ -53,11 +63,11 @@ After enough context is gathered, propose two or three distinct directions. Each
 - Tradeoff.
 - Visual language: hierarchy, density, color rhythm, typography, motion, and shape language.
 
-Then recommend one option and explain why it best fits the audience, goal, constraints, and desired impression. The recommendation should be opinionated, but still invite correction before implementation.
+Then recommend one option and explain why it best fits the audience, goal, constraints, and desired impression. Be opinionated, invite correction or confirmation, and do not implement in the same response.
 
 ## Shared Understanding Output
 
-End with a compact brief:
+Produce the full brief only after enough context exists to synthesize and recommend. During early interview turns, reflect the current read without inventing undecided fields.
 
 ```markdown
 Shared design direction:
@@ -72,4 +82,4 @@ Shared design direction:
 - Open questions:
 ```
 
-Do not implement until the brief is confirmed or the remaining open questions are clearly non-blocking. If the user disagrees with the recommendation, keep brainstorming until a common direction emerges.
+For the ambiguous path, do not implement until the user confirms the brief or explicitly delegates the final selection after seeing the recommendation. If the user disagrees, keep brainstorming until a common direction emerges. For the specific path, the compact alignment check is sufficient because the original request already confirmed the baseline.

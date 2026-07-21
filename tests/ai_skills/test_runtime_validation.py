@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import sys
 import tempfile
 import unittest
-from unittest.mock import call, patch
+from unittest.mock import ANY, call, patch
 
 import scripts.ai_skills_lib.runtime_validation as runtime_validation
 
@@ -68,6 +68,7 @@ class RuntimeValidationRunnerTests(unittest.TestCase):
                     ],
                     cwd=root,
                     check=False,
+                    env=ANY,
                 ),
                 call(
                     [
@@ -79,12 +80,45 @@ class RuntimeValidationRunnerTests(unittest.TestCase):
                     ],
                     cwd=root,
                     check=False,
+                    env=ANY,
                 ),
             ],
         )
         text = output.getvalue()
         self.assertLess(text.index("Runtime suite: alpha"), text.index("Runtime suite: zeta"))
         self.assertIn("validate runtime: OK (2 suites passed)", text)
+
+    def test_pytest_receives_caller_environment_with_bytecode_writing_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            suite = root / "tests" / "runtime" / "alpha"
+            suite.mkdir(parents=True)
+            (suite / "test_alpha.py").write_text("", encoding="utf-8")
+            output = StringIO()
+
+            with (
+                patch.dict(
+                    runtime_validation.os.environ,
+                    {
+                        "CALLER_SETTING": "preserved",
+                        "PYTHONDONTWRITEBYTECODE": "0",
+                    },
+                    clear=True,
+                ),
+                patch.object(runtime_validation, "subprocess", create=True) as subprocess,
+                redirect_stdout(output),
+            ):
+                subprocess.run.return_value = SimpleNamespace(returncode=0)
+                result = runtime_validation.run_runtime_validation(root)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            subprocess.run.call_args.kwargs["env"],
+            {
+                "CALLER_SETTING": "preserved",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            },
+        )
 
     def test_process_error_fails_suite_and_continues_without_retry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

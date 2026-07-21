@@ -8,7 +8,7 @@ DUF recalculează **silentios** mai multe atribute "tehnice" (de control, nu fis
 
 | Atribut | Skill a produs | DUF a normalizat la | De ce |
 |---|---|---|---|
-| `totalPlata_A` | totalul fiscal (`445`) | suma cifrelor CNP (`55`) | Atributul e un checksum CNP, nu valoarea fiscală — eu (skill) greșeam interpretarea câmpului. Fixat acum în `references/schema/d212-xml-schema.md` + template. |
+| `totalPlata_A` | totalul fiscal | suma cifrelor CNP din sesiunea declarantului | Atributul este un checksum CNP, nu valoarea fiscală; vezi `references/schema/d212-xml-schema.md` și template-ul root. |
 | `bifa121`, `bifa122`, `bifa132` | bazat pe prezența cap14 cu/fără țară | `bifa121="1"`, `bifa122="0"`, `bifa132="0"` (chiar și cu venituri străinătate prezente) | DUF folosește logică internă despre regim, conformare, CAS estimat etc., nu doar prezența capitolelor. |
 | Câmpuri CASS detaliate (`cass_total_ven`, `cass_baza`, `cass_anuala`, `cass_datorat`, `cass_retinut`, `cass_dif_*`, `bifa_cass_*`, `oblcass_real_*`) | trimise mereu | omise când CASS datorată e `0` și nu e activată secțiunea CASS | DUF nu serializează aceste câmpuri pentru sesiunile fără CASS de plată. |
 
@@ -16,7 +16,7 @@ Concluzia: chiar dacă XML-ul nostru e *importabil*, atributele de control difer
 
 ## Procedură (după Faza 6 a orchestratorului)
 
-1. **Skill generează `outputs/D212.xml`** cu toate bifele `"0"`, `totalPlata_A = suma cifrelor CNP`, câmpurile CASS conditional pe `cass_due`. Acest XML este OK pentru import în DUF — DUF acceptă orice valori "rezonabile" și le normalizează.
+1. **Skill generează `outputs/D212.xml`** cu toate bifele `"0"`, `totalPlata_A = suma cifrelor CNP`, câmpurile CASS condiționate de `cass_due`. Fișierul rămâne candidat pentru import; nu îl descrie drept acceptat până când DUF îl importă efectiv.
 
 2. **Utilizatorul importă în DUF** (`https://www.anaf.ro/declaratii/duf`):
    - "Importă declarație" / "Încarcă XML existent" → selectează `outputs/D212.xml`
@@ -54,9 +54,9 @@ for k in sorted(set(a) | set(b)):
 PY
 ```
 
-## Când round-trip nu e necesar
+## Când poate fi omis gate-ul
 
-- Dacă utilizatorul nu intenționează submit electronic (face declarația doar pentru calcul/planificare): XML-ul brut e suficient.
-- Dacă DUF e indisponibil (mentenanță): folosește XML-ul brut + raportul md ca evidență; menționează în raport că round-trip nu a fost posibil și de ce.
+- Dacă utilizatorul nu intenționează depunere electronică și folosește rezultatele doar pentru calcul, planificare sau completare manuală, round-trip-ul nu este cerut.
+- Dacă DUF este indisponibil, `D212.xml` și raportul pot rămâne dovezi de lucru, dar depunerea electronică este blocată. Menționează indisponibilitatea în raport și `worklog.md`; nu propune submit-ul XML-ului brut.
 
-Altfel, round-trip e **mandatoriu** înainte de submit, pentru că forma canonică DUF este referința la control fiscal.
+Altfel, round-trip-ul este **obligatoriu** înainte de submit. Consimțământul utilizatorului nu poate elimina acest gate.

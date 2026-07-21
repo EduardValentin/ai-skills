@@ -1,7 +1,7 @@
 # form-mapping.yaml
 # Structured mapping: categorie venit ↔ atribute XML ↔ secțiune DUF.
-# Companion narrative: form-mapping.md
-# Sync rules: schema-validator.md
+# Companion narrative: references/schema/form-mapping.md
+# Sync rules: references/schema/schema-validator.md
 # Last sync with d212-xml-schema.md: 2026-05-11
 
 meta:
@@ -31,7 +31,7 @@ categorii_venit:
         required: true
         type: integer_lei
         sursa_date: "calc.net_gain_RON"
-        calcul_ref: "../references/pf-investitii.md#calcul-cap-2012"
+        calcul_ref: "references/pf-investitii.md#calcul-cap-2012"
       str_pierdere_precedenta:
         required: false
         type: integer_lei
@@ -39,7 +39,7 @@ categorii_venit:
       str_pierdere_compensata:
         required: true
         type: integer_lei
-        calcul_ref: "../references/pf-investitii.md#compensare-pierderi"
+        calcul_ref: "references/pf-investitii.md#compensare-pierderi"
       str_venit_recalculat:
         required: true
         type: integer_lei
@@ -85,7 +85,7 @@ categorii_venit:
         required: true
         type: integer_lei
         sursa_date: "calc.interest_RON"
-        calcul_ref: "../references/pf-investitii.md#calcul-cap-2017"
+        calcul_ref: "references/pf-investitii.md#calcul-cap-2017"
       str_pierdere_compensata:
         required: true
         type: integer_lei
@@ -127,7 +127,7 @@ categorii_venit:
         required: true
         type: integer_lei
         sursa_date: "calc.dividend_gross_RON"
-        calcul_ref: "../references/pf-investitii.md#calcul-cap-2018"
+        calcul_ref: "references/pf-investitii.md#calcul-cap-2018"
       str_pierdere_compensata:
         type: integer_lei
         default: 0
@@ -148,18 +148,12 @@ categorii_venit:
       - "_legi/{an}/impozit-dividende.md#cota"
       - "_legi/{an}/tratate-dubla-impunere.md"
 
-# Note: PFA în sistem real nu folosește <cap14> ci alte capitole (a se determina
-# din Instrucțiuni la freshness check). Mapping-ul PFA real va fi adăugat la
-# Task 2.3.B într-o iterație ulterioară dacă scenariul PFA e activat în sesiune.
-# Pentru moment, scope-ul YAML acoperă strict capitolele <cap14> cu codurile
-# 2012/2017/2018 și obligațiile <oblig_realizat>.
-
 oblig_realizat:
   duf_section: "Date privind CASS / Date privind CAS / sumar fiscal"
   campuri:
     cass_ven_inv:
       sursa_date: "calc.cass_baza_din_venituri_investitii"
-      calcul_ref: "../references/pf-investitii.md#cass-baza"
+      calcul_ref: "references/pf-investitii.md#cass-baza"
     cass_baza:
       type: integer_lei
       formula: "min(cass_total_ven, 12 * salariu_minim_brut)"

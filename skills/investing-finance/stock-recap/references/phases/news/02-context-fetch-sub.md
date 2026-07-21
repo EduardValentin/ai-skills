@@ -58,27 +58,43 @@ mkdir -p <ticker_dir>/.raw/news-<YYYY-MM-DD>/
 
 ### `fetch_kind == "risk-factors-diff"`
 
-`diff_risk_factors.py` takes the two 10-K filing files directly — it doesn't fetch them itself. So this is a two-step fetch:
+`diff_risk_factors.py` accepts frontmatter Markdown section bodies, not filing HTML. Fetch the filings, select exact old/new entries from the manifest, extract Item 1A from each raw filing, then diff the two extracted Markdown files:
 
 ```bash
-# Step 1: fetch both years' 10-Ks (if not already present in tickers/<ticker>/.raw/)
+# Step 1: fetch raw 10-K filings
+mkdir -p \
+  <ticker_dir>/.raw/news-<YYYY-MM-DD>/filings/ \
+  <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/prior/ \
+  <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/current/
+
 <skill-python> <skill-scripts-dir>/fetch_sec.py <ticker> \
   --forms 10-K \
   --since <extra_args.prior-year>-01-01 \
-  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/
+  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/filings/
 
-# Step 2: diff the two HTML files (the orchestrator passes their on-disk paths in extra_args)
+# Step 2: extract each selected raw filing to a distinct section directory
+<skill-python> <skill-scripts-dir>/extract_10k_sections.py <ticker> \
+  --html <prior-raw-html-path> \
+  --year <prior-report-date-year> \
+  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/prior/
+
+<skill-python> <skill-scripts-dir>/extract_10k_sections.py <ticker> \
+  --html <current-raw-html-path> \
+  --year <current-report-date-year> \
+  --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/current/
+
+# Step 3: diff the extracted Item 1A Markdown bodies, oldest then newest
 <skill-python> <skill-scripts-dir>/diff_risk_factors.py \
   --ticker <ticker> \
-  --file-a <extra_args.file-a-path> \
-  --file-b <extra_args.file-b-path> \
+  --file-a <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/prior/item_1a_risk_factors.md \
+  --file-b <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors/current/item_1a_risk_factors.md \
   --out <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors-diff.json \
   --out-md <ticker_dir>/.raw/news-<YYYY-MM-DD>/risk-factors-diff.md
 ```
 
-After Step 1's fetch, inspect `_filings_index.json` to identify the prior-year and current-year 10-K HTML paths (matching by `report_date`'s year). Then run Step 2 with those paths.
+After Step 1, read `filings/_filings_index.json`, filter to `form == "10-K"`, and sort by `report_date`. Select the entries whose `report_date` years equal `extra_args.prior-year` and `extra_args.current-year`; join each selected entry's `filename` to the `filings/` directory. Do not select by filesystem modification time or pass raw HTML to the diff script. If either year is absent or either extractor index omits `item_1a_risk_factors`, return `DONE_WITH_CONCERNS` and do not run the diff.
 
-Return the list of NEW risk factors added in `current-year` vs `prior-year` (read from the JSON or MD output).
+Return the raw filing paths, the two extracted Item 1A paths, and the list of new risk factors added in `current-year` versus `prior-year` (read from the JSON or Markdown output).
 
 ### `fetch_kind == "competitor-pull"`
 

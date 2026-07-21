@@ -1,0 +1,74 @@
+{
+  "skill_name": "prototype-work",
+  "evals": [
+    {
+      "id": "missing-reference-app-path",
+      "prompt": "I need a new cancellation flow in the fake fixture workspace. The staged README.md is the only workspace file. Begin by running the bundled scripts/prepare-prototype-work.sh helper with the current workspace as --project-root. There is no designs/ directory, and I have not supplied a reference-app path. Continue as far as appropriate.",
+      "expected_output": "Preparation stops without workspace edits, asks for the reference application's absolute path, and explains that the bundled helper will be rerun with --app-root after the path is supplied.",
+      "assertions": [
+        "The response provides evidence of running scripts/prepare-prototype-work.sh with the fake fixture workspace as --project-root and correctly interprets its designs-only auto-detection failure.",
+        "The agent stops before changing prototype code or companion documentation and asks the user for the reference application's path.",
+        "The proposed continuation reruns scripts/prepare-prototype-work.sh with an explicit --app-root value after the user supplies the path."
+      ],
+      "files": [
+        "fixtures/missing-reference-app-path/inputs/README.md"
+      ],
+      "checks": []
+    },
+    {
+      "id": "ambiguous-reference-app-path",
+      "prompt": "The fake fixture workspace contains designs/account/package.json and designs/checkout/package.json, and both declare React prototype apps. I have not selected either reference app. Begin by running the bundled scripts/prepare-prototype-work.sh helper with the current workspace as --project-root, then continue as far as appropriate.",
+      "expected_output": "Preparation reports both React prototype candidates, stops without installing dependencies or editing the workspace, asks which reference app path to use, and explains that the helper will be rerun with an explicit --app-root value.",
+      "assertions": [
+        "The response provides evidence of running scripts/prepare-prototype-work.sh with the fake fixture workspace as --project-root and reports both designs/account and designs/checkout as ambiguous candidates.",
+        "The agent stops before dependency installation or workspace edits and asks the user to select the reference application's path.",
+        "The proposed continuation reruns scripts/prepare-prototype-work.sh with the selected absolute path passed through --app-root."
+      ],
+      "files": [
+        "fixtures/ambiguous-reference-app-path/inputs/designs/account/package.json",
+        "fixtures/ambiguous-reference-app-path/inputs/designs/checkout/package.json"
+      ],
+      "checks": []
+    },
+    {
+      "id": "onboarding-flow-companion-obligations",
+      "prompt": "Before editing a fake React prototype, list the concrete companion work required for a new onboarding flow. Eligibility is a mocked business rule, and enrollment is a simulated API operation that can load, succeed, return no eligible result, or fail. The flow changes product behavior and spans multiple routed screens.",
+      "expected_output": "A focused implementation and verification outline covering separated business and API-like mocks, all asynchronous outcomes, business-only PRD consolidation, router-driven browser verification, and captured evidence.",
+      "assertions": [
+        "The response calls for explicit, separately owned mocks for eligibility rules and the simulated enrollment API boundary rather than treating asynchronous UI state alone as the integration mock.",
+        "The planned prototype behavior includes distinct loading, success, empty or ineligible, and error outcomes.",
+        "The response requires PRD.md to be updated for the changed behavior while limiting its content to product behavior and business rules, excluding component, layout, token, and simulated-API implementation details.",
+        "The response requires exercising the stateful flow through configured router interactions rather than manually entering URLs.",
+        "The completion obligations include browser evidence for changed surfaces and reporting the evidence, documentation changes, and blockers."
+      ],
+      "checks": []
+    },
+    {
+      "id": "compact-preparation-reports",
+      "prompt": "A fake existing prototype needs an account-health panel. It has root-level PRD.md, DESIGN.md, and brandvoice.md plus routes, mock data, theme configuration, semantic tokens, and reusable components. Describe the preparation output needed before implementation, including how to inspect the running app.",
+      "expected_output": "Four compact, task-relevant product, voice, design, and app-scope reports plus browser screenshots and a short visual-vibe summary, without raw document dumps.",
+      "assertions": [
+        "The product report covers the app goal, audience, core flows, business rules, constraints, and task-relevant PRD direction.",
+        "The voice report covers audience, tone, preferred and banned language, and copy principles.",
+        "The design report covers design philosophy, visual direction, accessibility priorities, and design-system rules.",
+        "The app-scope report covers routes, mock boundaries, semantic tokens, theme configuration, component inventory and variants, and design-system configuration.",
+        "The preparation includes navigating the running app and capturing two or three screenshots from different pages or flow states, followed by a concise visual-vibe summary.",
+        "The four outputs are framed as compact reports rather than raw documentation dumps or a generic claim that the files were read."
+      ],
+      "checks": []
+    },
+    {
+      "id": "production-scope-mapping-boundary",
+      "prompt": "A fake prototype under designs/ for subscription recovery is finished, and the next task is a production implementation plan. It has several stateful routes, visible validation and error states, mocked recovery rules, and a mocked provider call. Explain what the prototype side of the codebase scope map must capture and what it must not do yet.",
+      "expected_output": "A prototype-to-production scope map that preserves routes, states, accessible UI contracts, mock and data boundaries, and load-bearing docs, pairs them with candidly labeled production counterparts, and makes no production edits.",
+      "assertions": [
+        "The map captures the prototype root, relevant routes, stateful branches, visible declarations or locators, accessible names and roles, visible copy, and interaction states.",
+        "The map captures mocked business rules, API-like integration boundaries, relevant data shapes, and load-bearing PRD, design, and voice facts.",
+        "Relevant production routes, states, selectors, tests, or components are paired with prototype route, state, selector, and element counterparts and labeled as known or uncertain.",
+        "When dynamic composition or third-party code prevents reliable declaration locators, the response records that limitation instead of inventing locators.",
+        "The response treats scope mapping as input to later planning, implementation, verification, or parity work and does not claim permission to edit production code."
+      ],
+      "checks": []
+    }
+  ]
+}

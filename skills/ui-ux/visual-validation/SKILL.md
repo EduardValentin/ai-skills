@@ -35,7 +35,19 @@ Use the highest available capability:
 
 If none of these is possible, report the blocker instead of claiming visual confidence.
 
-If validation is delayed or cannot be completed in the current turn, say what is blocked, record the residual risk, and still list the concrete viewport/state matrix and visual smell families that must be checked next. Waiting for a slow server is acceptable; claiming visual confidence before rendered evidence is not.
+If validation is delayed or cannot be completed in the current turn, say what is blocked, record the residual risk, and list the concrete viewport, state, and visual-smell coverage still required. Waiting for a slow server is acceptable; claiming visual confidence before rendered evidence is not.
+
+## Evidence Boundaries
+
+Match each claim to evidence that can establish it:
+
+- Screenshots can establish visible layout, wrapping, clipping, overlap, spacing, color consistency, and the appearance of a captured state.
+- Live interaction or browser automation is required to establish keyboard order, focus transitions, hover or active behavior, and state changes.
+- Contrast claims require computed colors or a contrast measurement, not visual estimation from a screenshot alone.
+- Motion claims require live observation or automation with the relevant reduced-motion preference emulated.
+- Canvas or 3D claims require visible-pixel evidence and resize checks; a present canvas element is not proof of rendered output.
+
+Name the evidence source for each completed check. Treat anything outside that evidence as unverified.
 
 ## Viewport Matrix
 
@@ -46,7 +58,7 @@ Use the product's configured breakpoints when available. At minimum cover:
 - A common desktop width.
 - A wide desktop width around 1920px.
 
-For stateful UI, capture the relevant states: default, loading, empty, error, disabled, focused, expanded, selected, and long-content cases.
+For stateful UI, enumerate the supported states affected by the change, such as default, loading, empty, error, disabled, focused, expanded, selected, and long-content cases. Check each affected state or mark it unverified. Record unsupported states as not applicable with a brief reason instead of implying they passed or making every example mandatory.
 
 ## What To Check
 
@@ -68,15 +80,18 @@ Return concise evidence:
 
 ```markdown
 Visual validation:
+- Evidence: <browser, automation, measurements, and artifacts used>
 - Viewports checked: <list>
 - States checked: <list>
+- Planned or unverified viewports: <list or none>
+- Planned or unverified states: <list or none; include justified not-applicable states when useful>
 - Findings: <none or bullets with screenshot/viewport/state>
-- Fixes applied: <summary or none>
+- Fixes and rechecks: <summary or none>
 - Residual risk: <anything not observable>
 ```
 
-When evidence is still pending, do not write only `pending`. Fill the same fields with the planned matrix and the minimum unverified smell list: grid/card axis alignment, overflow, clipping, hidden or non-wrapping text, overlap, sibling sizing, sibling colors, focus states, contrast, motion, and spacing.
+When evidence is still pending, do not write only `pending` and do not put planned coverage under checked fields. Report `none` for checks that did not occur, then fill the planned or unverified fields with the required matrix and minimum smell list: grid/card axis alignment, overflow, clipping, hidden or non-wrapping text, overlap, sibling sizing, sibling colors, focus states, contrast, motion, and spacing.
 
 ## Done Means
 
-Every visual finding has either been fixed and rechecked, or explicitly handed back with the reason it cannot be verified in the current environment.
+Every visual finding has either been fixed and rechecked with appropriate evidence, or explicitly handed back with the reason it cannot be verified in the current environment. Every affected supported viewport and state is checked or remains clearly identified as residual risk.

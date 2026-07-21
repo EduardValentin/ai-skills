@@ -5,9 +5,9 @@ last_synced: 2026-05-11
 
 # Form mapping — companion narativ
 
-Acest document explică **cum umpli fiecare câmp** din `form-mapping.yaml`. YAML-ul e sursa structurată (mașină); md-ul e sursa pentru raționament uman (cum culegi datele, ce întrebări pui utilizatorului, ce capcane evit).
+Acest document explică **cum umpli fiecare câmp** din `references/schema/form-mapping.yaml`. YAML-ul e sursa structurată (mașină); md-ul e sursa pentru raționament uman (cum culegi datele, ce întrebări pui utilizatorului, ce capcane evit).
 
-Regulă strictă (vezi `schema-validator.md`): orice schimbare în YAML trebuie reflectată aici și viceversa. Câmpurile YAML fără descriere aici sau secțiunile aici fără ancore în YAML sunt erori.
+Regulă strictă (vezi `references/schema/schema-validator.md`): orice schimbare în YAML trebuie reflectată aici și viceversa. Câmpurile YAML fără descriere aici sau secțiunile aici fără ancore în YAML sunt erori.
 
 ## Categoria 2012 — Transferul titlurilor de valoare
 
@@ -16,7 +16,7 @@ Regulă strictă (vezi `schema-validator.md`): orice schimbare în YAML trebuie 
 **Cum se completează:**
 
 - `str_stat_realiz_v` — codul ISO-3166-alpha2 al țării unde e listat brokerul (IBKR → `"US"` indiferent unde tranzacționează tu; Tradeville → câmp absent, e venit RO).
-- `str_venit_net_anual` — câștigul net **anual agregat** în RON, calculat din raportul broker. **NU per tranzacție**: regula ANAF pentru brokeri internaționali fără reținere la sursă e agregare anuală cu metoda FIFO. Vezi `../references/pf-investitii.md#calcul-cap-2012` pentru pas cu pas.
+- `str_venit_net_anual` — câștigul net anual în RON, calculat din raportul broker conform regulilor oficiale verificate pentru anul fiscal. Vezi `references/pf-investitii.md#calcul-cap-2012` pentru pașii și gate-urile de dovezi.
 - `str_pierdere_precedenta` — dacă în anul fiscal precedent ai avut pierdere reportată pentru cod 2012, citeste-o din D212-ul anului trecut, atributul `str_pierdere_compensata` (sau pierdere ne-compensată).
 - `str_pierdere_compensata` — pierderea efectiv compensată în anul curent (= min cu `str_venit_net_anual`).
 - `str_venit_recalculat` — automatic = `str_venit_net_anual - str_pierdere_compensata`.
@@ -26,7 +26,7 @@ Regulă strictă (vezi `schema-validator.md`): orice schimbare în YAML trebuie 
 - `str_dif_impozit_datorat` — `impozit_datorat_Ro - credit_fiscal`.
 
 **Capcane:**
-- IBKR raportează în USD. Folosește cursbnr.ro media anuală pentru conversie (vezi `../references/workflow/currency-conversion.md`).
+- Pentru valori în valută, determină metoda din sursa oficială aplicabilă categoriei și anului, apoi folosește fiecare curs din autoritatea oficială cerută de regulă; orice curs BNR provine direct din BNR. Vezi `references/workflow/currency-conversion.md`; nu presupune media anuală și nu folosi un agregator drept autoritate.
 - Cripto: dacă brokerul nu raportează FIFO, agentul trebuie să-l calculeze din lista tranzacții. Cere user-ului confirmare metodă.
 - Instrumente derivate (opțiuni, futures): la fel — cod 2012, dar raportul broker poate folosi alt format (mark-to-market). Cere user-ului clarificare dacă raportul nu e linear.
 

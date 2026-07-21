@@ -1,8 +1,6 @@
 ---
 name: feature-work-planning
 description: Use when the user asks to plan future product, feature, technical, or operational work, with or without an existing ticket, PRD, prototype, or backlog item. Use for clarifying behavior, scope, systems, dependencies, sequencing, risks, rollout, migrations, integrations, or delivery slices before implementation or backlog writing.
-compatibility: >-
-  Plain user context is sufficient. Tickets, PRDs, prototypes, and repository context are optional; ask questions or mark assumptions explicitly when they are unavailable.
 metadata:
   status: experimental
   allows_tool_references: "false"
@@ -12,7 +10,7 @@ metadata:
 
 ## Purpose
 
-Turn an idea, conversation, PRD, prototype, existing ticket, technical brief, or rough problem statement into an approved future-work plan. This skill plans the work implied by the request; it does not implement it, edit source-of-truth documents, or write polished backlog items.
+Turn an idea, conversation, PRD, prototype, existing ticket, technical brief, or rough problem statement into a draft future-work plan that the user can review and approve. This skill plans the work implied by the request; it does not implement it, edit source-of-truth documents, or write polished backlog items.
 
 ## When To Use
 
@@ -30,28 +28,29 @@ Use any available context: user notes, PRD sections, prototypes/designs, existin
 
 1. Establish the goal, users, success criteria, and non-goals.
 2. If context is thin, start with a Requirements Alignment section before the work plan. Include each label: users, flow, data/entities/lifecycle, permissions, integrations, edge cases, non-goals, and success criteria. Mark unknowns as questions instead of skipping a label.
-3. Identify affected systems: UI, API, data, permissions, jobs, migrations, notifications, analytics, billing, audit logs, external systems, and operational concerns when relevant.
-4. Identify dependencies, sequencing, risks, rollout or migration needs, and verification surfaces.
-5. If planning reveals a product source-of-truth gap, flag it as a separate documentation decision or follow-up. Do not turn documentation alignment into an implementation slice unless the user requested documentation work.
-6. Propose delivery slices by user outcome or delivery risk. When the source context lists systems or components, do not mirror that list into layer slices; group the system work under outcome or risk slices. Candidate slice titles should name outcomes or risks, not only systems such as API, UI, migration, analytics, rollout, or QA. For example, convert "API, banner, migration, analytics, rollout, QA" into slices like "enforce the decision safely," "explain the state to the user," "make existing data compatible," and "observe and control launch," with systems listed as integration points inside each slice. Use an enabling slice only when a prerequisite cannot deliver user value directly.
-7. Ask the user to approve the work plan before treating it as ready for implementation, backlog drafting, or other downstream use.
+3. Classify unresolved questions by impact. If an answer could change the goal, actors or permissions, core flow or data lifecycle, integration contract, compliance obligations, feasibility, or delivery approach, stop after alignment and ask for that decision before slicing. For lower-impact unknowns, state assumptions as pending approval and continue with clearly provisional slices.
+4. Identify affected systems: UI, API, data, permissions, jobs, migrations, notifications, analytics, billing, audit logs, external systems, and operational concerns when relevant.
+5. Identify dependencies, sequencing, risks, rollout or migration needs, and verification surfaces.
+6. If planning reveals a product source-of-truth gap, flag it as a separate documentation decision or follow-up. Do not turn documentation alignment into an implementation slice unless the user requested documentation work.
+7. Propose delivery slices by user outcome or delivery risk. When the source context lists systems or components, do not mirror that list into layer slices; group the system work under outcome or risk slices. Candidate slice titles should name outcomes or risks, not only systems such as API, UI, migration, analytics, rollout, or QA. For example, convert "API, banner, migration, analytics, rollout, QA" into slices like "enforce the decision safely," "explain the state to the user," "make existing data compatible," and "observe and control launch," with systems listed as integration points inside each slice. Use an enabling slice only when a prerequisite cannot deliver user value directly.
+8. Present the first reviewable version as a Draft Planning Packet. Ask the user to resolve blockers and approve the assumptions and slices. Treat the packet as approved only after explicit confirmation; until then it is not ready for implementation, backlog drafting, or other downstream use.
 
 ## Planning Packet
 
-Produce a compact packet with:
+Before approval, produce a compact Draft Planning Packet with:
 
 - goal and source context
-- approved assumptions and open questions
+- confirmed facts, assumptions pending approval, and open questions or blockers
 - proposed work slices with outcome, scope, dependencies, order, and integration points
 - technical notes that downstream work must preserve
 - acceptance themes and verification surfaces
 - documentation/source-of-truth updates needed, if any
 
-If a product source of truth should change, recommend a separate documentation follow-up. If the user wants backlog items afterward, use the approved planning packet as the source context.
+After the user confirms the decisions and plan, mark the packet approved and record accepted assumptions as decisions. If a product source of truth should change, recommend a separate documentation follow-up. If the user switches to backlog drafting afterward, end this workflow and pass the approved planning packet forward as source context.
 
 ## Boundaries
 
 - Do not edit PRDs.
 - Do not publish or create tracker issues.
-- Do not write final ticket prose unless the user explicitly switches from planning to backlog drafting.
+- Do not write final ticket prose. An explicit switch to backlog drafting ends this workflow; pass the approved planning packet forward as source context.
 - Do not invent acceptance criteria or technical facts when planning context is insufficient; ask or mark assumptions for approval.

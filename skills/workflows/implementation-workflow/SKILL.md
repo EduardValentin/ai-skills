@@ -1,8 +1,8 @@
 ---
 name: implementation-workflow
-description: Manual workflow for approved code work through implementation, review, verification, fixes, and reporting.
+description: Use when an approved implementation plan or plan slice is ready for code changes and the work must continue through independent review, manual QA, remediation, reruns, and reporting.
 compatibility: >-
-  Requires native agent dispatch support. Use code-reviewer and qa-verifier when available; the fallback is sufficiently capable generic read-only review and QA agents. Independent review and manual QA remain mandatory under either path.
+  Requires fresh-context agent dispatch. Prefer the native code-reviewer and qa-verifier; if either is unavailable, use separate generic agents: an independent read-only reviewer with repository and diff access, and a QA agent able to exercise the runtime surface. Block if either role cannot produce evidence.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -12,85 +12,112 @@ metadata:
 
 # Implementation Workflow
 
-## Purpose
+## Scope
 
-Implement approved code work with strong engineering judgment, review, verification, and reporting.
+Implement an approved code unit and carry it through code quality checks, independent review, manual QA, remediation, reruns, and a traceable implementation report.
 
-This workflow owns implementation, code quality, code review, manual QA verification, fixes, reruns, and the implementation report.
+This workflow starts after implementation-plan approval. It does not own requirements intake, source-of-truth approval, design approval, plan approval, execution-mode selection, PR readiness or publication, release, merge, or tracker-state changes.
 
-It does not own user-facing ticket intake, requirements approval, spec/design approval, implementation-plan approval, PR readiness, release, merge, or tracker-state changes.
+Preserve the execution mode selected before this workflow starts. Delegation does not transfer responsibility for repository instructions, plan interpretation, integration, scope control, or approval-sensitive decisions away from the main agent.
 
-Once an approved implementation plan exists and the next action is coding that plan, the selected execution mode follows this workflow's review, verification, fix/rerun, and reporting contract.
+## Entry Gate
 
-## Required Inputs
+Require:
 
-Expect enough context to implement safely:
+- an approved implementation plan or approved plan slice
+- acceptance criteria or another clear, approved user-observable outcome
+- the approved boundary and explicit non-goals
+- applicable source-of-truth requirements or design decisions, when the work has them
+- repository instructions, ownership constraints, and current branch or worktree state
+- known dependencies, sequencing constraints, risks, and expected verification surfaces
 
-- unit goal and acceptance criteria, or a clear user-observable outcome
-- approved boundary, including explicit non-goals
-- approved implementation plan or approved plan slice
-- affected files/surfaces, if already known
-- repository instructions and ownership constraints
-- current branch/worktree state
-- dependencies, sequencing constraints, and known risks
+Check that the packet is current and internally consistent. A separate spec or design artifact is not required when the approved work does not need one.
 
-If required inputs are missing, stale, or contradictory in a way that affects safe implementation, stop with `IMPLEMENTATION BLOCKED` and name the missing input or conflict.
+If required context is missing, stale, or contradictory enough to make implementation unsafe, return `IMPLEMENTATION BLOCKED`. Name the blocker and the exact input or approval needed; do not infer scope or edit.
 
-## Delegation checkpoint
+## Completion States
 
-Before broad searches or large file reads, consider dispatching read-only subagents for independent, compressible discovery such as repo-wide reference inventories, external API research, test-surface mapping, docs/env/deploy sweeps, or PR/status checks.
-Keep the main agent responsible for the approved plan, repo instructions, workflow interpretation, core code path, implementation decisions, and approval-sensitive artifacts. Subagent outputs must be concise, locator-backed, and categorized; avoid raw dumps.
-Delegated and inline discovery together must still populate the implementation scope map: affected files/surfaces, entry points, tests, risks, and verification surfaces with locators. If choosing not to delegate a plausible broad discovery task, briefly state why.
+Use only these terminal states:
 
-## Implementation Workflow
+- `IMPLEMENTATION COMPLETE`: the approved behavior is implemented, relevant automated checks pass or have a documented justified exception, independent review has no unresolved relevant findings, and manual QA has passing evidence for every acceptance criterion or approved outcome.
+- `IMPLEMENTATION BLOCKED`: any required gate cannot be completed, including an unavailable input, an unapproved plan change, a check that cannot be resolved, missing independent review evidence, or missing manual QA evidence.
 
-1. Start from the approved spec/design and implementation plan. Resolve missing, stale, or contradictory context before editing.
-2. Decide the code-scanning depth needed before editing based on the approved plan, ambiguity, risk, coupling, and current confidence. Map the relevant codebase surface before editing, using the delegation checkpoint for broad independent discovery when it preserves output quality and saves main-context load. Capture affected files/surfaces, entry points, tests, risks, and verification surfaces with locators.
-3. Implement the approved plan using the execution mode selected before this workflow starts.
-4. Run the review phase.
-5. Run the verification phase.
-6. Return the implementation report.
+A blocked result still reports all available implementation, check, review, and QA evidence plus the next required input or decision. Never describe unfinished review or QA as optional follow-up work.
 
-## Engineering Invariants
+## Discovery and Delegation
 
-- Stay inside the approved boundary; do not broaden scope or change the approved plan without approval.
-- If implementation reveals that the approved plan should change, stop with `IMPLEMENTATION BLOCKED`, state how the plan should change and why, and do not continue until the plan change is approved.
-- Adopt a TDD approach when making changes: express the intended behavior with a failing test first, implement the change, then rerun the test and relevant checks.
-- Follow existing project patterns unless the approved plan requires a justified deviation.
-- Do not patch narrowly when the change affects contracts, shared state, dependency flow, error handling, performance, or public behavior.
-- Prefer clear names that expose purpose, domain invariants, and side effects.
-- Avoid duplicating logic, hiding side effects, or adding abstractions that do not reduce real complexity.
-- Keep changes traceable to the unit goal and acceptance criteria.
-- Keep security implications in mind while implementing or delegating work, especially auth/session, authorization, user input, data exposure, persistence, redirects, file handling, external requests, privileged actions, dependencies, sensitive logging, and changes to what users can see or do.
+Choose scanning depth from the plan's ambiguity, risk, coupling, and current confidence. Before editing, produce a locator-backed scope map covering affected files or surfaces, entry points, tests, risks, and verification surfaces.
 
-## Review
+Before broad searches or large reads, consider fresh, read-only subagents for independent and compressible discovery such as reference inventories, external API research, test mapping, or environment and deployment sweeps. Ask for concise, categorized, locator-backed results. Keep plan interpretation and the core code path with the main agent. If a plausible broad discovery slice remains inline, briefly state why.
 
-Request independent review before treating implementation as complete.
+## Implementation
 
-Start a fresh-context review session with `code-reviewer` when available; otherwise dispatch a sufficiently capable generic read-only review subagent. Ask it to review the PR against the approved goal, acceptance criteria, approved plan, repository instructions, and relevant codebase context.
-Include those same items in the review handoff, plus the changed files or diff when available.
+1. Confirm the entry gate and approved execution mode.
+2. Build the scope map and inspect the relevant architecture, callers, contracts, and tests.
+3. Implement only the approved plan, following repository patterns unless the plan justifies a deviation.
+4. Run focused checks first, then the relevant regression checks implied by risk and coupling.
+5. Submit the resulting implementation diff or working tree to independent review. A PR may be supplied when one already exists, but a PR is not required.
+6. Resolve relevant review findings and obtain a clean fresh review before QA.
+7. Manually verify the reviewed executable behavior against every acceptance criterion or approved outcome.
+8. Resolve QA failures through the remediation loop, including fresh review and affected QA reruns.
+9. Return the implementation report when all gates pass or a blocker requires approval or new context.
 
-Wait for the reviewer to finish.
+### Engineering Invariants
 
-Filter the reviewer findings and discard any irrelevant findings given the approved goals.
+- Stay inside the approved boundary. If implementation reveals that the plan must change, return `IMPLEMENTATION BLOCKED`, explain the required change and why, and wait for approval.
+- Use TDD for behavior changes: add or update a meaningful test, observe the intended failure, implement, and rerun the focused and relevant regression checks.
+- When no meaningful automated test can exercise the change, document why before implementation and record the strongest available deterministic and manual evidence in the report. Do not claim TDD in that case.
+- Prefer names that expose purpose, side effects, and domain invariants.
+- Avoid duplicated logic, hidden side effects, and abstractions that do not remove real complexity.
+- Trace every change to the approved goal, criteria, or required supporting behavior.
+- Assess security implications where relevant, especially authentication, authorization, user input, data exposure, persistence, redirects, files, external requests, privileged actions, dependencies, and sensitive logging.
 
-## Verification
+## Independent Review
 
-Dispatch the `qa-verifier` subagent when available; otherwise dispatch a sufficiently capable generic QA subagent to perform manual QA verification against the ACs from the ticket. Pass all relevant context to the subagent. This verification is mandatory and the flow cannot move forward until manual QA verification is performed.
-Include the acceptance criteria, implemented surface, setup/runtime details, affected files or surfaces, changed behavior, known risks, and any review/fix context in the QA handoff.
+Use a fresh-context `code-reviewer` when available. Otherwise use a generic reviewer that is independent from implementation, read-only, able to inspect the repository and complete diff, and capable of evaluating correctness, regressions, security, maintainability, and test coverage.
+
+Provide the approved goal, acceptance criteria or outcome, approved plan, non-goals, repository instructions, relevant codebase context, known risks, check evidence, and the implementation diff or changed files. Wait for a completed review. Evaluate findings against the approved scope, retain all relevant findings, and record why any finding is rejected as irrelevant or incorrect.
+
+## Manual QA
+
+Use `qa-verifier` when available. Otherwise use a separate generic QA agent that can exercise the actual runtime surface and capture user-observable or system-observable evidence. It must not substitute source inspection, mocks, or automated tests for manual execution.
+
+Provide the criteria or approved outcome, implemented surface and entry points, setup and runtime details, affected files or surfaces, changed behavior, known risks, check evidence, and review or fix context. Require evidence for every criterion. Wait for the QA result; passing automated checks alone never satisfies this gate.
+
+## Remediation Loop
+
+For each relevant review finding or QA failure:
+
+1. Decide whether the fix remains inside the approved plan. Block and request approval if it does not.
+2. Add or update a meaningful failing test first when the issue is automatable, then implement the fix.
+3. Rerun the focused check and all regression checks affected by the fix.
+4. Obtain fresh independent review of the revised diff.
+5. If QA has started, rerun failed and affected criteria plus relevant regression surfaces so every criterion has passing evidence against the final implementation.
+
+Clear review findings before the first QA pass. If fresh review finds another relevant issue, repeat the loop before QA or QA reruns. Continue until no relevant review finding remains and all criteria pass. If a finding, failure, environment problem, or missing capability cannot be resolved, return `IMPLEMENTATION BLOCKED` with the evidence gathered so far.
+
+## Implementation Report
+
+The final report includes:
+
+- terminal status
+- approved goal and delivered behavior mapped to the criteria or outcome
+- changed files or surfaces and their purpose
+- test-first evidence, focused and regression check commands, and outcomes, or the justified no-test exception
+- independent review findings, dispositions, fixes, reruns, and final review outcome
+- manual QA coverage, criterion-level outcomes, and final evidence
+- known residual risks and limitations, explicitly stating when none are known
+- for a blocked result, the exact blocker and next required input or approval
+
+Do not claim PR readiness, publish a PR, release, merge, or update a tracker from this workflow.
 
 ## Red Flags
 
-Stop and recover when:
-
-- implementing without enough goal, scope, constraints, or verification context to proceed safely
-- treating a delegated unit as permission to redesign product direction
-- reading only the file to edit when nearby architecture, callers, contracts, or tests could affect the change
-- claiming TDD was followed without first adding or updating a meaningful failing test, or skipping tests without a reason
-- treating developer checks as acceptance, visual, or PR-verdict verification
-- skipping review entirely
-- treating implementation as complete before the independent reviewer finishes
-- moving forward before mandatory manual QA verification is performed
-- answering a completion question with review or manual QA next steps but no blocked implementation report
-- returning only a prose summary with no changed files, checks, review result, or risks
-- broadening beyond the approved unit without approval
+- Editing before the entry gate and scope map are complete.
+- Broadening scope or changing the plan without approval.
+- Reading only the target file when callers, contracts, or adjacent tests can affect the change.
+- Claiming TDD without observing a meaningful failing test.
+- Treating automated checks as independent review or manual QA.
+- Letting the implementer perform the independent review.
+- Completing while relevant findings, failed criteria, or missing evidence remain.
+- Returning an unstructured prose summary without changed surfaces, checks, review, QA, and risks.

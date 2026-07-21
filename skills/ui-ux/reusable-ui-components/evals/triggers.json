@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "review-filter-panel-component-api",
+      "query": "Please review this FilterPanel refactor. Callers are passing six boolean props and custom class overrides to represent density, tone, loading, and optional rich actions. Recommend a clearer reusable component API and explain what should remain owned by each page.",
+      "should_trigger": true
+    },
+    {
       "id": "audit-theme-token-contrast",
       "query": "Audit our light and dark theme tokens for color contrast, spacing consistency, and semantic naming, then propose a revised token scale. The component structure and APIs should remain unchanged.",
+      "should_trigger": false
+    },
+    {
+      "id": "validate-responsive-checkout-layout",
+      "query": "Use browser screenshots at mobile, tablet, and desktop widths to verify the existing checkout page has no clipping, overlap, or unexpected visual regressions, and report the viewport-specific issues you find.",
       "should_trigger": false
     }
   ]

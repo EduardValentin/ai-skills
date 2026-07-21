@@ -1,0 +1,42 @@
+{
+  "skill_name": "design-direction-brainstorming",
+  "evals": [
+    {
+      "id": "ambiguous-premium-dashboard-alignment",
+      "prompt": "Make our operations dashboard feel more premium and less cluttered. I have not settled on an audience-specific tone, density, or references. You decide; I trust your taste. Start helping me with this redesign.",
+      "expected_output": "Begins an adaptive design-direction interview, explains the upcoming option-synthesis process, and defers implementation and stylistic commitment until shared understanding exists.",
+      "assertions": [
+        "The response treats 'premium,' 'less cluttered,' and delegated taste as insufficient direction and begins collaborative alignment instead of selecting or implementing a visual solution.",
+        "The response asks at least one high-leverage, decision-shaping question and signals that it will continue narrowing relevant dimensions such as audience and task, desired impression, product goal, constraints, references, or qualities to avoid.",
+        "The response explicitly says the answers will be synthesized into two or three distinct directions with tradeoffs and visual language and then narrowed into a shared brief before implementation.",
+        "The response does not state a preferred direction, recommend final styling, or begin implementation before receiving enough context."
+      ],
+      "checks": []
+    },
+    {
+      "id": "specific-enterprise-direction-lightweight-alignment",
+      "prompt": "Add a compact visual summary strip to the reporting dashboard. It should feel utilitarian, dense, and enterprise-grade rather than playful. Follow the existing table-heavy style and optimize it for scanning. Help me move this into implementation.",
+      "expected_output": "Performs a brief alignment check that preserves the supplied direction, surfaces a meaningful constraint or tradeoff, and proceeds without an unnecessary full interview unless a genuinely blocking ambiguity remains.",
+      "assertions": [
+        "The response accurately reflects the requested utilitarian, dense, enterprise-grade, table-oriented, scanning-first direction.",
+        "The response identifies a meaningful design constraint or tradeoff, such as density versus legibility, accessibility, responsive behavior, or variable content length.",
+        "The response does not restart the full discovery interview or require answers to the entire question set when the supplied direction is already specific enough.",
+        "The response indicates readiness to proceed toward implementation, or asks only a concrete question whose answer is genuinely necessary to avoid violating the stated direction."
+      ],
+      "checks": []
+    },
+    {
+      "id": "synthesize-incident-console-directions",
+      "prompt": "We have finished the discovery for a redesign of an incident-response console. Primary users are experienced SREs triaging active outages on desktop. The goal is faster prioritization with fewer missed critical signals. It should feel calm, authoritative, and fast under pressure. Keep information dense but WCAG AA accessible, support long service and incident names, use restrained motion, and avoid consumer-app playfulness, oversized cards, or dramatic animation. The team likes Grafana's operational density but wants clearer hierarchy. Before any implementation, synthesize viable directions and help us settle on one.",
+      "expected_output": "Presents distinct, decision-ready design directions, recommends the best fit from the supplied evidence, and closes with a compact shared-direction brief for confirmation.",
+      "assertions": [
+        "The response proposes two or three genuinely distinct design directions rather than superficial styling variants.",
+        "Each direction explains its core idea, best fit, meaningful tradeoff, and visual language across hierarchy, density, color rhythm, typography, motion, and shape language.",
+        "The response recommends one direction and ties the rationale to the SRE audience, outage-triage goal, desired calm authority, density, accessibility, long-content, and restrained-motion constraints.",
+        "The response invites correction or confirmation before implementation and does not start implementing the interface.",
+        "The response concludes with a compact shared design direction covering audience, goal, desired impression, recommended option, visual language, interaction or motion, accessibility and content constraints, things to avoid, and any open questions."
+      ],
+      "checks": []
+    }
+  ]
+}

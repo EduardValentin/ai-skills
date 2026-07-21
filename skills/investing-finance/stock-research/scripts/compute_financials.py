@@ -1,7 +1,8 @@
-"""Pull XBRL company-facts → financials.json with TTM trends and margins.
+"""Pull XBRL company-facts into dated annual financial history and margins.
 
 Usage:
     compute_financials.py <TICKER> [--years N] --out <path>
+                          [--company-facts-out <path>]
 
 Companies report the same business metric under different `us-gaap` concept
 names — SEC's XBRL taxonomy has evolved (especially around ASC 606 in 2018,
@@ -126,7 +127,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("ticker")
     p.add_argument("--years", type=int, default=10)
     p.add_argument("--out", required=True)
-    return p.parse_args(argv)
+    p.add_argument(
+        "--company-facts-out",
+        help="Optional path for the unmodified SEC company-facts response",
+    )
+    args = p.parse_args(argv)
+    if args.company_facts_out and Path(args.company_facts_out).resolve() == Path(
+        args.out
+    ).resolve():
+        p.error("--company-facts-out must be distinct from --out")
+    return args
 
 
 def _pick_fy_values_for_concept(
@@ -247,7 +257,30 @@ def _data_quality(
     }
 
 
-def _build_year(fy: int, raw: dict[str, dict[int, float]]) -> dict:
+def _fy_report_dates(facts: dict, years: int) -> dict[int, str]:
+    """Return the latest 10-K period end recorded for each fiscal year."""
+    report_dates: dict[int, str] = {}
+    for concept in facts.get("us-gaap", {}).values():
+        for items in concept.get("units", {}).values():
+            for item in items:
+                if item.get("fp") != "FY" or item.get("form") != "10-K":
+                    continue
+                fiscal_year = item.get("fy")
+                report_date = item.get("end")
+                if not isinstance(fiscal_year, int) or not isinstance(report_date, str):
+                    continue
+                report_dates[fiscal_year] = max(
+                    report_date, report_dates.get(fiscal_year, report_date)
+                )
+    keep = sorted(report_dates)[-years:]
+    return {fy: report_dates[fy] for fy in keep}
+
+
+def _build_year(
+    fy: int,
+    raw: dict[str, dict[int, float]],
+    report_dates: dict[int, str],
+) -> dict:
     revenue = raw["revenue"].get(fy)
     net_income = raw["net_income"].get(fy)
     gross_profit = raw["gross_profit"].get(fy)
@@ -263,6 +296,7 @@ def _build_year(fy: int, raw: dict[str, dict[int, float]]) -> dict:
     ltd_val = raw["long_term_debt"].get(fy)
     return {
         "fiscal_year": fy,
+        "report_date": report_dates.get(fy),
         "revenue": revenue,
         "gross_profit": gross_profit,
         "operating_income": op_income,
@@ -308,7 +342,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     client = SECClient()
-    facts = client.get_company_facts(info.cik_padded).get("facts", {})
+    company_facts = client.get_company_facts(info.cik_padded)
+    if args.company_facts_out:
+        company_facts_path = Path(args.company_facts_out)
+        company_facts_path.parent.mkdir(parents=True, exist_ok=True)
+        company_facts_path.write_text(json.dumps(company_facts, indent=2) + "\n")
+    facts = company_facts.get("facts", {})
 
     raw: dict[str, dict[int, float]] = {}
     tag_resolution: dict[str, str | None] = {}
@@ -324,7 +363,12 @@ def main(argv: list[str] | None = None) -> int:
     for series in raw.values():
         all_fys.update(series.keys())
     fys = sorted(all_fys)[-args.years :]
-    years = [_build_year(fy, raw) for fy in fys]
+    report_dates = _fy_report_dates(facts, args.years)
+    years = [_build_year(fy, raw, report_dates) for fy in fys]
+    dated_years = [year["report_date"] for year in years if year["report_date"]]
+    if years and not dated_years:
+        print("error: SEC company facts contain no dated 10-K fiscal periods", file=sys.stderr)
+        return 3
 
     result: dict = {
         "ticker": info.ticker,
@@ -332,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
         "name": info.name,
         "schema_version": 1,
         "generated_at": date.today().isoformat(),
+        "latest_report_date": max(dated_years) if dated_years else None,
         "years": years,
         "trend_gate": {
             "revenue_up_and_right": _trend_gate(years, "revenue"),

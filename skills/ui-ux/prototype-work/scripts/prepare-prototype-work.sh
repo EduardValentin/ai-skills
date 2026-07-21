@@ -9,7 +9,7 @@ Prepare a React prototype reference app before prototype-work starts.
 
 Options:
   --project-root PATH   Project/worktree root. Defaults to git top-level or cwd.
-  --app-root PATH       React reference app root. Required when auto-detection under designs/ fails.
+  --app-root PATH       React reference app root. Required unless auto-detection finds exactly one app.
   --port PORT           Preview port. Defaults to 5173.
   --force-install       Install dependencies even outside a worktree.
   --skip-install        Skip dependency installation.
@@ -102,14 +102,26 @@ locate_prototype_app() {
   [ -d "$designs_dir" ] || fail "No designs/ directory found under $project_root. Ask the user for the reference app path, then rerun with --app-root."
 
   local package_file
+  local -a candidates=()
   while IFS= read -r package_file; do
     if grep -Eq '"react"[[:space:]]*:' "$package_file" || grep -Eq '"@vitejs/plugin-react"[[:space:]]*:' "$package_file"; then
-      dirname "$package_file"
-      return 0
+      candidates+=("$(dirname "$package_file")")
     fi
   done < <(find "$designs_dir" -mindepth 1 -maxdepth 4 -name package.json -not -path '*/node_modules/*' | sort)
 
-  fail "Could not find a React package.json under $designs_dir. Ask the user for the reference app path, then rerun with --app-root."
+  case "${#candidates[@]}" in
+    0)
+      fail "Could not find a React package.json under $designs_dir. Ask the user for the reference app path, then rerun with --app-root."
+      ;;
+    1)
+      printf '%s\n' "${candidates[0]}"
+      ;;
+    *)
+      printf '[prototype-work] React prototype app candidates:\n' >&2
+      printf '  %s\n' "${candidates[@]}" >&2
+      fail "Multiple React prototype apps found under $designs_dir. Ask the user for the reference app path, then rerun with --app-root."
+      ;;
+  esac
 }
 
 read_node_version() {

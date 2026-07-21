@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "build-accessible-desktop-command-palette",
+      "query": "Build a command palette for our existing Electron desktop interface using the app's components and tokens. It must support keyboard navigation, adaptive sizing, and explicit loading, no-results, error, and selected states.",
+      "should_trigger": true
+    },
+    {
       "id": "audit-dashboard-visual-regressions",
       "query": "Review the supplied desktop and mobile dashboard screenshots, identify spacing, hierarchy, contrast, and overflow regressions, and return prioritized findings. Do not change the implementation.",
+      "should_trigger": false
+    },
+    {
+      "id": "explore-finance-dashboard-directions",
+      "query": "Before implementation begins, develop three contrasting visual directions for a personal-finance dashboard, with type, color, density, and composition rationale. We are deciding on a direction and do not want code yet.",
       "should_trigger": false
     }
   ]

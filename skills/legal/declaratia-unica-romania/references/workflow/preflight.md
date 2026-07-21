@@ -1,18 +1,17 @@
 # Preflight protocol
 
-Faza 4 a sesiunii. Verifică prezența documentelor obligatorii în `{an_fiscal}/sesiuni/{slug}/inputs/` înainte de calcul.
+Faza 4 a sesiunii. Verifică prezența documentelor obligatorii în `${D212_DATA_DIR}/{an_fiscal}/sesiuni/{YYYY-MM-DD}_{persoana_slug}/inputs/` înainte de calcul.
 
 ## Procedură
 
-1. **Determină lista documentelor obligatorii** pe baza scenariilor selectate la Faza 1:
+1. **Determină lista documentelor obligatorii** pe baza categoriilor PF selectate la Faza 1:
 
-   - **PF investiții** → vezi `../references/pf-investitii.md#documente-necesare` pentru lista exactă per sub-scenariu (IBKR, broker RO, bancă RO pentru dobânzi, dovezi cripto).
-   - **PFA real** → vezi `../references/pfa-real.md#documente-necesare`.
-   - **Combinat** → uniunea ambelor liste.
+   - Vezi `references/pf-investitii.md#documente-necesare` pentru lista exactă per categorie (broker internațional, broker RO, bancă RO pentru dobânzi, dovezi cripto).
+   - Pentru mai multe categorii PF, folosește uniunea listelor relevante, fără a amesteca proveniența documentelor.
 
-2. **Listează conținutul `inputs/`** prin `ls -la {an_fiscal}/sesiuni/{slug}/inputs/`.
+2. **Listează conținutul `inputs/`** din sesiunea selectată și confirmată prin `ls -la -- "${D212_DATA_DIR}/{an_fiscal}/sesiuni/{YYYY-MM-DD}_{persoana_slug}/inputs/"`. Păstrează această cale neschimbată pentru toate rerulările preflight din sesiunea curentă.
 
-3. **Verifică match prin glob patterns** definit în fiecare scenario file. Examplu:
+3. **Verifică potrivirea cu pattern-urile glob** definite în `references/pf-investitii.md`. Exemplu:
    - PF investiții IBKR: glob `annual_activity_statement*.pdf` SAU `*.csv` cu nume IBKR
    - Dividende RO: glob `hotarare*AGA*.pdf` SAU `nota*plata*dividende*.pdf`
 
@@ -23,7 +22,7 @@ Faza 4 a sesiunii. Verifică prezența documentelor obligatorii în `{an_fiscal}
    - De ce e necesar (un rând)
 
 5. **Hard-stop** până una din:
-   - User pune fișierele în `inputs/` și agentul re-rulează preflight (`ls` din nou)
+   - User pune fișierele în `inputs/` și agentul re-rulează preflight cu aceeași comandă și aceeași cale de sesiune confirmată (`ls -la -- "${D212_DATA_DIR}/{an_fiscal}/sesiuni/{YYYY-MM-DD}_{persoana_slug}/inputs/"`)
    - User scrie waiver explicit: "Nu am {document}, e OK pentru că {motiv}". Waiverul se înregistrează în `worklog.md` cu timestamp și motivul verbatim.
 
 6. **Output preflight pass:** entry în `worklog.md`:

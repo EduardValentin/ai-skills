@@ -1,0 +1,46 @@
+{
+  "skill_name": "reusable-ui-components",
+  "evals": [
+    {
+      "id": "consolidate-metric-tile-variants",
+      "prompt": "This is an active component-design decision, so give a concrete recommendation rather than a list of hypothetical options. The analytics overview already has a MetricTile that renders a label, value, trend, optional sparkline, loading state, and footer. We now need the same KPI role on the sales dashboard at regular density and on the account page at compact density. The account footer must accept a link plus an icon, while the sales footer is plain text. Both pages fetch their own data, route on link activation, and record analytics. A teammate proposes copying the JSX onto both pages; another proposes a generic CardBlock with booleans such as compact, showSparkline, hasLinkFooter, and isSales. Decide the component direction, sketch the public API, and provide the required decision summary.",
+      "expected_output": "A concrete recommendation to extend the existing role-specific MetricTile with an intentional density variant and footer composition, while keeping page behavior at the page boundary and explaining the shared role and interaction model.",
+      "assertions": [
+        "The response begins from the nearby MetricTile's existing role, structure, states, and usage rather than treating duplicated JSX or a new generic card as the default.",
+        "The response concludes that the two new instances share MetricTile's semantic role and interaction model and therefore should reuse or extend that component.",
+        "The proposed API uses a meaningful density variant and composition or a slot for the rich footer instead of a generic CardBlock or a pile of page-specific booleans.",
+        "The response accounts for component-owned UI structure, internal styling, loading and visual states, and accessibility responsibilities.",
+        "The response keeps fetching, routing, analytics, and other page-specific business behavior in the sales and account pages.",
+        "The decision summary explicitly states both the role and interaction model that justify reuse and the page-boundary ownership rule."
+      ],
+      "checks": []
+    },
+    {
+      "id": "separate-expandable-metric-pattern",
+      "prompt": "Review this proposed extension before implementation. We have a static MetricTile used throughout the product: it presents a label, value, and optional trend but has no interactive state. A new reporting pattern shows the same headline metric, but its entire header is a disclosure trigger that expands and collapses a detailed breakdown, exposes keyboard and screen-reader state, and may contain arbitrary breakdown content. The proposal is to add expandable, defaultExpanded, and showChevron booleans to MetricTile. Decide whether this belongs in MetricTile or in a separate reusable component, propose the important API shape, and include a reuse/refactor decision summary. The reporting page fetches the breakdown and tracks expansion events.",
+      "expected_output": "A role-based decision to create a separately named disclosure component with a small compositional API and component-owned interaction/accessibility, while leaving data and analytics on the reporting page.",
+      "assertions": [
+        "The response recognizes that the disclosure behavior has a materially different role, interaction model, and accessibility invariant from the static MetricTile.",
+        "The response recommends a separate role-specific component rather than forcing the behavior through boolean variants on MetricTile.",
+        "The suggested API is small and intentional, supports rich breakdown content through composition or slots, and avoids presentation-based naming.",
+        "The new component owns disclosure structure, expanded state semantics, trigger relationships, keyboard behavior, and other interaction accessibility responsibilities.",
+        "The reporting page retains fetching, analytics, routing, and business logic and passes resulting content or controlled state through the public API.",
+        "The decision summary explicitly explains the role and interaction model behind separation and states the page-boundary ownership rule."
+      ],
+      "checks": []
+    },
+    {
+      "id": "ask-before-design-system-fork",
+      "prompt": "A designer asks you to add a yellow EmptyState treatment to the shared design system today. The current EmptyState supports neutral and danger tones with stable defaults. The new treatment is variously called warning, attention, and caution in the ticket, and the designer says it may become a primitive used across the product. One proposed implementation also changes the existing default icon and tone. Explain the next action you would take before implementation, what you would inspect, and what constraints you would preserve in the eventual component change.",
+      "expected_output": "A focused request for product or design clarification before creating a design-system fork or changing defaults, paired with a conservative inventory and boundary-preserving implementation direction.",
+      "assertions": [
+        "The response inspects the existing EmptyState API and usages before proposing a new primitive or variant.",
+        "The response asks for clarification or an explicit decision because the variant has multiple reasonable semantic names and may create a design-system primitive.",
+        "The response does not silently change the existing component's default icon, tone, behavior, or visual contract.",
+        "The eventual direction favors a meaningful variant axis and role-based API over page-specific flags or class overrides.",
+        "The response preserves the reusable component's ownership of UI and accessibility while excluding page fetching, routing, analytics, and business logic."
+      ],
+      "checks": []
+    }
+  ]
+}

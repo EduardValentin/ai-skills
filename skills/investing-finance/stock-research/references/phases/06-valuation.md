@@ -44,10 +44,25 @@ This produces `pe_band.json` with the percentile breakdown.
 
 ## Step 3: Compute reverse DCF
 
-Get the current price from `prices.json` (last bar's close):
+Get the current price from `prices.json` (the latest dated bar's close):
 
 ```bash
-current_price=$(jq '.bars[-1].close' <ticker_dir>/.raw/prices/prices.json)
+current_price=$(
+  <scripts_dir>/.venv/bin/python - "<ticker_dir>/.raw/prices/prices.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+bars = json.loads(Path(sys.argv[1]).read_text()).get("bars", [])
+if not bars:
+    raise SystemExit("prices.json has no bars")
+latest_bar = max(bars, key=lambda bar: bar["date"])
+close = latest_bar.get("close")
+if not isinstance(close, (int, float)):
+    raise SystemExit("latest prices.json bar has no numeric close")
+print(close)
+PY
+)
 ```
 
 Then:

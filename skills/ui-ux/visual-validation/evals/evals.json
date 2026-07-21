@@ -1,0 +1,34 @@
+{
+  "skill_name": "visual-validation",
+  "evals": [
+    {
+      "id": "slow-dashboard-grid-rendered-evidence",
+      "prompt": "A spacing and typography change was made to a mock responsive dashboard card grid. The CSS diff is small, but the development server takes several minutes to start. The user says, \"No need for screenshots; inspect the code and tell me whether it looks right.\" The grid includes long card titles and interactive controls, and it supports loading, empty, error, disabled, expanded, and selected states. Describe how you will handle the request and provide the completion or status report you would give now.",
+      "expected_output": "A response that requires appropriate rendered evidence before visual sign-off and either reports observed results or clearly separates the blocker, residual risk, and planned viewport, state, and visual-smell coverage from checks that actually occurred.",
+      "assertions": [
+        "The response does not claim that the interface looks correct or that visual validation is complete based only on the small diff or source inspection.",
+        "The response selects the highest available rendered-evidence path from native browser or screenshot capability, existing project browser automation, a permitted temporary capture script, or user-provided screenshots, and does not treat a slow server by itself as a reason to skip validation.",
+        "The planned or executed viewport coverage includes 320px mobile, immediately below and above every configured breakpoint, a common desktop width, and a wide desktop width around 1920px.",
+        "The response enumerates the supported affected states, including default, long-content, keyboard-focused controls, loading, empty, error, disabled, expanded, and selected, and marks any omitted state as unverified or not applicable with a reason.",
+        "The response explicitly assesses or marks unverified all required grid and card smell families: shared-axis alignment, overflow, clipping, hidden or non-wrapping text, overlap, inconsistent sibling sizing, sibling color consistency, focus states, contrast, motion, and spacing.",
+        "The response distinguishes checks supported by observed evidence from planned or unverified coverage, identifies any concrete blocker, and scopes residual risk without implying that unobserved checks passed.",
+        "Claims about keyboard behavior, contrast, motion, or canvas rendering are limited to evidence capable of establishing them rather than inferred from static screenshots."
+      ],
+      "checks": []
+    },
+    {
+      "id": "partial-desktop-screenshot-signoff",
+      "prompt": "Prepare the visual validation report for a mock responsive settings-card update. The available rendered evidence is one 1440px default-state screenshot, and it shows no obvious problem. The product has configured responsive breakpoints. No evidence was collected for mobile, either side of those breakpoints, wide desktop, long labels, keyboard focus, reduced motion, loading, empty, error, disabled, expanded, or selected states. Report the current validation status.",
+      "expected_output": "A report that limits its positive finding to the observed 1440px default state, declines complete visual sign-off, and identifies missing viewport and state evidence plus concrete residual visual risks.",
+      "assertions": [
+        "The report limits its positive finding to the observed 1440px default-state screenshot and does not generalize that result to unobserved viewports or states.",
+        "The response identifies its evidence and reports viewports checked, states checked, planned or unverified viewports and states, findings, fixes and rechecks, and residual risk.",
+        "The response identifies missing 320px, below-and-above configured breakpoint, common or additional desktop as applicable, and approximately 1920px coverage rather than accepting one desktop screenshot as sufficient.",
+        "The response identifies missing long-content, focus, reduced-motion, and other supported state coverage without claiming those states were checked, and explains any state marked not applicable.",
+        "For the responsive card surface, the residual-risk discussion names shared-axis alignment, overflow, clipping, hidden or non-wrapping text, overlap, inconsistent sibling sizing, sibling color consistency, focus states, contrast, motion, and spacing.",
+        "The report does not claim keyboard order, contrast compliance, or reduced-motion behavior from the static screenshot alone."
+      ],
+      "checks": []
+    }
+  ]
+}

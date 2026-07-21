@@ -2,7 +2,7 @@
 name: stock-recap
 description: "Use when recapping an existing US-listed stock thesis — catching up on every quarter (10-Q/10-K) filed since the last analysis, or analyzing the impact of a material event (M&A, CEO change, regulatory ruling, restated guidance). Triggers on phrases like \"catch me up on NVDA\", \"recap MSFT since last quarter\", \"how does this acquisition affect my AAPL thesis\", \"new earnings just dropped for TSLA\". Mechanically diffs actuals vs saved bull/base/bear projections, LLM-evaluates the saved English sell triggers in 4 states (🔴 fired / 🟡 flashing / 🟢 clear / ⚪ cannot-evaluate), and optionally proposes a surgical or reclassifying thesis update. Not for: initial deep dive on a brand-new ticker (that's stock-research), portfolio P&L tracking, short-term trading, or non-US listings."
 compatibility: >-
-  Requires SR_SEC_USER_AGENT, SR_RESEARCH_REPO, prior stock-research artifacts, market-source network access, and writable Git state. Native agent dispatch and structured-input tools are optional: fall back to sequential prompts and numbered text choices. Missing artifacts route to stock-research; missing bundled scripts or required runtime capabilities block execution.
+  Requires SR_SEC_USER_AGENT, SR_RESEARCH_REPO, a prior stock-research baseline, the target research repo's AGENTS.md, market-source network access, a skill-local Python runtime, and writable Git state. Native agent dispatch and structured-input tools are optional: fall back to sequential prompts and numbered text choices. If stock-research artifacts are missing, route to stock-research; if that skill or required runtime capabilities are unavailable, stop and report the blocker.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -16,8 +16,8 @@ A two-flow skill that keeps an existing investment thesis alive. After `stock-re
 
 When beginning a recap, the response must preserve these gates before any recap work:
 
-- Prior research preconditions: `verdict.json`, `projections.json`, `financials.json`, `market-expectations.json`, the SEC EDGAR user-agent, the bundled financial runtime, and the investing research repo.
-- Gap detection: check for new 10-Q / 10-K filings since the latest saved financial period.
+- Prior research preconditions: `SR_RESEARCH_REPO` and the target repo's `AGENTS.md`; a schema-versioned `tickers.json.tickers.<TICKER>` entry; schema-versioned `verdict.json`, `projections.json`, `financials.json`, and `market-expectations.json`; `SR_SEC_USER_AGENT`; the bundled financial runtime; market-source network access; and writable Git state.
+- Gap detection: check for 10-Q / 10-K filings whose SEC `report_date` is strictly later than the latest saved financial period. Do not substitute `filing_date` for this comparison.
 - Mode routing: in the first response, state both routing branches explicitly: if filings exist, offer quarterly catch-up or news mode; if no filings exist, offer switch to news mode, valuation-only recap, or exit.
 - Quarterly mechanics: refresh financials and valuation, mechanically diff actuals against saved bull case / base case / bear case projections, and evaluate every saved sell trigger as fired, flashing, clear, or cannot-evaluate. Do not shorten this to "evaluate sell triggers" without naming the four states.
 - Checkpoints: explicitly state that the workflow uses the walkthrough and trigger/trajectory checkpoints before any thesis update, asks before any surgical patch or reclassification, and asks again before pushing changes to remote. Do not omit these checkpoint gates from the first response.
@@ -36,7 +36,7 @@ When beginning a recap, the response must preserve these gates before any recap 
 
 ## Prerequisites (one-time setup)
 
-1. **`stock-research` has been run for this ticker.** The skill reads `tickers/<TICKER>/verdict.json`, `projections.json`, `financials.json`, and `market-expectations.json`. If any of those are missing, Phase 1 aborts with instructions to run `stock-research` first.
+1. **`stock-research` has been run for this ticker.** The skill reads `tickers/<TICKER>/verdict.json`, `projections.json`, `financials.json`, and `market-expectations.json`. `financials.json` must name its cutoff as an ISO `latest_report_date`, and each annual point under `years[]` must carry its own ISO `report_date`. If any baseline artifact or required field is missing, Phase 1 follows the collaborator-present/unavailable behavior in `compatibility`; it never invents a cutoff or recap baseline.
 
 2. **SEC EDGAR User-Agent.** Same env var as `stock-research`:
    ```bash
@@ -45,7 +45,17 @@ When beginning a recap, the response must preserve these gates before any recap 
 
 3. **Bundled financial runtime is ready.** Resolve scripts from `<skill-root>/scripts/`; do not depend on a repository-level toolkit or another harness install. Its `.venv` must already be set up from the bundled `requirements.txt`. If `<skill-python> --version` fails or a required bundled script is missing, stop and report the setup blocker.
 
-4. **Research repo exists.** The skill writes per-session artifacts under `${SR_RESEARCH_REPO}/tickers/<TICKER>/recaps/`. If the repo root is missing, abort with the same bootstrap instructions as `stock-research`.
+4. **Research repo exists.** `SR_RESEARCH_REPO` is the only repository-path variable; it is required and has no machine-specific default. Open `${SR_RESEARCH_REPO}/AGENTS.md` before resolving repo-owned paths or writes. If the repo root or instructions are missing, stop and ask for the configured repo path.
+
+5. **Saved index entry exists.** Before recap work, require `tickers.json` with top-level `schema_version: 1`, a `tickers` object, and `tickers.<TICKER>`. The canonical index mirrors are `current_status`, `current_conviction`, `gvd_category`, and `current_target_position_pct`; `verdict.json` remains authoritative when a mirror is stale.
+
+## Runtime and artifact contracts
+
+- Resolve every script and reference from this installed skill root. For gap detection, pass `financials.json.latest_report_date` verbatim to `scripts/fetch_sec.py` with `--forms 10-Q,10-K`, `--report-after <date>`, and `--list-only`; parse `stdout.filings[]` and sort by `report_date`. A delayed filing is included by its covered period, while a same-period filing or amendment is not a new period.
+- A quarterly refresh must keep the saved `financials.json` untouched while `compute_financials.py` writes a distinct staged annual document and raw SEC company-facts artifact. Merge explicit `YYYY-Qn=report_date` inputs with `refresh_quarterly_financials.py`; validate its staged merged output, then atomically replace the canonical JSON. Preserve prior `quarters[]`, `ttm[]`, and unrecognized/manual fields while adding new dated points.
+- Use the target repo's `AGENTS.md` for allowed writes and Git policy. The bundled index helpers assume `tickers.json.tickers.<TICKER>` and the current-field mirrors named above; stop if the target repo declares an incompatible contract.
+- For a valuation-only recap, write `mode: valuation-only`, `session: valuation-only-recap`, set `window_start` and `window_end` to the valuation as-of date, and set `periods_processed: []`. State that no quarters were ingested, financials remain at their saved period, and trajectory/actuals comparisons were not refreshed.
+- Shared Step 1.5 captures optional session context. News event capture is News Phase 1.7 and always follows that shared step; do not use Phase 1.5 for both states.
 
 ## Asking the user for input
 
@@ -84,7 +94,7 @@ After Phase 1's preconditions and gap-detection complete, ask the user to pick t
 - **Quarterly catch-up** — ingest every unprocessed 10-Q / 10-K since the last recap (or initial research), build trajectory across all of them, evaluate all sell triggers, optionally update thesis.
 - **News mode** — analyze a single material event (M&A, leadership, regulatory, guidance, customer/supply, litigation, other) and its impact on the thesis.
 
-The two flows never interleave in a single session. Quarterly catch-up proceeds to Phase 2; News mode first completes its mandatory Phase 1.5 event capture and then proceeds to Phase 2.
+The two flows never interleave in a single session. Quarterly catch-up proceeds to Phase 2; News mode first completes its mandatory Phase 1.7 event capture and then proceeds to Phase 2.
 
 ```
 Quarterly mode → Phase 2 (fetch) → Phase 3 (refresh financials + valuation)
@@ -93,7 +103,7 @@ Quarterly mode → Phase 2 (fetch) → Phase 3 (refresh financials + valuation)
                 → Phase 6 (update, optional) → Checkpoint 3
                 → Phase 7 (commit + index)
 
-News mode      → Phase 1.5 (event capture) → Phase 2 (optional context fetch)
+News mode      → Phase 1.7 (event capture) → Phase 2 (optional context fetch)
                 → Phase 3 (impact analysis) → Checkpoint 1
                 → Phase 4 (update, optional) → Checkpoint 2
                 → Phase 5 (commit + index)

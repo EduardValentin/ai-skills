@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+workspace=$(CDPATH= cd "$script_dir/.." && pwd)
+state_dir="$workspace/verify-pr-fixture-state"
+mkdir -p "$state_dir"
+printf 'pr-ci-monitor %s\n' "$*" >> "$state_dir/tool-invocations.log"
+
+case " $* " in
+  *" --help "*|*" help "*)
+    printf '%s\n' 'Usage: pr-ci-monitor start --commit COMMIT --branch BRANCH'
+    ;;
+  *" start "*|*" watch "*)
+    if [ ! -f "$state_dir/merged" ]; then
+      printf '%s\n' '{"started":false,"error":"merge evidence is missing"}' >&2
+      exit 4
+    fi
+    printf '%s\n' '{"started":false,"missing":"durable-monitor-access","error":"durable background monitor access is unavailable in this fake simulation"}' >&2
+    exit 5
+    ;;
+  *)
+    printf '%s\n' 'Start the fake monitor with pr-ci-monitor start --commit def456 --branch main.' >&2
+    exit 2
+    ;;
+esac

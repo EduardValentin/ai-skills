@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "draft-new-prd-outline",
+      "query": "Turn these product notes into a concise PRD outline covering goals, users, core flows, permissions, lifecycle, edge cases, non-goals, and success outcomes.",
+      "should_trigger": true
+    },
+    {
       "id": "turn-approved-prd-into-tickets",
       "query": "The PRD is approved. Break it into Jira implementation tickets with acceptance criteria, dependencies, and delivery order.",
+      "should_trigger": false
+    },
+    {
+      "id": "design-prd-implementation",
+      "query": "Using this approved PRD, design the API endpoints, database schema, React component hierarchy, and rollout plan.",
       "should_trigger": false
     }
   ]

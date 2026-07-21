@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+workspace=$(CDPATH= cd "$script_dir/.." && pwd)
+state_dir="$workspace/verify-pr-fixture-state"
+mkdir -p "$state_dir"
+printf 'linear %s\n' "$*" >> "$state_dir/tool-invocations.log"
+
+case " $* " in
+  *" --help "*|*" help "*)
+    printf '%s\n' 'Fake linear supports issue and search reads.'
+    ;;
+  *)
+    : > "$state_dir/ticket-read"
+    cat <<'JSON'
+{"identifier":"APP-100","title":"Checkout monitor fallback","status":{"name":"Ready for Merge","type":"started"},"projectPolicy":{"reviewStates":["In Review","Ready for Merge"]},"url":"https://linear.example/acme/issue/APP-100"}
+JSON
+    ;;
+esac

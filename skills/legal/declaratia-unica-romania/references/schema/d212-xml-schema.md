@@ -8,7 +8,7 @@ source_anchor_xml: ${D212_DATA_DIR}/2025/D212.xml
 
 # Schema XML D212
 
-Documentul descrie structura XML produsă/importată de platforma DUF (`duf.anaf.ro`). Toate atributele și elementele sunt extrase din `D212.xml` golden reference (vezi `source_anchor_xml`). Înainte de orice generare XML în faza 6 a sesiunii, verifică `last_verified` și `platform_version` față de pagina DUF live (vezi `../references/workflow/freshness-check.md`).
+Documentul descrie structura XML produsă/importată de platforma DUF (`duf.anaf.ro`). Toate atributele și elementele sunt extrase din `D212.xml` golden reference (vezi `source_anchor_xml`). Înainte de orice generare XML în faza 6 a sesiunii, verifică `last_verified` și `platform_version` față de pagina DUF live (vezi `references/workflow/freshness-check.md`).
 
 ## Header
 
@@ -34,7 +34,7 @@ Atribute (toate obligatorii):
 | `an_r` | string anul (`"2026"` = anul calendaristic al depunerii) | sesiune (`{an_fiscal} + 1`) |
 | `luna_r` | `"12"` (luna de referință închidere an fiscal) | constant |
 | `d_rec`, `rectif1`, `rectif2` | flag-uri rectificare; `"0"` la declarație inițială | sesiune |
-| `totalPlata_A` | **checksum CNP** — suma cifrelor din `cif`, NU totalul fiscal de plată. Pentru CNP `1960828284541` → 58; pentru `2970422284573` → 55. Totalul fiscal real e în `<oblig_realizat>` la `dif_de_plata` / `oblimpoz_real_dif_deplata`. | calculat: `sum(int(c) for c in cif)` |
+| `totalPlata_A` | **checksum CNP** — suma cifrelor din `cif`, NU totalul fiscal de plată. Calculează exclusiv din CNP-ul documentat al declarantului din sesiunea curentă; nu folosi identificatori exemplu sau valori din alte sesiuni. Totalul fiscal real e în `<oblig_realizat>` la `dif_de_plata` / `oblimpoz_real_dif_deplata`. | calculat: `sum(int(c) for c in cif)` |
 | `bifa_conformare`, `bifa18`, `bifa19`, `bifa23` | bife procedură; default `"0"` | sesiune |
 | `anulare_litA`, `anulare_litB` | flag anulare; `"0"` la declarație inițială | sesiune |
 | `bifa111`, `bifa112`, `bifa113`, `bifa121`, `bifa122`, `bifa131`, `bifa132`, `bifa14`, `bifa15` | bife subcapitole controlate de DUF după logică internă. **Skill-ul nu le poate seta determinist** — default `"0"` și rely pe DUF re-export pentru forma canonică. Vezi `references/workflow/duf-roundtrip.md`. | default `"0"`; DUF normalizează |
@@ -80,7 +80,7 @@ Conține obligațiile calculate pe baza veniturilor realizate. Atribute relevant
 
 ## Element `<cap14>` (per linie de venit străinătate/România)
 
-Atribute (selectate per categorie de venit; vezi `form-mapping.yaml` pentru regula exactă required/optional):
+Atribute (selectate per categorie de venit; vezi `references/schema/form-mapping.yaml` pentru regula exactă required/optional):
 
 | Atribut | Tip | Sursă |
 |---|---|---|
@@ -106,4 +106,4 @@ Atribute (selectate per categorie de venit; vezi `form-mapping.yaml` pentru regu
 | `2017` | Dobânzi | conturi de economii, depozite, obligațiuni străinătate | `cap14` |
 | `2018` | Dividende | dividende străinătate sau RO ne-reținute la sursă | `cap14` |
 
-**Reverificare obligatorie:** la fiecare freshness check (Faza 2), re-fetch din Instrucțiuni PDF ANAF pentru anul fiscal curent. Lista poate crește (DPI, chirii etc.) — dar acest skill acoperă strict `2012`/`2017`/`2018` și PFA real (separat, codat în `references/pfa-real.md`).
+**Reverificare obligatorie:** la fiecare freshness check (Faza 2), re-fetch din Instrucțiuni PDF ANAF pentru anul fiscal curent. Lista poate crește (DPI, chirii etc.), dar acest skill acoperă strict categoriile PF mapate aici: `2012`, `2017` și `2018`.

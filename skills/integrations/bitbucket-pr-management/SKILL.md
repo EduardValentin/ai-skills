@@ -1,8 +1,17 @@
 ---
 name: bitbucket-pr-management
-description: Use when a task involves Bitbucket or a Bitbucket-hosted pull request/repository, including PR URLs, pull request IDs, PR branches, metadata/comments, testing or verifying PR behavior, reviewing changes, writing summaries, comment posting, description updates, or merge requests.
+description: >-
+  Manages and verifies Bitbucket pull requests, including metadata, discussion,
+  reviews, summaries, comments, descriptions, and merges. Use for Bitbucket
+  pull-request work when a task gives a PR URL or ID, or asks to resolve a PR
+  from a branch in a Bitbucket-hosted repository.
 compatibility: >-
-  Requires Bash, curl, and Bitbucket Cloud credentials supplied through BITBUCKET_TOKEN or BITBUCKET_EMAIL with BITBUCKET_API_TOKEN. macOS Keychain and git credential fill are optional credential-source fallbacks. Use direct HTTPS when the bundled helper is unavailable; self-hosted Bitbucket requires instance-specific routes.
+  Requires Bash, curl, and Python 3. Live Bitbucket Cloud access requires an
+  approved OAuth 2 access token in BITBUCKET_TOKEN or an Atlassian account email
+  in BITBUCKET_EMAIL with its scoped API token in BITBUCKET_API_TOKEN. Use direct
+  HTTPS if the bundled helper is unavailable. Self-hosted Bitbucket requires
+  approved authentication and instance/version-specific API documentation or an
+  approved local integration.
 metadata:
   status: config-required
   allows_tool_references: "true"
@@ -10,44 +19,52 @@ metadata:
 
 # Bitbucket PR Management
 
-## Supported Hosts
+## Host Boundaries
 
 Use these instructions for Bitbucket Cloud PR URLs such as `https://bitbucket.org/<workspace>/<repo_slug>/pull-requests/<id>`.
 
-For self-hosted Bitbucket URLs, do not reuse Cloud mutation routes. Confirm the instance route pattern before posting comments, updating descriptions, or merging.
+For self-hosted Bitbucket Server or Data Center, never reuse Bitbucket Cloud API routes or the Cloud helper. Establish the route and authentication from official API documentation that matches the instance and version, or from an approved local integration. If neither is available, report the parsed PR identity and the missing evidence; do not invent a universal self-hosted route.
 
 ## Authentication
 
 Prefer existing approved credentials before asking how to authenticate. Never print, paste, commit, store, place credentials in URLs, or put secrets in command history.
 
-Use this fallback order:
+Use only one of these supported Bitbucket Cloud REST authentication shapes per attempt:
 
-1. Approved local keychain or CLI credentials, including the local `codex-bitbucket-api-token` convention when present. For that keychain item, the working shape may be Basic auth: read the keychain `acct` value as `BITBUCKET_EMAIL` and the `-w` secret as `BITBUCKET_API_TOKEN`. Do not default to treating the `-w` secret as `BITBUCKET_TOKEN`; if Bearer auth returns `401`, retry with the Basic-auth shape before reporting a blocker.
-2. Environment auth for the helper: `BITBUCKET_EMAIL` plus `BITBUCKET_API_TOKEN` for app-password Basic auth, or `BITBUCKET_TOKEN` only when it is explicitly available as a Bearer token.
-3. Git credential helper for `bitbucket.org`: run `printf 'protocol=https\nhost=bitbucket.org\n\n' | git credential fill`, then use the returned `username` and `password` as Basic auth.
+1. Set `BITBUCKET_TOKEN` only for an explicitly approved OAuth 2 access token.
+2. Set `BITBUCKET_EMAIL` to the Atlassian account email and `BITBUCKET_API_TOKEN` to the API token bound to that account. This is API-token Basic authentication.
 
-Treat each approved source as a credential candidate. A credential that can read PR metadata may still lack write scope; if a write receives `401` or `403`, try the next approved source before reporting a blocker.
+Do not reuse a generic `bitbucket.org` Git credential for REST. Git API-token authentication accepts a Bitbucket username or the static `x-bitbucket-api-token-auth` username, while REST API-token Basic authentication requires the Atlassian account email. If only Git credentials are available, request or locate a separately approved REST credential whose email-token binding is known; never infer the email from a Git username.
 
-When using the optional local Keychain convention, read the account and secret without printing them, expose them only to one helper invocation as `BITBUCKET_EMAIL` and `BITBUCKET_API_TOKEN`, then discard the shell values. Do not include credential retrieval command substitutions in logs or reusable snippets.
+API tokens need `read:pullrequest:bitbucket` for PR reads, comment reads, and comment creation. Description updates and merges need both `read:pullrequest:bitbucket` and `write:pullrequest:bitbucket`; API-token scopes do not imply one another. OAuth 2 credentials need the corresponding `pullrequest` scope for reads and comments and `pullrequest:write` for updates and merges.
+
+Treat each separately approved source as a credential candidate. A credential that can read PR metadata may still lack write scope; if a write receives `401` or `403`, try the next approved REST credential before reporting a blocker.
+
+Expose only one credential candidate to each helper or HTTPS attempt. Before a Basic-auth attempt, unset `BITBUCKET_TOKEN`; before an OAuth attempt, unset `BITBUCKET_EMAIL` and `BITBUCKET_API_TOKEN`. This prevents the helper's OAuth-variable preference from silently reusing a failed candidate.
+
+When an approved local credential provider supplies the email-token pair, capture and parse it only inside a non-traced, non-echoing shell scope. Confirm that the account field is the Atlassian account email, pass both values to one helper invocation in memory, and unset them immediately afterward. Do not run credential retrieval as a standalone command or preserve its output.
 
 Never echo credential variables, run auth commands under shell tracing, paste token values into chat, place credentials in URLs, or preserve secrets in command output.
 
-## Bitbucket Cloud Helper
+## Bitbucket Cloud Workflow
 
 Prefer the helper shipped with this skill for Bitbucket Cloud operations. Resolve it relative to the skill directory, not relative to the target repository:
 
-- Preferred helper path: `<skill-dir>/scripts/bitbucket-cloud-pr.sh`.
+- Skill-relative helper path: `scripts/bitbucket-cloud-pr.sh`.
 
 Run `"$BITBUCKET_PR_HELPER" --help` for supported commands and auth environment variables. Do not assume every Bitbucket target repository has a root-level `scripts/bitbucket-cloud-pr.sh`. If the skill helper is unavailable in the current runtime, use the same Bitbucket Cloud routes with direct HTTPS requests.
 
 For Cloud PR URLs, parse `workspace`, `repo_slug`, and `pull_request_id` first.
-For discussion, summary, review, or verification requests, read `pr-details` before `read-comments`; follow `next` pagination until the needed comments are complete. If live calls are blocked, still report the parsed PR identity and blocked helper sequence.
+
+Read fresh `pr-details` before grounding any discussion, summary, review, verification, or mutation in a PR. Read comments only when the requested result depends on discussion, review feedback, approval blockers, or comment content. Metadata-only or UI/behavior verification does not require comments unless that context is material. If live calls are blocked, report the parsed identity and blocked operation without inventing PR content.
+
+The helper's `read-comments` command fetches every comments page and returns one JSON object whose `values` contains the combined comments. It parses each response with Python 3 and follows a top-level `next` URL only when it uses HTTPS, the exact `api.bitbucket.org` host, and the same workspace, repository, PR, and comments collection. It rejects mismatched links before making another request. If direct HTTPS is required because the helper is unavailable, preserve those structured parsing and validation rules; never scrape `next` from prose or pass an unvalidated URL to the shell.
 
 For branch-only requests, derive `workspace` and `repo_slug` from the Bitbucket remote when possible, then run `find-prs-for-branch`. If there is not exactly one clear candidate, ask the user to choose before mutating.
 
 For any write, `pr-details` is the next step before mutation; verify the exact PR, state, destination branch, requested operation, and payload before `post-comment`, `update-description`, or `merge`. For merge requests, include `merge-status` polling in the path; if merge returns a task ID, poll until success or failure.
 
-For comments, follow `next` pagination until the needed data is complete.
+`--dry-run` proves the helper's method, route, and JSON body only. It does not authenticate, read current PR state, or perform a mutation.
 
 ## Formatting Rules
 
@@ -60,4 +77,8 @@ Prefer this flattened shape: step text paragraph, blank line, code fence at colu
 | Mistake | Correction |
 | --- | --- |
 | Looking for `scripts/bitbucket-cloud-pr.sh` in the target repository | Resolve the helper relative to this skill directory first; fall back to direct HTTPS routes if unavailable. |
-| Treating the local `codex-bitbucket-api-token` secret as a Bearer token after `401` | Use the keychain `acct` value plus the `-w` secret as `BITBUCKET_EMAIL` and `BITBUCKET_API_TOKEN` for Basic auth. |
+| Reusing a Git credential for Cloud REST | Require a separately approved Atlassian-email and API-token binding; do not treat the Git username as the REST identity. |
+| Retrying Basic auth while `BITBUCKET_TOKEN` remains set | Expose only the intended candidate and unset variables from every other auth shape. |
+| Manually following an unchecked comments `next` link | Use `read-comments`; for direct HTTPS fallback, parse JSON and enforce the same HTTPS host and collection path before fetching. |
+| Fetching comments for every verification request | Read comments only when discussion or review context is material to the requested result. |
+| Reusing Cloud routes for a self-hosted PR | Require matching official instance documentation or an approved local integration; otherwise stop with the route evidence blocker. |

@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "prototype-production-scope-map",
+      "query": "Use the finished designs/subscription prototype as the reference for production planning. Map its routes, interaction states, accessible element locators, business-rule mocks, and integration boundaries to known or uncertain production counterparts, but do not edit production yet.",
+      "should_trigger": true
+    },
+    {
       "id": "production-react-feature",
       "query": "Implement the approved billing settings screen directly in our production Next.js app from the Figma design, connect it to the real account API, and add integration tests.",
+      "should_trigger": false
+    },
+    {
+      "id": "shared-design-system-components",
+      "query": "Add reusable button and text-field variants plus semantic tokens to our shared production design-system package based on the approved component specification.",
       "should_trigger": false
     }
   ]

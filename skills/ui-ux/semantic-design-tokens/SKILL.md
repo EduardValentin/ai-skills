@@ -53,13 +53,15 @@ Good token names describe purpose, scope, and state. Primitive scales may exist 
 
 ## Audit Script
 
-Run the bundled scanner against changed UI files when a token audit is needed:
+For a token audit of changed UI files in the scanner's supported formats, run the bundled scanner when Python 3 is available:
 
 ```bash
 python3 <skill-dir>/scripts/audit_tokens.py <path> [<path> ...]
 ```
 
-The scanner flags common review triggers: hex colors, `rgb()/hsl()`, and bracketed literal style values. Exit status 1 means review findings were emitted; it does not mean every finding is a token violation. Findings are prompts for judgment, not proof of a violation. Replace them with semantic tokens only when they duplicate an existing role or represent a reusable design-system decision.
+If Python or the scanner is unavailable, manually review the changed UI files and report that fallback. The scanner flags only common review triggers: hex colors, `rgb()/hsl()`, and bracketed literal style values. It does not detect ordinary CSS length literals, duplicated constants across files, indirect token bypasses, or semantic-role misuse.
+
+Exit status 1 means review findings were emitted; it does not mean every finding is a token violation. Treat findings as prompts for judgment, not proof of a violation. Regardless of the scanner result, complete the broader manual diff audit and replace values with semantic tokens only when they duplicate an existing role or represent a reusable design-system decision.
 
 ## Done Means
 

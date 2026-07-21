@@ -1,0 +1,55 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+workspace=$(CDPATH= cd "$script_dir/.." && pwd)
+state_dir="$workspace/verify-pr-fixture-state"
+mkdir -p "$state_dir"
+printf 'gh %s\n' "$*" >> "$state_dir/tool-invocations.log"
+
+case " $* " in
+  *" --help "*|*" help "*)
+    printf '%s\n' 'Fake gh supports: pr view, pr checks, api policy reads, and pr merge.'
+    ;;
+  *" pr merge "*)
+    for required_read in pr-read policy-read checks-read ticket-read; do
+      if [ ! -f "$state_dir/$required_read" ]; then
+        printf '{"merged":false,"error":"fresh gate read missing: %s"}\n' "$required_read" >&2
+        exit 3
+      fi
+    done
+    : > "$state_dir/merged"
+    cat <<'JSON'
+{"merged":true,"mergeCommit":{"oid":"def456"},"baseRefName":"main","url":"https://github.example/acme/app/pull/100"}
+JSON
+    ;;
+  *" pr checks "*|*" commits/"*"/check-runs "*)
+    : > "$state_dir/checks-read"
+    cat <<'JSON'
+[{"name":"build","required":true,"status":"COMPLETED","conclusion":"SUCCESS"},{"name":"surface-tests-checkout","required":true,"status":"COMPLETED","conclusion":"SUCCESS"}]
+JSON
+    ;;
+  *" branches/main/protection "*|*" rulesets "*)
+    : > "$state_dir/policy-read"
+    cat <<'JSON'
+{"requiredApprovingReviewCount":1,"codeOwnerReviewRequired":false,"requiredChecks":["build","surface-tests-checkout"]}
+JSON
+    ;;
+  *" pr view "*)
+    : > "$state_dir/pr-read"
+    : > "$state_dir/policy-read"
+    cat <<'JSON'
+{"number":100,"url":"https://github.example/acme/app/pull/100","state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"app-100-checkout","mergeStateStatus":"CLEAN","body":"Tracks APP-100","linkedTickets":["APP-100"],"repositoryPolicy":{"requiredApprovals":1,"codeOwnerReviewRequired":false,"requiredChecks":["build","surface-tests-checkout"]},"reviewDecision":"APPROVED","approvals":[{"reviewer":"fixture-reviewer","state":"APPROVED"}],"requestedChangesReviews":0,"unresolvedReviewThreads":0,"implementedSurfaceTests":{"checkout-flow":"PASS"}}
+JSON
+    ;;
+  *" api "*)
+    : > "$state_dir/policy-read"
+    cat <<'JSON'
+{"requiredApprovingReviewCount":1,"codeOwnerReviewRequired":false,"requiredChecks":["build","surface-tests-checkout"]}
+JSON
+    ;;
+  *)
+    printf '%s\n' 'Unsupported fake gh invocation. Run gh --help.' >&2
+    exit 2
+    ;;
+esac

@@ -1,8 +1,8 @@
-"""Environment-driven config for stock-research scripts.
+"""Environment-driven config for bundled stock research scripts.
 
 All settings come from env vars. Required: SR_SEC_USER_AGENT (SEC blocks empty
-or default user agents). Optional: SR_REPO_PATH, SR_DISCOUNT_RATE,
-SR_TERMINAL_GROWTH, SR_YEARS_OF_HISTORY.
+or default user agents) and SR_RESEARCH_REPO. Optional: SR_DISCOUNT_RATE,
+SR_TERMINAL_GROWTH, and SR_YEARS_OF_HISTORY.
 """
 from __future__ import annotations
 
@@ -12,9 +12,6 @@ from pathlib import Path
 
 class ConfigError(RuntimeError):
     pass
-
-
-DEFAULT_REPO_PATH = Path.home() / "Documents" / "Personal" / "investing-research"
 
 
 def sec_user_agent() -> str:
@@ -28,8 +25,12 @@ def sec_user_agent() -> str:
 
 
 def research_repo_path() -> Path:
-    raw = os.environ.get("SR_REPO_PATH")
-    return Path(raw) if raw else DEFAULT_REPO_PATH
+    raw = os.environ.get("SR_RESEARCH_REPO")
+    if not raw:
+        raise ConfigError(
+            "SR_RESEARCH_REPO is required. Set it to the investing research repo root."
+        )
+    return Path(raw).expanduser()
 
 
 def discount_rate() -> float:

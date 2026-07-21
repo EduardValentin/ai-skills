@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "assess-material-event-against-saved-thesis",
+      "query": "Apple just announced a transformative acquisition. How does that event change the AAPL thesis I already have saved?",
+      "should_trigger": true
+    },
+    {
       "id": "research-brand-new-ticker",
       "query": "I have never researched CRWD. Build an initial five-year bull, base, and bear thesis and tell me whether it is a buy.",
+      "should_trigger": false
+    },
+    {
+      "id": "calculate-portfolio-performance",
+      "query": "Calculate my portfolio profit and loss, current position weights, and tax-lot gains from these holdings and cost bases.",
       "should_trigger": false
     }
   ]

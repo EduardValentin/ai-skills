@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fake revenue dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: rgb(23, 32, 42);
+      background: rgb(245, 247, 250);
+      font-family: Arial, sans-serif;
+    }
+    main {
+      width: 920px;
+      margin: 48px auto;
+    }
+    .dashboard-heading {
+      margin: 0 0 24px;
+      font-size: 32px;
+      font-weight: 700;
+    }
+    [data-surface="reference"] .dashboard-heading { line-height: 38.4px; }
+    [data-surface="implementation"] .dashboard-heading { line-height: 44.8px; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .filter-wrap { position: relative; }
+    .filter-button {
+      min-width: 112px;
+      height: 40px;
+      padding: 0 14px;
+      color: rgb(23, 32, 42);
+      background: rgb(255, 255, 255);
+      border: 1px solid rgb(148, 163, 184);
+      border-radius: 4px;
+      font: inherit;
+    }
+    .filter-button:focus-visible {
+      outline: 3px solid rgb(14, 116, 144);
+      outline-offset: 2px;
+    }
+    .filter-menu {
+      position: absolute;
+      right: 0;
+      width: 160px;
+      margin: 6px 0 0;
+      padding: 8px;
+      list-style: none;
+      background: rgb(255, 255, 255);
+      border: 1px solid rgb(203, 213, 225);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+    }
+    .filter-menu[hidden] { display: none; }
+    .filter-menu li { padding: 6px 8px; }
+    .revenue-card {
+      padding: 24px;
+      background: rgb(255, 255, 255);
+      border-radius: 6px;
+    }
+    [data-surface="reference"] .revenue-card {
+      border: 1px solid rgb(203, 213, 225);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+    [data-surface="implementation"] .revenue-card {
+      border: 2px solid rgb(148, 163, 184);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+    }
+    .chart {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 12px;
+      height: 260px;
+      padding-top: 18px;
+    }
+    .axis-labels {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .axis-label { color: rgb(71, 85, 105); }
+    [data-surface="reference"] .axis-label {
+      font-size: 12px;
+      font-weight: 400;
+    }
+    [data-surface="implementation"] .axis-label {
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .plot {
+      background: linear-gradient(to top, rgb(224, 242, 254), rgb(255, 255, 255));
+      border-bottom: 2px solid rgb(14, 116, 144);
+    }
+    .chart-legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 18px;
+      font-size: 13px;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      background: rgb(14, 116, 144);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 class="dashboard-heading">Revenue overview</h1>
+    <div class="toolbar">
+      <strong>Last 30 days</strong>
+      <div class="filter-wrap">
+        <button class="filter-button" type="button" aria-expanded="false" aria-controls="filter-menu">Filter</button>
+        <ul class="filter-menu" id="filter-menu" hidden>
+          <li>All revenue</li>
+          <li>Subscriptions</li>
+        </ul>
+      </div>
+    </div>
+    <section class="revenue-card" aria-labelledby="revenue-title">
+      <h2 id="revenue-title">Revenue</h2>
+      <div class="chart" role="img" aria-label="Revenue increased from 20 to 80 thousand dollars">
+        <div class="axis-labels" aria-hidden="true">
+          <span class="axis-label">$80k</span>
+          <span class="axis-label">$50k</span>
+          <span class="axis-label">$20k</span>
+        </div>
+        <div class="plot"></div>
+      </div>
+      <div class="chart-legend">
+        <span class="legend-swatch" aria-hidden="true"></span>
+        <span>Recurring revenue</span>
+      </div>
+    </section>
+  </main>
+  <script>
+    const surface = new URLSearchParams(location.search).get("surface");
+    document.body.dataset.surface = surface === "reference" ? "reference" : "implementation";
+
+    const filterButton = document.querySelector(".filter-button");
+    const filterMenu = document.querySelector(".filter-menu");
+    filterButton.addEventListener("click", () => {
+      const expanded = filterButton.getAttribute("aria-expanded") === "true";
+      filterButton.setAttribute("aria-expanded", String(!expanded));
+      filterMenu.hidden = expanded;
+    });
+  </script>
+</body>
+</html>

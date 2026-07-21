@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "verify-canvas-rendering",
+      "query": "The new Three.js scene sometimes appears blank after resizing. Inspect the rendered page and screenshots across phone and desktop sizes, verify that the canvas has visible pixels and remains framed correctly, and report the evidence.",
+      "should_trigger": true
+    },
+    {
       "id": "implement-settings-cards",
       "query": "Build a reusable React settings-card component from the approved design, add loading and empty variants, and expose it in Storybook for the product team.",
+      "should_trigger": false
+    },
+    {
+      "id": "define-semantic-color-tokens",
+      "query": "Replace the repeated hex values in our theme with semantic surface, text, border, and action tokens, then document when each token should be used.",
       "should_trigger": false
     }
   ]

@@ -7,8 +7,23 @@
       "should_trigger": true
     },
     {
+      "id": "verify-bitbucket-branch-pull-request",
+      "query": "Verify the UI changes in the pull request for branch feature/auth-panel; the repository remote is https://bitbucket.org/acme/widget.git.",
+      "should_trigger": true
+    },
+    {
       "id": "review-github-pull-request",
       "query": "Review the authentication changes in GitHub pull request #42 for acme/widget and draft a review summary.",
+      "should_trigger": false
+    },
+    {
+      "id": "update-gitlab-merge-request",
+      "query": "Update GitLab merge request 42 in acme/widget with the release verification notes.",
+      "should_trigger": false
+    },
+    {
+      "id": "configure-bitbucket-pipeline",
+      "query": "Configure a Bitbucket Pipeline that builds the image and deploys the repository to staging after every push to main.",
       "should_trigger": false
     }
   ]

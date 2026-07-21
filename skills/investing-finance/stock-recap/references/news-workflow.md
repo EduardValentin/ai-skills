@@ -1,10 +1,10 @@
 # Stock Recap News Workflow
 
-## News mode Phase 1.5: Event capture
+## News mode Phase 1.7: Event capture
 
 (Phase 1 ran already in shared form; News mode adds an event-capture step before any fetch.)
 
-### Step 1.5.1 — Capture the event (free-form)
+### Step 1.7.1 — Capture the event (free-form)
 
 Ask the user, in plain Markdown:
 
@@ -18,7 +18,7 @@ Also ask:
 
 Capture as `event_date`.
 
-### Step 1.5.2 — Classify the event (agent + user)
+### Step 1.7.2 — Classify the event (agent + user)
 
 The agent proposes a classification from this fixed list:
 
@@ -95,7 +95,7 @@ Format (rendered Markdown):
 
 ### Event
 
-> <event_description from Phase 1.5>
+> <event_description from Phase 1.7>
 
 Class: **<event_class>** | Date: <event_date>
 

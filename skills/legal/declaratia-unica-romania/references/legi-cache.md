@@ -15,15 +15,12 @@ _legi/{an}/
 ├── README.md                          # index sintetic + last_verified per modul
 ├── salariu-minim.md
 ├── plafoane-cass.md
-├── plafoane-cas.md
 ├── impozit-dividende.md
 ├── impozit-castig-capital.md
 ├── impozit-dobanzi.md
 ├── impozit-cripto.md
-├── pfa-real-cheltuieli.md
 ├── tratate-dubla-impunere.md
-├── curs-bnr-mediu.md
-└── modificari-cf-fata-de-anul-precedent.md
+└── conversie-valutara.md
 ```
 
 Toate au frontmatter conform `references/workflow/citation-protocol.md`.
@@ -43,12 +40,8 @@ Format:
 | Cotă impozit dividende RO | 8% | `_legi/{an}/impozit-dividende.md` | 2026-05-11 |
 | Cotă impozit câștig capital | 10% / 1% (după caz) | `_legi/{an}/impozit-castig-capital.md` | 2026-05-11 |
 | Cotă impozit dobânzi | 10% | `_legi/{an}/impozit-dobanzi.md` | 2026-05-11 |
-| Curs mediu USD | 4.6612 | `_legi/{an}/curs-bnr-mediu.md` | 2026-05-11 |
-| Curs mediu EUR | 4.9745 | `_legi/{an}/curs-bnr-mediu.md` | 2026-05-11 |
-
-## Modificări CF față de anul precedent
-
-Vezi `_legi/{an}/modificari-cf-fata-de-anul-precedent.md` pentru changelog.
+| Metodă conversie categoria 2012 | {metoda verificată} | `_legi/{an}/conversie-valutara.md` | {YYYY-MM-DD} |
+| Curs oficial folosit | {monedă, dată/an, valoare} | `_legi/{an}/conversie-valutara.md` | {YYYY-MM-DD} |
 
 ## Reverificare
 
@@ -81,11 +74,10 @@ _legi/2024/impozit-dividende.md         # cota 5% (anul fiscal 2024)
 _legi/2025/impozit-dividende.md         # cota 8% (anul fiscal 2025)
 ```
 
-Cache-ul e per-an fiscal, deci natural separat — nu folosim sufix `.v2` pe același an decât dacă există o rectificativă ANAF intra-anuală.
+Cache-ul este separat per an fiscal. Nu suprascrie dovezile unui an cu reguli sau valori din alt an.
 
 ## Modulele relevante per scenariu
 
-Indicat în `references/pf-investitii.md` și `references/pfa-real.md`, dar recap:
+Indicat în `references/pf-investitii.md`, dar recap:
 
-- **PF investiții**: `impozit-dividende`, `impozit-castig-capital`, `impozit-dobanzi`, `impozit-cripto`, `tratate-dubla-impunere`, `curs-bnr-mediu`, `plafoane-cass`, `salariu-minim`.
-- **PFA real**: `pfa-real-cheltuieli`, `plafoane-cas`, `plafoane-cass`, `salariu-minim`, `modificari-cf-fata-de-anul-precedent`.
+- **PF investiții**: `impozit-dividende`, `impozit-castig-capital`, `impozit-dobanzi`, `impozit-cripto`, `tratate-dubla-impunere`, `conversie-valutara`, `plafoane-cass`, `salariu-minim`.

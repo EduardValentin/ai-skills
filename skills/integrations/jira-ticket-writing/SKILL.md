@@ -1,8 +1,8 @@
 ---
 name: jira-ticket-writing
-description: Use when drafting, creating, or editing Jira tickets
+description: Drafts and revises Jira ticket fields with outcome-focused summaries, structured descriptions, native acceptance tasks, and issue relationships. Use when preparing, creating, or editing Jira tickets.
 compatibility: >-
-  Publishing or editing requires a configured Jira tool or API through JIRA_CONFIG_PATH with access to the target project. Support for custom acceptance fields, ADF task items, parent fields, and native links varies. When unavailable, return a draft and report unsupported native-link behavior.
+  Drafting works without Jira access. Publishing or editing requires an approved Jira integration or API configured through JIRA_CONFIG_PATH, permission for the target project, and support for the required fields. Field IDs, ADF support, parent fields, and issue-link types vary by instance. When a required capability is unavailable, return a draft, name unapplied fields or links, and do not claim or perform a partial write.
 metadata:
   status: config-required
   allows_tool_references: "true"
@@ -12,7 +12,20 @@ metadata:
 
 ## Overview
 
-Apply these preferences when writing Jira ticket drafts or publishing/editing tickets through Jira tools. This skill only captures formatting and writing preferences.
+Write practical Jira tickets whose field structure matches the target Jira instance. Preserve user value and delivery outcomes while keeping implementation detail, acceptance evidence, and issue relationships in their proper fields.
+
+## Operating Boundary
+
+- Draft by default. Requests to prepare, draft, rewrite, or clean a ticket do not authorize a Jira mutation.
+- Create or update an issue only when the user explicitly requests the write and an approved Jira integration is available. Use a dry run when the integration provides one.
+- Before a write, inspect the target project's field and issue-link metadata. For an edit, also read the current issue. Verify the exact project or issue, complete field payload, parent, and requested links immediately before mutation.
+- If the target, field mapping, representation, or relationship direction cannot be verified, return the usable draft and identify the blocker. Do not silently publish a partial ticket; require explicit approval for any reduced write.
+
+## Field Representation
+
+- For a human-readable draft, Markdown headings and labeled links are acceptable.
+- For Jira API fields or a payload, return field-keyed data and serialize every rich-text value in the exact format accepted by the configured Jira instance. Use ADF nodes and marks when the field requires ADF; do not present Markdown as an API-ready ADF value.
+- Discover instance-specific custom field IDs instead of inventing them. If field metadata is unavailable, use semantic field names in the draft and report that ID mapping is still required.
 
 ## Ticket Shape
 
@@ -29,9 +42,10 @@ Apply these preferences when writing Jira ticket drafts or publishing/editing ti
 
 ## Acceptance Criteria
 
-- Put acceptance criteria in Jira's `Acceptance & Testing Criteria` field, not in the description body. Only when there is no dedicated field may they be placed in the body.
-- Use real Jira task checkboxes, not markdown `[ ]` text.
-- When using Jira API fields, represent checkboxes with Atlassian Document Format `taskList` and `taskItem` nodes. See `references/adf-task-list.md` for the structure.
+- Discover whether the project has a dedicated `Acceptance & Testing Criteria` field and whether that field supports native task nodes.
+- When the dedicated field supports them, put acceptance criteria there as real Jira task checkboxes, not Markdown `[ ]` text. For Jira API fields, follow `references/adf-task-list.md` and use ADF `taskList` and `taskItem` nodes.
+- When the dedicated field exists but cannot represent native tasks, keep the criteria assigned to that field in the draft, report the capability gap, and stop before publication. Do not move them into the description or degrade them to Markdown checkboxes without an explicitly approved exception.
+- Only when no dedicated field exists may criteria fall back to the description. Use native ADF task nodes there when supported; otherwise return the draft, report the limitation, and stop before publication.
 
 - Write criteria as pass/fail outcomes. Avoid vague "consider" or "look into" wording unless the ticket is explicitly an investigation.
 - Keep checkboxes user- or delivery-observable where possible.
@@ -40,12 +54,13 @@ Apply these preferences when writing Jira ticket drafts or publishing/editing ti
 
 - Model parent/epic relationships with Jira's native parent field.
 - Model blockers, blocked-by, related work, and follow-ups with native Jira issue links when concrete issue keys exist.
+- Resolve the target instance's available link types and inward/outward directions. Use only an unambiguous semantically matching type and direction; do not guess from a display label.
 - Do not put dependency blocks in the description body.
-- If the available Jira tool cannot create a native issue link, leave dependency prose out of the ticket and report the limitation in the final response.
+- If no matching link type exists or the integration cannot create it, leave dependency prose out of the ticket, identify each unapplied relationship, and do not claim it was created. Require explicit approval before publishing without requested links.
 
 ## Links And Labels
 
-- Format repository links as Markdown references with meaningful labels, for example: `[yesenergy/yes-map](https://bitbucket.org/yesenergy/yes-map/src/master/)`.
+- Give repository links meaningful labels in the target field's representation, for example `[yesenergy/yes-map](https://bitbucket.org/yesenergy/yes-map/src/master/)` in Markdown or linked text in ADF.
 - Avoid bare URLs in ticket descriptions.
 - Use labels sparingly. Do not add labels by default.
 - If labels seem useful, propose them to the user or add them only when the user asks.

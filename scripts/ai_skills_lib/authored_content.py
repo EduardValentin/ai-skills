@@ -890,7 +890,11 @@ def _classify_pattern_value(
     if pattern.name == "authorization-value":
         parts = value.strip().split(None, 1)
         credential = parts[1] if len(parts) == 2 else value
-        return "safe" if _is_safe_assigned_value(credential) else "sensitive"
+        return (
+            "safe"
+            if _is_safe_authorization_credential(credential)
+            else "sensitive"
+        )
     return "safe" if _is_safe_assigned_value(value) else "sensitive"
 
 
@@ -1081,3 +1085,15 @@ def _is_safe_assigned_value(raw_value: str) -> bool:
     if re.fullmatch(r"<(?:YOUR_[A-Z0-9_]+|REDACTED|PLACEHOLDER)>", normalized):
         return True
     return bool(re.fullmatch(r"(?:X{3,}|\*{3,})", normalized))
+
+
+def _is_safe_authorization_credential(raw_value: str) -> bool:
+    """Allow an exact shell reference when a quoted header leaves its closing quote."""
+    if _is_safe_assigned_value(raw_value):
+        return True
+    value = raw_value.rstrip()
+    if value.endswith("\\"):
+        value = value[:-1].rstrip()
+    if not value.endswith(("'", '"')):
+        return False
+    return bool(_PURE_REFERENCE_PATTERN.fullmatch(value[:-1].rstrip()))

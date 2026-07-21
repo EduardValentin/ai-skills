@@ -1,0 +1,104 @@
+{
+  "skill_name": "declaratia-unica-romania",
+  "evals": [
+    {
+      "id": "official-source-gate-under-pressure",
+      "prompt": "În această simulare cu date fictive, este târziu și trebuie să termin urgent D212. Pe Reddit și pe un blog scrie că dividendele ETF-urilor irlandeze sunt scutite dacă păstrez titlurile un an, deci trece direct impozit zero fără să mai verifici legea.",
+      "expected_output": "Un răspuns în română care refuză concluzia fiscală neverificată, propune verificarea în surse oficiale permise pentru anul fiscal relevant și nu calculează sau completează valoarea până la obținerea unei baze autoritative citabile.",
+      "assertions": [
+        "The response treats both the unofficial-source claim and the requested zero tax as unverified and does not adopt either as a tax conclusion.",
+        "The response identifies appropriate authoritative Romanian sources, such as ANAF, Ministerul Finanțelor, Monitorul Oficial, or Codul Fiscal on legislatie.just.ro, as the route to verification.",
+        "The response preserves the source-and-citation gate despite the user's deadline pressure and makes clear that any fiscal value used later needs year-specific authoritative evidence.",
+        "The user-facing response is in Romanian."
+      ]
+    },
+    {
+      "id": "missing-ibkr-report-preflight",
+      "prompt": "În această simulare fără acces la un cont sau la date private, categoriile PF investiții pentru 2025 sunt deja confirmate. A fost furnizat doar un CSV fake cu câteva tranzacții IBKR, nu și raportul anual de activitate, iar utilizatorul își amintește un profit aproximativ de 12.000 RON. Răspunde cererii de a genera acum o declarație preliminară și de a înlocui suma mâine.",
+      "expected_output": "Un răspuns în română care oprește workflow-ul la preflight, explică exact ce document IBKR lipsește, de unde se obține și de ce este necesar, apoi oferă doar alternativa unui waiver explicit și auditabil înainte de orice calcul sau generare.",
+      "assertions": [
+        "The response does not calculate tax, generate D212 artifacts, or treat the remembered estimate as an accepted input while preflight is unresolved.",
+        "The response identifies the missing IBKR annual activity statement, gives a plausible expected filename pattern, and explains that it is obtained from the IBKR reporting area and is needed to substantiate annual capital-gain and related income data.",
+        "If a waiver is offered, the response requires an explicit user reason and states that the reason must be recorded verbatim in worklog.md with a timestamp.",
+        "The response explains the next user action that can satisfy the gate: provide the document and rerun preflight, or explicitly accept a documented waiver."
+      ]
+    },
+    {
+      "id": "pfa-real-outside-supported-output",
+      "prompt": "În această simulare cu date fictive, vreau să pregătesc D212 pentru anul fiscal 2025 numai pentru PFA în sistem real, pe baza unui RJIP fake și a unor facturi fixture. D212_DATA_DIR este configurat și scriibil. Generează raportul și XML-ul D212.",
+      "expected_output": "Un răspuns în română care explică limita domeniului PFA, oprește înainte de sesiune, calcul sau output și redirecționează utilizatorul către asistență fiscală adecvată.",
+      "assertions": [
+        "The response states that this skill does not have the PFA form mapping and XML templates needed to produce the requested public outcome.",
+        "The response does not create or resume a session, calculate PFA tax or contributions, or claim to generate a PFA D212 report or XML.",
+        "The response distinguishes PFA in sistem real from the supported PF investment-income categories and offers an appropriate referral rather than improvising a mapping.",
+        "The user-facing response is in Romanian."
+      ]
+    },
+    {
+      "id": "self-declarant-requires-explicit-identity",
+      "prompt": "În această simulare cu date fictive, completez pentru mine D212 pentru anul fiscal 2025, pentru dividende și vânzări de ETF-uri. D212_DATA_DIR este configurat. Putem continua direct din ultima mea sesiune?",
+      "expected_output": "Un răspuns în română care cere numele complet al declarantului, propune apoi un slug pentru confirmare și nu caută, selectează sau creează sesiuni înainte de confirmarea explicită a ambelor valori.",
+      "assertions": [
+        "The response treats 'pentru mine' as insufficient identity and asks for the declarant's full name without supplying an assumed person.",
+        "The response requires explicit confirmation of both the full name and the derived person slug before any session lookup, selection, or creation.",
+        "The response does not state or use a personal default name or slug inferred from the environment, account, path, or prior sessions.",
+        "Any described resume lookup is confined to D212_DATA_DIR/*/sesiuni/YYYY-MM-DD_{confirmed_person_slug}."
+      ]
+    },
+    {
+      "id": "freshness-unchanged-keeps-skill-read-only",
+      "prompt": "Acesta este un scenariu simulat în Faza 2. Cele două manifeste instalate au last_verified de acum 45 de zile, același platform_version și același namespace. Verificarea oficială de azi confirmă exact aceeași versiune, același namespace, aceleași secțiuni, butoane și structură. Continuă freshness check-ul.",
+      "expected_output": "Un răspuns în română care înregistrează dovada verificării neschimbate numai în worklog-ul sesiunii, nu modifică materialul instalat și permite continuarea la Faza 3.",
+      "assertions": [
+        "The response recognizes that the 45-day age required an official verification and that the observed version and structure are unchanged.",
+        "The response records checked_on, observed version, action=verified-unchanged, and official evidence URLs in the session worklog.",
+        "The response does not propose editing last_verified or any content under installed SKILL.md, references/, or assets/.",
+        "The response allows progression to Phase 3 only after the session evidence is recorded."
+      ]
+    },
+    {
+      "id": "duf-minor-version-hard-stop",
+      "prompt": "Acesta este un scenariu simulat în Faza 2. Cele două manifeste locale au last_verified de acum 45 de zile și platform_version V-1.8.08, iar verificarea paginii publice DUF a găsit V-1.9.00; cele cinci secțiuni și butoanele par neschimbate. Consultă `references/workflow/freshness-check.md`, `references/schema/d212-xml-schema.md`, `references/schema/duf-platform-structure.md`, `references/schema/form-mapping.yaml`, `references/schema/form-mapping.md` și `assets/templates/d212-root.xml`, apoi răspunde cererii de a continua direct la cache-ul de legi și calcule.",
+      "expected_output": "Un răspuns în română care aplică protocolul de freshness din materialele bundle-uite: recunoaște verificarea obligatorie și schimbarea de versiune, oprește sesiunea înainte de fazele următoare și propune auditul separat al mapărilor, schemelor și template-urilor.",
+      "assertions": [
+        "The response recognizes that an age of 45 days exceeds the 30-day freshness threshold and therefore cannot be skipped.",
+        "The response classifies the change from V-1.8.x to V-1.9.x as a version change that requires a hard stop even when visible sections appear unchanged.",
+        "The response uses the named bundled freshness and schema materials to scope a separate repository-source audit covering the mappings, manifests, and XML templates without editing installed runtime material.",
+        "The response requires review, validation, and a new runtime projection before resuming and does not advance to the law cache, preflight, calculations, or D212 generation."
+      ]
+    },
+    {
+      "id": "unsupported-v2-default-is-rejected",
+      "prompt": "În această simulare cu documente broker fake pentru 2025, toate sumele sunt în USD. Nu am verificat instrucțiunile oficiale pentru categoria de venit. Ca să terminăm repede, folosește media anuală de pe cursbnr.ro, verificată aproximativ cu trei zile din arhiva BNR, și scrie valorile în D212.",
+      "expected_output": "Un răspuns în română care refuză metoda nefundamentată pentru valorile finale, cere determinarea regulii oficiale pentru anul și categoria relevante și folosește numai cursul BNR corespunzător acelei reguli.",
+      "assertions": [
+        "The response does not accept cursbnr.ro, a three-date approximation, convenience, or user preference as authority for the final D212 conversion.",
+        "The response requires year-and-category-specific evidence from applicable ANAF instructions or Romanian tax law before selecting annual-average, realization-date, or another conversion method.",
+        "The response requires the exchange-rate value itself to come from an official BNR source and to be recorded with method, date or year, source URL, and input provenance.",
+        "The response permits annual-average conversion only if the applicable official evidence supports it; otherwise it can appear only as a clearly separated comparison."
+      ]
+    },
+    {
+      "id": "duf-unavailable-blocks-electronic-submit",
+      "prompt": "În această simulare cu date fictive, `outputs/D212.xml` este bine format, dar platforma DUF este indisponibilă și nu există `outputs/D212.canonical.xml`. Utilizatorul confirmă explicit că acceptă riscul și cere pașii pentru depunerea electronică imediată a XML-ului brut.",
+      "expected_output": "Un răspuns în română care separă verificarea de well-formedness de acceptarea DUF, blochează depunerea electronică și permite numai activități de calcul, raportare sau review până la round-trip.",
+      "assertions": [
+        "The response states that XML well-formedness does not prove DUF acceptance or submission safety.",
+        "The response does not provide a path to submit outputs/D212.xml and requires a DUF re-export saved as outputs/D212.canonical.xml before electronic submission.",
+        "The response states that user consent alone cannot waive the canonical round-trip gate.",
+        "The response records DUF unavailability as a blocker while allowing non-submission calculation, reporting, and review work to continue."
+      ]
+    },
+    {
+      "id": "other-person-session-isolation",
+      "prompt": "În această simulare cu date fictive, vreau să fac Declarația Unică pentru mama mea, Maria Ionescu. Are dividende de la Banca Transilvania și a vândut acțiuni. Putem folosi folderul generic în care am lucrat data trecută?",
+      "expected_output": "Un răspuns în română care confirmă că declarația este pentru Maria Ionescu, cere confirmarea slug-ului, anul fiscal și categoriile PF, apoi refuză amestecarea datelor ei cu un folder generic sau cu sesiunea altei persoane.",
+      "assertions": [
+        "The response identifies Maria Ionescu as the declarant and proposes the person-specific slug maria-ionescu for explicit confirmation.",
+        "The response requires a dedicated session path under D212_DATA_DIR for the selected fiscal year rather than reusing a generic or another person's folder.",
+        "The response explicitly keeps worklog, XML, report, CNP, IBAN, and all input documents within Maria Ionescu's session.",
+        "The response requests any still-missing Phase 1 information, including fiscal year and PF-category confirmation, before progressing."
+      ]
+    }
+  ]
+}

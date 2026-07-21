@@ -56,13 +56,15 @@ Verifică la Phase 3 prezența + freshness:
 - `_legi/{an}/impozit-dobanzi.md`
 - `_legi/{an}/impozit-cripto.md`
 - `_legi/{an}/tratate-dubla-impunere.md`
-- `_legi/{an}/curs-bnr-mediu.md`
+- `_legi/{an}/conversie-valutara.md`
 - `_legi/{an}/plafoane-cass.md`
 - `_legi/{an}/salariu-minim.md`
 
 ## Proceduri calcul
 
-### Calcul cap 2012 — Transferul titlurilor de valoare (câștig capital)
+### Calcul cap 2012
+
+Transferul titlurilor de valoare și alte operațiuni cu instrumente financiare.
 
 **Sursa primară:** raport IBKR annual activity + CSV tranzacții.
 
@@ -74,19 +76,20 @@ Pași:
    ```
    gain_USD = (price_sell - price_buy) * quantity - commissions
    ```
-   IBKR raportează deja acest gain în CSV (coloana `realizedPnl` sau similară). Folosește valoarea raportată; dacă nu există, calculează manual cu FIFO (vezi `impozit-castig-capital.md` pentru regula).
+   IBKR raportează deja acest gain în CSV (coloana `realizedPnl` sau similară). Folosește valoarea raportată; dacă nu există, calculează manual numai după verificarea regulii din `_legi/{an}/impozit-castig-capital.md`.
 
-3. **Conversie V2** — folosește cursul mediu anual din `_legi/{an}/curs-bnr-mediu.md` (atributul `valori.USD`):
+3. **Determină metoda de conversie** din dovezile oficiale aplicabile categoriei 2012 și anului fiscal, urmând `references/workflow/currency-conversion.md`. Modulul `_legi/{an}/conversie-valutara.md` trebuie să indice metoda, granularitatea, sursa regulii și autoritatea oficială a fiecărui curs; orice curs BNR provine direct din BNR. Fără această dovadă, oprește calculul destinat depunerii.
+
+4. **Aplică metoda confirmată** la granularitatea cerută. Dacă regula cere cursul BNR din data realizării, convertește fiecare linie eligibilă cu cursul acelei date. Dacă regula cere cursul mediu anual BNR, aplică-l numai totalului și componentelor definite de acea regulă. Păstrează pentru fiecare rezultat referința la documentul brokerului, regula oficială și fiecare curs oficial folosit.
+
+5. **Agregare anuală**:
    ```
-   gain_RON_per_trade = round(gain_USD * curs_USD)
+   total_gain_RON = agregare_conform_regulii(valorilor_convertite)
    ```
 
-4. **Agregare anuală**:
-   ```
-   total_gain_RON = sum(gain_RON_per_trade)  # poate fi pozitiv sau negativ
-   ```
+#### Compensare pierderi
 
-5. **Compensare pierderi precedente** — citește `str_pierdere_precedenta` din D212 anterior:
+6. Citește `str_pierdere_precedenta` din D212 anterior și aplică regula anuală verificată:
    ```
    if total_gain_RON > 0:
      str_pierdere_compensata = min(total_gain_RON, str_pierdere_precedenta)
@@ -95,24 +98,26 @@ Pași:
      # noul total_gain_RON (negativ) devine pierdere reportată pentru anul următor
    ```
 
-6. **Citații obligatorii în worklog:**
+7. **Citații obligatorii în worklog:**
    ```
    total câștig capital cap 2012 (IBKR US): {total_gain_RON} RON
      [cota impozit: _legi/{an}/impozit-castig-capital.md#cota-art-94]
      [agregare anuală FIFO: _legi/{an}/impozit-castig-capital.md#regula-anuala-broker-international]
-     [conversie V2 USD→RON {curs_USD}: _legi/{an}/curs-bnr-mediu.md]
+     [metodă și curs valutar: _legi/{an}/conversie-valutara.md#<ancora-categorie>]
      [pierdere reportată din {an-1}: D212.xml#str_pierdere_compensata={X} RON]
    ```
 
-7. **Aplicare cotă**:
+8. **Aplicare cotă**:
    ```
    str_venit_recalculat = max(0, total_gain_RON - str_pierdere_compensata)
    str_impozit_datorat_Ro = round(str_venit_recalculat * cota_2012)
    ```
 
-8. **Pentru broker internațional fără reținere la sursă**: `str_impozit_platit = 0`, `str_credit_fiscal = 0`, `str_dif_impozit_datorat = str_impozit_datorat_Ro`.
+9. **Pentru broker internațional fără reținere la sursă**, confirmat din documentele utilizatorului: `str_impozit_platit = 0`, `str_credit_fiscal = 0`, `str_dif_impozit_datorat = str_impozit_datorat_Ro`.
 
-### Calcul cap 2017 — Dobânzi
+### Calcul cap 2017
+
+Dobânzi.
 
 **Sursa primară:** extras bancar / situație fiscală bancă (RO), raport broker pentru obligațiuni străinătate.
 
@@ -120,19 +125,21 @@ Pași:
 
 1. **Dobânzi RO**: în general impozit reținut la sursă (1% sau 10% în funcție de instrument — vezi `_legi/{an}/impozit-dobanzi.md`). **Nu se redeclară** dacă reținerea e finală. Verifică legea anuală.
 
-2. **Dobânzi străinătate**: agregare anuală, conversie V2.
+2. **Dobânzi din străinătate**: determină și aplică metoda valutară susținută oficial pentru categoria 2017 și anul fiscal, conform `references/workflow/currency-conversion.md`. Nu reutiliza automat metoda altei categorii.
 
 3. Aplicare cotă: `str_impozit_datorat_Ro = round(str_venit_recalculat * cota_2017)`.
 
-### Calcul cap 2018 — Dividende
+### Calcul cap 2018
+
+Dividende.
 
 **Sursa primară:** IBKR `*.dividends.html` + `*.f1042S.pdf`, dovezi RO ne-reținute.
 
 Pași:
 
-1. **Suma dividende brute** (gross, înainte de reținere străinătate) din `dividends.html`. Conversie V2 per total.
+1. **Suma dividendelor brute** (gross, înainte de reținerea din străinătate) din `dividends.html`. Convertește numai prin metoda susținută oficial pentru categoria 2018 și anul fiscal, conform `references/workflow/currency-conversion.md`.
 
-2. **Suma impozit reținut străinătate** din `f1042S.pdf`. Conversie V2.
+2. **Suma impozitului reținut în străinătate** din `f1042S.pdf`. Aplică regula oficială relevantă aceleiași componente și păstrează separat proveniența sumei și a cursului.
 
 3. **Verifică dubla impunere**:
    ```
@@ -148,7 +155,9 @@ Pași:
 
 6. **Diferență**: `str_dif_impozit_datorat = str_impozit_datorat_Ro - str_credit_fiscal`.
 
-### Calcul oblig_realizat — CASS pentru venituri investiții
+### CASS baza
+
+Calculul `<oblig_realizat>` pentru veniturile din investiții:
 
 1. `cass_ven_inv = total_venituri_investitii_brute_RON` (suma `str_venit_net_anual` din toate cap14 cu cod 2012/2017/2018).
 

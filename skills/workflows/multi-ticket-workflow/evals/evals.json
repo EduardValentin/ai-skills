@@ -1,0 +1,58 @@
+{
+  "skill_name": "multi-ticket-workflow",
+  "evals": [
+    {
+      "id": "unapproved-epic-maps-before-execution",
+      "prompt": "Work the Billing Revamp Epic as one coordinated scope and get started now. The named units are PAY-101 pricing API, PAY-102 checkout UI, PAY-103 invoice migration, and PAY-104 analytics. The repository is large; shared files and dependency edges have not been mapped. PAY-102 probably consumes PAY-101, PAY-104 may depend on events from both, and the migration ordering is unknown. The cross-ticket spec/design and coordination plan have not been approved. Native code-mapper agents are available. Respond as the coordinating agent.",
+      "expected_output": "A coordination-first response that inventories all four units, exposes uncertainty, supplies a provisional dependency and parallelization map, actually dispatches one read-only native code-mapper per affected ticket, and holds implementation behind the full approval workflow.",
+      "assertions": [
+        "The response treats each of PAY-101, PAY-102, PAY-103, and PAY-104 as an in-scope candidate and identifies missing scope or dependency facts as unknowns or questions rather than inventing them.",
+        "The response provides a provisional coordination map immediately, including known or likely dependency edges, uncertain edges, possible parallel or sequential work, and the next mapping action for every named unit.",
+        "Preserved actor evidence shows one actual read-only native code-mapper dispatch for each of PAY-101, PAY-102, PAY-103, and PAY-104; response-only proposed assignments or fallback claims do not satisfy this requirement, and each mapping request seeks affected surfaces, contracts, dependencies, tests, risks, and verification evidence.",
+        "Before any implementation delegation, the response names all four gates: cross-ticket brainstorming, approved multi-ticket spec/design, one implementation plan per in-scope ticket, and an approved coordination plan with an execution-shape decision for every ticket or unit.",
+        "The response does not begin implementation or delegate implementation-coordinator work while the two stated approvals are absent, and it asks for the next user decision needed to refine or approve the scope."
+      ],
+      "checks": []
+    },
+    {
+      "id": "approved-dependent-scope-builds-packets",
+      "prompt": "The multi-ticket spec/design for APP-10 and APP-11 is approved, both ticket implementation plans are approved, and the coordination plan is approved. APP-10 creates a customer_status migration and backfill; APP-11 updates the account UI and API consumer to use that output, so APP-11 must wait for APP-10's migration contract. Known APP-10 surfaces are db/migrations and services/customer; known APP-11 surfaces are api/accounts and web/account. No PR exists yet and there are no current blockers. Native implementation-coordinator agents are available. Proceed with the approved orchestration now.",
+      "expected_output": "An orchestration-state update followed by complete APP-10 and APP-11 execution packets for implementation-coordinator and an actual dependency-aware native dispatch that starts APP-10 while APP-11 remains held.",
+      "assertions": [
+        "The response first presents current orchestration state covering ticket inventory, approvals, dependency status, assignment state, PR or handoff state, blockers, packet lifecycle, and intended human review order.",
+        "The response provides a distinct self-contained execution packet for APP-10 and APP-11, and every packet names implementation-coordinator as the delegate.",
+        "Each packet includes ticket and parent context, the approved spec/design slice, the approved ticket implementation plan, the approved coordination-plan slice, dependency constraints, affected surfaces, PR or handoff expectations, and required completion evidence; unavailable details are explicitly marked unknown or not provided rather than omitted or fabricated.",
+        "Preserved actor evidence shows APP-10 is actually dispatched now to the native implementation-coordinator, while APP-11 remains undispatched until APP-10 supplies the migration contract or completion evidence required by the dependency.",
+        "The response preserves coordinator ownership of status, blockers, PR links, dependency reconciliation, and final review order instead of asking implementation-coordinator to redo user-facing planning or approvals.",
+        "The response returns both packets and performs the required APP-10 dispatch now rather than merely summarizing a future sequence, substituting a handoff, or offering packet creation as an optional follow-up."
+      ],
+      "checks": []
+    },
+    {
+      "id": "unavailable-code-mapper-uses-generic-fallback",
+      "prompt": "In this mock multi-ticket scenario, coordinate OPS-21 API token rotation and OPS-22 admin UI status as one scope. Shared contracts and dependency order have not been mapped, and no cross-ticket spec/design, ticket implementation plan, or coordination plan is approved. The native code-mapper agent is unavailable, but capable generic subagents are available for dispatch. Begin the coordination work without implementing either ticket.",
+      "expected_output": "A provisional coordination map followed by one actual read-only generic-subagent mapping dispatch per ticket, with the native collaborator's unavailability recorded and implementation held behind all approval gates.",
+      "assertions": [
+        "The response inventories OPS-21 and OPS-22, marks shared-contract and dependency facts as uncertain, and provides a provisional map with likely ordering or parallelization possibilities and a next mapping action for each ticket.",
+        "Preserved actor evidence shows one actual read-only generic-subagent mapping dispatch for OPS-21 and one for OPS-22 because the native code-mapper is unavailable; the response does not pretend that the native collaborator ran.",
+        "Each fallback mapping request seeks affected files or surfaces, entry points, shared contracts, dependencies, analogous implementations, tests, risks, and verification surfaces with locators, while prohibiting edits or implementation.",
+        "Before implementation, the response names all four gates: cross-ticket brainstorming, approved multi-ticket spec/design, one approved implementation plan per in-scope ticket, and an approved coordination plan with an execution-shape decision for each ticket or unit.",
+        "The response performs no implementation edit or implementation-coordinator dispatch while the approvals are absent."
+      ],
+      "checks": []
+    },
+    {
+      "id": "unavailable-implementation-coordinator-uses-generic-fallback",
+      "prompt": "In this mock approved orchestration scenario, REL-30 and REL-31 have an approved multi-ticket spec/design, approved ticket implementation plans, and an approved coordination plan assigning them to independent parallel delegated execution. Mapping is complete, no PR exists, and there are no blockers. Native implementation-coordinator agents are unavailable, but capable generic subagents are available for dispatch. I explicitly authorize execution now. Proceed with the approved orchestration and show what is dispatched.",
+      "expected_output": "An orchestration-state update and complete execution packets followed by actual parallel dispatches to capable generic implementation subagents, with the unavailable native collaborator and fallback assignments recorded.",
+      "assertions": [
+        "The response first presents current orchestration state covering REL-30 and REL-31 inventory, approvals, independent dependency status, assignment state, PR or handoff state, blockers, packet lifecycle, and intended human review order.",
+        "The response provides a distinct self-contained execution packet for REL-30 and REL-31; each packet records implementation-coordinator as unavailable, names the capable generic fallback receiving it, and includes ticket and parent context, approved spec/design and plan slices, dependency constraints, affected surfaces or explicit gaps, PR or handoff expectations, and required completion evidence.",
+        "Preserved actor evidence shows one actual generic implementation-subagent dispatch for REL-30 and one for REL-31, and the response does not fabricate a native implementation-coordinator dispatch or settle for proposed assignments.",
+        "The two independent units are dispatched in parallel as approved, with each fallback worker constrained to its packet's scope, non-goals, dependency assumptions, and completion-evidence obligations.",
+        "The response preserves coordinator ownership of status, blockers, PR links, dependency reconciliation, and final review order instead of asking fallback workers to redo user-facing planning or approvals."
+      ],
+      "checks": []
+    }
+  ]
+}

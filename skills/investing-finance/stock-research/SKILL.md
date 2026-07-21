@@ -2,7 +2,7 @@
 name: stock-research
 description: "Use when researching a US-listed company end-to-end for a long-horizon fundamentals deep dive on a US-listed ticker, building a new investment thesis, or evaluating whether to buy/watch/avoid at the current price. Triggers on \"research AAPL\", \"deep dive on Microsoft\", \"should I buy NVDA\", \"analyze TSLA's fundamentals\". Do not use, or select as a closest fit, for technical analysis, chart patterns, options strategy, day-trading entry levels, \"update existing thesis\", \"latest quarter\", \"compare against prior thesis\", or stock-recap."
 compatibility: >-
-  Requires SR_RESEARCH_REPO pointing to a local US-equity research repository with AGENTS.md, a Python scripts environment with pinned runtime dependencies, SR_SEC_USER_AGENT, SEC and market-data network access, and Git. Without workers, run phases sequentially; without structured input, use numbered choices. Existing-thesis and latest-quarter requests route only to stock-recap; if unavailable, decline and report the missing handoff.
+  Requires SR_REPO_PATH pointing to a local US-equity research repository with AGENTS.md, a Python scripts environment with pinned runtime dependencies, SR_SEC_USER_AGENT, SEC and market-data network access, and Git. Without workers, run phases sequentially; without structured input, use numbered choices. Existing-thesis and latest-quarter requests route only to stock-recap; if unavailable, decline and report the missing handoff.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -22,6 +22,8 @@ Use for:
 - Requests like "research AAPL", "deep dive on Microsoft", "should I buy NVDA", or "analyze TSLA fundamentals".
 - A full buy/watch/avoid decision rooted in business quality, financials, valuation, and long-term ownership.
 
+Eligible securities are common shares or ADRs listed on Nasdaq, the New York Stock Exchange, or NYSE American with sufficient SEC issuer data for this workflow. For a dual-listed issuer, use its US-listed ticker and state the relationship to the operating issuer. Exclude OTC securities and securities listed only outside the United States.
+
 Do not use for:
 
 - Existing-thesis updates, latest-quarter catchups, or comparing against a prior thesis. Use `stock-recap` only; do not co-select this skill.
@@ -30,7 +32,7 @@ Do not use for:
 
 ## First Response Contract
 
-Before durable work starts, the first response must show these gates as an explicit checklist or table with a status for each gate. Do not collapse them into prose like "setup is verified."
+The first response always shows setup and identity as an explicit checklist or table with a separate status for each gate. Do not collapse the gates into prose like "setup is verified." If every setup gate passes, include items 2 through 5 in that response before durable work starts. If any setup gate is pending or failed, stop after the blocked gate report and focused recovery guidance.
 
 1. **Setup and identity:** ticker/company identity, `SR_SEC_USER_AGENT`, scripts environment, investing research repo, and existing ticker folder.
 2. **User framing:** GVD lens picker with the exact options `growth`, `quality-growth`, `value`, `dividend`, and `speculative-growth`, plus a free-form session-context question.
@@ -38,24 +40,25 @@ Before durable work starts, the first response must show these gates as an expli
 4. **Durable artifacts:** name the ticker research folder and core Markdown/JSON outputs for thesis, business/moat, financials, competitors/SWOR, earnings calls, valuation, market expectations, projections, verdict, and repo index metadata. Use the target repo's `AGENTS.md` for exact paths and root metadata files.
 5. **Scope boundary:** long-horizon fundamentals only; no technical analysis, options, or day-trading advice.
 
-Pending setup gates are blockers. If any required setup check is pending or failed, stop after a blocked setup message. Do not ask for GVD lens, session context, phase plan, or artifact initialization until setup is verified.
+Do not ask for the GVD lens or session context, preview the phase plan or artifacts, make an existing-folder decision, or initialize artifacts until every setup gate is verified.
 
 ## Setup Gates
 
 Use scripts from this skill's installed `scripts/` directory. The scripts are part of the skill installation; do not hardcode an agent-specific or machine-specific install path.
 
-Resolve the investing research repo, open its `AGENTS.md`, and follow that file for canonical path, allowed writes, layout, repo-owned setup checks, existing-folder handling, index files, commit convention, and remote-push policy.
+Resolve the investing research repo from `SR_REPO_PATH`, open its `AGENTS.md`, and follow that file for canonical paths, allowed writes, layout, repo-owned setup checks, existing-folder handling, index files, commit convention, and remote-push policy.
 
 Before any durable work, verify these gates separately:
 
+- Ticker/company identity: resolve the ticker and CIK, confirm the company, and confirm that the security meets the eligibility rule above.
 - SEC identity: `SR_SEC_USER_AGENT` is set.
 - Script runtime: the installed skill-local Python executable exists and can run the needed scripts.
-- Target repo: the research repo root and `AGENTS.md` are available.
+- Target repo: `SR_REPO_PATH` is set and its research repo root and `AGENTS.md` are available.
 - Ticker folder state: determine whether the repo-defined ticker folder exists, then follow repo instructions for create, refresh, archive/restart, or abort.
 
 Use actual resolved paths from the installed skill and the investing repo's `AGENTS.md` only in recovery messages.
 
-When setup is blocked, list each gate separately in the recovery message: SEC user-agent, script runtime, target repo instructions/root, and ticker-folder state. Do not summarize these as "verify setup."
+When setup is blocked, list each gate separately in the recovery message: ticker/company identity, SEC user-agent, script runtime, target repo variable/instructions/root, and ticker-folder state. Do not summarize these as "verify setup."
 
 If a ticker folder already exists, follow the target repo's `AGENTS.md` and ask with the runtime's structured input mechanism before overwriting anything. If structured input is unavailable, present the same options as a numbered plain-text choice and wait for the user's answer.
 
@@ -176,7 +179,8 @@ Render setup errors as short Markdown with the exact command to fix:
 
 - Missing `SR_SEC_USER_AGENT`: show `export SR_SEC_USER_AGENT="<Name> <email>"`.
 - Missing scripts venv: show `cd <installed-skill>/scripts`, `python -m venv .venv`, and `.venv/bin/pip install -r requirements.txt`.
-- Missing research repo or missing repo `AGENTS.md`: ask the user for the investing research repo path and stop before writing.
+- Missing research repo variable: show `export SR_REPO_PATH="<path-to-investing-research>"` and stop before writing.
+- Missing repo `AGENTS.md`: report the resolved `SR_REPO_PATH`, ask for a valid investing research repo root, and stop before writing.
 - Unknown ticker: stop with "Ticker not found on SEC EDGAR. Confirm spelling."
 
 ## Hard Stop

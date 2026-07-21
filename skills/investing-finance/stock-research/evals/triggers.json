@@ -10,6 +10,11 @@
       "id": "existing-thesis-quarterly-recap",
       "query": "I already have a saved AAPL thesis. Update it for the latest 10-Q and tell me what changed versus my original assumptions.",
       "should_trigger": false
+    },
+    {
+      "id": "short-term-chart-options",
+      "query": "Analyze NVDA's daily chart, identify support and resistance, and suggest a two-week options entry.",
+      "should_trigger": false
     }
   ]
 }

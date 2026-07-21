@@ -39,17 +39,36 @@ Run these scripts (already at `<scripts_dir>/`) before writing the file:
 
 1. **Fetch the latest 10-K and recent 8-Ks:**
    ```bash
+   cutoff_date=$(
+     <scripts_dir>/.venv/bin/python - <<'PY'
+   from datetime import date
+
+   today = date.today()
+   try:
+       cutoff = today.replace(year=today.year - 2)
+   except ValueError:
+       cutoff = today.replace(year=today.year - 2, day=28)
+   print(cutoff.isoformat())
+   PY
+   )
+
    <scripts_dir>/.venv/bin/python <scripts_dir>/fetch_sec.py <ticker> \
      --forms 10-K,8-K,DEF\ 14A,4 \
-     --since $(date -v-2y +%Y-%m-%d) \
+     --since "$cutoff_date" \
      --out <raw_dir>
    ```
 
 2. **Extract structured sections from the most recent 10-K:**
    ```bash
-   # Find the most recent 10-K HTML in <raw_dir>:
-   tenk=$(ls -t <raw_dir>/*10-K*.html | head -1)
-   tenk_year=$(echo "$tenk" | grep -oE '[0-9]{4}' | tail -1)
+   filings_index="<raw_dir>/_filings_index.json"
+   tenk=$(
+     <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+       --index "$filings_index" --form 10-K --rank 0 --field path
+   )
+   tenk_year=$(
+     <scripts_dir>/.venv/bin/python <scripts_dir>/select_filing.py \
+       --index "$filings_index" --form 10-K --rank 0 --field report-year
+   )
 
    <scripts_dir>/.venv/bin/python <scripts_dir>/extract_10k_sections.py <ticker> \
      --html "$tenk" \
@@ -192,6 +211,7 @@ From the DEF 14A proxy:
 
 - **Status `BLOCKED`** if:
   - `fetch_sec.py` returns non-zero (ticker not on EDGAR or SEC down)
+  - `select_filing.py` cannot resolve the latest 10-K from `_filings_index.json`
   - `extract_10k_sections.py` produces empty `item_1_business.md` (parse failure)
 
 - **Status `DONE_WITH_CONCERNS`** if:

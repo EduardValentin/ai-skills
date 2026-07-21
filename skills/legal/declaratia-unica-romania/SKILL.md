@@ -1,8 +1,8 @@
 ---
 name: declaratia-unica-romania
-description: "Use when the user wants to fill the Romanian annual income tax Declarația Unică (D212) — phrases like \"completare declarație unică\", \"D212\", \"declaratia unica\", venituri din dividende, venituri PFA, câștig capital broker IBKR/Tradeville, venituri investiții ANAF. Covers Persoană Fizică (dividends, capital gains, crypto, interest from RO and foreign brokers) and PFA în sistem real. Do not use for: PFA cu norma de venit, microîntreprinderi/SRL, venituri salariale, venituri din chirii, asistență la control fiscal."
+description: "Use when utilizatorul cere pregătirea sau verificarea Declarației Unice D212 pentru venituri PF din dividende, câștiguri de capital, cripto ori dobânzi. Nu se folosește pentru PFA, firme, salarii, chirii, control fiscal sau contestații."
 compatibility: >-
-  Requires a writable data root selected through D212_DATA_DIR, shell access, Python 3 for XML validation, and network access to the named official sources. Use native web fetch when available, then curl, wget, or user-provided browser content. Isolated dispatch is optional; use separate CLI sessions when unavailable. The DUF browser round trip remains user-mediated.
+  Requires a user-selected writable D212_DATA_DIR, shell access, Python 3 for local XML well-formedness checks, and network access to official Romanian sources. Use a native web-fetch tool when available, then curl, wget, or user-provided public content. Isolated dispatch is optional; use separate CLI sessions otherwise. DUF import and export remain user-mediated.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -10,62 +10,61 @@ metadata:
 
 # Declarația Unică România
 
-## Overview
+## Scop
 
-Skill orchestrator pentru completarea anuală a D212 cu **disciplină strictă de citare** din surse oficiale (ANAF, MF, Monitor Oficial, Codul Fiscal) și separare clară între cunoștințe statice (skill) și fapte anuale (cache local). Skill-ul refuză surse neoficiale, refuză să inventeze fapte fiscale și emite **un XML importabil în duf.anaf.ro** + **un raport markdown auditabil**.
+Orchestrează pregătirea anuală a D212 în română, cu surse oficiale, date separate pe persoană și un traseu auditabil. Produce un raport de completare și, când datele și schema permit, un XML candidat pentru import în DUF. Nu prezenta un calcul drept cert sau un XML drept acceptat înainte de verificările aplicabile.
 
-## Preconditions
+## Domeniu
 
-Skill-ul presupune citire/scriere într-un `D212_DATA_DIR` ales de utilizator, execuție shell și Python 3 stdlib pentru validare XML. Pentru pagini web, folosește fetch-ul nativ cu fallback la `curl`, `wget`, apoi conținut furnizat de utilizator (vezi `references/workflow/freshness-check.md`). Dispatch-ul izolat este opțional; când lipsește, folosește sesiuni CLI separate. Dacă lipsesc accesul la date, shell-ul sau validarea XML, oprește și raportează blocajul.
+Folosește skill-ul pentru:
 
-## When To Use
+- venituri PF din dividende, transfer de titluri, cripto sau dobânzi;
+- un caz care combină două sau mai multe dintre aceste categorii de venituri PF.
 
-- Utilizatorul cere completarea declarației unice / D212.
-- Utilizatorul are venituri din dividende, vânzare acțiuni/ETF/cripto, dobânzi conturi/depozite, sau PFA în sistem real.
-- Sesiune anuală recurentă (mai a anului următor, pentru veniturile anului fiscal precedent).
+Nu îl activa inițial pentru PFA în sistem real sau la normă de venit, SRL/microîntreprindere, salarii, chirii, control fiscal ori contestații. Dacă un domeniu exclus este descoperit într-o sesiune deja începută, oprește înainte de calcul, păstrează separat dovezile deja primite, explică limita și redirecționează utilizatorul către ajutor adecvat; această ieșire sigură nu extinde domeniul skill-ului.
 
-**Do not use for:** PFA cu norma de venit, microîntreprinderi (SRL), venituri salariale, venituri din chirii (D224/D300), asistență la control fiscal sau contestații.
+## Contracte Canonice
 
-## Workflow Phases (Hard Gates)
+Regulile de mai jos prevalează asupra default-urilor, exemplelor numerice sau instrucțiunilor incompatibile din referințele bundle-uite.
 
-Citește `references/orchestrator.md` pentru detaliu complet. Phase order strict:
+1. **Identitate și izolare.** Întreabă pentru cine se pregătește declarația; nu presupune nicio identitate. Confirmă numele și slug-ul înainte de a crea sesiunea. Worklog-ul, XML-urile, raportul, CNP-ul, IBAN-ul și toate inputurile rămân numai în sesiunea acelei persoane.
 
+2. **Layout unic.** Sesiunea canonică este `${D212_DATA_DIR}/{an_fiscal}/sesiuni/{YYYY-MM-DD}_{persoana_slug}/`, cu `inputs/`, `outputs/` și `worklog.md`. Reluarea caută numai `${D212_DATA_DIR}/*/sesiuni/YYYY-MM-DD_*`; nu folosi un prefix suplimentar sau un folder generic.
+
+3. **Skill read-only la runtime.** `SKILL.md`, `references/` și `assets/` sunt material instalat și nu se modifică în timpul unei sesiuni fiscale. Orice schimbare de schemă cere un hard-stop și o activitate separată în sursa repository-ului, urmată de review, validare și o proiecție runtime nouă.
+
+4. **Freshness exact.** Manifestele gate-ului sunt `references/schema/d212-xml-schema.md` și `references/schema/duf-platform-structure.md`; ambele trebuie să aibă același `platform_version` și câmp `last_verified`, iar primul trebuie să aibă `schema_namespace`. Câmp lipsă, valori divergente sau vechime de cel puțin 30 de zile impun verificare oficială. Dacă versiunea și structura sunt neschimbate, înregistrează verificarea curentă în sesiune fără a rescrie skill-ul. Orice schimbare de `platform_version`, namespace, structură, secțiuni, butoane sau template impune hard-stop și audit separat pentru cele două manifeste, `references/schema/form-mapping.yaml`, `references/schema/form-mapping.md`, `assets/templates/d212-root.xml`, `assets/templates/cap14-romania.xml`, `assets/templates/cap14-strainatate.xml` și `assets/templates/oblig_realizat.xml`.
+
+5. **Fapte fiscale anuale.** Ratele, plafoanele, codurile, termenele și regulile de calcul se verifică pentru anul și categoria relevante în ANAF, Ministerul Finanțelor, Monitorul Oficial, `legislatie.just.ro` sau BNR. Literalele și exemplele din referințele bundle-uite sunt neoperative până la confirmarea lor în dovezile oficiale curente. Sursele neoficiale pot orienta căutarea, dar nu susțin concluzia.
+
+6. **Proveniență potrivită tipului de valoare.** Parametrii legali trimit la sursa oficială și ancora din `_legi/{an}/`; sumele și datele de identificare trimit la documentul utilizatorului, inclusiv pagină, rând sau secțiune când există; rezultatele calculate arată formula și proveniența inputurilor și parametrilor. Timestamp-urile, identificatorii și metadatele sesiunii trimit la evenimentul din worklog, nu la o ancoră legală.
+
+7. **Conversie valutară.** Pentru un calcul destinat depunerii, folosește metoda și cursul cerute de sursa oficială aplicabilă venitului și anului, cu curs BNR per dată a realizării când aceasta este regula verificată. Media anuală V2 și `cursbnr.ro` nu sunt default și nu sunt autoritate fiscală. O metodă alternativă poate apărea doar ca estimare comparativă sau ca decizie explicită susținută de dovezi oficiale; consemnează baza și diferența, iar fără suport oficial nu o folosi în D212 finală.
+
+8. **XML și DUF.** Verificarea cu ElementTree dovedește numai că XML-ul este bine format. `outputs/D212.xml` rămâne candidat de import până când utilizatorul îl importă și îl revizuiește în DUF. Pentru depunere electronică, round-trip-ul este obligatoriu: numai re-exportul acceptat de DUF, salvat ca `outputs/D212.canonical.xml`, poate fi propus utilizatorului pentru submit. Gate-ul poate fi omis numai dacă nu se intenționează depunere electronică sau DUF este indisponibil; în al doilea caz sesiunea nu avansează la submit, iar motivul se consemnează. Consimțământul singur nu transformă XML-ul brut într-un fișier sigur pentru depunere.
+
+## Workflow Cu Hard Gates
+
+Citește `references/orchestrator.md` pentru detaliile fazelor, aplicând contractele canonice de mai sus:
+
+```text
+1. Identificare -> 2. Freshness schemă -> 3. Cache legi -> 4. Preflight
+   -> 5. Calcul și proveniență -> 6. XML candidat și raport
+   -> 6.5 DUF round-trip -> 7. Review utilizator -> 8. Închidere
 ```
-1. Identificare → 2. Freshness schema → 3. Cache legi → 4. Preflight docs
-   → 5. Calcul + citare → 6. Generare D212.xml + raport
-   → 6.5 DUF round-trip → 7. Review user → 8. Close
-```
 
-Nu se avansează silențios; fiecare gate are condiție explicită.
+Nu avansa silențios peste un gate. La blocaj, spune ce lipsește, ce acțiune îl rezolvă și ce rezultate nu pot fi încă produse.
 
-## Scenarii (alese la Phase 1)
+## Rutare Scenariu
 
-- **PF investiții** — vezi `references/pf-investitii.md`
-- **PFA real** — vezi `references/pfa-real.md`
-- **Combinat** — citește ambele scenarii
+Citește `references/pf-investitii.md`. Pentru mai multe categorii PF, păstrează distincte inputurile, conversiile și calculele fiecărei linii de venit, apoi unifică numai obligațiile și raportul final.
 
-Pentru o cerere care alege clar doar **PFA real**, confirmă scenariul PFA real și cere documentele PFA relevante. Nu amesteca în același răspuns exemple, documente, cache-uri sau liste din PF investiții; dacă trebuie verificat dacă există și alte scenarii, întreabă generic, fără exemple: "Ai avut și alte venituri care ar schimba scenariul?"
+## Gate-uri De Dovezi
 
-Intake-ul minim PFA real cere explicit: RJIP sau evidența contabilă pe anul fiscal, facturi emise, documente justificative pentru cheltuieli deductibile/nedeductibile, dovezi plăți/estimări CAS-CASS dacă există, D212 anterior dacă există, și verificarea modulelor de lege pentru cheltuieli PFA, plafoane CAS, plafoane CASS și salariu minim.
+- Refuză ratele dictate de utilizator, memoria de training, forumurile, blogurile, Reddit și știrile ca bază fiscală. Oferă verificarea concretă în sursele oficiale adecvate înainte de concluzie.
+- Nu transforma estimări sau valori ținute minte în inputuri D212. Un document obligatoriu lipsă oprește preflight-ul până la furnizare sau până la un waiver explicit permis de workflow; orice waiver include motivul verbatim și timestamp în `worklog.md`.
+- Nu cere și nu folosi credențiale SPV. Importul, revizuirea, re-exportul și depunerea în DUF/SPV rămân acțiuni ale utilizatorului.
 
-## Discipline non-negociabile
+## Limbă
 
-1. **Whitelist surse**: anaf.ro, mfinante.gov.ro, monitoruloficial.ro, legislatie.just.ro, bnr.ro (+ cursbnr.ro doar pentru V2 convenience). Reddit/forumuri/știri **refuzate**. Cunoștințele din training NU sunt sursă autoritativă. Orice răspuns care refuză o sursă neoficială trebuie să ofere verificarea concretă în surse whitelist numite, de exemplu ANAF, MF, Monitorul Oficial, Codul Fiscal prin legislatie.just.ro, sau BNR înainte de concluzie. Vezi `references/workflow/citation-protocol.md`.
-
-2. **Citare obligatorie**: fiecare valoare numerică din worklog și raport are referință inline către `_legi/{an}/{modul}.md#ancora`.
-
-3. **Preflight documente**: valorile estimate sau ținute minte nu sunt input de completare D212. Dacă un document obligatoriu lipsește, se oprește până există documentul sau un waiver explicit. Orice răspuns care menționează un waiver trebuie să spună că waiverul se înregistrează în `worklog.md` cu timestamp și motivul verbatim.
-
-4. **Izolare persoană**: când declarația este pentru altă persoană, confirmă identitatea și slug-ul persoanei (ex. `Maria Ionescu` → `maria-ionescu`). Orice răspuns pentru altă persoană trebuie să spună explicit că worklog-ul, XML-ul, raportul, CNP-ul, IBAN-ul și toate inputurile stau doar în sesiunea acelei persoane, nu într-un folder generic sau al agentului.
-
-5. **Conversie valutară V2**: cursbnr.ro media anuală + cross-check BNR 3-puncte. Notă obligatorie în raport: "V2 vs per-tranzacție Cod Fiscal art. 76 alin. (2)". Vezi `references/workflow/currency-conversion.md`.
-
-## Limba
-
-Toată comunicarea cu utilizatorul, fișierele cache, raportul final și instrucțiunile sunt în **română**. Numele coduri categorie și atributelor XML rămân ca în sursa oficială.
-
-## Locații
-
-- Cache legi (state local, out-of-repo): `${D212_DATA_DIR}/_legi/{an}/`
-- Sesiuni (state local, out-of-repo): `${D212_DATA_DIR}/{an_fiscal}/sesiuni/{date}_{persoana}/`
-- Skill canonic: `skills/legal/declaratia-unica-romania/`
+Toată comunicarea cu utilizatorul, cache-ul, worklog-ul și raportul sunt în română. Păstrează codurile de categorie și numele atributelor XML exact ca în sursa oficială.

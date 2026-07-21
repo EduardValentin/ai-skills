@@ -14,7 +14,6 @@ Disciplina de citare pentru orice fapt fiscal folosit în calcul.
 **Secundare (navigare/index, nu citare):**
 - `static.anaf.ro`
 - `cdep.ro`
-- `cursbnr.ro` — convenience pentru media anuală V2
 
 **Refuzate:**
 - Reddit, Avocatnet, GoldRing, contzilla, forumuri
@@ -41,7 +40,7 @@ citat_verbatim: |
 ```
 
 Body-ul (după frontmatter) conține:
-- **Ancore markdown** (`# Cota`, `# Plafon`, etc.) la care fac referință cache_ref din `form-mapping.yaml`
+- **Ancore markdown** (`# Cota`, `# Plafon`, etc.) la care fac referință valorile `cache_ref` din `references/schema/form-mapping.yaml`
 - **Context** (de ce e relevant)
 - **Exemple** dacă ajută
 
@@ -53,8 +52,8 @@ Pentru fiecare valoare numerică, ancoră inline `[descriere: cache_path#anchor]
 câștig capital total cap 2012: 13.105 RON
   [cota 10%: _legi/2025/impozit-castig-capital.md#cota-art-94]
   [agregare anuală FIFO: _legi/2025/impozit-castig-capital.md#regula-anuala-broker-international]
-  [conversie V2 USD→RON: _legi/2025/curs-bnr-mediu.md (USD=4.6612)]
-  [V2 advisory: _legi/2025/curs-bnr-mediu.md#avertisment-vs-per-tranzactie]
+  [regulă și metodă de conversie: _legi/2025/conversie-valutara.md#categoria-2012]
+  [curs oficial BNR: _legi/2025/conversie-valutara.md#cursuri-folosite]
 ```
 
 ## Anti-halucinare

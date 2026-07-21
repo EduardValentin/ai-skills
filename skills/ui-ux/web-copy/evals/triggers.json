@@ -7,6 +7,11 @@
       "should_trigger": true
     },
     {
+      "id": "review-pricing-page-copy",
+      "query": "Review our pricing-page headline, supporting line, and plan CTAs for vague claims and inconsistent terminology, then rewrite them in a clear, confident voice.",
+      "should_trigger": true
+    },
+    {
       "id": "design-dashboard-information-architecture",
       "query": "Design the information architecture and responsive layout for an invoicing dashboard, including navigation groups, breakpoints, component placement, and the mobile interaction flow.",
       "should_trigger": false

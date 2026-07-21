@@ -14,7 +14,9 @@ metadata:
 
 Manually verify that an implementation satisfies its acceptance criteria by exercising the implemented surface the way a user, client, job runner, or integration would.
 
-Do not edit the system under test. Prefer real third-party dependencies whenever acceptance criteria depend on them. If required access, tooling, credentials, data, real dependencies, or an executable surface is unavailable, return `QA cannot proceed` and name the blocker plus required next input. This still applies when tests pass or the intended probes are obvious; explicitly state that mocks, tests, and source inspection cannot replace the missing runtime evidence. If the request says the runtime or dependency is unavailable, report the blocker as the verdict instead of a hypothetical plan. When a caller explicitly requires `CANNOT_VERIFY`, use that blocker token with the same reason and required next input.
+Do not change implementation code or alter configuration to repair a defect while acting as the verifier. Normal verification may use documented setup, feature flags, or test controls and may mutate designated test data or trigger expected side effects when the acceptance criteria require it; record those mutations and any cleanup.
+
+When an acceptance criterion depends on a real third-party contract or propagated state, gather evidence from that dependency. A controlled substitute is acceptable only when the criterion and requested scope explicitly concern behavior independent of the dependency; report the limitation and do not claim integration coverage. If required access, tooling, credentials, data, dependencies, or an executable surface is unavailable, return `QA cannot proceed` and name the blocker plus required next input. Passing tests, mocks, and source inspection cannot replace missing runtime evidence. When a caller explicitly requires `CANNOT_VERIFY`, use that blocker token with the same reason and required next input.
 
 ## Inputs
 
@@ -43,6 +45,15 @@ When metadata is available but testing instructions are absent or vague, scope b
 
 Automated checks, mocks, fake imports, stubs, simulations, unit tests, type checks, source inspection, and static review can support QA context, but they are not manual QA and do not count as QA verification by themselves.
 
+## Verdicts and Report
+
+- `CLEAN`: every acceptance criterion was exercised against the required running surface and passed.
+- `BUGS FOUND`: at least one exercised behavior failed. Include reproduction steps, expected behavior, actual behavior, and evidence for every defect.
+- `QA cannot proceed`: required runtime, access, data, or dependency evidence is unavailable. Name each blocker and the next input needed. Use `CANNOT_VERIFY` instead only when the caller requires that token.
+- `NOT RUN`: verification is feasible but has not been executed, including scope-only or plan-only requests. Describe the intended probes without implying observed results.
+
+The final report must include the verdict, mode and environment, scope inputs, and a result for every acceptance criterion. For each criterion, record the action, request, command, or trigger; expected behavior; observed UI, response, state, side effect, or propagation result; evidence; and pass, fail, or blocked status. Also list defects, blockers and unverified areas, limitations, test-data mutations and cleanup, and relevant regression notes. Mark unavailable fields as `missing` or `not applicable` rather than silently omitting them.
+
 ## Evidence Standard
 
 Every acceptance criterion must map to a concrete observation:
@@ -53,7 +64,7 @@ Every acceptance criterion must map to a concrete observation:
 
 Any observed bug changes the verdict to `BUGS FOUND`.
 
-When provided runtime facts show QA can proceed but verification has not yet been run, do not return `QA cannot proceed`; state the manual/runtime probes and that the final report will map each acceptance criterion to concrete evidence. Any failed behavior becomes `BUGS FOUND` with reproduction steps, expected behavior, actual behavior, and evidence.
+When provided runtime facts show QA can proceed but verification has not yet been run, use `NOT RUN`, state the manual/runtime probes, and explain the evidence each probe must produce. Any failed behavior becomes `BUGS FOUND`.
 
 ## Forbidden Behaviors
 
@@ -64,7 +75,7 @@ When provided runtime facts show QA can proceed but verification has not yet bee
 - Falling back to diff-scoped QA before the caller has had a chance to provide missing ticket/PR details, acceptance criteria, implemented surface area, and testing instructions.
 - Treating inferred diff scope as authoritative when ticket/PR details, acceptance criteria, or testing instructions are available.
 - Comparing appearance against references, analogs, computed styles, or bounding boxes instead of verifying behavior after user or system actions.
-- Modifying product code while acting as the QA verifier.
+- Modifying product code or changing configuration to repair a finding while acting as the QA verifier.
 - Assessing PR readiness, CI approval gates, unresolved review comments, mergeability, or tracker-state gates.
 - Omitting state-transition, persistence, side-effect, or propagation checks when the acceptance criteria depend on them.
 - Reporting a bug without reproduction steps and evidence.

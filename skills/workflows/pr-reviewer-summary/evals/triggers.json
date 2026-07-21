@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "update-existing-pr-description",
+      "query": "Update the PR body for https://github.com/example/ops/pull/418 using the latest diff and commits, keeping automated checks separate from reviewer-run verification.",
+      "should_trigger": true
+    },
+    {
       "id": "review-diff-for-defects",
       "query": "Review this pull request diff for correctness bugs, security risks, regressions, and missing tests. Return findings ordered by severity with file and line references.",
+      "should_trigger": false
+    },
+    {
+      "id": "write-release-notes-from-merged-prs",
+      "query": "Turn these five merged pull requests into customer-facing release notes grouped by feature area, omitting internal implementation details.",
       "should_trigger": false
     }
   ]

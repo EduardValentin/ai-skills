@@ -21,14 +21,14 @@ Write copy from the product's language, the page's job, and the user's context. 
 ## Workflow
 
 1. Gather the copy brief: audience, page or component goal, key message, tone, must-use terms, banned terms, and desired user action.
-2. Read available brand-voice guidance. If none exists, infer a temporary voice from the product context and say that it should be confirmed.
+2. Read available brand-voice guidance. If none exists, infer a temporary voice from the product context and mark it for confirmation before treating the copy as final.
 3. Draft copy in place with the design hierarchy: headline, support line, body, CTA, helper text, error text, or empty-state structure as needed.
 4. Review for human tone: remove filler, vague claims, buzzwords, repeated phrases, and anything the brand would not actually say.
 5. Check accessibility: button/link text should make sense out of context, error text should explain recovery, and headings should describe the section honestly.
 
-If the user asks not to answer copy questions, continue only by naming the missing brief inputs and marking the working voice as temporary and needing confirmation. Do not hide missing audience, page goal, key message, tone, must-use terms, banned terms, or desired action behind a polished draft.
+If essential brief inputs are missing, ask only questions whose answers would materially change the copy. If the user asks the assistant not to ask copy-brief questions, name the missing inputs and any assumptions, mark an inferred voice as temporary, and pause production-ready drafting until the assumptions are confirmed. A preferred phrase alone is not a complete brief.
 
-Every copy decision or blocker response must include the quality checks that will govern the draft: CTA clarity, recoverable error text, honest headings, human tone, and fit within the design hierarchy and available space.
+Apply the quality checks while drafting or reviewing: CTA clarity, recoverable error text, honest headings, human tone, and fit within the design hierarchy and available space. Surface that checklist only when the user asks for rationale or review findings.
 
 ## Copy Principles
 

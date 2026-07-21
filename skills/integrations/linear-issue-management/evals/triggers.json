@@ -7,8 +7,18 @@
       "should_trigger": true
     },
     {
+      "id": "update-linear-issue-metadata",
+      "query": "Move CP-417 to In Progress in Linear, assign it to Mara, add the Payments label, and comment that the API contract has been approved.",
+      "should_trigger": true
+    },
+    {
       "id": "draft-platform-neutral-stories",
       "query": "Turn these onboarding interview notes into a polished platform-neutral epic and user stories with acceptance criteria so the product team can review the draft.",
+      "should_trigger": false
+    },
+    {
+      "id": "plan-onboarding-scope",
+      "query": "Help us decide the MVP boundaries, dependencies, and delivery sequence for a new student onboarding flow before anyone drafts implementation tickets.",
       "should_trigger": false
     }
   ]

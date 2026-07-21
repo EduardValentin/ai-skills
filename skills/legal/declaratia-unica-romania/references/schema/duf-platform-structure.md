@@ -16,7 +16,7 @@ Platforma web ANAF pentru completarea D212. Sursa pentru maparea "ce label apare
    - **"Adaugă venit România"** → generează un element `<cap14>` fără `str_stat_realiz_v`
    - În interiorul fiecărei adăugări, dropdown pentru categorie venit (`2012`, `2017`, `2018`, ...)
 3. **Venituri cu reținere la sursă** — venituri unde plătitorul (broker RO, bancă RO, etc.) a reținut deja impozitul. Folosit doar informativ pentru reconciliere CASS; nu generează `cap14`.
-4. **Date privind CAS** — pentru PFA, contribuție de asigurări sociale. Mapează pe sub-set din `<oblig_realizat>`.
+4. **Date privind CAS** — secțiune a platformei folosită, între altele, pentru PFA; domeniul PFA nu este acoperit de acest skill.
 5. **Date privind CASS** — contribuție asigurări sănătate. Bifa de regim (`bifa_cass_real`), tip venit (DPI / venituri investiții / etc.), bază (`cass_baza`), CASS anuală.
 
 ## Opțiuni adiacente
@@ -49,4 +49,4 @@ La fiecare freshness check (≥ 30 zile), fetch `https://www.anaf.ro/declaratii/
 - Lista celor 5 secțiuni principale e neschimbată
 - Butoanele "Adaugă venit străinătate/România" sunt încă prezente
 
-Dacă oricare s-a schimbat → hard-stop, prompt user (vezi `../references/workflow/freshness-check.md`).
+Dacă oricare s-a schimbat → hard-stop, informează utilizatorul și urmează `references/workflow/freshness-check.md`.
