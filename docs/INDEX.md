@@ -1,15 +1,15 @@
 # Documentation
 
-This repository contains portable Agent Skills, their deterministic validation,
-and an opt-in model-backed evaluation framework.
+Use this page to choose the shortest guide that answers your question.
 
-- [Skill specification](SPEC.md) defines the repository contract for creating
-  and maintaining skills.
-- [Testing](TESTING.md) explains offline validation, trigger and behavior
-  runners, identity-anchored local-install diagnostics, repetition thresholds,
-  fixtures, isolation, bounded evidence capture, and reviewable results.
-- The root [README](../README.md) covers installation and everyday use.
+| Guide | Audience | Covers |
+| --- | --- | --- |
+| [Using the skills](USING-SKILLS.md) | Skill users | Install, select, update, remove, and diagnose installs |
+| [Creating skills](CREATING-SKILLS.md) | Skill authors and agents | Skill structure, frontmatter, writing rules, scripts, eval definitions, and author checklist |
+| [Evaluation](EVALUATION.md) | Skill authors and reviewers | Static checks, trigger and behavior runs, fixtures, judging, grading, and result inspection |
+| [Architecture](ARCHITECTURE.md) | Contributors and maintainers | Source layout, CLI components, sandbox lifecycle, trust boundaries, and result flow |
+| [Contributing](CONTRIBUTING.md) | Repository contributors | Environment setup, development workflow, required gates, and runtime maintenance |
 
 The public [Agent Skills specification](https://agentskills.io/specification)
-is the compatibility baseline. Repository rules that are stricter than that
-specification are identified as local policy.
+is the portability baseline. Rules described as repository policy are
+additional constraints enforced by this project.

@@ -1,53 +1,49 @@
 # AI Skills
 
-Portable [Agent Skills](https://agentskills.io/) and reusable native agents for
-Codex and Claude Code. Skills are organized by group under `skills/`; canonical
-native-agent prompts and delivery metadata live under `agents/`.
+A public collection of portable [Agent Skills](https://agentskills.io/) for
+Codex, Claude Code, and other compatible agents. The repository also contains
+reusable native-agent prompts and a validation and evaluation framework for
+maintaining skill quality.
 
-## Install
+Skills are organized by subject under `skills/`. Each skill is independently
+installable and keeps its instructions, scripts, references, assets, and eval
+definitions together.
 
-List the available skills, then install all or select individual skills for
-Codex:
+## Quick Start
+
+List the available skills:
 
 ```bash
 npx skills add EduardValentin/ai-skills --list
+```
+
+Review each selected skill's status and `compatibility` requirements. This
+repository includes experimental, configuration-dependent, and local-tooling
+skills. Install all skills globally for Codex, or select individual skills when
+prompted:
+
+```bash
 npx skills add EduardValentin/ai-skills -g -a codex
 ```
 
-After confirming the Codex installation, install the desired skills for Claude
-Code separately:
+For repository development, install Python 3.11 or newer and the test
+dependencies, then run the deterministic validation gate:
 
 ```bash
-npx skills add EduardValentin/ai-skills -g -a claude-code
-```
-
-Use `--skill <name>` one or more times to make a non-interactive selection, or
-`--skill '*'` to select every skill.
-
-Update or remove global installs with the standard CLI:
-
-```bash
-npx skills update -g
-npx skills remove <skill-name> -g -a codex
-```
-
-## Native Agents
-
-Native agents are delivered separately from public skills:
-
-```bash
-python3 scripts/sync_native_agents.py push
-python3 scripts/sync_native_agents.py check
-```
-
-## Validate
-
-Run the deterministic repository gate with:
-
-```bash
+python3 -m pip install -r requirements-test.txt
 python3 scripts/ai_skills.py validate ci-all
 ```
 
-See the [documentation index](docs/INDEX.md), [skill specification](docs/SPEC.md),
-and [testing guide](docs/TESTING.md) for repository policy and opt-in evaluation
-commands.
+## Documentation
+
+- [Using the skills](docs/USING-SKILLS.md) covers installation, selection,
+  updates, removal, and native agents.
+- [Creating skills](docs/CREATING-SKILLS.md) defines the portable skill and
+  repository contracts.
+- [Evaluation](docs/EVALUATION.md) explains behavior evals, trigger evals,
+  fixtures, judges, grading, and result review.
+- [Architecture](docs/ARCHITECTURE.md) explains repository components and the
+  Docker Sandboxes runtime.
+- [Contributing](docs/CONTRIBUTING.md) covers setup, validation, and pull-request
+  expectations.
+- [Documentation index](docs/INDEX.md) maps readers to the right guide.

@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "missing-reference-app-path",
-      "prompt": "I need a new cancellation flow in the fake fixture workspace. The staged README.md is the only workspace file. Begin by running the bundled scripts/prepare-prototype-work.sh helper with the current workspace as --project-root. There is no designs/ directory, and I have not supplied a reference-app path. Continue as far as appropriate.",
+      "prompt": "I need a new cancellation flow in the current workspace. `README.md` is the only available workspace file. The `scripts/prepare-prototype-work.sh` helper is available; begin by running it with the current workspace as `--project-root`. There is no `designs/` directory, and I have not supplied a reference-app path. Continue as far as appropriate.",
       "expected_output": "Preparation stops without workspace edits, asks for the reference application's absolute path, and explains that the bundled helper will be rerun with --app-root after the path is supplied.",
       "assertions": [
         "The response provides evidence of running scripts/prepare-prototype-work.sh with the fake fixture workspace as --project-root and correctly interprets its designs-only auto-detection failure.",
@@ -17,7 +17,7 @@
     },
     {
       "id": "ambiguous-reference-app-path",
-      "prompt": "The fake fixture workspace contains designs/account/package.json and designs/checkout/package.json, and both declare React prototype apps. I have not selected either reference app. Begin by running the bundled scripts/prepare-prototype-work.sh helper with the current workspace as --project-root, then continue as far as appropriate.",
+      "prompt": "The current workspace contains `designs/account/package.json` and `designs/checkout/package.json`, and both declare React prototype apps. I have not selected either reference app. The `scripts/prepare-prototype-work.sh` helper is available; begin by running it with the current workspace as `--project-root`, then continue as far as appropriate.",
       "expected_output": "Preparation reports both React prototype candidates, stops without installing dependencies or editing the workspace, asks which reference app path to use, and explains that the helper will be rerun with an explicit --app-root value.",
       "assertions": [
         "The response provides evidence of running scripts/prepare-prototype-work.sh with the fake fixture workspace as --project-root and reports both designs/account and designs/checkout as ambiguous candidates.",
@@ -32,7 +32,7 @@
     },
     {
       "id": "onboarding-flow-companion-obligations",
-      "prompt": "Before editing a fake React prototype, list the concrete companion work required for a new onboarding flow. Eligibility is a mocked business rule, and enrollment is a simulated API operation that can load, succeed, return no eligible result, or fail. The flow changes product behavior and spans multiple routed screens.",
+      "prompt": "Before editing a React prototype, list the concrete companion work required for a new onboarding flow. The prototype represents eligibility through a local business-rule boundary and enrollment through a separate API-style operation that can load, succeed, return no eligible result, or fail. The flow changes product behavior and spans multiple routed screens.",
       "expected_output": "A focused implementation and verification outline covering separated business and API-like mocks, all asynchronous outcomes, business-only PRD consolidation, router-driven browser verification, and captured evidence.",
       "assertions": [
         "The response calls for explicit, separately owned mocks for eligibility rules and the simulated enrollment API boundary rather than treating asynchronous UI state alone as the integration mock.",
@@ -45,7 +45,7 @@
     },
     {
       "id": "compact-preparation-reports",
-      "prompt": "A fake existing prototype needs an account-health panel. It has root-level PRD.md, DESIGN.md, and brandvoice.md plus routes, mock data, theme configuration, semantic tokens, and reusable components. Describe the preparation output needed before implementation, including how to inspect the running app.",
+      "prompt": "An existing prototype needs an account-health panel. It has root-level `PRD.md`, `DESIGN.md`, and `brandvoice.md` plus routes, local data and integration boundaries, theme configuration, semantic tokens, and reusable components. Describe the preparation output needed before implementation, including how to inspect the running app.",
       "expected_output": "Four compact, task-relevant product, voice, design, and app-scope reports plus browser screenshots and a short visual-vibe summary, without raw document dumps.",
       "assertions": [
         "The product report covers the app goal, audience, core flows, business rules, constraints, and task-relevant PRD direction.",
@@ -59,7 +59,7 @@
     },
     {
       "id": "production-scope-mapping-boundary",
-      "prompt": "A fake prototype under designs/ for subscription recovery is finished, and the next task is a production implementation plan. It has several stateful routes, visible validation and error states, mocked recovery rules, and a mocked provider call. Explain what the prototype side of the codebase scope map must capture and what it must not do yet.",
+      "prompt": "A prototype under `designs/` for subscription recovery is finished, and the next task is a production implementation plan. It has several stateful routes and visible validation and error states; recovery rules and a provider call are represented locally within the prototype. Explain what the prototype side of the codebase scope map must capture and what it must not do yet.",
       "expected_output": "A prototype-to-production scope map that preserves routes, states, accessible UI contracts, mock and data boundaries, and load-bearing docs, pairs them with candidly labeled production counterparts, and makes no production edits.",
       "assertions": [
         "The map captures the prototype root, relevant routes, stateful branches, visible declarations or locators, accessible names and roles, visible copy, and interaction states.",

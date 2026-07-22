@@ -244,14 +244,24 @@ class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
                 self.assertTrue(any(expected in message for message in messages), messages)
 
     def test_rejects_direct_skill_layout(self):
-        direct_root = self.repository.root / "skills" / "legacy"
+        direct_root = self.repository.root / "skills" / "alpha"
         direct_root.mkdir(parents=True)
         (direct_root / "SKILL.md").write_text(
-            "---\nname: legacy\ndescription: Legacy workflow.\nmetadata:\n  status: public-ready\n---\n",
+            "---\nname: alpha\ndescription: Example workflow.\nmetadata:\n  status: public-ready\n---\n",
             encoding="utf-8",
         )
 
         self.assert_issue("must use skills/<group>/<skill>/SKILL.md")
+
+    def test_rejects_skill_documents_outside_the_canonical_source_tree(self):
+        self.repository.add_skill("alpha")
+        alternate = self.repository.root / "alternate" / "alpha" / "SKILL.md"
+        alternate.parent.mkdir(parents=True)
+        alternate.write_text("duplicate source\n", encoding="utf-8")
+
+        self.assert_issue(
+            "outside the canonical skills/<group>/<skill>/SKILL.md source tree"
+        )
 
     def test_rejects_non_directory_entries_at_every_skill_layout_boundary(self):
         boundaries = (
@@ -623,12 +633,11 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_no_issues()
 
-    def test_rejects_unknown_legacy_empty_and_placeholder_entries(self):
+    def test_rejects_unsupported_empty_and_placeholder_entries(self):
         skill_root = self.repository.add_skill("alpha")
-        for name in ("commands", "phases", "schema", "workflow", "agents", "tests"):
-            directory = skill_root / name
-            directory.mkdir()
-            (directory / "content.txt").write_text("legacy\n", encoding="utf-8")
+        unsupported = skill_root / "unsupported"
+        unsupported.mkdir()
+        (unsupported / "content.txt").write_text("unsupported\n", encoding="utf-8")
         (skill_root / "assets").mkdir()
         references = skill_root / "references"
         references.mkdir()
@@ -637,7 +646,7 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         messages = self.messages()
 
-        for name in ("commands", "phases", "schema", "workflow", "agents", "tests", "NOTES.txt"):
+        for name in ("unsupported", "NOTES.txt"):
             self.assertTrue(any(name in message for message in messages), messages)
         self.assertTrue(any("empty directory" in message for message in messages))
         self.assertTrue(any(".gitkeep placeholders are not allowed" in message for message in messages))
@@ -779,23 +788,6 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         self.assertEqual(sum("slack-token" in message for message in messages), 1)
         self.assertEqual(sum("aws-access-key-id" in message for message in messages), 1)
 
-    def test_rejects_duplicate_harness_sources_and_dist(self):
-        self.repository.add_skill("alpha")
-        duplicate_paths = (
-            self.repository.root / "plugins" / "sample" / "skills" / "alpha" / "SKILL.md",
-            self.repository.root / "codex" / "skills" / "alpha" / "SKILL.md",
-            self.repository.root / "claude" / "skills" / "alpha" / "SKILL.md",
-        )
-        for path in duplicate_paths:
-            path.parent.mkdir(parents=True)
-            path.write_text("duplicate\n", encoding="utf-8")
-        (self.repository.root / "dist").mkdir()
-
-        messages = self.messages()
-
-        self.assertEqual(sum("duplicate public skill source" in message for message in messages), 3)
-        self.assertTrue(any("dist/ must not exist" in message for message in messages))
-
     def test_repository_readme_is_not_scanned(self):
         self.repository.add_skill("alpha")
         credential_shape = "sk" + "-" + ("a" * 32)
@@ -885,8 +877,8 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
             ),
             (
                 "arbitrary root directory",
-                Path("legacy/content.txt"),
-                "unsupported evals entry: legacy",
+                Path("unsupported/content.txt"),
+                "unsupported evals entry: unsupported",
             ),
             (
                 "fixture-root file",

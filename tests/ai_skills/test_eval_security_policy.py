@@ -48,29 +48,57 @@ class TemporaryPolicySkill:
     def cleanup(self) -> None:
         self.temporary_directory.cleanup()
 
-    def document(self, prompt: str = "Perform the task.") -> dict[str, object]:
+    def document(
+        self,
+        prompt: str = "Perform the task.",
+        *,
+        files: tuple[str, ...] = (),
+    ) -> dict[str, object]:
+        case: dict[str, object] = {
+            "id": "alpha-core",
+            "prompt": prompt,
+            "expected_output": "A complete task result.",
+            "assertions": ["The result completes the task."],
+            "checks": [],
+        }
+        if files:
+            case["files"] = list(files)
         return {
             "skill_name": "alpha",
-            "evals": [
-                {
-                    "id": "alpha-core",
-                    "prompt": prompt,
-                    "expected_output": "A complete task result.",
-                    "assertions": ["The result completes the task."],
-                    "checks": [],
-                }
-            ],
+            "evals": [case],
         }
 
-    def messages(self, prompt: str = "Perform the task.") -> list[str]:
+    def messages(
+        self,
+        prompt: str = "Perform the task.",
+        *,
+        files: tuple[str, ...] = (),
+    ) -> list[str]:
         return [
             issue.message
             for issue in validate_behavior_eval_document(
-                self.document(prompt),
+                self.document(prompt, files=files),
                 self.record,
                 "alpha",
             )
         ]
+
+    def add_executable_input(self, relative_path: str) -> None:
+        path = self.root / "evals" / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        path.chmod(0o755)
+
+    def add_http_fixture(self) -> None:
+        path = (
+            self.root
+            / "evals"
+            / "fixtures"
+            / "alpha-core"
+            / "mockserverInitialization.json"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[]\n", encoding="utf-8")
 
 
 class EvalDefinitionSecurityTests(unittest.TestCase):
@@ -114,7 +142,7 @@ class EvalDefinitionSecurityTests(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 self.assertTrue(
                     any(
-                        "requires real private credentials or session state" in message
+                        "private credentials or session state" in message
                         for message in self.skill.messages(prompt)
                     )
                 )
@@ -135,9 +163,74 @@ class EvalDefinitionSecurityTests(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 self.assertTrue(
                     any(
-                        "requires real private credentials or session state" in message
+                        "private credentials or session state" in message
                         for message in self.skill.messages(prompt)
                     )
+                )
+
+    def test_declared_case_resources_allow_evaluation_blind_actor_prompts(self) -> None:
+        relative_path = "fixtures/alpha-core/inputs/bin/gh"
+        self.skill.add_executable_input(relative_path)
+
+        messages = self.skill.messages(
+            "Use the available gh command to inspect my GitHub repository.",
+            files=(relative_path,),
+        )
+
+        self.assertFalse(
+            any("private credentials or session state" in message for message in messages),
+            messages,
+        )
+        self.assertFalse(
+            any("prompt must name staged actor input" in message for message in messages),
+            messages,
+        )
+
+    def test_private_state_without_declared_case_resources_still_fails(self) -> None:
+        messages = self.skill.messages(
+            "Use the available gh command to inspect my GitHub repository."
+        )
+
+        self.assertIn(
+            "eval 'alpha-core' requires private credentials or session state "
+            "without declared isolated case resources",
+            messages,
+        )
+
+    def test_declared_http_fixture_allows_evaluation_blind_actor_prompts(self) -> None:
+        self.skill.add_http_fixture()
+
+        messages = self.skill.messages(
+            "Inspect my GitHub repository and report the open pull requests."
+        )
+
+        self.assertFalse(
+            any("private credentials or session state" in message for message in messages),
+            messages,
+        )
+
+    def test_declared_resources_do_not_allow_explicit_live_private_state(self) -> None:
+        relative_path = "fixtures/alpha-core/inputs/context.txt"
+        path = self.skill.root / "evals" / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("context\n", encoding="utf-8")
+
+        for resources in ("file", "http"):
+            with self.subTest(resources=resources):
+                files: tuple[str, ...] = ()
+                if resources == "file":
+                    files = (relative_path,)
+                    prompt = "Read context.txt, then use my production GitHub token."
+                else:
+                    self.skill.add_http_fixture()
+                    prompt = "Use my production GitHub token."
+
+                messages = self.skill.messages(prompt, files=files)
+
+                self.assertIn(
+                    "eval 'alpha-core' explicitly requests live or private credentials "
+                    "or session state; use isolated non-production resources",
+                    messages,
                 )
 
     def test_explicit_fake_fixture_and_negated_private_state_controls_are_allowed(self) -> None:

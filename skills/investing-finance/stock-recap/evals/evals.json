@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "quarterly-recap-kickoff",
-      "prompt": "Use this simulated scenario. Kick off stock-recap for MSFT with a fake existing US-listed thesis. Return the first response only, before fetching data or changing files. The simulated SEC state may or may not contain a newer 10-Q / 10-K. Explain the gates you will verify, how period-based gap detection determines the available choices, what a quarterly catch-up does, and where you will stop for approval.",
+      "prompt": "Kick off stock-recap for MSFT with an existing US-listed thesis. Return the first response only, before fetching data or changing files. Whether the SEC contains a newer 10-Q / 10-K is not yet known. Explain the gates you will verify, how period-based gap detection determines the available choices, what a quarterly catch-up does, and where you will stop for approval.",
       "expected_output": "A Markdown kickoff that enumerates the saved-thesis, index, target-repo, and runtime prerequisites; explains period-based filing gap detection and both result branches; names the quarterly comparison and four-state sell-trigger mechanics; and preserves every approval checkpoint before thesis writes or a remote push.",
       "assertions": [
         "The response requires verdict.json, projections.json, financials.json, and market-expectations.json with schema_version 1, plus a schema-versioned tickers.json.tickers.MSFT entry; financials.json must also expose latest_report_date and dated years[].report_date values.",
@@ -16,7 +16,7 @@
     },
     {
       "id": "missing-prior-thesis-routes-to-research",
-      "prompt": "In this sandbox scenario, a fake research repository has no NVDA folder, ticker index entry, verdict.json, projections.json, financials.json, or market-expectations.json. The stock-research collaborator and its required fake runtime capabilities are available. Recap NVDA as the skill requires. Do not create placeholders, fetch market data, or perform the routed research workflow.",
+      "prompt": "The research repository has no NVDA folder, ticker index entry, verdict.json, projections.json, financials.json, or market-expectations.json. The stock-research collaborator and its required runtime capabilities are available. Recap NVDA as the skill requires. Do not create placeholders, fetch market data, or perform the routed research workflow.",
       "expected_output": "A clear abort that lists the missing baseline artifacts and index entry and, because the collaborator is explicitly available, routes the user to stock-research instead of fabricating a recap baseline.",
       "assertions": [
         "The response stops stock-recap before filing fetches, valuation work, analysis, or repository writes because the saved thesis is absent.",
@@ -26,7 +26,7 @@
     },
     {
       "id": "missing-prior-thesis-blocks-without-research-collaborator",
-      "prompt": "In this sandbox scenario, a fake research repository has no NVDA folder, ticker index entry, verdict.json, projections.json, financials.json, or market-expectations.json. The stock-research collaborator and its required runtime capabilities are explicitly unavailable. Recap NVDA as the skill requires. Do not create placeholders or fetch market data.",
+      "prompt": "The research repository has no NVDA folder, ticker index entry, verdict.json, projections.json, financials.json, or market-expectations.json. The stock-research collaborator and its required runtime capabilities are explicitly unavailable. Recap NVDA as the skill requires. Do not create placeholders or fetch market data.",
       "expected_output": "A clear stock-recap blocker that lists the missing baseline, states that the required stock-research route is unavailable, and stops without fabricating artifacts or pretending to dispatch a collaborator.",
       "assertions": [
         "The response stops stock-recap before filing fetches, valuation work, analysis, or repository writes because the saved thesis is absent.",
@@ -37,7 +37,7 @@
     },
     {
       "id": "valuation-only-final-artifact-contract",
-      "prompt": "Use `references/shared-phase-and-quarterly-workflow.md` for this fake offline MSFT scenario. Gap detection found no new filing periods, the user selected valuation-only recap, the saved financials latest_report_date remains 2025-12-31, valuation as-of is 2026-07-20, no thesis update was applied, and the simulated commit short SHA is abc1234. Show the Phase 7 recap artifact contract, commit metadata, and final user summary only. Do not write files, run Git, or fetch data.",
+      "prompt": "Use `references/shared-phase-and-quarterly-workflow.md` for this offline MSFT recap. Gap detection found no new filing periods, the user selected valuation-only recap, the saved financials latest_report_date remains 2025-12-31, valuation as-of is 2026-07-20, no thesis update was applied, and the commit short SHA is abc1234. Show the Phase 7 recap artifact contract, commit metadata, and final user summary only. Do not write files, run Git, or fetch data.",
       "expected_output": "A valuation-only recap contract and final summary with valuation-specific frontmatter, trigger/session metadata, zero filing periods, the unchanged saved financial cutoff, and the valuation-only recap path; it must not masquerade as a quarterly filing recap.",
       "assertions": [
         "The recap path is tickers/MSFT/recaps/recap-2026-07-20-valuation-only.md and its frontmatter uses mode valuation-only and session valuation-only-recap.",
@@ -50,7 +50,7 @@
     },
     {
       "id": "sell-trigger-rubric-and-recommendation",
-      "prompt": "Use `references/sell-trigger-evaluation.md` and `references/auto-recommend-rules.md`. In this simulated MSFT quarterly catch-up, Phase 1 through Checkpoint 1 are complete; the user accepted the default diff thresholds, and Steps 5.1-5.3 and 5.5 have already been shown. Render the remaining sell-trigger evaluation and auto-recommend decision, then stop for the required choice. Treat all values below as supplied simulation data.\n\nSaved sell triggers:\n- materially_overvalued: [\"Forward P/E above 40x while expected EPS growth is below 15%\"]\n- thesis_broken: [\"Revenue YoY < 5% for two consecutive quarters\", \"Gross margin < 43%\", \"Any single customer exceeds 25% of revenue\"]\n- better_opportunity: null\n\nAccepted evidence: forward P/E is 32x; expected next-year EPS growth is 18%; revenue YoY was 4.5% in 2026-Q1 and 6.0% in 2026-Q2; latest TTM gross margin is 42.7%; neither 10-Q in the window reports customer concentration and there is no current annual disclosure. Other auto-recommend inputs: cumulative deviations are below 10%; quality-growth remains the top GVD bucket; reverse-DCF implied growth moved from 20% to 22%; share count, net debt, and dividend changed by less than 5%. Do not fetch more data or apply updates yet.",
+      "prompt": "Use `references/sell-trigger-evaluation.md` and `references/auto-recommend-rules.md`. In this MSFT quarterly catch-up, Phase 1 through Checkpoint 1 are complete; the user accepted the default diff thresholds, and Steps 5.1-5.3 and 5.5 have already been shown. Render the remaining sell-trigger evaluation and auto-recommend decision, then stop for the required choice. Treat all values below as supplied data.\n\nSaved sell triggers:\n- materially_overvalued: [\"Forward P/E above 40x while expected EPS growth is below 15%\"]\n- thesis_broken: [\"Revenue YoY < 5% for two consecutive quarters\", \"Gross margin < 43%\", \"Any single customer exceeds 25% of revenue\"]\n- better_opportunity: null\n\nAccepted evidence: forward P/E is 32x; expected next-year EPS growth is 18%; revenue YoY was 4.5% in 2026-Q1 and 6.0% in 2026-Q2; latest TTM gross margin is 42.7%; neither 10-Q in the window reports customer concentration and there is no current annual disclosure. Other auto-recommend inputs: cumulative deviations are below 10%; quality-growth remains the top GVD bucket; reverse-DCF implied growth moved from 20% to 22%; share count, net debt, and dividend changed by less than 5%. Do not fetch more data or apply updates yet.",
       "expected_output": "A plain-English sell-trigger section applying the bundled four-state rubric to every non-null saved trigger, followed by an evidence-based recommendation to enter Phase 6 because one trigger fired and a bounded choice to update or continue without updating.",
       "assertions": [
         "The gross-margin trigger is fired because 42.7% is below 43%, and the justification quantifies the roughly 30-basis-point breach.",
@@ -64,7 +64,7 @@
     },
     {
       "id": "news-mode-ma-context-opt-in",
-      "prompt": "Use `references/news-workflow.md` for this simulated CRM News mode continuation. All Phase 1 gates passed. The fake captured event is: \"On 2026-07-15, CRM disclosed in an 8-K that it agreed to acquire US-listed BOX.\" The user confirmed the event class as M&A. No context has been fetched. Present the Phase 2 decision and stop before dispatching anything.",
+      "prompt": "Use `references/news-workflow.md` for this CRM News mode continuation. All Phase 1 gates passed. The captured event is: \"On 2026-07-15, CRM disclosed in an 8-K that it agreed to acquire US-listed BOX.\" The user confirmed the event class as M&A. No context has been fetched. Present the Phase 2 decision and stop before dispatching anything.",
       "expected_output": "A bounded context-fetch opt-in for the simulated M&A event that proposes the latest 8-K and target-company financials, includes a skip-all path, and waits for the user's selection before dispatch.",
       "assertions": [
         "The response preserves the confirmed M&A classification, event date, and event description rather than asking the user to re-enter them.",

@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "required-checks-and-surface-tests-block",
-      "prompt": "In this fake PR readiness simulation, verify mock GitHub PR #42 for mock Linear ticket APP-123 for final readiness. Current mock source-system outputs show that the PR is open and non-draft, APP-123 is In Review, one required approval is present, and there are no unresolved comments or requested-changes reviews. Required checks are build=pass, lint=fail, and e2e=pending. No evidence is available for tests covering the changed invite-form behavior. Report readiness without changing the mock PR or ticket.",
+      "prompt": "Verify GitHub PR #42, linked to Linear ticket APP-123, for final readiness. Current source-system outputs show that the PR is open and non-draft, APP-123 is In Review, one required approval is present, and there are no unresolved comments or requested-changes reviews. Required checks are build=pass, lint=fail, and e2e=pending. No evidence is available for tests covering the changed invite-form behavior. Report readiness without changing the PR or ticket.",
       "expected_output": "A compact Verify PR report with a NOT_READY verdict, the failing and pending checks plus missing implemented-surface test evidence as concrete blockers, and no claimed mutations.",
       "assertions": [
         "The verdict is NOT_READY because required checks are not all passing.",
@@ -15,7 +15,7 @@
     },
     {
       "id": "ticket-must-be-review-state",
-      "prompt": "In this fake PR readiness simulation, verify mock GitHub PR #88 for mock Jira ticket PROJ-88 for merge readiness. Current mock source-system outputs show that the PR is open and non-draft, the provider reports it is mergeable and conflict-free, every required check passes, implemented-surface tests pass, the repository-required approval is present, and no review threads or requested-changes reviews are active. The mock Jira project requires linked tickets to be in a review state, and PROJ-88 is In Progress. Do not change the mock Jira or GitHub state.",
+      "prompt": "Verify GitHub PR #88, linked to Jira ticket PROJ-88, for merge readiness. Current source-system outputs show that the PR is open and non-draft, the provider reports it is mergeable and conflict-free, every required check passes, implemented-surface tests pass, the repository-required approval is present, and no review threads or requested-changes reviews are active. The Jira project requires linked tickets to be in a review state, and PROJ-88 is In Progress. Do not change the Jira or GitHub state.",
       "expected_output": "A NOT_READY report that makes the ticket's In Progress status the blocker, explains that it must move to an accepted review-state column, and performs no mutation.",
       "assertions": [
         "The verdict is NOT_READY even though the PR, CI, tests, approvals, and comments otherwise pass.",
@@ -26,7 +26,7 @@
     },
     {
       "id": "unresolved-review-state-blocks",
-      "prompt": "In this fake PR readiness simulation, verify mock GitHub PR #51 for mock Linear ticket APP-51 for final readiness. Current mock source-system outputs show APP-51 is Ready for Merge, all required CI checks pass, implemented-surface tests pass, and the required approval policy is satisfied. The mock GitHub output also shows one active unresolved review thread and a requested-changes review that has not been cleared. Return the readiness report without dismissing or resolving anything.",
+      "prompt": "Verify GitHub PR #51, linked to Linear ticket APP-51, for final readiness. Current source-system outputs show APP-51 is Ready for Merge, all required CI checks pass, implemented-surface tests pass, and the required approval policy is satisfied. The GitHub output also shows one active unresolved review thread and a requested-changes review that has not been cleared. Return the readiness report without dismissing or resolving anything.",
       "expected_output": "A NOT_READY report that separately identifies the unresolved thread and active requested-changes review as blockers and makes no mutation.",
       "assertions": [
         "The verdict is NOT_READY because review state is still blocking.",
@@ -37,7 +37,7 @@
     },
     {
       "id": "merge-conflict-blocks-final-readiness",
-      "prompt": "In this fake PR readiness simulation, verify mock source-control PR acme/app#64 for final readiness. Current mock source-system outputs show that the PR is open and non-draft, every required check passes, implemented-surface tests pass, the linked ticket is in the configured Ready for Merge state, the required approval policy is satisfied, and no requested-changes review or unresolved thread is active. The provider's current mergeability result reports that the PR is non-mergeable because it conflicts with the base branch. Report readiness without changing the fake PR or ticket.",
+      "prompt": "Verify source-control PR acme/app#64 for final readiness. Current source-system outputs show that the PR is open and non-draft, every required check passes, implemented-surface tests pass, the linked ticket is in the configured Ready for Merge state, the required approval policy is satisfied, and no requested-changes review or unresolved thread is active. The provider's current mergeability result reports that the PR is non-mergeable because it conflicts with the base branch. Report readiness without changing the PR or ticket.",
       "expected_output": "A NOT_READY report that identifies the current provider-reported merge conflict as a final-readiness blocker and performs no mutation.",
       "assertions": [
         "The verdict is NOT_READY even though every CI, test, ticket, approval, and review-state gate otherwise passes.",
@@ -48,7 +48,7 @@
     },
     {
       "id": "fetch-missing-current-state",
-      "prompt": "In this fake source-control simulation, verify mock GitHub PR https://github.example/acme/app/pull/77 for final readiness. I have not supplied its current lifecycle state, mergeability, linked ticket, ticket status, checks, implemented-surface test evidence, approvals, or review-thread state. Fake command shims are staged at `bin/gh` and `bin/linear`; prepend `bin` to PATH and use their source-system reads rather than asking me to transcribe metadata. The shims accept ordinary read arguments and record their invocations.",
+      "prompt": "Verify GitHub PR https://github.example/acme/app/pull/77 for final readiness. I have not supplied its current lifecycle state, mergeability, linked ticket, ticket status, checks, implemented-surface test evidence, approvals, or review-thread state. The `gh` and `linear` commands are available; use them to read current source-system state rather than asking me to transcribe metadata.",
       "expected_output": "The agent reads current PR metadata first, resolves and reads the linked mock Linear ticket, evaluates every applicable readiness gate from the shim results, and returns the evidence-backed verdict.",
       "assertions": [
         "The agent executes the fake source-control shim to fetch current PR metadata before issuing a verdict or asking the user for omitted fields.",
@@ -65,7 +65,7 @@
     },
     {
       "id": "merge-recheck-and-post-merge-failure",
-      "prompt": "In this fake merge simulation, a previous report said mock GitHub PR acme/app#99 was READY. I explicitly approve merging the mock PR only if every current gate still passes. Fake command shims are staged at `bin/gh`, `bin/linear`, and `bin/pr-ci-monitor`; prepend `bin` to PATH and use them to re-fetch the PR, linked ticket, policy, checks, implemented-surface tests, current mergeability, approvals, and unresolved review state before any merge. If the merge succeeds, start the provided monitor on the resulting merge commit and handle its reported CI outcome. Do not implement a CI fix.",
+      "prompt": "A previous report said GitHub PR acme/app#99 was READY. I explicitly approve merging the PR only if every current gate still passes. The `gh`, `linear`, and `pr-ci-monitor` commands are available; use them to re-fetch the PR, linked ticket, policy, checks, implemented-surface tests, current mergeability, approvals, and unresolved review state before any merge. If the merge succeeds, start `pr-ci-monitor` on the resulting merge commit and handle its reported CI outcome. Do not implement a CI fix.",
       "expected_output": "The agent treats the old verdict as a hint, revalidates all gates before the approved fake merge, starts the monitor on the merge commit, and reports POST_MERGE_BLOCKED with fetched deploy-smoke failure details and a proposed investigation plan without implementing a fix.",
       "assertions": [
         "The agent re-fetches every readiness gate, including the current provider mergeability result, from the fake source-control and ticket shims before attempting the merge rather than relying on the prior READY report.",
@@ -84,7 +84,7 @@
     },
     {
       "id": "merge-monitor-start-unavailable",
-      "prompt": "In this fully fake offline merge simulation, I explicitly approve merging mock GitHub PR acme/app#100 only if every current gate passes. Fake command shims are staged at `bin/gh`, `bin/linear`, and `bin/pr-ci-monitor`; prepend `bin` to PATH and use only those shims to re-fetch the PR, linked ticket, policy, checks, implemented-surface tests, current mergeability, approvals, and unresolved review state before any merge. If the fake merge succeeds, attempt to start durable monitoring with the staged monitor shim and handle its result. Do not contact external services.",
+      "prompt": "I explicitly approve merging GitHub PR acme/app#100 only if every current gate passes. The `gh`, `linear`, and `pr-ci-monitor` commands are available; use only those commands to re-fetch the PR, linked ticket, policy, checks, implemented-surface tests, current mergeability, approvals, and unresolved review state before any merge. If the merge succeeds, attempt to start durable monitoring with `pr-ci-monitor` and handle its result. Do not contact external services.",
       "expected_output": "The agent revalidates all gates, performs the approved fake merge, and returns POST_MERGE_MONITORING_BLOCKED because durable background monitor access is unavailable, without inventing monitor evidence or post-merge CI results.",
       "assertions": [
         "The agent re-fetches every readiness gate, including the current provider mergeability result, from the fake source-control and ticket shims before attempting the merge.",

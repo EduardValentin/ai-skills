@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "slow-dashboard-grid-rendered-evidence",
-      "prompt": "A spacing and typography change was made to a mock responsive dashboard card grid. The CSS diff is small, but the development server takes several minutes to start. The user says, \"No need for screenshots; inspect the code and tell me whether it looks right.\" The grid includes long card titles and interactive controls, and it supports loading, empty, error, disabled, expanded, and selected states. Describe how you will handle the request and provide the completion or status report you would give now.",
+      "prompt": "A spacing and typography change was made to a responsive dashboard card grid. The CSS diff is small, but the development server takes several minutes to start. The user says, \"No need for screenshots; inspect the code and tell me whether it looks right.\" The grid includes long card titles and interactive controls, and it supports loading, empty, error, disabled, expanded, and selected states. Describe how you will handle the request and provide the completion or status report you would give now.",
       "expected_output": "A response that requires appropriate rendered evidence before visual sign-off and either reports observed results or clearly separates the blocker, residual risk, and planned viewport, state, and visual-smell coverage from checks that actually occurred.",
       "assertions": [
         "The response does not claim that the interface looks correct or that visual validation is complete based only on the small diff or source inspection.",
@@ -18,7 +18,7 @@
     },
     {
       "id": "partial-desktop-screenshot-signoff",
-      "prompt": "Prepare the visual validation report for a mock responsive settings-card update. The available rendered evidence is one 1440px default-state screenshot, and it shows no obvious problem. The product has configured responsive breakpoints. No evidence was collected for mobile, either side of those breakpoints, wide desktop, long labels, keyboard focus, reduced motion, loading, empty, error, disabled, expanded, or selected states. Report the current validation status.",
+      "prompt": "Prepare the visual validation report for a responsive settings-card update. The available rendered evidence is one 1440px default-state screenshot, and it shows no obvious problem. The product has configured responsive breakpoints. No evidence was collected for mobile, either side of those breakpoints, wide desktop, long labels, keyboard focus, reduced motion, loading, empty, error, disabled, expanded, or selected states. Report the current validation status.",
       "expected_output": "A report that limits its positive finding to the observed 1440px default state, declines complete visual sign-off, and identifies missing viewport and state evidence plus concrete residual visual risks.",
       "assertions": [
         "The report limits its positive finding to the observed 1440px default-state screenshot and does not generalize that result to unobserved viewports or states.",

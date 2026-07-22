@@ -14,7 +14,7 @@
     },
     {
       "id": "remove-technical-leakage-and-redundancy",
-      "prompt": "Review and clean up this draft PRD section. Return proposed replacement wording; do not edit a file.\n\n### Archived plans\nWhen a coach selects Archive in ArchivePlanButton.tsx, PATCH /api/v1/plans/:id writes training_plans.archived_at. Coaches can always see archived plans in ArchivePanel. Archived plans remain visible to coaches forever. The client_plan_view query filters rows where archived_at is set, so clients cannot see archived plans. Archived plans must not appear to clients after archival. Development should use mocked plan rows in the archive list.",
+      "prompt": "Review and clean up this draft PRD section. Return proposed replacement wording; do not edit a file.\n\n### Archived plans\nWhen a coach selects Archive in ArchivePlanButton.tsx, PATCH /api/v1/plans/:id writes training_plans.archived_at. Coaches can always see archived plans in ArchivePanel. Archived plans remain visible to coaches forever. The client_plan_view query filters rows where archived_at is set, so clients cannot see archived plans. Archived plans must not appear to clients after archival. Development should use generated test plan rows in the archive list.",
       "expected_output": "A PRD-focused review that identifies the implementation leakage and duplicated archive rule, followed by one concise business-level replacement covering coach and client visibility, an approval gate, and a final coherence assessment.",
       "assertions": [
         "The review correctly classifies the named React component, endpoint, database details, query mechanics, and mock-data instruction as implementation material rather than PRD content.",
@@ -36,7 +36,7 @@
     },
     {
       "id": "apply-authorized-prd-edit",
-      "prompt": "The staged fake PRD is at `docs/PRD.md`. Edit that file now: update only the Plan lifecycle section so archived plans remain visible to coaches indefinitely but are hidden from clients immediately after archival. Preserve the rest of the PRD and summarize the affected scope when complete.",
+      "prompt": "The PRD is available at `docs/PRD.md`. Edit that file now: update only the Plan lifecycle section so archived plans remain visible to coaches indefinitely but are hidden from clients immediately after archival. Preserve the rest of the PRD and summarize the affected scope when complete.",
       "expected_output": "A completed direct edit to docs/PRD.md that updates only the archive lifecycle and permission rule, preserves unrelated PRD content, and reports the narrow scope without seeking another approval.",
       "assertions": [
         "The staged docs/PRD.md is actually edited rather than returned as a proposal or left pending for another wording-approval round.",

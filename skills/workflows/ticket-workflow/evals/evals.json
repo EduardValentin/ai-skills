@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "unwritten-artifacts-are-not-approved",
-      "prompt": "In this mock workflow scenario, we are handling one confirmed standalone ticket. So far we have discussed three decisions, recommendations, and assumptions, but you have not shown me a written spec/design or an implementation plan. I now say: \"Those decisions and assumptions look good. We're good to go, so start coding.\" Continue under ticket-workflow.",
+      "prompt": "We are handling one confirmed standalone ticket. So far we have discussed three decisions, recommendations, and assumptions, but you have not shown me a written spec/design or an implementation plan. I now say: \"Those decisions and assumptions look good. We're good to go, so start coding.\" Continue under ticket-workflow.",
       "expected_output": "A gated response that does not begin implementation, presents the written spec/design for explicit approval first, and reserves the implementation plan for a separate later approval.",
       "assertions": [
         "The response treats the user's statement as agreement with previously seen discussion, not as approval of an unwritten spec/design or implementation plan.",
@@ -14,7 +14,7 @@
     },
     {
       "id": "parent-context-and-interview",
-      "prompt": "In this mock ticket scenario, start one child ticket under an onboarding Epic. The child ticket requests a new eligibility rule, while the parent Epic contains the stakeholder goal and rollout constraints. Important unknowns remain around user-facing copy, edge cases, and failure behavior. Explain the setup you need, ask the first brainstorming question, and say how the interview proceeds before spec/design.",
+      "prompt": "Start one child ticket under an onboarding Epic. The child ticket requests a new eligibility rule, while the parent Epic contains the stakeholder goal and rollout constraints. Important unknowns remain around user-facing copy, edge cases, and failure behavior. Explain the setup you need, ask the first brainstorming question, and say how the interview proceeds before spec/design.",
       "expected_output": "A setup-grounded interview that uses both child and parent context, asks one material question at a time, and defers spec/design and planning until shared understanding is reached.",
       "assertions": [
         "The response requires reading both the child ticket and its parent to understand goals, stakeholder implications, acceptance criteria, dependencies, constraints, and ambiguity.",
@@ -26,7 +26,7 @@
     },
     {
       "id": "selective-read-only-discovery",
-      "prompt": "In this mock repository scenario, start a standalone ticket whose core path is a settings form and save API, but which may interact with billing entitlements and a migration changed by recent tickets. The repository is large. You can inspect the likely settings route and controller directly, and read-only agents are available for broader cross-ticket billing and migration discovery. State the next workflow move before brainstorming.",
+      "prompt": "Start a standalone ticket whose core path is a settings form and save API, but which may interact with billing entitlements and a migration changed by recent tickets. The repository is large. You can inspect the likely settings route and controller directly, and read-only agents are available for broader cross-ticket billing and migration discovery. State the next workflow move before brainstorming.",
       "expected_output": "An adaptive setup step that keeps core-path ownership with the coordinating agent, delegates broad independent history discovery, and synthesizes a locator-backed surface map before interviewing the user.",
       "assertions": [
         "The response keeps the main agent responsible for repository instructions, the ticket, workflow interpretation, the core settings path, and user-facing decisions.",
@@ -38,7 +38,7 @@
     },
     {
       "id": "approved-plan-requires-mode-approval",
-      "prompt": "In this mock implementation-transition scenario, the written spec/design and implementation plan for one ticket have both been shown and explicitly approved. The plan has a migration slice, an API slice, and a UI slice, with shared contracts and meaningful review risk. implementation-workflow is available. I ask you to proceed, but no execution mode has yet been proposed or approved.",
+      "prompt": "The written spec/design and implementation plan for one ticket have both been shown and explicitly approved. The plan has a migration slice, an API slice, and a UI slice, with shared contracts and meaningful review risk. implementation-workflow is available. I ask you to proceed, but no execution mode has yet been proposed or approved.",
       "expected_output": "A justified execution-mode recommendation followed by a request for explicit mode approval, with the ticket transition and implementation-workflow dispatch held until the required point.",
       "assertions": [
         "The response recommends inline, delegated, or hybrid execution using the plan's size, coupling, separability, risk, and implementation context; a hybrid recommendation is justified for the described mix rather than asserted without reasoning.",
@@ -50,7 +50,7 @@
     },
     {
       "id": "unavailable-implementation-collaborator-fallback",
-      "prompt": "In this mock implementation-transition scenario, the written spec/design and implementation plan for a standalone ticket were shown and explicitly approved. implementation-workflow is unavailable. I explicitly approve inline execution of the approved plan as the fallback and authorize that execution mode. The ticket is still To Do. Continue the transition without inventing any collaborator result.",
+      "prompt": "The written spec/design and implementation plan for a standalone ticket were shown and explicitly approved. implementation-workflow is unavailable. I explicitly approve inline execution of the approved plan as the fallback and authorize that execution mode. The ticket is still To Do. Continue the transition without inventing any collaborator result.",
       "expected_output": "A transparent inline fallback that first puts the ticket In Progress, preserves the approved scope and verification obligations, and reports only work or blockers that actually occur.",
       "assertions": [
         "The response does not pretend to invoke implementation-workflow or fabricate a collaborator result.",
@@ -62,7 +62,7 @@
     },
     {
       "id": "blocked-pr-readiness",
-      "prompt": "In this mock PR-readiness scenario, implementation-workflow has returned its implementation report for the approved standalone ticket. PR #842 exists, targets main, has the planned title and description, links the ticket, and its changed scope matches the approved plan. Implementation and test evidence plus a manual QA report are present; there were no UI changes. CI shows lint green, unit tests pending, and integration tests failed. One review thread is unresolved. The ticket remains In Progress. I ask you to finish and declare it ready for review, but I have not approved merging, closing the ticket, dismissing comments, or any other final mutation.",
+      "prompt": "implementation-workflow has returned its implementation report for the approved standalone ticket. PR #842 exists, targets main, has the planned title and description, links the ticket, and its changed scope matches the approved plan. Implementation and test evidence plus a manual QA report are present; there were no UI changes. CI shows lint green, unit tests pending, and integration tests failed. One review thread is unresolved. The ticket remains In Progress. I ask you to finish and declare it ready for review, but I have not approved merging, closing the ticket, dismissing comments, or any other final mutation.",
       "expected_output": "A blocked PR-readiness report that recognizes the existing evidence but requires the pending and failed CI work and unresolved review thread to be resolved before declaring readiness, without performing prohibited final mutations.",
       "assertions": [
         "The response verifies or records the PR's existence, target, metadata, ticket link, changed scope, and applicable implementation, test, and manual QA evidence, and correctly treats UI parity evidence as not applicable.",

@@ -61,25 +61,24 @@ def validate_repository_shape(root: Path) -> list[ValidationIssue]:
                             f"{path.relative_to(root)} must use "
                             "skills/<group>/<skill>/SKILL.md"
                         ),
+                        )
                     )
-                )
 
-    for pattern in (
-        "plugins/*/skills/*/SKILL.md",
-        "codex/skills/*/SKILL.md",
-        "claude/skills/*/SKILL.md",
-    ):
-        for path in sorted(root.glob(pattern)):
-            if ".system" not in path.parts:
-                issues.append(
-                    ValidationIssue(
-                        scope="repository",
-                        message=f"duplicate public skill source: {path.relative_to(root)}",
-                    )
+    for path in _iter_skill_tree(root, excluded_directories=frozenset({".git"})):
+        if (
+            path.name.casefold() == "skill.md"
+            and not path.is_relative_to(skills_directory)
+        ):
+            issues.append(
+                ValidationIssue(
+                    scope="repository",
+                    message=(
+                        f"{path.relative_to(root)} is outside the canonical "
+                        "skills/<group>/<skill>/SKILL.md source tree"
+                    ),
                 )
+            )
 
-    if (root / "dist").exists():
-        issues.append(ValidationIssue(scope="repository", message="dist/ must not exist"))
     return issues
 
 
@@ -175,7 +174,11 @@ def validate_skill_root(
     return issues
 
 
-def _iter_skill_tree(root: Path) -> Iterator[Path]:
+def _iter_skill_tree(
+    root: Path,
+    *,
+    excluded_directories: frozenset[str] = frozenset(),
+) -> Iterator[Path]:
     pending = [root]
     while pending:
         directory = pending.pop()
@@ -185,5 +188,9 @@ def _iter_skill_tree(root: Path) -> Iterator[Path]:
             continue
         for child in children:
             yield child
-            if child.is_dir() and not child.is_symlink():
+            if (
+                child.is_dir()
+                and not child.is_symlink()
+                and child.name not in excluded_directories
+            ):
                 pending.append(child)

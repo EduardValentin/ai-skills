@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "blocks-without-approved-plan",
-      "prompt": "In this mocked repository scenario, please add whatever script seems useful. There is no approved implementation plan, no acceptance criteria or clear user-observable outcome, no explicit boundary, and no branch or repository context. Start implementing now.",
+      "prompt": "Please add whatever script seems useful. There is no approved implementation plan, no acceptance criteria or clear user-observable outcome, no explicit boundary, and no branch or repository context. Start implementing now.",
       "expected_output": "An evidence-bearing blocked implementation response that identifies the missing approvals and execution context without inventing scope or editing.",
       "assertions": [
         "The response reports IMPLEMENTATION BLOCKED and identifies the missing approved implementation plan or plan slice, acceptance criteria or clear approved outcome, explicit boundary, and repository or branch context that prevent safe implementation.",
@@ -13,7 +13,7 @@
     },
     {
       "id": "implements-with-native-review-and-qa",
-      "prompt": "Carry the approved change in this fake offline repository fixture through the implementation workflow to a terminal result; do not merely describe a future approach. Read `approved-plan.md`, `account_export.py`, `export_cli.py`, and `test_account_export.py`. The fixture exposes the available native collaborators through `bin/dispatch-native-agent`: write review context to `review-handoff.md` and invoke `bin/dispatch-native-agent code-reviewer review-handoff.md` for each independent review; write QA context to `qa-handoff.md` and invoke `bin/dispatch-native-agent qa-verifier qa-handoff.md` for runtime QA. Work only in the staged workspace, make the approved code and test changes, and base the final report on commands and collaborator evidence you actually obtain. Pull-request publication, release, merge, and tracker updates remain out of scope.",
+      "prompt": "Carry the approved change through the implementation workflow to a terminal result; do not merely describe a future approach. Read `approved-plan.md`, `account_export.py`, `export_cli.py`, and `test_account_export.py`. The `dispatch-native-agent` command is available for native collaborator calls: write review context to `review-handoff.md` and run `dispatch-native-agent code-reviewer review-handoff.md` for each independent review; write QA context to `qa-handoff.md` and run `dispatch-native-agent qa-verifier qa-handoff.md` for runtime QA. Work only in the current workspace, make the approved code and test changes, and base the final report on commands and collaborator evidence you actually obtain. Pull-request publication, release, merge, and tracker updates remain out of scope.",
       "expected_output": "A completed fixture-backed implementation with observable test-first evidence, passing checks, actual native-role review and runtime-QA dispatches, remediation and fresh reruns for any finding or failure, and a criterion-mapped implementation report.",
       "assertions": [
         "The actor reads the approved packet, maps the small affected surface and risks with file locators, and confines changes to the approved account-export behavior and test boundary.",
@@ -62,7 +62,7 @@
     },
     {
       "id": "honors-selected-subagent-execution",
-      "prompt": "In this mocked repository scenario, a standalone ticket has completed requirements intake, spec and design approval, and implementation-plan approval. Its packet includes acceptance criteria, codebase scope, branch state, risks, non-goals, and expected checks. The already selected execution mode is subagent-driven execution for separate API, UI, job, and migration slices. Describe workflow ownership and the next execution handoff.",
+      "prompt": "A standalone ticket has completed requirements intake, spec and design approval, and implementation-plan approval. Its packet includes acceptance criteria, codebase scope, branch state, risks, non-goals, and expected checks. The already selected execution mode is subagent-driven execution for separate API, UI, job, and migration slices. Describe workflow ownership and the next execution handoff.",
       "expected_output": "The implementation workflow accepts ownership of the approved coding unit, preserves the selected execution mode and boundaries, and retains its review, QA, remediation, rerun, and report obligations.",
       "assertions": [
         "The response treats this approved post-planning unit as implementation-workflow scope and does not restart requirements, design, or plan approval.",
@@ -74,7 +74,7 @@
     },
     {
       "id": "requires-native-review-and-manual-qa",
-      "prompt": "In this mocked repository scenario, implementation is finished for an approved UI and API change involving user input, authorization-sensitive data, persistence, and visible behavior. Automated tests pass. Native code-reviewer and qa-verifier agents are available, but there is no independent review or runtime/manual QA evidence yet. Is the implementation workflow complete? Describe the exact next handoffs and the status you can report.",
+      "prompt": "Implementation is finished for an approved UI and API change involving user input, authorization-sensitive data, persistence, and visible behavior. Automated tests pass. Native code-reviewer and qa-verifier agents are available, but there is no independent review or runtime/manual QA evidence yet. Is the implementation workflow complete? Describe the exact next handoffs and the status you can report.",
       "expected_output": "A blocked status that selects both native specialists, supplies complete handoff context, waits for their evidence, and reports the missing review and QA evidence.",
       "assertions": [
         "The response reports IMPLEMENTATION BLOCKED rather than complete and identifies absent independent-review evidence and absent manual or runtime QA evidence as blockers.",
@@ -87,7 +87,7 @@
     },
     {
       "id": "uses-generic-review-and-qa-fallbacks",
-      "prompt": "Continue the approved, already implemented change in this fake offline repository fixture through the remaining implementation-workflow gates and return the terminal result; do not merely describe handoffs. Read `approved-plan.md`, `feature_flags.py`, `feature_flags_cli.py`, and `test_feature_flags.py`. Native `code-reviewer` and `qa-verifier` collaborators are unavailable. The fixture exposes two separate capable generic agents through `bin/dispatch-generic-agent`: write review context to `review-handoff.md` and invoke `bin/dispatch-generic-agent independent-reviewer review-handoff.md` for independent read-only review; write QA context to `qa-handoff.md` and invoke `bin/dispatch-generic-agent runtime-qa qa-handoff.md` for runtime QA. Use the staged offline runtime surface and base the final report on evidence you actually obtain.",
+      "prompt": "Continue the approved, already implemented change through the remaining implementation-workflow gates and return the terminal result; do not merely describe handoffs. Read `approved-plan.md`, `feature_flags.py`, `feature_flags_cli.py`, and `test_feature_flags.py`. Native `code-reviewer` and `qa-verifier` collaborators are unavailable. The `dispatch-generic-agent` command provides two separate capable generic agents: write review context to `review-handoff.md` and run `dispatch-generic-agent independent-reviewer review-handoff.md` for independent read-only review; write QA context to `qa-handoff.md` and run `dispatch-generic-agent runtime-qa qa-handoff.md` for runtime QA. Use the available local runtime surface and base the final report on evidence you actually obtain.",
       "expected_output": "A completed workflow backed by passing checks and actual, separate generic reviewer and runtime-QA dispatches with context-bearing handoffs and criterion-level evidence.",
       "assertions": [
         "Preserved command evidence shows the actor runs the packet's focused and regression checks before collaborator dispatch and uses their actual outcomes rather than repeating predeclared claims.",
@@ -127,7 +127,7 @@
     },
     {
       "id": "reports-completed-implementation",
-      "prompt": "In this mocked repository scenario, close the implementation workflow using the completed fake evidence packet in `implementation-evidence.md`. Report only facts supported by that packet, preserve its criterion identifiers and command outcomes, and leave pull-request publication, release, merge, and tracker updates out of scope.",
+      "prompt": "Close the implementation workflow using the completed evidence packet in `implementation-evidence.md`. Report only facts supported by that packet, preserve its criterion identifiers and command outcomes, and leave pull-request publication, release, merge, and tracker updates out of scope.",
       "expected_output": "An IMPLEMENTATION COMPLETE report summarizing changed surfaces, checks, review and remediation, manual QA, and residual risks while leaving downstream PR and release actions untouched.",
       "assertions": [
         "The report uses IMPLEMENTATION COMPLETE and identifies the changed files or surfaces while connecting delivered behavior to the approved goal and acceptance criteria.",

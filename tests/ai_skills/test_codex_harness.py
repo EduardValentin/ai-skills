@@ -18,7 +18,7 @@ from scripts.ai_skills_lib.codex_harness import (
     CodexOutputError,
     project_actor_skill,
 )
-from scripts.ai_skills_lib.harness import ActorInput, HarnessRequest
+from scripts.ai_skills_lib.harness import ActorInput, HarnessRequest, PreparedFile
 from scripts.ai_skills_lib.fixture_proxy import FixtureProxyError, FixtureSession
 from scripts.ai_skills_lib.sandbox_runtime import (
     CaseWorkspace,
@@ -1427,6 +1427,98 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
         self.assertEqual(staged_content, "actor input\n")
         self.assertFalse(undeclared_exists)
+
+    def test_exposes_declared_bin_commands_on_the_actor_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            skills_root = root / "skills"
+            input_root = (
+                skills_root
+                / "workflows"
+                / "example"
+                / "evals"
+                / "fixtures"
+                / "case"
+                / "inputs"
+            )
+            command = input_root / "bin" / "gh"
+            command.parent.mkdir(parents=True)
+            command.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            command.chmod(0o755)
+            runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skills_root)
+
+            adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="fixture-command",
+                    prompt="Use the available gh command.",
+                    timeout_seconds=60,
+                    actor_inputs=(
+                        ActorInput(
+                            source=command,
+                            destination=PurePosixPath("bin/gh"),
+                            prepared=PreparedFile(
+                                source=command,
+                                content=command.read_bytes(),
+                                executable=True,
+                            ),
+                        ),
+                    ),
+                    fixture_root=input_root.parent,
+                ),
+                runtime.results_root / "fixture-command",
+            )
+
+        actor_path = (
+            f"{runtime.last_case.workspace}/bin:"
+            f"{codex_harness.ACTOR_BASE_PATH}"
+        )
+        self.assertIn(
+            f"shell_environment_policy.set.PATH={json.dumps(actor_path)}",
+            runtime.calls[-1][2],
+        )
+        self.assertEqual(runtime.calls[-1][4], {})
+
+    def test_does_not_add_non_executable_bin_inputs_to_the_actor_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skills_root = root / "skills"
+            input_root = (
+                skills_root
+                / "workflows"
+                / "example"
+                / "evals"
+                / "fixtures"
+                / "case"
+                / "inputs"
+            )
+            data_file = input_root / "bin" / "command-contract.txt"
+            data_file.parent.mkdir(parents=True)
+            data_file.write_text("documentation only\n", encoding="utf-8")
+            runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skills_root)
+
+            adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="fixture-data",
+                    prompt="Read bin/command-contract.txt.",
+                    timeout_seconds=60,
+                    actor_inputs=(
+                        ActorInput(
+                            source=data_file,
+                            destination=PurePosixPath("bin/command-contract.txt"),
+                        ),
+                    ),
+                    fixture_root=input_root.parent,
+                ),
+                runtime.results_root / "fixture-data",
+            )
+
+        self.assertFalse(
+            any("shell_environment_policy.set.PATH=" in part for part in runtime.calls[-1][2])
+        )
 
     def test_rejects_actor_inputs_outside_the_declared_fixture_input_tree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

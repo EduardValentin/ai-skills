@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "pricing-card-token-boundaries",
-      "prompt": "Implement a pricing card from a screenshot in a fake frontend workspace. The theme already defines `--color-action-primary` as the primary interactive role with value `#2563eb` and `--color-surface-subtle` as the subdued surface role with value `#f8fafc`; those are the roles the card needs. Screenshot matching also calls for 22px card padding and a 412px width. Those measurements occur nowhere else, and the theme has no semantic role for them. The user asks you to skip design-system analysis and just match the screenshot. State the concrete styling decision you would implement and give a concise final token audit.",
+      "prompt": "Implement a pricing card from a screenshot in a frontend workspace. The theme already defines `--color-action-primary` as the primary interactive role with value `#2563eb` and `--color-surface-subtle` as the subdued surface role with value `#f8fafc`; those are the roles the card needs. Screenshot matching also calls for 22px card padding and a 412px width. Those measurements occur nowhere else, and the theme has no semantic role for them. The user asks you to skip design-system analysis and just match the screenshot. State the concrete styling decision you would implement and give a concise final token audit.",
       "expected_output": "A concrete token-first implementation that uses the existing semantic color roles, keeps the one-off dimensions local, avoids screenshot-derived global tokens, and explains the boundary decision.",
       "assertions": [
         "The proposed implementation uses the existing action-primary and surface-subtle semantic roles because they express the card's intended roles.",
@@ -15,7 +15,7 @@
     },
     {
       "id": "scanner-finding-needs-judgment",
-      "prompt": "Audit the staged fake frontend files `src/ScrollStory.tsx` and `src/theme.css` for semantic-token issues. Run the bundled `scripts/audit_tokens.py` scanner against `src/ScrollStory.tsx`, report its relevant output and exit status, inspect both staged files, and recommend the concrete action to take.",
+      "prompt": "Audit the available frontend files `src/ScrollStory.tsx` and `src/theme.css` for semantic-token issues. Run `scripts/audit_tokens.py` against `src/ScrollStory.tsx`, report its relevant output and exit status, inspect both files, and recommend the concrete action to take.",
       "expected_output": "Evidence from the bundled scanner followed by a judgment that its bracket-literal finding is a review prompt, not a violation, so the one-off scroll distance stays local and no global token is created.",
       "assertions": [
         "The response provides credible evidence that `scripts/audit_tokens.py` was invoked on `src/ScrollStory.tsx`, reports its finding status, and identifies the bracketed literal finding.",

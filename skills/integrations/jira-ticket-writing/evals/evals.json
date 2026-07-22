@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "create-story-with-dedicated-acceptance-field",
-      "prompt": "In this simulation, prepare a draft of the Jira API fields for an approved story; do not publish it. Users opening an asset detail page need the map to load their saved layers, preserve existing filters, and show a clear fallback when the map provider fails. The implementation replaces the old map wrapper in the fake repository https://github.com/acme/yes-map. Editing layer definitions is out of scope. The simulated Jira project exposes a separate rich-text `Acceptance & Testing Criteria` field that supports Atlassian Document Format task lists. No labels have been approved. Consult `references/adf-task-list.md` when preparing the task checkboxes.",
+      "prompt": "Prepare a draft of the Jira API fields for an approved story; do not publish it. Users opening an asset detail page need the map to load their saved layers, preserve existing filters, and show a clear fallback when the map provider fails. The implementation replaces the old map wrapper in the repository https://github.com/acme/yes-map. Editing layer definitions is out of scope. The Jira project exposes a separate rich-text `Acceptance & Testing Criteria` field that supports Atlassian Document Format task lists. No labels have been approved. Consult `references/adf-task-list.md` when preparing the task checkboxes.",
       "expected_output": "A clean Jira field draft with an outcome-focused summary, a concise sectioned description, a meaningfully labeled repository link, and a separate Acceptance & Testing Criteria ADF document containing native unchecked task items.",
       "assertions": [
         "The summary describes the user or delivery outcome and is neither issue-key-prefixed nor merely a file or implementation name.",
@@ -16,7 +16,7 @@
     },
     {
       "id": "clean-existing-ticket-and-native-relationships",
-      "prompt": "In this simulation, prepare but do not publish the Jira API field updates needed to clean an approved draft. Existing summary: `MKT-123 - mapbox_v3_asset_detail.ts`. The description has a `Source Context` block containing the bare fake repository URL https://github.com/acme/asset-map, a dependency block saying `blocked by MKT-101` and `related to MKT-99`, Markdown checkbox criteria for keeping the selected saved layer visible and showing a provider-failure warning, and a process note explaining where acceptance criteria are tracked. The simulated issue belongs under parent epic MKT-10. The fake Jira project provides a dedicated ADF-capable Acceptance & Testing Criteria field, a parent field, and native issue links with unambiguous blocked-by and related link directions. No label change was requested.",
+      "prompt": "Prepare but do not publish the Jira API field updates needed to clean an approved draft. Existing summary: `MKT-123 - mapbox_v3_asset_detail.ts`. The description has a `Source Context` block containing the bare repository URL https://github.com/acme/asset-map, a dependency block saying `blocked by MKT-101` and `related to MKT-99`, Markdown checkbox criteria for keeping the selected saved layer visible and showing a provider-failure warning, and a process note explaining where acceptance criteria are tracked. The issue belongs under parent epic MKT-10. The Jira project provides a dedicated ADF-capable Acceptance & Testing Criteria field, a parent field, and native issue links with unambiguous blocked-by and related link directions. No label change was requested.",
       "expected_output": "A concise update proposal with an outcome-focused summary, normalized description, dedicated ADF acceptance field, parent MKT-10, correctly directed native links for MKT-101 and MKT-99, and no unapproved label changes.",
       "assertions": [
         "The revised summary removes the issue key and file-name framing and communicates the intended outcome.",
@@ -29,7 +29,7 @@
     },
     {
       "id": "report-native-link-capability-gap",
-      "prompt": "In this simulation, draft the Jira fields for an approved task to connect the billing summary to the existing invoice exporter. Set parent epic BILL-20. The task is blocked by BILL-18 and is follow-up work to BILL-7. The simulated Jira integration can set the parent and rich-text fields, including a dedicated ADF-capable acceptance field, but it cannot create issue links. Produce the usable draft, explain any capability limitation, and do not publish anything.",
+      "prompt": "Draft the Jira fields for an approved task to connect the billing summary to the existing invoice exporter. Set parent epic BILL-20. The task is blocked by BILL-18 and is follow-up work to BILL-7. The available Jira integration can set the parent and rich-text fields, including a dedicated ADF-capable acceptance field, but it cannot create issue links. Produce the usable draft, explain any capability limitation, and do not publish anything.",
       "expected_output": "A usable ticket draft with BILL-20 in the parent field, concise ticket content and ADF acceptance criteria, no dependency block in the description, and a clear report that the blocked-by and follow-up links could not be created natively.",
       "assertions": [
         "The response still produces a practical draft and maps BILL-20 to the native parent field.",
@@ -42,7 +42,7 @@
     },
     {
       "id": "use-description-fallback-with-native-tasks",
-      "prompt": "In this simulation, prepare a Jira API payload draft for an approved task: when an archived layer is selected on the asset detail map, show a warning, keep that layer visibly selected, and record an audit event. The fake Jira project has no dedicated Acceptance & Testing Criteria field. Its description field supports ADF, including taskList and taskItem nodes. Do not publish the ticket.",
+      "prompt": "Prepare a Jira API payload draft for an approved task: when an archived layer is selected on the asset detail map, show a warning, keep that layer visibly selected, and record an audit event. The Jira project has no dedicated Acceptance & Testing Criteria field. Its description field supports ADF, including taskList and taskItem nodes. Do not publish the ticket.",
       "expected_output": "A structured Jira draft whose acceptance criteria fall back to the description because no dedicated field exists, while still using valid ADF task items rather than Markdown checkbox text.",
       "assertions": [
         "The response places acceptance criteria in the description specifically because the simulated project has no dedicated acceptance field and does not fabricate a custom field.",
@@ -54,7 +54,7 @@
     },
     {
       "id": "block-unsupported-dedicated-acceptance-format",
-      "prompt": "In this simulation, prepare a Jira API field draft for an approved task that warns account administrators before disabling the final active export destination. The fake Jira project has a dedicated Acceptance & Testing Criteria field, but that field cannot represent ADF taskList or taskItem nodes. The description does support ADF tasks. No publication is authorized. Produce the usable draft and identify any capability limitation.",
+      "prompt": "Prepare a Jira API field draft for an approved task that warns account administrators before disabling the final active export destination. The Jira project has a dedicated Acceptance & Testing Criteria field, but that field cannot represent ADF taskList or taskItem nodes. The description does support ADF tasks. No publication is authorized. Produce the usable draft and identify any capability limitation.",
       "expected_output": "A field draft that keeps the acceptance criteria assigned to the dedicated field, does not silently relocate or degrade them, and clearly reports that native checkbox representation blocks publication.",
       "assertions": [
         "The criteria remain assigned to the existing dedicated Acceptance & Testing Criteria field rather than being moved into the description merely because the description supports ADF tasks.",
@@ -66,7 +66,7 @@
     },
     {
       "id": "scope-diagnostic-investigation-ticket",
-      "prompt": "In this simulation, draft but do not publish an investigation Jira ticket to determine why saved layers intermittently disappear when users reopen the asset detail map. The approved scope is diagnosis only: reproduce or characterize the failure, collect evidence, identify the likely cause, and recommend next steps. No production fix is approved. The fake Jira project provides a separate ADF-capable Acceptance & Testing Criteria field.",
+      "prompt": "Draft but do not publish an investigation Jira ticket to determine why saved layers intermittently disappear when users reopen the asset detail map. The approved scope is diagnosis only: reproduce or characterize the failure, collect evidence, identify the likely cause, and recommend next steps. No production fix is approved. The Jira project provides a separate ADF-capable Acceptance & Testing Criteria field.",
       "expected_output": "A diagnostic investigation ticket with a clean summary, concise structured description, the unapproved fix clearly out of scope, and separate native task criteria for concrete investigation deliverables.",
       "assertions": [
         "The ticket is framed as an investigation and defines concrete diagnostic deliverables rather than promising a production fix.",
@@ -78,7 +78,7 @@
     },
     {
       "id": "authorized-update-with-mock-jira",
-      "prompt": "In this fake offline Jira simulation, update fake issue MAP-42. I explicitly authorize this simulated update. Users reopening the asset detail map must retain their selected saved layer and see a clear warning when the map provider is unavailable; changing layer definitions is out of scope. An approved fake Jira collaborator is staged at `bin/jira`; prepend `bin` to PATH, run `jira --help` for its command contract, and use it for all Jira reads and the update. It supports a dry run. Do not make live requests or substitute a real Jira client.",
+      "prompt": "Update Jira issue MAP-42. I explicitly authorize this update. Users reopening the asset detail map must retain their selected saved layer and see a clear warning when the map provider is unavailable; changing layer definitions is out of scope. The approved `jira` command is available; run `jira --help` for its command contract and use it for all Jira reads and the update. It supports a dry run. Do not make live requests or substitute another Jira client.",
       "expected_output": "A metadata-grounded fake Jira update that reads the current issue, prepares the complete supported payload, passes the collaborator's dry run, performs the explicitly authorized simulated mutation, and reports the verified fake outcome.",
       "assertions": [
         "Before attempting the update, the agent executes the fake Jira collaborator's project metadata read and current MAP-42 issue read rather than relying on invented field IDs or stale issue state.",
@@ -94,7 +94,7 @@
     },
     {
       "id": "authorized-create-without-jira-collaborator",
-      "prompt": "In this fake offline Jira simulation, create a task in fake project BILL and place it under fake parent BILL-20. I explicitly authorize the simulated create. The task should let billing administrators retry a failed invoice export, show the retry result, and prevent a second retry while one is running. Supplied fake project metadata says the Summary field is `summary`, Description is ADF field `description`, Parent is `parent`, and the dedicated ADF-capable Acceptance & Testing Criteria field is `customfield_10091` with native task-list support. No labels or issue links were requested. No approved Jira integration or API collaborator is available, `JIRA_CONFIG_PATH` is unset, and no fake Jira command or MCP tool is present. Do not make live requests.",
+      "prompt": "Create a task in Jira project BILL and place it under parent BILL-20. I explicitly authorize this create. The task should let billing administrators retry a failed invoice export, show the retry result, and prevent a second retry while one is running. Supplied project metadata says the Summary field is `summary`, Description is ADF field `description`, Parent is `parent`, and the dedicated ADF-capable Acceptance & Testing Criteria field is `customfield_10091` with native task-list support. No labels or issue links were requested. No approved Jira integration or API collaborator is available, `JIRA_CONFIG_PATH` is unset, and no `jira` command or Jira MCP tool is available. Do not make live requests.",
       "expected_output": "A usable field-keyed Jira draft plus a named integration blocker, with no attempted or claimed create and no partial-write representation.",
       "assertions": [
         "The response recognizes that explicit mutation authorization does not overcome the absence of an approved Jira integration or configured API collaborator.",

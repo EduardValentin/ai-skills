@@ -64,7 +64,7 @@
     },
     {
       "id": "route-thin-context-to-planning",
-      "prompt": "In this simulated scenario, implementation-ready tickets are requested for a scheduling feature, but roles, user flow, permissions, data, edge cases, and integrations are all undecided. The feature-work-planning skill is available in the current runtime. Continue under ticket-writing and return the next responsible result.",
+      "prompt": "Implementation-ready tickets are requested for a scheduling feature, but roles, user flow, permissions, data, edge cases, and integrations are all undecided. The feature-work-planning skill is available in the current runtime. Continue under ticket-writing and return the next responsible result.",
       "expected_output": "An actual feature-work-planning invocation that returns a concrete requirements-alignment result or next decision before final ticket drafting and defers implementation-ready tickets until the planning result is approved.",
       "assertions": [
         "Preserved actor transcript or trace shows an actual feature-work-planning invocation before any final ticket drafting; merely naming, selecting, recommending, or promising the collaborator does not satisfy this requirement.",
@@ -75,7 +75,7 @@
     },
     {
       "id": "clarify-thin-context-without-planner",
-      "prompt": "In this simulated scenario, implementation-ready tickets are requested for a scheduling feature. Roles, user flow, permissions, data, edge cases, and integrations have not been decided, and the feature-work-planning skill is unavailable in the current runtime. Continue under ticket-writing.",
+      "prompt": "Implementation-ready tickets are requested for a scheduling feature. Roles, user flow, permissions, data, edge cases, and integrations have not been decided, and the feature-work-planning skill is unavailable in the current runtime. Continue under ticket-writing.",
       "expected_output": "A concise clarification response that requests the missing planning facts and defers final ticket prose rather than inventing scope.",
       "assertions": [
         "The response uses the documented fallback by asking for the missing facts needed to establish approved context.",

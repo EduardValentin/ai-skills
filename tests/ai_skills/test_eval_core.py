@@ -297,10 +297,6 @@ class EvalArtifactSchemaTests(unittest.TestCase):
         self.assertNotIn(secret_value, message)
         self.assertRegex(message, r"grading\.schema\.json.*\$.*additionalProperties")
 
-    def test_obsolete_grading_document_parser_is_removed(self):
-        self.assertFalse(hasattr(eval_core, "_grading_record_from_dict"))
-
-
 def generated_grading_record(
     *,
     run_id: str = "run-with-skill",

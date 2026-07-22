@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "blocked-real-runtime-dependencies",
-      "prompt": "In this mocked QA scenario, give the current QA verdict for a certificate-expiry Celery job. Focused unit and integration tests pass, and a fixture source diff is available, but there is no running Celery beat, Oracle database, Vault service, credentials, or seeded fixture data. The acceptance criteria cover beat registration, an independent off-switch, success and failure events, continue-after-failure behavior, Vault-path redaction, and absence of alert creation. Fake Oracle and Vault clients could be imported locally.",
+      "prompt": "Give the current QA verdict for a certificate-expiry Celery job. Focused unit and integration tests pass, and a source diff is available, but there is no running Celery beat, Oracle database, Vault service, credentials, or seeded data. The acceptance criteria cover beat registration, an independent off-switch, success and failure events, continue-after-failure behavior, Vault-path redaction, and absence of alert creation. Local Oracle and Vault client substitutes are available.",
       "expected_output": "A blocked QA verdict that names the unavailable runtime surfaces and access needed to proceed, rejects tests and fakes as substitutes for dependency-critical runtime evidence, and identifies the concrete job, state, event, log, and side-effect observations required once unblocked.",
       "assertions": [
         "The response returns QA cannot proceed rather than CLEAN, NOT RUN, or a hypothetical claim of verification.",
@@ -15,7 +15,7 @@
     },
     {
       "id": "runtime-cli-evidence-verdict",
-      "prompt": "Manually QA the staged fake offline job CLI at `bin/delivery-job`; exercise it now with `python3 bin/delivery-job` and do not inspect or modify the fixture source. Use `other` mode and begin with `reset`. Acceptance criteria: enqueueing fake account `acct-fixture-42` exits successfully, returns a job ID in queued state, and that state persists through `status`; running the queued job exits successfully and persists completed state with exactly one delivery; rerunning the completed job is idempotent, exits successfully, and leaves the delivery count at one; requesting status for `job-missing` exits nonzero without changing the known job. Return the final criterion-mapped QA report with commands, exit statuses, observed output and state, evidence, cleanup, and the evidence-derived verdict.",
+      "prompt": "The `delivery-job` command is available. Manually QA it now without inspecting or modifying its source. Use `other` mode and begin with `reset`. Acceptance criteria: enqueueing account `acct-fixture-42` exits successfully, returns a job ID in queued state, and that state persists through `status`; running the queued job exits successfully and persists completed state with exactly one delivery; rerunning the completed job is idempotent, exits successfully, and leaves the delivery count at one; requesting status for `job-missing` exits nonzero without changing the known job. Return the final criterion-mapped QA report with commands, exit statuses, observed output and state, evidence, cleanup, and the evidence-derived verdict.",
       "expected_output": "An executed other-mode QA report that cites concrete CLI and persisted-state observations for every criterion and returns BUGS FOUND because rerunning the completed job increments its delivery count instead of remaining idempotent.",
       "assertions": [
         "The response provides credible evidence that the actor invoked the staged CLI for reset, enqueue, persisted status, initial run, rerun, and unknown-job status, including the relevant exit statuses and JSON output rather than substituting source inspection or a proposed plan.",
@@ -32,7 +32,7 @@
     },
     {
       "id": "mixed-invite-evidence-plan",
-      "prompt": "In this mock QA scenario, prepare the QA approach and final-report evidence requirements for a mixed invite flow; do not execute the probes in this response. The sandbox app entry point is http://localhost:3000/invites, the sandbox API is at http://localhost:8080, and seeded fixture users will be available. Acceptance criteria require invite creation through the API, invite submission through the form, duplicate rejection, visible form errors, persisted invite state, and matching UI/API invite status.",
+      "prompt": "Prepare the QA approach and final-report evidence requirements for a mixed invite flow; do not execute the probes in this response. The app entry point is http://localhost:3000/invites, the API is at http://localhost:8080, and seeded users will be available. Acceptance criteria require invite creation through the API, invite submission through the form, duplicate rejection, visible form errors, persisted invite state, and matching UI/API invite status.",
       "expected_output": "A NOT RUN mixed-mode verification approach that combines browser interactions with programmatic API and state probes, ties both surfaces through persisted and propagated invite state, and maps every criterion to concrete evidence and verdict handling.",
       "assertions": [
         "The response uses NOT RUN, explicitly treats the work as mixed-mode QA, and includes both browser-observed behavior and programmatic API or service probes.",
@@ -45,7 +45,7 @@
     },
     {
       "id": "ui-states-and-fix-boundary",
-      "prompt": "In this mock QA scenario, prepare the manual QA approach for a sandbox settings form; do not execute it yet. The form must handle loading, empty, success, server error, validation, disabled submit while saving, rapid clicks, and navigation during save. I also asked you to fix anything you find. A seeded fixture user and a test control that forces the next save to fail will be available.",
+      "prompt": "Prepare the manual QA approach for a settings form; do not execute it yet. The form must handle loading, empty, success, server error, validation, disabled submit while saving, rapid clicks, and navigation during save. I also asked you to fix anything you find. A seeded user and a test control that forces the next save to fail will be available.",
       "expected_output": "A NOT RUN browser-based behavior plan covering the named states and interactions, with observable evidence and bug-report requirements, while keeping implementation repairs outside the QA-verifier role.",
       "assertions": [
         "The response uses NOT RUN and requires real browser actions against the running sandbox form and rendered outcomes, not screenshots, source inspection, or automated checks alone.",
@@ -58,7 +58,7 @@
     },
     {
       "id": "pr-metadata-fallback-order",
-      "prompt": "In this mock QA scenario, a frontend PR needs QA. A fixture local diff and ticket ID are available, but the browser PR page is blocked by authentication and there is pressure to test from the diff. No MCP, API, CLI, or authenticated local-metadata access has been attempted, and the caller has not yet been asked for the PR details, acceptance criteria, implemented surface, or testing instructions. What should happen next?",
+      "prompt": "A frontend PR needs QA. A local diff and ticket ID are available, but the browser PR page is blocked by authentication and there is pressure to test from the diff. No MCP, API, CLI, or authenticated local-metadata access has been attempted, and the caller has not yet been asked for the PR details, acceptance criteria, implemented surface, or testing instructions. What should happen next?",
       "expected_output": "A metadata-first NOT RUN response that attempts available PR and ticket tooling, then asks the caller for missing scope details if tooling fails, and uses clearly provisional diff inference only after both sources are exhausted.",
       "assertions": [
         "The response requires attempting available MCP, API, CLI, or authenticated local metadata for both PR and ticket before beginning verification or inferring scope from the diff.",
@@ -70,7 +70,7 @@
     },
     {
       "id": "readable-pr-without-testing-notes",
-      "prompt": "In this mock QA scenario, prepare QA scope for a frontend PR; do not run the browser yet. Fixture PR metadata and the linked fixture ticket are readable, but the PR has no testing section. The ticket says users can filter saved places by Active, Archived, and All, and the fixture diff changes the filter panel and badge count. The sandbox app entry point is http://localhost:3000/saved-places with seeded fixture Active and Archived records.",
+      "prompt": "Prepare QA scope for a frontend PR; do not run the browser yet. PR metadata and the linked ticket are readable, but the PR has no testing section. The ticket says users can filter saved places by Active, Archived, and All, and the local diff changes the filter panel and badge count. The app entry point is http://localhost:3000/saved-places with seeded Active and Archived records.",
       "expected_output": "A non-blocked NOT RUN QA scope derived from the available metadata, ticket criteria, diff, entry point, data needs, implemented surfaces, and regression risks, followed by browser evidence requirements for filters and counts.",
       "assertions": [
         "The response uses NOT RUN and proceeds with scoping rather than blocking solely because formal testing notes are absent.",
@@ -83,7 +83,7 @@
     },
     {
       "id": "caller-notes-outrank-diff",
-      "prompt": "In this mock QA scenario, prepare the QA scope for a frontend PR whose host is unavailable. The caller supplied fixture PR testing notes: verify saved-place filters for Active, Archived, and All, then archive an item and confirm the counter updates. A fixture local diff is available. Explain the scope and evidence you will use; do not execute the browser steps yet.",
+      "prompt": "Prepare the QA scope for a frontend PR whose host is unavailable. The caller supplied PR testing notes: verify saved-place filters for Active, Archived, and All, then archive an item and confirm the counter updates. A local diff is available. Explain the scope and evidence you will use; do not execute the browser steps yet.",
       "expected_output": "A NOT RUN QA scope grounded in the caller-provided notes, with the diff used for affected-surface and regression-risk discovery, and a browser evidence plan for filters, archiving, and the resulting count and state.",
       "assertions": [
         "The response accepts the supplied testing notes as the available metadata source and does not block merely because the PR host is unavailable.",

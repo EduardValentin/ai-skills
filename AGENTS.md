@@ -11,14 +11,14 @@ never edit installed or generated copies.
 - Before creating a branch or worktree from `main`, fetch the remote and base
   it on the current `origin/main`.
 - Skills use the strict source layout
-  `skills/<group>/<skill>/SKILL.md`. Do not create per-harness skill copies or
-  repository-level runtime toolkits.
+  `skills/<group>/<skill>/SKILL.md`. Runtime dependencies needed by a skill
+  belong inside that skill folder.
 - A skill is self-contained. Bundled executable code belongs in its skill;
   duplicated bundled financial runtime code is allowed only for this approved
   self-contained-skill exception.
 - Do not directly edit installed skills, generated artifacts, or caches.
 - When skill layout, validation, installation, or testing behavior changes,
-  update `docs/INDEX.md`, `docs/TESTING.md`, and `docs/SPEC.md`.
+  update the relevant files under `docs/` and keep `docs/INDEX.md` accurate.
 
 ### Skill contract and validation
 
@@ -42,6 +42,9 @@ never edit installed or generated copies.
   present and absent behavior.
 - Every retained skill requires `evals/evals.json` and
   `evals/triggers.json`.
+- Dispatch every `SKILL.md` read performed for specification alignment to a
+  separate subagent, regardless of the current delegation depth. Return only
+  the findings needed by the coordinating agent.
 
 ### Evaluation and test policy
 
@@ -79,10 +82,13 @@ never edit installed or generated copies.
   manifest limit. Every declared call is verified. Bind actor inputs and HTTP
   initialization to the exact current case fixture root.
 - Keep behavior definitions generic and runner-owned: actor prompts must not
-  contain expected results or grading guidance; use semantic assertions for
+  contain expected results, grading guidance, or unnecessary disclosure of
+  evaluation, sandbox, fixture, mock, or shim mechanics. Describe available
+  commands and data as ordinary task capabilities. Use semantic assertions for
   meaning and only the approved deterministic checks for hard artifact
-  contracts. Declared inputs stay below the exact case `inputs/` directory, and
-  runner-only schemas and proxy expectations stay outside it.
+  contracts. Declared inputs stay below the exact case `inputs/` directory;
+  executable `inputs/bin/` collaborators are runner-added to the actor `PATH`;
+  runner-only schemas and proxy expectations stay outside `inputs/`.
 - Model-backed runs use reusable Docker Sandboxes worker pools. Give every case
   a fresh actor projection, workspace, `CODEX_HOME`, and ephemeral harness
   session; keep actor and judge workers separate, keep real credentials in the
@@ -91,12 +97,14 @@ never edit installed or generated copies.
   read-only, shell-free, web-free, and response-schema-bound; treat all actor
   evidence as untrusted. Do not weaken resource limits, mount isolation,
   network policy, oracle isolation, MockServer no-passthrough behavior, or
-  cleanup without updating `docs/TESTING.md` and the harness tests.
+  cleanup without updating `docs/ARCHITECTURE.md`, `docs/EVALUATION.md`, and
+  the harness tests.
 - Runtime pins are immutable: no floating sandbox/template/image tags, package
   ranges, or runtime-schema downloads. Changes to `config/eval-runtime.json`,
   Docker Sandboxes or Codex pins, or the vendored MockServer schema require
-  `docs/TESTING.md` updates and a report of the recommended integration
-  verification; the agent-backed suite still requires explicit user approval.
+  `docs/ARCHITECTURE.md` and `docs/EVALUATION.md` updates plus a report of the
+  recommended integration verification; the agent-backed suite still requires
+  explicit user approval.
 - `validate ci-all` is deterministic, offline, and model-free. It includes
   `tests/ai_skills/` plus deterministic runtime tests. Real Docker
   Sandboxes/Codex/MockServer smoke tests belong under
@@ -113,10 +121,12 @@ never edit installed or generated copies.
   literals. Authored fake credential values must start with `FAKE_`; never
   print matched values. Preserve safe actor evidence exactly; quarantine and
   fail an attempt when its evidence would require redaction instead of grading
-  transformed content. Eval prompts use a conservative lexical rejection for
-  explicit owned/live resources; directly qualify non-live resources as fake,
-  mock, fixture, sandbox, simulation, or transcript data. Leave broader
-  semantic private-state concerns to judge and human review.
+  transformed content. Eval prompts always reject explicit actual, live,
+  personal, private, production, real, or logged-in resource requests. Ordinary
+  owner phrasing is allowed only when valid case-local inputs or HTTP
+  initialization establish the non-production boundary, without requiring
+  fixed disclosure prose in the actor prompt. Leave broader semantic
+  private-state concerns to judge and human review.
 - Hard absence evidence is allowed for structural, security, artifact, and
   negative-trigger contracts. Do not use brittle absence assertions against
   model prose.

@@ -30,7 +30,7 @@
     },
     {
       "id": "unavailable-code-mapper-uses-generic-fallback",
-      "prompt": "In this mock multi-ticket scenario, coordinate OPS-21 API token rotation and OPS-22 admin UI status as one scope. Shared contracts and dependency order have not been mapped, and no cross-ticket spec/design, ticket implementation plan, or coordination plan is approved. The native code-mapper agent is unavailable, but capable generic subagents are available for dispatch. Begin the coordination work without implementing either ticket.",
+      "prompt": "Coordinate OPS-21 API token rotation and OPS-22 admin UI status as one scope. Shared contracts and dependency order have not been mapped, and no cross-ticket spec/design, ticket implementation plan, or coordination plan is approved. The native code-mapper agent is unavailable, but capable generic subagents are available for dispatch. Begin the coordination work without implementing either ticket.",
       "expected_output": "A provisional coordination map followed by one actual read-only generic-subagent mapping dispatch per ticket, with the native collaborator's unavailability recorded and implementation held behind all approval gates.",
       "assertions": [
         "The response inventories OPS-21 and OPS-22, marks shared-contract and dependency facts as uncertain, and provides a provisional map with likely ordering or parallelization possibilities and a next mapping action for each ticket.",
@@ -43,7 +43,7 @@
     },
     {
       "id": "unavailable-implementation-coordinator-uses-generic-fallback",
-      "prompt": "In this mock approved orchestration scenario, REL-30 and REL-31 have an approved multi-ticket spec/design, approved ticket implementation plans, and an approved coordination plan assigning them to independent parallel delegated execution. Mapping is complete, no PR exists, and there are no blockers. Native implementation-coordinator agents are unavailable, but capable generic subagents are available for dispatch. I explicitly authorize execution now. Proceed with the approved orchestration and show what is dispatched.",
+      "prompt": "REL-30 and REL-31 have an approved multi-ticket spec/design, approved ticket implementation plans, and an approved coordination plan assigning them to independent parallel delegated execution. Mapping is complete, no PR exists, and there are no blockers. Native implementation-coordinator agents are unavailable, but capable generic subagents are available for dispatch. I explicitly authorize execution now. Proceed with the approved orchestration and show what is dispatched.",
       "expected_output": "An orchestration-state update and complete execution packets followed by actual parallel dispatches to capable generic implementation subagents, with the unavailable native collaborator and fallback assignments recorded.",
       "assertions": [
         "The response first presents current orchestration state covering REL-30 and REL-31 inventory, approvals, independent dependency status, assignment state, PR or handoff state, blockers, packet lifecycle, and intended human review order.",

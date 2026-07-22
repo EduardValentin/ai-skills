@@ -56,11 +56,13 @@ _PRIVATE_STATE_LIVE_QUALIFIER = (
     r"(?:actual|live|personal|private|prod(?:uction)?|real|logged[- ]in)"
 )
 _PRIVATE_STATE_OWNER_QUALIFIER = r"(?:my|our|your)"
-_PRIVATE_STATE_PATTERNS = (
+_PRIVATE_STATE_LIVE_PATTERNS = (
     re.compile(
         rf"\b{_PRIVATE_STATE_LIVE_QUALIFIER}\s+{_PRIVATE_RESOURCE}\b",
         re.IGNORECASE,
     ),
+)
+_PRIVATE_STATE_OWNED_PATTERNS = (
     re.compile(
         rf"\b{_PRIVATE_STATE_OWNER_QUALIFIER}\s+"
         rf"(?:saved\s+|stored\s+|logged[- ]in\s+)?"
@@ -329,18 +331,43 @@ def validate_behavior_eval_document(
                 )
             )
         seen_ids.add(case_id)
-        if len(case_id) <= 64 and _CASE_ID_PATTERN.fullmatch(case_id):
+        case_id_is_valid = len(case_id) <= 64 and bool(
+            _CASE_ID_PATTERN.fullmatch(case_id)
+        )
+        if case_id_is_valid:
             issues.extend(_case_path_issues(scope, case_id, raw_case))
             issues.extend(_case_resource_issues(skill, scope, case_id, raw_case))
         prompt = raw_case.get("prompt")
-        if isinstance(prompt, str) and _requires_live_private_state(prompt):
+        has_isolated_resources = case_id_is_valid and (
+            _case_has_declared_isolated_resources(
+                skill,
+                case_id,
+                raw_case,
+            )
+        )
+        private_state_message: str | None = None
+        if isinstance(prompt, str) and _requires_private_state(
+            prompt,
+            _PRIVATE_STATE_LIVE_PATTERNS,
+        ):
+            private_state_message = (
+                f"eval '{case_id}' explicitly requests live or private credentials "
+                "or session state; use isolated non-production resources"
+            )
+        elif (
+            isinstance(prompt, str)
+            and not has_isolated_resources
+            and _requires_private_state(prompt, _PRIVATE_STATE_OWNED_PATTERNS)
+        ):
+            private_state_message = (
+                f"eval '{case_id}' requires private credentials or session state "
+                "without declared isolated case resources"
+            )
+        if private_state_message is not None:
             issues.append(
                 ValidationIssue(
                     scope=scope,
-                    message=(
-                        f"eval '{case_id}' requires real private credentials or session "
-                        "state; use an explicit mock or fixture"
-                    ),
+                    message=private_state_message,
                 )
             )
         if isinstance(prompt, str) and _contains_actor_prompt_oracle_leak(prompt):
@@ -439,7 +466,18 @@ def _case_resource_issues(
                 )
                 continue
             actor_path = path.relative_to(expected_inputs).as_posix()
-            if isinstance(prompt, str) and not _text_names_path(prompt, actor_path):
+            logical = skill.root / "evals" / path
+            source = authored_file(logical, skill.root)
+            actor_names = [actor_path]
+            if (
+                path.relative_to(expected_inputs).parent == PurePosixPath("bin")
+                and source is not None
+                and _authored_file_is_executable(source.resolved_path)
+            ):
+                actor_names.append(path.name)
+            if isinstance(prompt, str) and not any(
+                _text_names_path(prompt, actor_name) for actor_name in actor_names
+            ):
                 issues.append(
                     ValidationIssue(
                         scope=scope,
@@ -449,10 +487,9 @@ def _case_resource_issues(
                         ),
                     )
                 )
-            logical = skill.root / "evals" / path
             if (
                 _has_symlink_component(logical, skill.root)
-                or authored_file(logical, skill.root) is None
+                or source is None
             ):
                 issues.append(
                     ValidationIssue(
@@ -638,8 +675,11 @@ def _installable_eval_reference_issues(
     return issues
 
 
-def _requires_live_private_state(prompt: str) -> bool:
-    for pattern in _PRIVATE_STATE_PATTERNS:
+def _requires_private_state(
+    prompt: str,
+    patterns: tuple[re.Pattern[str], ...],
+) -> bool:
+    for pattern in patterns:
         for match in pattern.finditer(prompt):
             if _has_direct_nonlive_qualification(prompt, match):
                 continue
@@ -647,6 +687,45 @@ def _requires_live_private_state(prompt: str) -> bool:
                 continue
             return True
     return False
+
+
+def _case_has_declared_isolated_resources(
+    skill: SkillRecord,
+    case_id: str,
+    raw_case: Mapping[object, object],
+) -> bool:
+    fixture_root = skill.root / "evals" / "fixtures" / case_id
+    initialization = fixture_root / "mockserverInitialization.json"
+    if (
+        not _has_symlink_component(initialization, skill.root)
+        and authored_file(initialization, skill.root) is not None
+    ):
+        return True
+
+    expected_inputs = PurePosixPath("fixtures") / case_id / "inputs"
+    raw_files = raw_case.get("files")
+    if not isinstance(raw_files, Sequence) or isinstance(raw_files, (str, bytes)):
+        return False
+    for raw_path in raw_files:
+        if not isinstance(raw_path, str) or not _is_canonical_relative_path(raw_path):
+            continue
+        path = PurePosixPath(raw_path)
+        if path.parent != expected_inputs and expected_inputs not in path.parents:
+            continue
+        logical = skill.root / "evals" / path
+        if (
+            not _has_symlink_component(logical, skill.root)
+            and authored_file(logical, skill.root) is not None
+        ):
+            return True
+    return False
+
+
+def _authored_file_is_executable(path: Path) -> bool:
+    try:
+        return bool(path.stat().st_mode & 0o111)
+    except OSError:
+        return False
 
 
 def _has_direct_nonlive_qualification(prompt: str, match: re.Match[str]) -> bool:

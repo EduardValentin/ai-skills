@@ -50,6 +50,7 @@ from scripts.ai_skills_lib.sandbox_runtime import (
     SandboxRuntimeError,
 )
 RUNTIME_ENTRIES = ("SKILL.md", "scripts", "references", "assets")
+ACTOR_BASE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 DISABLED_FEATURES = (
     "apps",
     "browser_use",
@@ -361,7 +362,10 @@ class CodexHarnessAdapter:
                     raise CodexOutputError(
                         "expected skill was not provisioned as an installed SKILL.md"
                     )
-                shell_environment = request.shell_environment
+                shell_environment = _merge_shell_environment(
+                    request.shell_environment,
+                    _actor_input_environment(request, case.workspace),
+                )
                 if request.fixture_initialization is not None:
                     assert self.fixture_proxy is not None
                     fixture_session = self.fixture_proxy.prepare_case(
@@ -845,6 +849,25 @@ def _stage_actor_inputs(
         else:
             shutil.copy2(source, destination)
             destination.chmod(0o755 if source.stat().st_mode & 0o111 else 0o644)
+
+
+def _actor_input_environment(
+    request: HarnessRequest,
+    workspace: Path,
+) -> tuple[tuple[str, str], ...]:
+    if request.role != "actor":
+        return ()
+    for actor_input in request.actor_inputs:
+        if actor_input.destination.parent != PurePosixPath("bin"):
+            continue
+        executable = (
+            actor_input.prepared.executable
+            if actor_input.prepared is not None
+            else bool(actor_input.source.stat().st_mode & 0o111)
+        )
+        if executable:
+            return (("PATH", f"{workspace / 'bin'}:{ACTOR_BASE_PATH}"),)
+    return ()
 
 
 def _write_prepared_file(
@@ -1898,14 +1921,14 @@ def _require_contained_path(
 
 def _merge_shell_environment(
     declared: tuple[tuple[str, str], ...],
-    fixture: tuple[tuple[str, str], ...],
+    runner_owned: tuple[tuple[str, str], ...],
 ) -> tuple[tuple[str, str], ...]:
     merged = dict(declared)
-    for name, value in fixture:
+    for name, value in runner_owned:
         existing = merged.get(name)
         if existing is not None and existing != value:
             raise CodexOutputError(
-                f"declared shell environment conflicts with fixture-owned variable {name}"
+                f"declared shell environment conflicts with runner-owned variable {name}"
             )
         merged[name] = value
     return tuple(sorted(merged.items()))

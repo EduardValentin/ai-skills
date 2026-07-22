@@ -596,7 +596,7 @@ class BehaviorDefinitionValidationTests(unittest.TestCase):
             },
         )
 
-        self.assert_issue("requires real private credentials or session state")
+        self.assert_issue("private credentials or session state")
 
         document = json.loads((skill / "evals" / "evals.json").read_text())
         document["evals"][0]["prompt"] = (

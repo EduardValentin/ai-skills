@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": "initial-thesis-first-response",
-      "prompt": "Use this fully simulated scenario without live lookups. Research COST from scratch and tell me whether it belongs in a long-term portfolio. I want a durable fundamentals thesis, not trading advice. COST is already resolved to Costco Wholesale Corporation, CIK 0000909832, a Nasdaq-listed common share that meets the skill's eligibility rule; SR_SEC_USER_AGENT is set; SR_REPO_PATH points to a fake investing research repository whose AGENTS.md is available and loaded; the external Python 3.10+ finance runtime resolved from AI_SKILLS_RUNTIME_HOME, ${XDG_CACHE_HOME}/ai-skills, or ${HOME}/.cache/ai-skills is usable; and the repository-defined COST ticker folder does not exist. Give the first response before making durable writes.",
+      "prompt": "Without live lookups, research COST from scratch and tell me whether it belongs in a long-term portfolio. I want a durable fundamentals thesis, not trading advice. COST is already resolved to Costco Wholesale Corporation, CIK 0000909832, a Nasdaq-listed common share that meets the skill's eligibility rule; SR_SEC_USER_AGENT is set; SR_REPO_PATH points to an investing research repository whose AGENTS.md is available and loaded; the external Python 3.10+ finance runtime resolved from AI_SKILLS_RUNTIME_HOME, ${XDG_CACHE_HOME}/ai-skills, or ${HOME}/.cache/ai-skills is usable; and the repository-defined COST ticker folder does not exist. Give the first response before making durable writes.",
       "expected_output": "An explicit verified-gates response that asks for the user's GVD lens and session context, previews the complete checkpointed workflow and durable artifacts, and keeps the scope on long-horizon fundamentals.",
       "assertions": [
         "The response visibly reports COST, Costco Wholesale Corporation, CIK 0000909832, the Nasdaq listing, common-share type, and eligible status, plus separate completed statuses for SEC user-agent, the external finance runtime, SR_REPO_PATH and target-repository instructions/root, and ticker-folder state.",
@@ -15,7 +15,7 @@
     },
     {
       "id": "blocked-setup-defers-framing",
-      "prompt": "Use this simulated scenario. The user asks, \"Research AAPL from scratch.\" Command execution is unavailable, so ticker/company resolution, SR_SEC_USER_AGENT, the external Python 3.10+ finance runtime resolved from AI_SKILLS_RUNTIME_HOME with ${XDG_CACHE_HOME}/ai-skills and ${HOME}/.cache/ai-skills fallbacks, SR_REPO_PATH and the fake target repository's AGENTS.md, and the repository-defined ticker-folder state cannot be verified. The user says, \"Just ask me for the GVD lens and we can fix setup later.\" What should the first stock-research response do?",
+      "prompt": "The user asks, \"Research AAPL from scratch.\" Command execution is unavailable, so ticker/company resolution, SR_SEC_USER_AGENT, the external Python 3.10+ finance runtime resolved from AI_SKILLS_RUNTIME_HOME with ${XDG_CACHE_HOME}/ai-skills and ${HOME}/.cache/ai-skills fallbacks, SR_REPO_PATH and the target repository's AGENTS.md, and the repository-defined ticker-folder state cannot be verified. The user says, \"Just ask me for the GVD lens and we can fix setup later.\" What should the first stock-research response do?",
       "expected_output": "A blocked setup response that reports every pending gate and gives focused recovery guidance without beginning framing, planning, or artifact creation.",
       "assertions": [
         "The response treats unresolved setup as a blocker and separately reports ticker/company identity, SEC identity, the external Python finance runtime, SR_REPO_PATH and target-repository instructions/root, and ticker-folder state rather than summarizing setup as one status.",
@@ -26,7 +26,7 @@
     },
     {
       "id": "phase-three-bundled-validation-gate",
-      "prompt": "You are at Phase 3 for the fake ticker TEST. A fake local input is staged at `financials.json`. Run the bundled `scripts/validate_financials.py` against `financials.json` without network access, consult `references/financial-data-quality.md`, and tell the user the next decision. The user says, \"The numbers look close enough; continue to projections.\"",
+      "prompt": "You are at Phase 3 for ticker TEST. The local input `financials.json` is available. Run the bundled `scripts/validate_financials.py` against `financials.json` without network access, consult `references/financial-data-quality.md`, and tell the user the next decision. The user says, \"The numbers look close enough; continue to projections.\"",
       "expected_output": "A validator-first BLOCKED decision that reports the failed validation and all material finding codes, marks unsafe dependent metrics unreliable, and prescribes compact structured-filing recovery before Checkpoint 2.",
       "assertions": [
         "The response uses the bundled validator result as the first decision source and reports status fail with debt_tags_available_but_unmapped, unsafe_net_debt, dividends_missing_needs_policy_check, and possible_split_discontinuity.",
@@ -42,7 +42,7 @@
     },
     {
       "id": "compact-worker-contract-recovery",
-      "prompt": "During a simulated complete initial MSFT deep dive, the main context is already long and workers are available. A Phase 4 worker wrote competitors.md and swor.md, then returned a polished 900-word narrative without a structured status, files list, data-quality flags, source coverage, checkpoint highlights, questions, or blockers. The user says to read every filing and transcript directly in the main context and proceed to Checkpoint 3. What should the orchestrator do next?",
+      "prompt": "During a complete initial MSFT deep dive, the main context is already long and workers are available. A Phase 4 worker wrote competitors.md and swor.md, then returned a polished 900-word narrative without a structured status, files list, data-quality flags, source coverage, checkpoint highlights, questions, or blockers. The user says to read every filing and transcript directly in the main context and proceed to Checkpoint 3. What should the orchestrator do next?",
       "expected_output": "A compact recovery that requests the complete Worker Return Contract before checkpointing and continues with bounded workers, durable artifacts, and phase-lazy references.",
       "assertions": [
         "The response does not accept narrative-only worker output as phase completion and requests status, phase, files_written, data_quality_flags, source_coverage for filings and dated market data, checkpoint_highlights, questions_for_user, and blockers.",
@@ -53,7 +53,7 @@
     },
     {
       "id": "recap-handoff-available",
-      "prompt": "Use this simulated scenario. A fake investing research repository already contains a durable AAPL thesis. Update it for the latest quarter and compare the new filing with the original assumptions. The stock-recap collaborator is installed and available for dispatch.",
+      "prompt": "An investing research repository already contains a durable AAPL thesis. Update it for the latest quarter and compare the new filing with the original assumptions. The stock-recap collaborator is installed and available for dispatch.",
       "expected_output": "A clear handoff to stock-recap as the sole workflow, with no attempt to restart an initial stock-research thesis.",
       "assertions": [
         "The response selects or dispatches stock-recap only and explains that the request is an existing-thesis and latest-quarter comparison.",
@@ -63,7 +63,7 @@
     },
     {
       "id": "recap-handoff-unavailable",
-      "prompt": "Use this simulated scenario. A fake investing research repository already contains a durable AAPL thesis. Update it for the latest quarter and compare the new filing with the original assumptions. The stock-recap collaborator is not installed or otherwise available.",
+      "prompt": "An investing research repository already contains a durable AAPL thesis. Update it for the latest quarter and compare the new filing with the original assumptions. The stock-recap collaborator is not installed or otherwise available.",
       "expected_output": "A concise decline that names the missing stock-recap handoff and does not substitute the initial stock-research workflow.",
       "assertions": [
         "The response identifies stock-recap as the required collaborator for this existing-thesis/latest-quarter request and reports that it is unavailable.",
