@@ -89,6 +89,24 @@ The runtime deliberately creates different views of one case:
 The runner enforces these views through separate sandbox workers, distinct
 filesystem projections, runner-owned prompts, and schema-constrained judge
 output. The distinction is architectural, not a prompt convention.
+Every host child process receives closed standard input. Actor and judge prompts
+are supplied explicitly, so a calling terminal cannot become undeclared model
+input or keep a headless Codex turn waiting for more text.
+
+Case files are staged through the worker's host projection, then copied into a
+quota-bound tmpfs before execution. A root-only bridge under
+`/run/ai-skills-evals/` keeps the underlying host projection available to the
+runner for verified import and export without making that bridge traversable by
+the case user. The worker's ordinary host projection receives one protective
+bind mount while a case is active. The runner reuses that bind while the sandbox
+kernel remains running or recreates it after a restart, remounts it read-only
+for execution, and returns it to read-write only after cleanup. This prevents an
+actor from bypassing the tmpfs quota through Docker's host mount.
+
+The runner seals public skill entries only after importing them into the case
+tmpfs. Each public entry is root-owned and verified as immutable. The catalog
+root is a root-owned sticky directory: Codex can replace its actor-owned
+`.system` entry, but cannot rename, delete, or edit a public skill.
 
 ```mermaid
 flowchart LR
@@ -108,9 +126,26 @@ Workers are reused only after reset verification; uncertain workers are
 destroyed. Pinned templates, images, network policy, resource limits, and
 runtime versions make runs repeatable.
 
+Case quiescence proves the cgroup empty before export and removes it after the
+case filesystem is deactivated. Later case retirement cleans only persistent
+identity and staging state, so reuse does not depend on kernel state surviving
+a Docker Sandbox stop and restart. Volatile scratch targets such as `/run/lock`
+are recreated empty before residual-UID checks.
+The fixed cgroup scripts communicate success through exit code `0` and empty
+stdout. Non-fatal host warnings emitted by the `sbx` wrapper on stderr do not
+override that proof; timeouts, nonzero exits, truncation, or unexpected script
+stdout remain hard failures.
+
+The runner reconciles each worker's name and UUID from `sbx ls`. The UUID is
+the authoritative internal identity used to track case state and prove exact
+cleanup; the verified name is the address passed to Docker Sandbox commands
+such as `sbx exec` and `sbx rm`.
+
 Authentication remains in Docker Sandboxes' host proxy. A case receives a
 non-secret proxy profile and placeholder, never the user's Codex home,
-`auth.json`, browser state, SSH keys, or service credentials.
+`auth.json`, browser state, SSH keys, or service credentials. The generated
+profile is checked byte-for-byte and structurally against the output pinned for
+the configured Docker Sandbox template before it enters a case.
 
 See [Evaluation: Sandboxes, workers, and cases](EVALUATION.md#sandboxes-workers-and-cases)
 for lifecycle diagrams and operational commands.

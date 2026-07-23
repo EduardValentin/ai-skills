@@ -460,11 +460,16 @@ class CodexHarnessAdapter:
                 successful_skill_reads = parsed.successful_skill_reads
                 projection_trace: tuple[Mapping[str, object], ...] = ()
                 projection_failure: str | None = None
-                if expected_path is not None and (
-                    expected_path.is_symlink()
-                    or not expected_path.is_file()
-                    or expected_digest is None
-                    or _file_sha256(expected_path) != expected_digest
+                if (
+                    not result.timed_out
+                    and lifecycle_failure is None
+                    and expected_path is not None
+                    and (
+                        expected_path.is_symlink()
+                        or not expected_path.is_file()
+                        or expected_digest is None
+                        or _file_sha256(expected_path) != expected_digest
+                    )
                 ):
                     successful_skill_reads = ()
                     projection_failure = (
@@ -2186,7 +2191,7 @@ def _parse_codex_output(
         successful_reads.clear()
         diagnostics.append("projected SKILL.md changed before activation evidence was finalized")
     stderr = _redact(result.stderr.strip())
-    if stderr:
+    if stderr and (result.returncode != 0 or result.timed_out or diagnostics):
         diagnostics.append(stderr[:MAX_DIAGNOSTIC_CHARS])
     if result.timed_out and not diagnostics:
         diagnostics.append("Codex execution timed out")

@@ -36,10 +36,13 @@ _PROFILE_READ_CHUNK_BYTES = 64 * 1024
 _PINNED_DOCKER_CODEX_CONFIG_BYTES = b"""\
 # Codex configuration for Docker sandbox
 # This configuration enables "yolo mode" - no approvals, full access
+
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 mcp_oauth_credentials_store = "file"
+
 model_provider = "sandboxd"
+
 [model_providers.sandboxd]
 name = "Sandbox Proxy"
 base_url = "https://chatgpt.com/backend-api/codex"
@@ -187,6 +190,10 @@ case_root = os.path.normpath(sys.argv[2])
 bridge_mount = os.path.normpath(sys.argv[3])
 case_mounts = tuple(os.path.normpath(path) for path in sys.argv[4:])
 case_mount_roots = ("/tmp", "/.system-var-tmp", "/.system-dev-shm", "/.system-run-lock")
+bridge_path = pathlib.Path(bridge_mount)
+expected_bridge_root = pathlib.Path("/run/ai-skills-evals") / expected_source
+if bridge_path != expected_bridge_root / "host":
+    raise SystemExit("case host bridge is outside the runner-owned hierarchy")
 if len(case_mounts) != len(case_mount_roots):
     raise SystemExit("case filesystem cleanup received an invalid mount contract")
 
@@ -316,6 +323,12 @@ for _ in range(16):
     unmount_top(bridge_mount)
 else:
     raise SystemExit("case host bridge mount stack is too deep")
+
+for directory in (bridge_path, expected_bridge_root):
+    try:
+        directory.rmdir()
+    except FileNotFoundError:
+        pass
 """
 
 CASE_PRIVILEGE_LOCKDOWN_SCRIPT = r"""import os
@@ -374,6 +387,89 @@ if libc.unshare(CLONE_NEWUSER) == 0:
     raise SystemExit("case UID can create a user namespace")
 if ctypes.get_errno() not in (errno.EPERM, errno.EACCES, errno.EINVAL, errno.ENOSYS):
     raise SystemExit("case UID user namespace denial is ambiguous")
+"""
+
+WORKER_MOUNT_PROTECT_SCRIPT = r"""import os
+import pathlib
+import re
+import stat
+import subprocess
+import sys
+
+worker_root = pathlib.Path(os.path.normpath(sys.argv[1]))
+if not worker_root.is_absolute() or worker_root == pathlib.Path("/"):
+    raise SystemExit("worker mount root is invalid")
+metadata = worker_root.lstat()
+if not stat.S_ISDIR(metadata.st_mode) or worker_root.is_symlink():
+    raise SystemExit("worker mount root is not a directory")
+
+def decode(value):
+    return re.sub(r"\\([0-7]{3})", lambda match: chr(int(match.group(1), 8)), value)
+
+def entries():
+    found = []
+    for line in pathlib.Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+        except ValueError:
+            continue
+        if len(fields) <= separator + 3:
+            continue
+        if pathlib.Path(os.path.normpath(decode(fields[4]))) == worker_root:
+            found.append(set(fields[5].split(",")))
+    return found
+
+before = entries()
+if len(before) == 1:
+    subprocess.run(("mount", "--bind", str(worker_root), str(worker_root)), check=True)
+elif len(before) != 2:
+    raise SystemExit("worker mount root does not have a safe bind depth")
+subprocess.run(("mount", "-o", "remount,bind,ro", str(worker_root)), check=True)
+after = entries()
+if len(after) != 2 or "ro" not in after[-1] or "rw" in after[-1]:
+    raise SystemExit("worker mount root is not protected by one read-only bind")
+"""
+
+WORKER_MOUNT_RESTORE_SCRIPT = r"""import os
+import pathlib
+import re
+import stat
+import subprocess
+import sys
+
+worker_root = pathlib.Path(os.path.normpath(sys.argv[1]))
+if not worker_root.is_absolute() or worker_root == pathlib.Path("/"):
+    raise SystemExit("worker mount root is invalid")
+metadata = worker_root.lstat()
+if not stat.S_ISDIR(metadata.st_mode) or worker_root.is_symlink():
+    raise SystemExit("worker mount root is not a directory")
+
+def decode(value):
+    return re.sub(r"\\([0-7]{3})", lambda match: chr(int(match.group(1), 8)), value)
+
+def entries():
+    found = []
+    for line in pathlib.Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        try:
+            separator = fields.index("-")
+        except ValueError:
+            continue
+        if len(fields) <= separator + 3:
+            continue
+        if pathlib.Path(os.path.normpath(decode(fields[4]))) == worker_root:
+            found.append(set(fields[5].split(",")))
+    return found
+
+before = entries()
+if not before:
+    raise SystemExit("worker mount root is not mounted")
+if "ro" in before[-1]:
+    subprocess.run(("mount", "-o", "remount,bind,rw", str(worker_root)), check=True)
+after = entries()
+if len(after) != len(before) or "rw" not in after[-1] or "ro" in after[-1]:
+    raise SystemExit("worker mount root was not restored read-write")
 """
 
 CASE_CGROUP_SETUP_SCRIPT = r"""import os
@@ -515,7 +611,18 @@ def events():
         parsed[name] = value
     return parsed
 
+def is_empty():
+    return (
+        events().get("populated") == "0"
+        and not (cgroup / "cgroup.procs").read_text(encoding="ascii").strip()
+    )
+
 deadline = time.monotonic() + timeout_seconds
+if is_empty():
+    time.sleep(0.01)
+    if is_empty():
+        raise SystemExit(0)
+
 (cgroup / "cgroup.freeze").write_text("1\n", encoding="ascii")
 while events().get("frozen") != "1":
     if time.monotonic() >= deadline:
@@ -645,13 +752,89 @@ target = pathlib.Path(sys.argv[2])
 try:
     os.rename(source, target)
 except OSError as error:
-    if error.errno not in (errno.EACCES, errno.EPERM):
+    if error.errno not in (errno.EACCES, errno.EPERM, errno.EROFS):
         raise
     if not source.is_dir() or target.exists():
         raise SystemExit("catalog rename probe left an unexpected filesystem state")
 else:
     os.rename(target, source)
     raise SystemExit("catalog directory entry is replaceable by the case user")
+"""
+
+DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT = """import errno
+import os
+import pathlib
+import sys
+
+target = pathlib.Path(sys.argv[1])
+if not target.parent.is_dir() or target.exists():
+    raise SystemExit("write-denial probe target is not clean")
+try:
+    os.mkdir(target, 0o700)
+except OSError as error:
+    if error.errno not in (errno.EACCES, errno.EPERM, errno.EROFS):
+        raise
+    if target.exists():
+        raise SystemExit("write-denial probe left an unexpected filesystem entry")
+else:
+    os.rmdir(target)
+    raise SystemExit("directory accepts writes from the case user")
+"""
+
+PUBLIC_SKILL_CATALOG_PROBE_SCRIPT = """import errno
+import os
+import pathlib
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+system_skills = root / ".system"
+metadata = root.lstat()
+if not stat.S_ISDIR(metadata.st_mode) or root.is_symlink():
+    raise SystemExit("public skill catalog root is invalid")
+if not metadata.st_mode & stat.S_ISVTX or not os.access(root, os.W_OK | os.X_OK):
+    raise SystemExit("public skill catalog root is not a writable sticky directory")
+if not system_skills.is_dir() or system_skills.is_symlink():
+    raise SystemExit("Codex system skill directory is invalid")
+
+catalog_probe = root / ".catalog-write-probe"
+system_probe = root / ".system-replace-probe"
+if catalog_probe.exists() or system_probe.exists():
+    raise SystemExit("skill catalog probe target is not clean")
+catalog_probe.mkdir(mode=0o700)
+catalog_probe.rmdir()
+os.rename(system_skills, system_probe)
+os.rename(system_probe, system_skills)
+
+for entry in root.iterdir():
+    if entry.name == ".system":
+        continue
+    if entry.is_symlink() or not entry.is_dir():
+        raise SystemExit("public skill entry is not a real directory")
+    rename_probe = root / f".{entry.name}.rename-probe"
+    write_probe = entry / ".write-probe"
+    if rename_probe.exists() or write_probe.exists():
+        raise SystemExit("public skill probe target is not clean")
+    try:
+        os.rename(entry, rename_probe)
+    except OSError as error:
+        if error.errno not in (errno.EACCES, errno.EPERM, errno.EROFS):
+            raise
+        if not entry.is_dir() or rename_probe.exists():
+            raise SystemExit("public skill rename probe changed the catalog")
+    else:
+        os.rename(rename_probe, entry)
+        raise SystemExit("public skill entry is replaceable by the case user")
+    try:
+        os.mkdir(write_probe, 0o700)
+    except OSError as error:
+        if error.errno not in (errno.EACCES, errno.EPERM, errno.EROFS):
+            raise
+        if write_probe.exists():
+            raise SystemExit("public skill write probe changed the skill")
+    else:
+        os.rmdir(write_probe)
+        raise SystemExit("public skill entry accepts writes from the case user")
 """
 
 
@@ -747,6 +930,7 @@ class SubprocessRunner:
             timed_out = False
             process = subprocess.Popen(
                 argv,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 start_new_session=True,
@@ -1764,6 +1948,9 @@ class SandboxRuntime:
         self._active_cases: dict[str, CaseWorkspace] = {}
         self._proxy_state_digests: dict[str, tuple[str, str]] = {}
         self._mounted_case_filesystems: set[str] = set()
+        self._guarded_worker_mounts: set[str] = set()
+        self._sealed_skill_catalogs: set[str] = set()
+        self._quiesced_cases: set[str] = set()
         self._busy_workers: set[tuple[WorkerRole, int]] = set()
         self._worker_condition = threading.Condition()
         self._closed = False
@@ -2029,6 +2216,7 @@ class SandboxRuntime:
                 directory.mkdir()
             skills = directories["codex_home"] / "skills"
             skills.mkdir()
+            (skills / ".system").mkdir()
             for directory in (
                 directories["home"] / ".config",
                 directories["home"] / ".cache",
@@ -2054,9 +2242,7 @@ class SandboxRuntime:
                 user_name=user_name,
                 uid=uid,
                 host_staging_root=case_root,
-                host_export_bridge=(
-                    worker.host_root / ".ai-skills-case-bridge" / "host"
-                ),
+                host_export_bridge=Path("/run/ai-skills-evals") / filesystem_source / "host",
                 filesystem_source=filesystem_source,
                 system_var_tmp=system_var_tmp,
                 system_dev_shm=system_dev_shm,
@@ -2134,7 +2320,7 @@ class SandboxRuntime:
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or not isinstance(value, str) or "\x00" in value:
                 raise SandboxRuntimeError("worker environment contains an unsafe name or value")
             command.extend(("--env", f"{name}={value}"))
-        command.append(worker.id)
+        command.append(worker.name)
         command.extend(
             (
                 "python3",
@@ -2220,6 +2406,9 @@ class SandboxRuntime:
             self._terminate_and_prove_case_cgroup_empty(worker, case)
             self._clear_case_ipc(worker, case)
             self._deactivate_case_filesystem(worker, case, export_to_host=True)
+            self._remove_case_cgroup(worker, case)
+            if case.filesystem_source is not None:
+                self._quiesced_cases.add(case.filesystem_source)
         except BaseException as error:
             try:
                 self.invalidate_worker(worker)
@@ -2346,80 +2535,14 @@ class SandboxRuntime:
             self._proxy_state_digests.setdefault(worker.id, current_digests)
 
     def seal_skill_catalog(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
-        """Make the complete projected catalog runner-owned and actor-immutable."""
+        """Mark a fully staged catalog for sealing in the final case filesystem."""
         self._require_owned_worker(worker)
         if self._active_cases.get(worker.id) != case:
             raise SandboxRuntimeError("skill catalog belongs to an inactive case")
-        self._admin_checked(
-            worker,
-            ("chown", "-R", "root:root", str(case.skills)),
-        )
-        self._admin_checked(worker, ("chmod", "0555", str(case.skills)))
-        self._admin_checked(worker, ("chown", "root:root", str(case.codex_home)))
-        self._admin_checked(worker, ("chmod", "1777", str(case.codex_home)))
-        self._admin_checked(worker, ("chown", "root:root", str(case.root)))
-        self._admin_checked(worker, ("chmod", "0555", str(case.root)))
-        self._case_user_checked(
-            worker,
-            case,
-            ("test", "!", "-w", str(worker.host_root)),
-            "case user can mutate the worker mount root",
-        )
-        for writable_path in (
-            case.home,
-            case.codex_home,
-            case.tmpdir,
-            case.workspace,
-            case.bootstrap,
-        ):
-            self._case_user_checked(
-                worker,
-                case,
-                ("test", "-w", str(writable_path)),
-                "case user cannot write a required case workspace",
-            )
-        self._case_user_checked(
-            worker,
-            case,
-            ("test", "!", "-w", str(case.skills)),
-            "case user can mutate the projected skill catalog",
-        )
-        self._case_user_checked(
-            worker,
-            case,
-            (
-                "python3",
-                "-c",
-                CATALOG_RENAME_PROBE_SCRIPT,
-                str(case.skills),
-                str(case.codex_home / ".skills-rename-probe"),
-            ),
-            "case user can replace the projected skill catalog",
-        )
-        self._case_user_checked(
-            worker,
-            case,
-            (
-                "python3",
-                "-c",
-                CATALOG_RENAME_PROBE_SCRIPT,
-                str(case.codex_home),
-                str(case.root / ".codex-home-rename-probe"),
-            ),
-            "case user can replace the Codex home containing the skill catalog",
-        )
-        self._case_user_checked(
-            worker,
-            case,
-            (
-                "python3",
-                "-c",
-                CATALOG_RENAME_PROBE_SCRIPT,
-                str(case.root),
-                str(worker.host_root / ".case-rename-probe"),
-            ),
-            "case user can replace the case root containing the skill catalog",
-        )
+        filesystem_source = case.filesystem_source
+        if filesystem_source is None:
+            raise SandboxRuntimeError("skill catalog filesystem identity is incomplete")
+        self._sealed_skill_catalogs.add(filesystem_source)
 
     def _activate_case_filesystem(
         self,
@@ -2432,16 +2555,23 @@ class SandboxRuntime:
             raise SandboxRuntimeError("case filesystem belongs to an inactive case")
         contract = self._case_filesystem_contract(worker, case)
         if worker.id in self._mounted_case_filesystems:
+            self._protect_worker_host_mount(worker)
             self._verify_case_filesystem(worker, case)
             self._verify_case_privilege_boundaries(worker, case)
+            self._verify_worker_and_catalog_boundaries(worker, case)
             return
 
         bridge_mount, filesystem_source, system_mounts = contract
         bridge_root = bridge_mount.parent
+        bridge_base = bridge_root.parent
         self._admin_checked(worker, ("mkdir", "--parents", str(bridge_mount)))
-        self._admin_checked(worker, ("chown", "root:root", str(bridge_root)))
-        self._admin_checked(worker, ("chmod", "0700", str(bridge_root)))
+        self._admin_checked(
+            worker,
+            ("chown", "root:root", str(bridge_base), str(bridge_root)),
+        )
+        self._admin_checked(worker, ("chmod", "0700", str(bridge_base), str(bridge_root)))
         self._admin_checked(worker, ("mount", "--bind", str(case.root), str(bridge_mount)))
+        self._protect_worker_host_mount(worker)
         isolation = self.manifest.case_isolation
         self._admin_checked(
             worker,
@@ -2470,6 +2600,11 @@ class SandboxRuntime:
                 f"{case.root}/",
             ),
         )
+        self._configure_case_writable_permissions(worker, case)
+        if filesystem_source in self._sealed_skill_catalogs:
+            self._apply_sealed_skill_catalog(worker, case)
+        self._admin_checked(worker, ("chown", "root:root", str(case.root)))
+        self._admin_checked(worker, ("chmod", "0555", str(case.root)))
         self._admin_checked(worker, ("mkdir", "--parents", "/run/lock"))
         for source, target in system_mounts:
             self._admin_checked(worker, ("mount", "--bind", str(source), target))
@@ -2501,7 +2636,107 @@ class SandboxRuntime:
             ("test", "!", "-x", str(bridge_root)),
             "case user can traverse the host export bridge",
         )
+        self._verify_worker_and_catalog_boundaries(worker, case)
         self._mounted_case_filesystems.add(worker.id)
+
+    def _protect_worker_host_mount(self, worker: SandboxWorker) -> None:
+        result = self._worker_command(
+            worker,
+            (
+                "python3",
+                "-c",
+                WORKER_MOUNT_PROTECT_SCRIPT,
+                str(worker.host_root),
+            ),
+            user="root",
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+        )
+        if (
+            result.timed_out
+            or result.returncode != 0
+            or result.stdout.strip()
+            or result.stderr.strip()
+            or result.stdout_truncated
+            or result.stderr_truncated
+        ):
+            raise SandboxRuntimeError("worker host mount could not be protected read-only")
+        self._guarded_worker_mounts.add(worker.id)
+
+    def _apply_sealed_skill_catalog(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        system_skills = case.skills / ".system"
+        self._admin_checked(worker, ("chown", "-R", "root:root", str(case.skills)))
+        self._admin_checked(worker, ("chmod", "-R", "u=rwX,go=rX", str(case.skills)))
+        self._admin_checked(worker, ("chmod", "1777", str(case.skills)))
+        self._admin_checked(
+            worker,
+            ("chown", "-R", f"{case.uid}:{case.uid}", str(system_skills)),
+        )
+        self._admin_checked(worker, ("chmod", "0700", str(system_skills)))
+        self._admin_checked(worker, ("chown", "root:root", str(case.codex_home)))
+        self._admin_checked(worker, ("chmod", "1777", str(case.codex_home)))
+
+    def _verify_worker_and_catalog_boundaries(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        self._case_user_checked(
+            worker,
+            case,
+            (
+                "python3",
+                "-c",
+                DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
+                str(worker.host_root / ".worker-write-probe"),
+            ),
+            "case user can mutate the worker mount root",
+        )
+        if case.filesystem_source not in self._sealed_skill_catalogs:
+            return
+        self._case_user_checked(
+            worker,
+            case,
+            (
+                "python3",
+                "-c",
+                PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+                str(case.skills),
+            ),
+            "public skill catalog permissions do not isolate Codex system skills",
+        )
+        for source, target, failure in (
+            (
+                case.skills,
+                case.codex_home / ".skills-rename-probe",
+                "case user can replace the projected skill catalog",
+            ),
+            (
+                case.codex_home,
+                case.root / ".codex-home-rename-probe",
+                "case user can replace the Codex home containing the skill catalog",
+            ),
+            (
+                case.root,
+                worker.host_root / ".case-rename-probe",
+                "case user can replace the case root containing the skill catalog",
+            ),
+        ):
+            self._case_user_checked(
+                worker,
+                case,
+                (
+                    "python3",
+                    "-c",
+                    CATALOG_RENAME_PROBE_SCRIPT,
+                    str(source),
+                    str(target),
+                ),
+                failure,
+            )
 
     def _verify_case_filesystem(
         self,
@@ -2550,6 +2785,10 @@ class SandboxRuntime:
             self._verify_case_filesystem(worker, case)
             self._admin_checked(
                 worker,
+                ("chmod", "-R", "u+rwX", str(bridge_mount)),
+            )
+            self._admin_checked(
+                worker,
                 (
                     "find",
                     str(bridge_mount),
@@ -2577,11 +2816,12 @@ class SandboxRuntime:
                 ),
             )
             self._admin_checked(worker, ("sync", "-f", str(bridge_mount)))
-        self._cleanup_case_filesystem_mounts(worker.id, case)
+        self._cleanup_case_filesystem_mounts(worker.name, worker.id, case)
         self._mounted_case_filesystems.discard(worker.id)
 
     def _cleanup_case_filesystem_mounts(
         self,
+        sandbox_name: str,
         worker_id: str,
         case: CaseWorkspace,
     ) -> None:
@@ -2595,7 +2835,7 @@ class SandboxRuntime:
                 "exec",
                 "--user",
                 "root",
-                worker_id,
+                sandbox_name,
                 "python3",
                 "-c",
                 CASE_FILESYSTEM_CLEANUP_SCRIPT,
@@ -2608,6 +2848,58 @@ class SandboxRuntime:
         )
         if result.timed_out or result.returncode != 0:
             raise SandboxRuntimeError("case filesystem mounts could not be cleared")
+        if worker_id in self._guarded_worker_mounts:
+            mount_restore = self._worker_command_by_name(
+                sandbox_name,
+                (
+                    "python3",
+                    "-c",
+                    WORKER_MOUNT_RESTORE_SCRIPT,
+                    str(case.root.parent),
+                ),
+                user="root",
+                timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+            )
+            if (
+                mount_restore.timed_out
+                or mount_restore.returncode != 0
+                or mount_restore.stdout.strip()
+                or mount_restore.stderr.strip()
+                or mount_restore.stdout_truncated
+                or mount_restore.stderr_truncated
+            ):
+                raise SandboxRuntimeError("worker host mount could not be restored read-write")
+        staging_tree_restore = self._worker_command_by_name(
+            sandbox_name,
+            ("chmod", "-R", "u+rwX", str(case.root)),
+            user="root",
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+        )
+        if staging_tree_restore.timed_out or staging_tree_restore.returncode != 0:
+            raise SandboxRuntimeError("case host staging tree could not be reopened for reset")
+        restore = self._worker_command_by_name(
+            sandbox_name,
+            ("chmod", "0700", str(case.root)),
+            user="root",
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+        )
+        if restore.timed_out or restore.returncode != 0:
+            raise SandboxRuntimeError("case host staging permissions could not be restored")
+        verification = self._worker_command_by_name(
+            sandbox_name,
+            ("stat", "--format=%a", str(case.root)),
+            user="root",
+            timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
+        )
+        if (
+            verification.timed_out
+            or verification.returncode != 0
+            or verification.stdout.strip() != "700"
+            or verification.stderr.strip()
+            or verification.stdout_truncated
+            or verification.stderr_truncated
+        ):
+            raise SandboxRuntimeError("case host staging permissions could not be verified")
 
     @staticmethod
     def _case_filesystem_contract(
@@ -2636,9 +2928,8 @@ class SandboxRuntime:
         )
         if any(source.parent != case.root for source, _ in rendered_system_paths):
             raise SandboxRuntimeError("case scratch path escapes the bounded filesystem")
-        if worker is not None and bridge_mount != (
-            worker.host_root / ".ai-skills-case-bridge" / "host"
-        ):
+        expected_bridge = Path("/run/ai-skills-evals") / filesystem_source / "host"
+        if bridge_mount != expected_bridge:
             raise SandboxRuntimeError("case host bridge escapes the selected worker")
         return bridge_mount, filesystem_source, rendered_system_paths
 
@@ -2712,6 +3003,9 @@ class SandboxRuntime:
         self._active_cases.clear()
         self._proxy_state_digests.clear()
         self._mounted_case_filesystems.clear()
+        self._guarded_worker_mounts.clear()
+        self._sealed_skill_catalogs.clear()
+        self._quiesced_cases.clear()
 
     def _discard_worker(self, worker: SandboxWorker) -> None:
         self._require_owned_worker(worker)
@@ -2748,7 +3042,7 @@ class SandboxRuntime:
             if not target.discard_without_export:
                 self._purge_cleanup_target_host_root(target)
             try:
-                self._issue_cleanup_removal(target, target.id)
+                self._issue_cleanup_removal(target)
             except BaseException:
                 self._quarantine_cleanup_target(target)
                 raise
@@ -2789,7 +3083,7 @@ class SandboxRuntime:
         if not target.discard_without_export:
             self._purge_cleanup_target_host_root(target)
         try:
-            self._issue_cleanup_removal(target, sandbox_id)
+            self._issue_cleanup_removal(target)
         except BaseException:
             self._quarantine_cleanup_target(target)
             raise
@@ -2811,13 +3105,14 @@ class SandboxRuntime:
     def _issue_cleanup_removal(
         self,
         target: CleanupTarget,
-        sandbox_id: str,
     ) -> None:
+        if target.id is None:
+            raise SandboxRuntimeError("sandbox removal requires a verified identity")
         target.removal_started = True
         target.removal_process_settled = False
         try:
             result = self._checked(
-                ("sbx", "rm", "--force", sandbox_id),
+                ("sbx", "rm", "--force", target.name),
                 self.manifest.limits.preflight_timeout_seconds,
             )
         except BaseException as error:
@@ -2849,7 +3144,7 @@ class SandboxRuntime:
             if len(name_matches) != 1 or not isinstance(name_matches[0].get("id"), str):
                 raise SandboxRuntimeError("pending worker cleanup identity remains ambiguous")
             candidate_id = name_matches[0]["id"]
-            self._prove_candidate_ownership(target, candidate_id)
+            self._prove_candidate_ownership(target)
             target.id = candidate_id
             return target.id
 
@@ -2871,7 +3166,6 @@ class SandboxRuntime:
     def _prove_candidate_ownership(
         self,
         target: CleanupTarget,
-        candidate_id: str,
     ) -> None:
         local_digest = self._read_local_ownership_marker_digest(target)
         if not hmac.compare_digest(local_digest, target.ownership_marker_sha256):
@@ -2884,7 +3178,7 @@ class SandboxRuntime:
                 "exec",
                 "--user",
                 "root",
-                candidate_id,
+                target.name,
                 "python3",
                 "-c",
                 OWNERSHIP_MARKER_PROBE_SCRIPT,
@@ -2956,21 +3250,27 @@ class SandboxRuntime:
         try:
             active_case = self._active_cases.get(target.id)
             if active_case is not None:
-                self._terminate_and_prove_case_cgroup_empty_by_id(
-                    target.id,
-                    active_case,
-                )
-                self._clear_case_ipc_by_id(target.id, active_case)
-                self._cleanup_case_filesystem_mounts(target.id, active_case)
-                self._mounted_case_filesystems.discard(target.id)
-                self._remove_case_cgroup_by_id(target.id, active_case)
+                quiesced = active_case.filesystem_source in self._quiesced_cases
+                if not quiesced:
+                    self._terminate_and_prove_case_cgroup_empty_by_name(
+                        target.name,
+                        active_case,
+                    )
+                    self._clear_case_ipc_by_name(target.name, active_case)
+                    self._cleanup_case_filesystem_mounts(
+                        target.name,
+                        target.id,
+                        active_case,
+                    )
+                    self._mounted_case_filesystems.discard(target.id)
+                    self._remove_case_cgroup_by_name(target.name, active_case)
             self._checked(
                 (
                     "sbx",
                     "exec",
                     "--user",
                     "root",
-                    target.id,
+                    target.name,
                     "find",
                     str(target.host_root),
                     "-mindepth",
@@ -3002,6 +3302,7 @@ class SandboxRuntime:
         if not target.sandbox_removed:
             raise SandboxRuntimeError("worker host staging cleanup requires verified sandbox removal")
         if target.host_root.exists():
+            _grant_owner_directory_removal_access(target.host_root)
             shutil.rmtree(target.host_root)
         if target.host_root.exists():
             raise SandboxRuntimeError("worker host staging cleanup could not be verified")
@@ -3012,13 +3313,21 @@ class SandboxRuntime:
             if worker.name != target.name:
                 continue
             self._workers.pop(key, None)
-            self._active_cases.pop(worker.id, None)
+            active_case = self._active_cases.pop(worker.id, None)
+            if active_case is not None and active_case.filesystem_source is not None:
+                self._sealed_skill_catalogs.discard(active_case.filesystem_source)
+                self._quiesced_cases.discard(active_case.filesystem_source)
             self._proxy_state_digests.pop(worker.id, None)
             self._mounted_case_filesystems.discard(worker.id)
+            self._guarded_worker_mounts.discard(worker.id)
         if target.id is not None:
-            self._active_cases.pop(target.id, None)
+            active_case = self._active_cases.pop(target.id, None)
+            if active_case is not None and active_case.filesystem_source is not None:
+                self._sealed_skill_catalogs.discard(active_case.filesystem_source)
+                self._quiesced_cases.discard(active_case.filesystem_source)
             self._proxy_state_digests.pop(target.id, None)
             self._mounted_case_filesystems.discard(target.id)
+            self._guarded_worker_mounts.discard(target.id)
 
     def _reconcile_failed_create(
         self,
@@ -3097,7 +3406,18 @@ class SandboxRuntime:
             ),
         )
         self._setup_case_cgroup(worker, case)
-        self._admin_checked(worker, ("chown", "-R", f"{case.uid}:{case.uid}", str(case.root)))
+        self._configure_case_writable_permissions(worker, case)
+        self._lock_down_case_identity(worker, case)
+
+    def _configure_case_writable_permissions(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
+        self._admin_checked(
+            worker,
+            ("chown", "-R", f"{case.uid}:{case.uid}", str(case.root)),
+        )
         scratch_paths = (
             case.tmpdir,
             case.system_var_tmp,
@@ -3118,6 +3438,12 @@ class SandboxRuntime:
             worker,
             ("chmod", "0700", str(case.tmpdir / "runtime")),
         )
+
+    def _lock_down_case_identity(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+    ) -> None:
         self._lock_down_case_privileges(worker)
         self._verify_case_privilege_boundaries(worker, case)
         self._case_user_checked(
@@ -3163,11 +3489,14 @@ class SandboxRuntime:
         )
 
     def _retire_case_identity(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
-        self._terminate_and_prove_case_cgroup_empty(worker, case)
-        self._clear_case_ipc(worker, case)
-        self._deactivate_case_filesystem(worker, case, export_to_host=False)
+        quiesced = case.filesystem_source in self._quiesced_cases
+        if not quiesced:
+            self._terminate_and_prove_case_cgroup_empty(worker, case)
+            self._clear_case_ipc(worker, case)
+            self._deactivate_case_filesystem(worker, case, export_to_host=False)
         self._admin_checked(worker, ("userdel", case.user_name), accepted=(0, 6))
         self._admin_checked(worker, ("groupdel", case.user_name), accepted=(0, 6))
+        self._admin_checked(worker, ("mkdir", "--parents", "/run/lock"))
         for directory in ("/tmp", "/var/tmp", "/dev/shm", "/run/lock"):
             self._admin_checked(
                 worker,
@@ -3208,7 +3537,11 @@ class SandboxRuntime:
                 "+",
             ),
         )
-        self._remove_case_cgroup(worker, case)
+        if not quiesced:
+            self._remove_case_cgroup(worker, case)
+        if case.filesystem_source is not None:
+            self._sealed_skill_catalogs.discard(case.filesystem_source)
+            self._quiesced_cases.discard(case.filesystem_source)
 
     def _setup_case_cgroup(
         self,
@@ -3217,7 +3550,7 @@ class SandboxRuntime:
     ) -> None:
         cgroup_path = self._case_cgroup_contract(worker, case)
         self._checked_case_cgroup_control(
-            worker.id,
+            worker.name,
             ("python3", "-c", CASE_CGROUP_SETUP_SCRIPT, str(cgroup_path)),
             "setup",
         )
@@ -3228,11 +3561,11 @@ class SandboxRuntime:
         case: CaseWorkspace,
     ) -> None:
         self._case_cgroup_contract(worker, case)
-        self._terminate_and_prove_case_cgroup_empty_by_id(worker.id, case)
+        self._terminate_and_prove_case_cgroup_empty_by_name(worker.name, case)
 
-    def _terminate_and_prove_case_cgroup_empty_by_id(
+    def _terminate_and_prove_case_cgroup_empty_by_name(
         self,
-        worker_id: str,
+        sandbox_name: str,
         case: CaseWorkspace,
     ) -> None:
         cgroup_path = self._case_cgroup_contract(None, case)
@@ -3241,7 +3574,7 @@ class SandboxRuntime:
             min(10, self.manifest.limits.preflight_timeout_seconds - 1),
         )
         self._checked_case_cgroup_control(
-            worker_id,
+            sandbox_name,
             (
                 "python3",
                 "-c",
@@ -3258,28 +3591,28 @@ class SandboxRuntime:
         case: CaseWorkspace,
     ) -> None:
         self._case_cgroup_contract(worker, case)
-        self._remove_case_cgroup_by_id(worker.id, case)
+        self._remove_case_cgroup_by_name(worker.name, case)
 
-    def _remove_case_cgroup_by_id(
+    def _remove_case_cgroup_by_name(
         self,
-        worker_id: str,
+        sandbox_name: str,
         case: CaseWorkspace,
     ) -> None:
         cgroup_path = self._case_cgroup_contract(None, case)
         self._checked_case_cgroup_control(
-            worker_id,
+            sandbox_name,
             ("python3", "-c", CASE_CGROUP_REMOVE_SCRIPT, str(cgroup_path)),
             "removal",
         )
 
     def _checked_case_cgroup_control(
         self,
-        worker_id: str,
+        sandbox_name: str,
         argv: tuple[str, ...],
         operation: str,
     ) -> None:
-        result = self._worker_command_by_id(
-            worker_id,
+        result = self._worker_command_by_name(
+            sandbox_name,
             argv,
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -3288,12 +3621,16 @@ class SandboxRuntime:
             result.timed_out
             or result.returncode != 0
             or result.stdout.strip()
-            or result.stderr.strip()
             or result.stdout_truncated
             or result.stderr_truncated
         ):
+            diagnostic = _safe_diagnostic(
+                result.stderr.strip()
+                or result.stdout.strip()
+                or ("command timed out" if result.timed_out else "no diagnostic")
+            )
             raise SandboxRuntimeError(
-                f"case cgroup {operation} verification was ambiguous"
+                f"case cgroup {operation} verification was ambiguous: {diagnostic}"
             )
 
     @staticmethod
@@ -3314,15 +3651,15 @@ class SandboxRuntime:
         return cgroup_path
 
     def _clear_case_ipc(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
-        self._clear_case_ipc_by_id(worker.id, case)
+        self._clear_case_ipc_by_name(worker.name, case)
 
-    def _clear_case_ipc_by_id(
+    def _clear_case_ipc_by_name(
         self,
-        worker_id: str,
+        sandbox_name: str,
         case: CaseWorkspace,
     ) -> None:
-        result = self._worker_command_by_id(
-            worker_id,
+        result = self._worker_command_by_name(
+            sandbox_name,
             ("python3", "-c", IPC_CLEANUP_SCRIPT, str(case.uid)),
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -3351,7 +3688,14 @@ class SandboxRuntime:
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
         )
         if result.timed_out or result.returncode not in accepted:
-            raise SandboxRuntimeError(f"case identity command failed: {argv[0]}")
+            diagnostic = _safe_diagnostic(
+                result.stderr.strip()
+                or result.stdout.strip()
+                or ("command timed out" if result.timed_out else "no diagnostic")
+            )
+            raise SandboxRuntimeError(
+                f"case identity command failed: {argv[0]}: {diagnostic}"
+            )
         return result
 
     def _case_user_checked(
@@ -3387,22 +3731,22 @@ class SandboxRuntime:
         timeout_seconds: int,
     ) -> CommandResult:
         self._require_owned_worker(worker)
-        return self._worker_command_by_id(
-            worker.id,
+        return self._worker_command_by_name(
+            worker.name,
             argv,
             user=user,
             timeout_seconds=timeout_seconds,
         )
 
-    def _worker_command_by_id(
+    def _worker_command_by_name(
         self,
-        worker_id: str,
+        sandbox_name: str,
         argv: Sequence[str],
         *,
         user: str,
         timeout_seconds: int,
     ) -> CommandResult:
-        command = ("sbx", "exec", "--user", user, worker_id, *argv)
+        command = ("sbx", "exec", "--user", user, sandbox_name, *argv)
         return self.process.run(command, timeout_seconds=timeout_seconds)
 
     def __enter__(self) -> SandboxRuntime:
@@ -3668,6 +4012,47 @@ def _safe_identifier(value: str) -> str:
     if not cleaned:
         raise SandboxRuntimeError("invocation id must contain a sandbox-safe character")
     return cleaned[:48]
+
+
+def _grant_owner_directory_removal_access(root: Path) -> None:
+    """Make a destroyed worker's real directories removable without following links."""
+
+    def grant(path: Path) -> None:
+        metadata = path.lstat()
+        if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+            raise SandboxRuntimeError("worker host staging contains an invalid directory")
+        os.chmod(
+            path,
+            stat.S_IMODE(metadata.st_mode)
+            | stat.S_IRUSR
+            | stat.S_IWUSR
+            | stat.S_IXUSR,
+        )
+
+    grant(root)
+
+    def reject_walk_error(error: OSError) -> None:
+        raise error
+
+    for directory, child_names, _ in os.walk(
+        root,
+        topdown=True,
+        onerror=reject_walk_error,
+        followlinks=False,
+    ):
+        current = Path(directory)
+        grant(current)
+        traversable: list[str] = []
+        for name in child_names:
+            child = current / name
+            metadata = child.lstat()
+            if stat.S_ISLNK(metadata.st_mode):
+                continue
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise SandboxRuntimeError("worker host staging directory changed during cleanup")
+            grant(child)
+            traversable.append(name)
+        child_names[:] = traversable
 
 
 def _safe_diagnostic(value: str) -> str:

@@ -132,6 +132,10 @@ flowchart TD
 Workers are reused within one command to control cost. Attempt state is not.
 Pinned templates and images provide caching across commands.
 
+Worker registration binds the sandbox name to the UUID reported by `sbx ls`.
+The runtime keeps state keyed by that UUID, verifies the binding before
+cleanup, and addresses Docker Sandbox CLI operations by the verified name.
+
 ```mermaid
 flowchart LR
     T["Pinned cached template"] --> S["Create sandbox"]
@@ -147,6 +151,33 @@ If reset, process cleanup, mount verification, or evidence capture cannot be
 proven, the attempt fails and the worker is destroyed. Durable results stay
 outside actor mounts. Authentication uses Docker Sandboxes' host proxy; the
 runner does not copy the user's Codex home or credentials into a case.
+Docker's generated non-secret Codex profile and auth placeholder must match the
+pinned bytes and parsed structure before actor or judge execution begins.
+
+The runner proves process cleanup from both `cgroup.events` and `cgroup.procs`.
+An already-empty cgroup is verified twice without another kill; a populated
+cgroup is frozen, killed, and then proven empty. The cgroup is removed during
+quiescence, so the next case never depends on volatile kernel state surviving a
+sandbox restart.
+
+Runtime subprocesses always receive closed standard input. Prompts are passed
+explicitly to Codex, so running the CLI from a PTY, CI, or another agent has the
+same behavior. A timed-out worker is destroyed and reported as a timeout; the
+resulting removal of its skill projection is not reported as skill tampering.
+Projection integrity remains mandatory for every completed run.
+
+The runner seeds each case from its host projection into the bounded tmpfs
+through a private root-only bridge under `/run/ai-skills-evals/`. The actor sees
+the tmpfs workspace but cannot traverse the bridge back to the underlying host
+projection. During execution, the ordinary worker host projection is remounted
+read-only, so the actor cannot use it as an unbounded writable path. Reset
+exports permitted outputs, unmounts the case tree, removes the case-specific
+bridge, and returns the worker projection to read-write before reuse. Public
+skill entries are sealed and verified only in their final actor-visible tmpfs
+location. The sticky catalog root lets Codex replace its own `.system` entry
+without permitting changes to root-owned public skills. After the actor stops,
+the runner reopens the private export staging tree for evidence collection and
+verified reset.
 
 Before the first approved model-backed run, follow Docker's
 [Sandboxes setup guide](https://docs.docker.com/ai/sandboxes/get-started/) and
@@ -354,6 +385,14 @@ with-skill/baseline comparisons or trigger rates.
 Aggregation rejects missing, injected, changed, partial, or untrustworthy
 attempts. Exit code `0` means the effective grades pass, `1` means trustworthy
 evaluated assertions fail, and `2` means the evidence or invocation is invalid.
+For Codex, an exit-0 response with a complete structured lifecycle remains
+successful when stderr contains informational status output. Stderr is
+forwarded as a bounded diagnostic only when the exit or lifecycle fails.
+Runner-owned cgroup checks likewise use the pinned script's exit status and
+empty stdout as their proof contract, so a non-fatal Docker host warning does
+not invalidate a successful check. When a timeout or lifecycle failure destroys
+the worker, that intentional projection removal is not labeled as skill
+tampering; completed runs still require exact post-run projection integrity.
 
 ## Real Runtime Smoke Tests
 

@@ -1363,6 +1363,95 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertIn("projected SKILL.md changed", execution.failure or "")
         self.assertEqual(execution.successful_skill_reads, ())
 
+    def test_timeout_cleanup_is_not_reported_as_projection_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "source" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: example\n---\nFollow me.\n",
+                encoding="utf-8",
+            )
+            runtime = FakeSandboxRuntime(
+                root,
+                [command_result("", returncode=124, timed_out=True)],
+            )
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skill.parent)
+            original_execute = runtime.execute
+
+            def execute_and_remove_projection(*args, **kwargs):
+                result = original_execute(*args, **kwargs)
+                assert runtime.last_case is not None
+                for directory_path, child_directories, _ in os.walk(runtime.last_case.root):
+                    Path(directory_path).chmod(0o755)
+                    for child in child_directories:
+                        (Path(directory_path) / child).chmod(0o755)
+                shutil.rmtree(runtime.last_case.root)
+                return result
+
+            runtime.execute = execute_and_remove_projection
+
+            execution = adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="candidate",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=1,
+                    skill_sources=(skill,),
+                    expected_skill="example",
+                ),
+                runtime.results_root / "timeout",
+            )
+
+        self.assertTrue(execution.timed_out)
+        self.assertNotIn("projected SKILL.md changed", execution.failure or "")
+        self.assertFalse(
+            any(event.get("event") == "projection_integrity_failure" for event in execution.trace)
+        )
+
+    def test_lifecycle_invalidation_is_not_reported_as_projection_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "source" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: example\n---\nFollow me.\n",
+                encoding="utf-8",
+            )
+            runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+            runtime.quiesce_error = RuntimeError("case reset failed")
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skill.parent)
+            original_invalidate = runtime.invalidate_worker
+
+            def invalidate_and_remove_projection(worker: SandboxWorker) -> None:
+                original_invalidate(worker)
+                assert runtime.last_case is not None
+                for directory_path, child_directories, _ in os.walk(runtime.last_case.root):
+                    Path(directory_path).chmod(0o755)
+                    for child in child_directories:
+                        (Path(directory_path) / child).chmod(0o755)
+                shutil.rmtree(runtime.last_case.root)
+
+            runtime.invalidate_worker = invalidate_and_remove_projection
+
+            execution = adapter.execute(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="candidate",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                    skill_sources=(skill,),
+                    expected_skill="example",
+                ),
+                runtime.results_root / "lifecycle-failure",
+            )
+
+        self.assertIn("post-execution lifecycle failed: case reset failed", execution.failure or "")
+        self.assertNotIn("projected SKILL.md changed", execution.failure or "")
+        self.assertFalse(
+            any(event.get("event") == "projection_integrity_failure" for event in execution.trace)
+        )
+
     def test_fixture_environment_is_applied_only_to_codex_shell_subprocesses(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1987,6 +2076,32 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertIn("native failure", execution.failure or "")
         self.assertNotIn("sk-", execution.failure or "")
         self.assertFalse(raw_artifact_exists)
+
+    def test_successful_status_stderr_does_not_fail_structured_codex_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(
+                root,
+                [
+                    command_result(
+                        codex_jsonl(),
+                        stderr="Reading additional input from stdin...",
+                    )
+                ],
+            )
+            adapter = CodexHarnessAdapter(runtime)
+            request = HarnessRequest(
+                role="actor",
+                run_variant="candidate",
+                prompt="Perform the scenario.",
+                timeout_seconds=60,
+            )
+
+            execution = adapter.execute(request, runtime.results_root / "status-stderr")
+
+        self.assertIsNone(execution.failure)
+        self.assertEqual(execution.exit_code, 0)
+        self.assertEqual(execution.response, "final response")
 
     def test_agent_response_secret_is_redacted_and_marks_execution_untrustworthy(self) -> None:
         credential = "gh" + "p_" + ("a" * 36)

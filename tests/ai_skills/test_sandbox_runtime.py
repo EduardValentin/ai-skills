@@ -31,15 +31,20 @@ from scripts.ai_skills_lib.sandbox_runtime import (
     CASE_PRIVILEGE_PROBE_SCRIPT,
     CaseWorkspace,
     CommandResult,
+    DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
     EvalRuntimeManifest,
     IPC_CLEANUP_SCRIPT,
     ManifestError,
+    OWNERSHIP_MARKER_PROBE_SCRIPT,
     PROCESS_FULLY_TERMINATED,
+    PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
     ProcessTerminationOutcome,
     SandboxRuntime,
     SandboxRuntimeError,
     SandboxWorker,
     SubprocessRunner,
+    WORKER_MOUNT_PROTECT_SCRIPT,
+    WORKER_MOUNT_RESTORE_SCRIPT,
     network_policy_sha256,
     process_termination_outcome,
 )
@@ -51,10 +56,13 @@ OWNERSHIP_MARKER_NAME = ".ai-skills-sandbox-owner"
 DOCKER_CODEX_PROXY_CONFIG = """\
 # Codex configuration for Docker sandbox
 # This configuration enables "yolo mode" - no approvals, full access
+
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 mcp_oauth_credentials_store = "file"
+
 model_provider = "sandboxd"
+
 [model_providers.sandboxd]
 name = "Sandbox Proxy"
 base_url = "https://chatgpt.com/backend-api/codex"
@@ -82,6 +90,8 @@ class FakeProcessRunner:
                 return marker_result
             if len(argv) > 5 and argv[3] == "root" and argv[5] == "getent":
                 return CommandResult(returncode=2, stdout="", stderr="")
+            if len(argv) > 6 and argv[3] == "root" and argv[5:7] == ("stat", "--format=%a"):
+                return completed("700\n")
             if CASE_CGROUP_EXEC_SCRIPT in argv:
                 script_index = argv.index(CASE_CGROUP_EXEC_SCRIPT)
                 wrapped = argv[script_index + 3 :]
@@ -89,7 +99,12 @@ class FakeProcessRunner:
                     wrapped[:2] == ("python3", "-c")
                     and len(wrapped) > 2
                     and wrapped[2]
-                    in (CATALOG_RENAME_PROBE_SCRIPT, CASE_PRIVILEGE_PROBE_SCRIPT)
+                    in (
+                        CATALOG_RENAME_PROBE_SCRIPT,
+                        CASE_PRIVILEGE_PROBE_SCRIPT,
+                        DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
+                        PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+                    )
                 ):
                     return completed()
             elif argv[3] == "root":
@@ -100,7 +115,12 @@ class FakeProcessRunner:
                 len(argv) > 7
                 and argv[5:7] == ("python3", "-c")
                 and argv[7]
-                in (CATALOG_RENAME_PROBE_SCRIPT, CASE_PRIVILEGE_PROBE_SCRIPT)
+                in (
+                    CATALOG_RENAME_PROBE_SCRIPT,
+                    CASE_PRIVILEGE_PROBE_SCRIPT,
+                    DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
+                    PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+                )
             ):
                 return completed()
         if argv == ("sbx", "ls", "--json"):
@@ -124,6 +144,13 @@ class FakeProcessRunner:
 
 def completed(stdout: str = "", stderr: str = "") -> CommandResult:
     return CommandResult(returncode=0, stdout=stdout, stderr=stderr)
+
+
+def discard_sandbox_by_name(sandboxes: dict[str, str], name: str) -> None:
+    matching_ids = [sandbox_id for sandbox_id, candidate in sandboxes.items() if candidate == name]
+    if len(matching_ids) != 1:
+        raise AssertionError(f"sandbox name did not resolve exactly once: {name!r}")
+    sandboxes.pop(matching_ids[0])
 
 
 def ownership_marker_probe_result(argv: tuple[str, ...]) -> CommandResult | None:
@@ -316,6 +343,21 @@ class EvalRuntimeManifestTests(unittest.TestCase):
 
 
 class SubprocessRunnerTests(unittest.TestCase):
+    def test_closes_child_stdin_independently_of_the_calling_terminal(self) -> None:
+        runner = SubprocessRunner(maximum_output_bytes=100)
+
+        with mock.patch(
+            "scripts.ai_skills_lib.sandbox_runtime.subprocess.Popen",
+            wraps=subprocess.Popen,
+        ) as popen:
+            result = runner.run(
+                (sys.executable, "-c", "print('complete')"),
+                timeout_seconds=5,
+            )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(popen.call_args.kwargs.get("stdin"), subprocess.DEVNULL)
+
     def test_popen_failure_reports_that_no_process_started(self) -> None:
         with mock.patch(
             "scripts.ai_skills_lib.sandbox_runtime.subprocess.Popen",
@@ -614,12 +656,54 @@ class SandboxRuntimeTests(unittest.TestCase):
     def test_case_filesystem_scripts_are_valid_python(self) -> None:
         compile(CASE_FILESYSTEM_PROBE_SCRIPT, "<case-filesystem-probe>", "exec")
         compile(CASE_FILESYSTEM_CLEANUP_SCRIPT, "<case-filesystem-cleanup>", "exec")
+        compile(WORKER_MOUNT_PROTECT_SCRIPT, "<worker-mount-protect>", "exec")
+        compile(WORKER_MOUNT_RESTORE_SCRIPT, "<worker-mount-restore>", "exec")
+        compile(
+            DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
+            "<directory-write-denial-probe>",
+            "exec",
+        )
+        compile(
+            PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+            "<public-skill-catalog-probe>",
+            "exec",
+        )
         compile(CASE_PRIVILEGE_LOCKDOWN_SCRIPT, "<case-privilege-lockdown>", "exec")
         compile(CASE_PRIVILEGE_PROBE_SCRIPT, "<case-privilege-probe>", "exec")
         compile(CASE_CGROUP_SETUP_SCRIPT, "<case-cgroup-setup>", "exec")
         compile(CASE_CGROUP_EXEC_SCRIPT, "<case-cgroup-exec>", "exec")
         compile(CASE_CGROUP_TERMINATE_SCRIPT, "<case-cgroup-terminate>", "exec")
         compile(CASE_CGROUP_REMOVE_SCRIPT, "<case-cgroup-remove>", "exec")
+
+    def test_cgroup_termination_is_idempotent_for_a_stably_empty_group(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cgroup = Path(directory)
+            (cgroup / "cgroup.procs").write_text("", encoding="ascii")
+            (cgroup / "cgroup.events").write_text(
+                "populated 0\nfrozen 1\n",
+                encoding="ascii",
+            )
+            (cgroup / "cgroup.freeze").write_text("", encoding="ascii")
+            (cgroup / "cgroup.kill").write_text("", encoding="ascii")
+
+            result = subprocess.run(
+                (
+                    sys.executable,
+                    "-c",
+                    CASE_CGROUP_TERMINATE_SCRIPT,
+                    str(cgroup),
+                    "1",
+                ),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            kill_contents = (cgroup / "cgroup.kill").read_text(encoding="ascii")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(kill_contents, "")
 
     def test_ipc_cleanup_script_is_valid_python(self) -> None:
         compile(IPC_CLEANUP_SCRIPT, "<ipc-cleanup>", "exec")
@@ -1255,15 +1339,24 @@ class SandboxRuntimeTests(unittest.TestCase):
 
             runtime.close()
 
+        ownership_probe = next(
+            argv
+            for argv, _ in process.calls
+            if OWNERSHIP_MARKER_PROBE_SCRIPT in argv
+        )
+        self.assertEqual(ownership_probe[4], "ai-skills-unit-test-actor-1")
         self.assertIn(
-            (("sbx", "rm", "--force", "actor-id"), self.manifest.limits.preflight_timeout_seconds),
+            (
+                ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+                self.manifest.limits.preflight_timeout_seconds,
+            ),
             process.calls,
         )
         self.assertNotIn("personal-sandbox", [part for argv, _ in process.calls for part in argv])
 
     def test_close_attempts_every_target_and_recovers_by_exact_identity(self) -> None:
         sandboxes = {"unrelated-id": "personal-sandbox"}
-        cleanup_failures = {"actor-id"}
+        cleanup_failures = {"ai-skills-unit-test-actor-1"}
 
         def run_command(argv: tuple[str, ...]) -> CommandResult:
             marker_result = ownership_marker_probe_result(argv)
@@ -1286,9 +1379,9 @@ class SandboxRuntimeTests(unittest.TestCase):
                 sandboxes[worker_id] = name
                 return completed()
             if argv[:4] == ("sbx", "exec", "--user", "root"):
-                worker_id = argv[4]
-                if worker_id in cleanup_failures:
-                    cleanup_failures.remove(worker_id)
+                worker_name = argv[4]
+                if worker_name in cleanup_failures:
+                    cleanup_failures.remove(worker_name)
                     return CommandResult(
                         returncode=1,
                         stdout="",
@@ -1296,7 +1389,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                     )
                 return completed()
             if argv[:3] == ("sbx", "rm", "--force"):
-                sandboxes.pop(argv[3], None)
+                discard_sandbox_by_name(sandboxes, argv[3])
                 return completed()
             raise AssertionError(f"unexpected process call: {argv!r}")
 
@@ -1321,8 +1414,8 @@ class SandboxRuntimeTests(unittest.TestCase):
             for argv, _ in process.calls
             if argv[:4] == ("sbx", "exec", "--user", "root")
         ]
-        self.assertIn(actor.id, cleanup_attempts)
-        self.assertIn(judge.id, cleanup_attempts)
+        self.assertIn(actor.name, cleanup_attempts)
+        self.assertIn(judge.name, cleanup_attempts)
         purge_attempts = [
             argv[4]
             for argv, _ in process.calls
@@ -1330,15 +1423,15 @@ class SandboxRuntimeTests(unittest.TestCase):
             and len(argv) > 5
             and argv[5] == "find"
         ]
-        self.assertEqual(purge_attempts.count(actor.id), 1)
-        remove_ids = [
+        self.assertEqual(purge_attempts.count(actor.name), 1)
+        remove_targets = [
             argv[3]
             for argv, _ in process.calls
             if argv[:3] == ("sbx", "rm", "--force")
         ]
-        self.assertIn(actor.id, remove_ids)
-        self.assertIn(judge.id, remove_ids)
-        self.assertNotIn("unrelated-id", remove_ids)
+        self.assertIn(actor.name, remove_targets)
+        self.assertIn(judge.name, remove_targets)
+        self.assertNotIn("personal-sandbox", remove_targets)
 
     def test_close_finishes_all_targets_before_propagating_interruption(self) -> None:
         sandboxes: dict[str, str] = {}
@@ -1366,12 +1459,12 @@ class SandboxRuntimeTests(unittest.TestCase):
                 sandboxes[worker_id] = name
                 return completed()
             if argv[:4] == ("sbx", "exec", "--user", "root"):
-                if argv[4] == "actor-id" and not actor_interrupted:
+                if argv[4] == "ai-skills-unit-test-actor-1" and not actor_interrupted:
                     actor_interrupted = True
                     raise KeyboardInterrupt()
                 return completed()
             if argv[:3] == ("sbx", "rm", "--force"):
-                sandboxes.pop(argv[3], None)
+                discard_sandbox_by_name(sandboxes, argv[3])
                 return completed()
             raise AssertionError(f"unexpected process call: {argv!r}")
 
@@ -1396,13 +1489,69 @@ class SandboxRuntimeTests(unittest.TestCase):
             self.assertFalse(actor.host_root.exists())
             self.assertFalse(judge.host_root.exists())
 
-        remove_ids = [
+        remove_targets = [
             argv[3]
             for argv, _ in process.calls
             if argv[:3] == ("sbx", "rm", "--force")
         ]
-        self.assertIn(actor.id, remove_ids)
-        self.assertIn(judge.id, remove_ids)
+        self.assertIn(actor.name, remove_targets)
+        self.assertIn(judge.name, remove_targets)
+
+    def test_close_removes_read_only_projection_after_quarantined_worker_is_destroyed(
+        self,
+    ) -> None:
+        sandboxes: dict[str, str] = {}
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                name = argv[argv.index("--name") + 1]
+                sandboxes["actor-id"] = name
+                return completed()
+            if argv[:3] == ("sbx", "rm", "--force"):
+                discard_sandbox_by_name(sandboxes, argv[3])
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            read_only_skill = worker.host_root / "case" / "codex-home" / "skills" / "example-skill"
+            read_only_skill.mkdir(parents=True)
+            (read_only_skill / "SKILL.md").write_text("fixture", encoding="utf-8")
+            read_only_skill.chmod(0o555)
+            runtime._cleanup_targets[worker.name].discard_without_export = True
+
+            try:
+                runtime.close()
+            finally:
+                if read_only_skill.exists():
+                    read_only_skill.chmod(0o755)
+
+            self.assertTrue(runtime.sandbox_cleanup_completed)
+            self.assertFalse(worker.host_root.exists())
 
     def test_interrupted_close_reports_unresolved_cleanup_and_retains_host_staging(self) -> None:
         sandboxes: dict[str, str] = {}
@@ -1434,7 +1583,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             if argv[:3] == ("sbx", "rm", "--force"):
                 if interrupt_cleanup:
                     raise KeyboardInterrupt()
-                sandboxes.pop(argv[3], None)
+                discard_sandbox_by_name(sandboxes, argv[3])
                 return completed()
             raise AssertionError(f"unexpected process call: {argv!r}")
 
@@ -1528,8 +1677,8 @@ class SandboxRuntimeTests(unittest.TestCase):
             for argv, _ in process.calls
             if argv[:4] == ("sbx", "exec", "--user", "root")
         ]
-        self.assertIn(actor.id, cleanup_attempts)
-        self.assertIn(judge.id, cleanup_attempts)
+        self.assertIn(actor.name, cleanup_attempts)
+        self.assertIn(judge.name, cleanup_attempts)
         purge_attempts = [
             argv[4]
             for argv, _ in process.calls
@@ -1537,14 +1686,14 @@ class SandboxRuntimeTests(unittest.TestCase):
             and len(argv) > 5
             and argv[5] == "find"
         ]
-        self.assertEqual(purge_attempts.count(actor.id), 1)
-        self.assertEqual(purge_attempts.count(judge.id), 1)
-        remove_ids = [
+        self.assertEqual(purge_attempts.count(actor.name), 1)
+        self.assertEqual(purge_attempts.count(judge.name), 1)
+        remove_targets = [
             argv[3]
             for argv, _ in process.calls
             if argv[:3] == ("sbx", "rm", "--force")
         ]
-        self.assertCountEqual(remove_ids, [actor.id, judge.id])
+        self.assertCountEqual(remove_targets, [actor.name, judge.name])
 
     def test_close_retries_host_cleanup_without_removing_the_sandbox_twice(self) -> None:
         process = FakeProcessRunner(
@@ -1627,7 +1776,13 @@ class SandboxRuntimeTests(unittest.TestCase):
         purge_calls = [
             argv
             for argv, _ in process.calls
-            if argv[:5] == ("sbx", "exec", "--user", "root", "actor-id")
+            if argv[:5] == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+            )
             and len(argv) > 5
             and argv[5] == "find"
         ]
@@ -1664,7 +1819,12 @@ class SandboxRuntimeTests(unittest.TestCase):
                 return completed()
             if argv[:4] == ("sbx", "exec", "--user", "root"):
                 return completed()
-            if argv == ("sbx", "rm", "--force", "actor-id"):
+            if argv == (
+                "sbx",
+                "rm",
+                "--force",
+                "ai-skills-unit-test-actor-1",
+            ):
                 sandboxes.pop("actor-id", None)
                 return CommandResult(
                     returncode=0,
@@ -1709,7 +1869,10 @@ class SandboxRuntimeTests(unittest.TestCase):
         remove_calls = [
             argv for argv, _ in process.calls if argv[:3] == ("sbx", "rm", "--force")
         ]
-        self.assertEqual(remove_calls, [("sbx", "rm", "--force", "actor-id")])
+        self.assertEqual(
+            remove_calls,
+            [("sbx", "rm", "--force", "ai-skills-unit-test-actor-1")],
+        )
 
     def test_evaluation_runtime_removes_staging_after_trustworthy_cleanup(self) -> None:
         runtime = mock.Mock()
@@ -1984,7 +2147,12 @@ class SandboxRuntimeTests(unittest.TestCase):
                 )
             if argv[:4] == ("sbx", "exec", "--user", "root"):
                 return completed()
-            if argv == ("sbx", "rm", "--force", "actor-id"):
+            if argv == (
+                "sbx",
+                "rm",
+                "--force",
+                "ai-skills-unit-test-actor-1",
+            ):
                 sandbox_present = False
                 return completed()
             raise AssertionError(f"unexpected process call: {argv!r}")
@@ -2022,7 +2190,7 @@ class SandboxRuntimeTests(unittest.TestCase):
 
         self.assertGreaterEqual(post_create_listings, 6)
         self.assertIn(
-            ("sbx", "rm", "--force", "actor-id"),
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
             [argv for argv, _ in process.calls],
         )
 
@@ -2125,7 +2293,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 runtime.acquire_worker("actor")
 
         self.assertIn(
-            ("sbx", "rm", "--force", "actor-id"),
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
             [argv for argv, _ in process.calls],
         )
         marker_probes = [
@@ -2177,7 +2345,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             runtime.close()
 
         self.assertIn(
-            ("sbx", "rm", "--force", "actor-id"),
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
             [argv for argv, _ in process.calls],
         )
 
@@ -2212,7 +2380,11 @@ class SandboxRuntimeTests(unittest.TestCase):
             self.assertNotEqual(first.user_name, second.user_name)
             self.assertFalse((second.root / "home" / "stale-home").exists())
             self.assertFalse((second.root / "workspace" / "stale-workspace").exists())
-            self.assertEqual(list(second.skills.iterdir()), [])
+            self.assertEqual(
+                {path.name for path in second.skills.iterdir()},
+                {".system"},
+            )
+            self.assertEqual(list((second.skills / ".system").iterdir()), [])
             self.assertEqual(
                 {path.name for path in second.root.iterdir()},
                 {
@@ -2231,7 +2403,13 @@ class SandboxRuntimeTests(unittest.TestCase):
         root_commands = [
             argv[5:]
             for argv, _ in process.calls
-            if argv[:5] == ("sbx", "exec", "--user", "root", "actor-id")
+            if argv[:5] == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+            )
         ]
         useradd_commands = [argv for argv in root_commands if argv[:1] == ("useradd",)]
         self.assertEqual(len(useradd_commands), 2)
@@ -2351,13 +2529,22 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertFalse(
             any(cgroup_wrapped_case_command(argv) is not None for argv in commands)
         )
-        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
+        )
 
     def test_case_layout_is_complete_before_identity_ownership_changes(self) -> None:
         missing_at_chown: list[Path] = []
 
         def inspect_chown(argv: tuple[str, ...]) -> None:
-            if argv[:5] != ("sbx", "exec", "--user", "root", "actor-id"):
+            if argv[:5] != (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+            ):
                 return
             command = argv[5:]
             if command[:2] != ("chown", "-R"):
@@ -2444,7 +2631,7 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertEqual(case.host_staging_root, case.root)
         self.assertEqual(
             case.host_export_bridge,
-            worker.host_root / ".ai-skills-case-bridge" / "host",
+            Path("/run/ai-skills-evals") / case.filesystem_source / "host",
         )
         commands = [argv for argv, _ in process.calls]
         tmpfs_mount = next(
@@ -2456,7 +2643,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "exec",
                 "--user",
                 "root",
-                "actor-id",
+                "ai-skills-unit-test-actor-1",
                 "mount",
                 "-t",
             )
@@ -2475,6 +2662,40 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertIn("nodev", mount_options)
         self.assertEqual(tmpfs_mount[-2], case.filesystem_source)
         self.assertEqual(tmpfs_mount[-1], str(case.root))
+        worker_mount_protect = next(
+            argv for argv in commands if WORKER_MOUNT_PROTECT_SCRIPT in argv
+        )
+        self.assertEqual(worker_mount_protect[-1], str(worker.host_root))
+        bridge_bind = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "ai-skills-unit-test-actor-1",
+            "mount",
+            "--bind",
+            str(case.root),
+            str(case.host_export_bridge),
+        )
+        self.assertIn(bridge_bind, commands)
+        self.assertLess(
+            commands.index(bridge_bind), commands.index(worker_mount_protect)
+        )
+        self.assertLess(
+            commands.index(worker_mount_protect), commands.index(tmpfs_mount)
+        )
+
+        worker_write_probe = next(
+            wrapped
+            for command in commands
+            if (wrapped := cgroup_wrapped_case_command(command)) is not None
+            and wrapped[:3]
+            == ("python3", "-c", DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT)
+        )
+        self.assertEqual(
+            worker_write_probe[-1],
+            str(worker.host_root / ".worker-write-probe"),
+        )
 
         expected_binds = {
             (str(case.tmpdir), "/tmp"),
@@ -2486,7 +2707,15 @@ class SandboxRuntimeTests(unittest.TestCase):
             (argv[-2], argv[-1])
             for argv in commands
             if argv[:7]
-            == ("sbx", "exec", "--user", "root", "actor-id", "mount", "--bind")
+            == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "mount",
+                "--bind",
+            )
         }
         self.assertTrue(expected_binds.issubset(actual_binds))
         probes = [
@@ -2494,7 +2723,15 @@ class SandboxRuntimeTests(unittest.TestCase):
             for argv in commands
             if len(argv) > 7
             and argv[:7]
-            == ("sbx", "exec", "--user", "root", "actor-id", "python3", "-c")
+            == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "python3",
+                "-c",
+            )
             and argv[7] == CASE_FILESYSTEM_PROBE_SCRIPT
         ]
         self.assertGreaterEqual(len(probes), 2)
@@ -2513,7 +2750,15 @@ class SandboxRuntimeTests(unittest.TestCase):
             for argv in commands
             if len(argv) > 7
             and argv[:7]
-            == ("sbx", "exec", "--user", "root", "actor-id", "python3", "-c")
+            == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "python3",
+                "-c",
+            )
             and argv[7] == CASE_PRIVILEGE_LOCKDOWN_SCRIPT
         ]
         privilege_probes = [
@@ -2532,7 +2777,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             "exec",
             "--user",
             "root",
-            "actor-id",
+            "ai-skills-unit-test-actor-1",
             "cp",
             "--archive",
             "--one-file-system",
@@ -2545,7 +2790,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             "exec",
             "--user",
             "root",
-            "actor-id",
+            "ai-skills-unit-test-actor-1",
             "cp",
             "--archive",
             "--one-file-system",
@@ -2553,13 +2798,83 @@ class SandboxRuntimeTests(unittest.TestCase):
             f"{case.root}/.",
             f"{case.host_export_bridge}/",
         )
+        staging_root_restore = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "ai-skills-unit-test-actor-1",
+            "chmod",
+            "0700",
+            str(case.root),
+        )
+        staging_tree_restore = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "ai-skills-unit-test-actor-1",
+            "chmod",
+            "-R",
+            "u+rwX",
+            str(case.root),
+        )
+        bridge_tree_reopen = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "ai-skills-unit-test-actor-1",
+            "chmod",
+            "-R",
+            "u+rwX",
+            str(case.host_export_bridge),
+        )
         self.assertIn(seed_copy, commands)
         self.assertIn(export_copy, commands)
+        self.assertIn(bridge_tree_reopen, commands)
+        self.assertIn(staging_tree_restore, commands)
+        self.assertIn(staging_root_restore, commands)
+        self.assertLess(commands.index(bridge_tree_reopen), commands.index(export_copy))
+        root_lock = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "ai-skills-unit-test-actor-1",
+            "chmod",
+            "0555",
+            str(case.root),
+        )
+        self.assertIn(root_lock, commands)
+        ownership_handoff = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "ai-skills-unit-test-actor-1",
+            "chown",
+            "-R",
+            f"{case.uid}:{case.uid}",
+            str(case.root),
+        )
+        ownership_handoffs = [
+            index for index, command in enumerate(commands) if command == ownership_handoff
+        ]
+        self.assertEqual(len(ownership_handoffs), 2)
+        self.assertLess(commands.index(seed_copy), commands.index(root_lock))
+        self.assertLess(commands.index(seed_copy), ownership_handoffs[-1])
+        self.assertLess(ownership_handoffs[-1], commands.index(root_lock))
+        self.assertLess(commands.index(root_lock), commands.index(probes[0]))
         cleanup_index = next(
             index
             for index, argv in enumerate(commands)
             if len(argv) > 7 and argv[7] == CASE_FILESYSTEM_CLEANUP_SCRIPT
         )
+        worker_mount_restore = next(
+            argv for argv in commands if WORKER_MOUNT_RESTORE_SCRIPT in argv
+        )
+        self.assertEqual(worker_mount_restore[-1], str(worker.host_root))
         actor_index = next(
             index
             for index, argv in enumerate(commands)
@@ -2572,6 +2887,14 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertLess(commands.index(privilege_probes[-1]), actor_index)
         self.assertLess(actor_index, commands.index(export_copy))
         self.assertLess(commands.index(export_copy), cleanup_index)
+        self.assertLess(cleanup_index, commands.index(worker_mount_restore))
+        self.assertLess(
+            commands.index(worker_mount_restore), commands.index(staging_tree_restore)
+        )
+        self.assertLess(
+            commands.index(staging_tree_restore), commands.index(staging_root_restore)
+        )
+        self.assertLess(cleanup_index, commands.index(staging_root_restore))
 
     def test_mount_verification_failure_recycles_worker_before_actor_execution(self) -> None:
         def fail_mount_probe(argv: tuple[str, ...]) -> CommandResult | None:
@@ -2626,7 +2949,10 @@ class SandboxRuntimeTests(unittest.TestCase):
                 for argv in commands
             )
         )
-        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
+        )
         self.assertFalse(
             any(
                 argv[:8]
@@ -2635,7 +2961,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                     "exec",
                     "--user",
                     "root",
-                    "actor-id",
+                    "ai-skills-unit-test-actor-1",
                     "cp",
                     "--archive",
                     "--one-file-system",
@@ -2704,7 +3030,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             "exec",
             "--user",
             "root",
-            "actor-id",
+            "ai-skills-unit-test-actor-1",
             "cp",
             "--archive",
             "--one-file-system",
@@ -2717,7 +3043,10 @@ class SandboxRuntimeTests(unittest.TestCase):
                 for argv in commands
             )
         )
-        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
+        )
 
     def test_privilege_boundary_failure_recycles_worker_before_actor_execution(self) -> None:
         privilege_probes = 0
@@ -2783,7 +3112,10 @@ class SandboxRuntimeTests(unittest.TestCase):
                 for argv in commands
             )
         )
-        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
+        )
 
     def test_executes_direct_arguments_with_case_scoped_environment(self) -> None:
         process = FakeProcessRunner(
@@ -2859,7 +3191,7 @@ class SandboxRuntimeTests(unittest.TestCase):
         codex_calls = [argv for argv, _ in process.calls if argv[-2:] == ("codex", "exec")]
         self.assertEqual(len(codex_calls), 1)
         self.assertIn(
-            ("sbx", "rm", "--force", "actor-id"),
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
             [argv for argv, _ in process.calls],
         )
 
@@ -2937,7 +3269,14 @@ class SandboxRuntimeTests(unittest.TestCase):
                 runtime.run_worker_control(worker, ("true",))
 
         self.assertIn(
-            ("sbx", "exec", "--user", "root", "actor-id", "false"),
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "false",
+            ),
             [argv for argv, _ in process.calls],
         )
 
@@ -2971,7 +3310,18 @@ class SandboxRuntimeTests(unittest.TestCase):
 
             runtime.quiesce_case(worker, case)
 
-        commands = [argv[5:] for argv, _ in process.calls if argv[:5] == ("sbx", "exec", "--user", "root", "actor-id")]
+        commands = [
+            argv[5:]
+            for argv, _ in process.calls
+            if argv[:5]
+            == (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+            )
+        ]
         cgroup_commands = [
             command
             for command in commands
@@ -2991,6 +3341,17 @@ class SandboxRuntimeTests(unittest.TestCase):
             commands.index(cgroup_commands[0]),
             commands.index(ipc_commands[0]),
         )
+        remove_commands = [
+            command
+            for command in commands
+            if command[:3] == ("python3", "-c", CASE_CGROUP_REMOVE_SCRIPT)
+        ]
+        self.assertEqual(len(remove_commands), 1)
+        self.assertEqual(remove_commands[0][-1], str(case.cgroup_path))
+        self.assertLess(
+            commands.index(ipc_commands[0]),
+            commands.index(remove_commands[0]),
+        )
         self.assertFalse(any(command[:1] in (("pkill",), ("pgrep",)) for command in commands))
         self.assertLess(
             CASE_CGROUP_TERMINATE_SCRIPT.index('"cgroup.freeze").write_text("1'),
@@ -2998,6 +3359,105 @@ class SandboxRuntimeTests(unittest.TestCase):
         )
         self.assertIn('state.get("populated") == "0"', CASE_CGROUP_TERMINATE_SCRIPT)
         self.assertIn('"cgroup.procs"', CASE_CGROUP_TERMINATE_SCRIPT)
+
+    def test_quiesce_accepts_successful_cgroup_control_with_host_warning(self) -> None:
+        def add_host_warning(argv: tuple[str, ...]) -> CommandResult | None:
+            if len(argv) > 7 and argv[7] == CASE_CGROUP_TERMINATE_SCRIPT:
+                return completed(
+                    stderr=(
+                        "WARN: could not acquire docker hub refresh lock, "
+                        "proceeding without cross-process lock"
+                    )
+                )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": "actor-id", "name": "ai-skills-unit-test-actor-1"}
+                            ]
+                        }
+                    )
+                ),
+            ],
+            side_effect=add_host_warning,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            runtime.quiesce_case(worker, case)
+
+        self.assertIn(case.filesystem_source, runtime._quiesced_cases)
+
+    def test_case_reset_does_not_revisit_quiesced_kernel_state(self) -> None:
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            first = runtime.prepare_case(worker, "case-one")
+
+            runtime.quiesce_case(worker, first)
+            second = runtime.prepare_case(worker, "case-two")
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertEqual(second.case_id, "case-two")
+        self.assertEqual(
+            sum(CASE_CGROUP_TERMINATE_SCRIPT in command for command in commands),
+            1,
+        )
+        self.assertEqual(
+            sum(CASE_CGROUP_REMOVE_SCRIPT in command for command in commands),
+            1,
+        )
+        run_lock_setup = (
+            "sbx",
+            "exec",
+            "--user",
+            "root",
+            "ai-skills-unit-test-actor-1",
+            "mkdir",
+            "--parents",
+            "/run/lock",
+        )
+        self.assertIn(run_lock_setup, commands)
 
     def test_ambiguous_cgroup_population_discards_worker_before_ipc_or_export(self) -> None:
         def report_fork_churn(argv: tuple[str, ...]) -> CommandResult | None:
@@ -3042,7 +3502,10 @@ class SandboxRuntimeTests(unittest.TestCase):
             worker = runtime.acquire_worker("actor")
             case = runtime.prepare_case(worker, "case-one")
 
-            with self.assertRaisesRegex(SandboxRuntimeError, "cgroup emptiness"):
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "case cgroup population could not be proven empty",
+            ):
                 runtime.quiesce_case(worker, case)
 
         commands = [argv for argv, _ in process.calls]
@@ -3062,7 +3525,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                     "exec",
                     "--user",
                     "root",
-                    "actor-id",
+                    "ai-skills-unit-test-actor-1",
                     "cp",
                     "--archive",
                     "--one-file-system",
@@ -3071,7 +3534,10 @@ class SandboxRuntimeTests(unittest.TestCase):
                 for argv in commands
             )
         )
-        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
+        )
 
     def test_close_quarantines_cgroup_ambiguity_and_destroys_without_export(self) -> None:
         def reject_cgroup_termination(argv: tuple[str, ...]) -> CommandResult | None:
@@ -3152,7 +3618,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                     "exec",
                     "--user",
                     "root",
-                    "actor-id",
+                    "ai-skills-unit-test-actor-1",
                     "cp",
                     "--archive",
                     "--one-file-system",
@@ -3161,7 +3627,10 @@ class SandboxRuntimeTests(unittest.TestCase):
                 for argv in commands
             )
         )
-        self.assertIn(("sbx", "rm", "--force", "actor-id"), commands)
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
+        )
 
     def test_environment_rejects_unsafe_names_and_nul_values(self) -> None:
         process = FakeProcessRunner(
@@ -3263,7 +3732,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             "exec",
             "--user",
             "root",
-            "actor-id",
+            "ai-skills-unit-test-actor-1",
             "chown",
             f"{case.uid}:{case.uid}",
             str(case.codex_home / "config.toml"),
@@ -3628,7 +4097,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "exec",
                 "--user",
                 "root",
-                "actor-id",
+                "ai-skills-unit-test-actor-1",
                 "chown",
                 f"{case.uid}:{case.uid}",
             )
@@ -3692,7 +4161,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             "exec",
             "--user",
             "root",
-            "actor-id",
+            "ai-skills-unit-test-actor-1",
             "chown",
             f"{case.uid}:{case.uid}",
         )
@@ -3716,6 +4185,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                         }
                     )
                 ),
+                completed("result"),
             ]
         )
         with tempfile.TemporaryDirectory() as state:
@@ -3732,6 +4202,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             case = runtime.prepare_case(worker, "case-one")
 
             runtime.seal_skill_catalog(worker, case)
+            runtime.execute(worker, case, ("true",), timeout_seconds=30)
 
         commands = [argv for argv, _ in process.calls]
         wrapped_commands = [
@@ -3740,7 +4211,17 @@ class SandboxRuntimeTests(unittest.TestCase):
             if (wrapped := cgroup_wrapped_case_command(argv)) is not None
         ]
         self.assertIn(
-            ("sbx", "exec", "--user", "root", "actor-id", "chown", "-R", "root:root", str(case.skills)),
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "chown",
+                "-R",
+                "root:root",
+                str(case.skills),
+            ),
             commands,
         )
         self.assertIn(
@@ -3749,7 +4230,34 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "exec",
                 "--user",
                 "root",
-                "actor-id",
+                "ai-skills-unit-test-actor-1",
+                "chown",
+                "-R",
+                f"{case.uid}:{case.uid}",
+                str(case.skills / ".system"),
+            ),
+            commands,
+        )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "chmod",
+                "0700",
+                str(case.skills / ".system"),
+            ),
+            commands,
+        )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
                 "chown",
                 "root:root",
                 str(case.codex_home),
@@ -3773,7 +4281,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "exec",
                 "--user",
                 "root",
-                "actor-id",
+                "ai-skills-unit-test-actor-1",
                 "chown",
                 "root:root",
                 str(case.root),
@@ -3786,7 +4294,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "exec",
                 "--user",
                 "root",
-                "actor-id",
+                "ai-skills-unit-test-actor-1",
                 "chmod",
                 "0555",
                 str(case.root),
@@ -3799,7 +4307,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "exec",
                 "--user",
                 "root",
-                "actor-id",
+                "ai-skills-unit-test-actor-1",
                 "chmod",
                 "1777",
                 str(case.codex_home),
@@ -3807,11 +4315,25 @@ class SandboxRuntimeTests(unittest.TestCase):
             commands,
         )
         self.assertIn(
-            ("sbx", "exec", "--user", "root", "actor-id", "chmod", "0555", str(case.skills)),
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "chmod",
+                "1777",
+                str(case.skills),
+            ),
             commands,
         )
         self.assertIn(
-            ("test", "!", "-w", str(case.skills)),
+            (
+                "python3",
+                "-c",
+                PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+                str(case.skills),
+            ),
             wrapped_commands,
         )
         rename_probes = {
