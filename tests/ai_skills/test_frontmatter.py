@@ -23,14 +23,14 @@ Body
         self.assertEqual(parsed["metadata"]["status"], "local-required")
         self.assertEqual(parsed["metadata"]["allows_tool_references"], "true")
 
-    def test_parses_yaml_scalar_forms_comments_and_escaped_stock_recap_description(self):
+    def test_parses_yaml_scalar_forms_comments_and_escaped_description(self):
         text = """---
 # A comment preceding the document content.
-name: 'stock-recap'
-description: "Use when recapping an existing US-listed stock thesis — catching up on each \\\"10-Q/10-K\\\" filed since the last update ✓."
+name: 'sample-skill'
+description: "Use when reviewing an existing document — checking each \\\"section/item\\\" since the last update ✓."
 compatibility: >
-  Requires a current thesis and public
-  filings.
+  Requires a current document and public
+  references.
 allowed-tools: 'web__run, finance'
 metadata:
   status: "local-required" # retained status
@@ -40,13 +40,13 @@ metadata:
 ---
 Body
 """
-        parsed = parse_skill_frontmatter(text, Path("skills/finance/stock-recap/SKILL.md"))
-        self.assertEqual(parsed["name"], "stock-recap")
+        parsed = parse_skill_frontmatter(text, Path("skills/examples/sample-skill/SKILL.md"))
+        self.assertEqual(parsed["name"], "sample-skill")
         self.assertEqual(
             parsed["description"],
-            'Use when recapping an existing US-listed stock thesis — catching up on each "10-Q/10-K" filed since the last update ✓.',
+            'Use when reviewing an existing document — checking each "section/item" since the last update ✓.',
         )
-        self.assertEqual(parsed["compatibility"], "Requires a current thesis and public filings.\n")
+        self.assertEqual(parsed["compatibility"], "Requires a current document and public references.\n")
         self.assertEqual(parsed["allowed-tools"], "web__run, finance")
         self.assertEqual(parsed["metadata"]["note"], "Review filings first.\nKeep Unicode punctuation: §.\n")
 

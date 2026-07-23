@@ -29,6 +29,87 @@
         "The report does not claim keyboard order, contrast compliance, or reduced-motion behavior from the static screenshot alone."
       ],
       "checks": []
+    },
+    {
+      "id": "parity-playwright-bundled-extractor",
+      "prompt": "Use the available local browser page `dashboard-fixture.html` to verify its implementation surface against its runnable reference surface. Serve the current workspace locally and open `dashboard-fixture.html?surface=implementation` and `dashboard-fixture.html?surface=reference`. Compare the default dashboard, the open filter menu, and keyboard focus on the filter control at 1280x800, 100% browser zoom, and device scale factor 1. The ticket and changed-file summary identify the dashboard heading, revenue graph card, axis labels, and filter control, but no affected-element inventory was supplied; I explicitly authorize best-effort in-session scoping from those inputs, the two surfaces, and live DOM inspection. Host browser automation is unavailable, but shell execution and Playwright are available. The `scripts/extract-element-style.browser.js` helper is available; use it for DOM evidence. Do not modify `dashboard-fixture.html`. Return the final visual-validation comparison report.",
+      "expected_output": "A parity-mode FINDINGS report backed by a scoped matched-element inventory, live DOM evidence gathered through Playwright with the bundled extractor, accessibility results, inventory provenance gaps, and the fixture's visual differences.",
+      "assertions": [
+        "The response selects parity mode and creates an affected-element inventory before normal comparison from the authorized task inputs, both runnable surfaces, and live DOM inspection.",
+        "The actor opens both rendered surfaces with matched viewport, zoom, device scale factor, and state rather than treating source or screenshots as the verified surface.",
+        "The response provides credible evidence that Playwright injected and called scripts/extract-element-style.browser.js as visualValidationExtractElementStyle with selectors passed as evaluation arguments on both surfaces.",
+        "Each in-scope row and state has nonblank evidence for typography, color and background, box, layout, full bounding geometry, transform, accessibility, and a row verdict; screenshots are secondary evidence.",
+        "The report identifies the seeded heading, graph-card, and axis-label differences as findings and does not claim CLEAN.",
+        "The visible chart legend omitted from the initial affected-element list is recorded and assessed as an inventory provenance gap.",
+        "The final report includes global verdict, mode, evidence status, comparison conditions, states, findings, accessibility, provenance gaps, out-of-scope flags, patterns to codify, and blockers, using explicit empty values where appropriate."
+      ],
+      "files": [
+        "fixtures/parity-playwright-bundled-extractor/inputs/dashboard-fixture.html"
+      ],
+      "checks": []
+    },
+    {
+      "id": "delegated-gate-inventory-provenance",
+      "prompt": "The `uiux-verifier` native-agent handoff includes implementation and prototype URLs, approved requirements and design notes, changed UI files, and an affected surface map with reference rows and implementation locators for the dashboard title, revenue card, and filter button. The approved notes permit a different filter glyph but require the same accessible name, control size, and focus treatment. During live inspection, a visible chart legend appears that was omitted from the supplied map. Before comparison begins, describe how you will use the handoff, complete the inventory, and report the approved and unapproved differences without modifying the UI.",
+      "expected_output": "A parity pre-comparison plan with no comparison evidence yet that treats every handoff artifact as a starting input, completes the planned inventory including the omitted chart legend provenance gap, defines the evidence schema for every row, and handles the approved glyph divergence without exempting other filter-control properties.",
+      "assertions": [
+        "The response explicitly uses both URLs, approved requirements and design, changed files, affected surface map, reference rows, and implementation locators as starting inputs.",
+        "Every supplied row remains in the planned inventory with implementation and reference locators plus planned fields for font, color and background, box, layout, full geometry, transform, state, accessibility, and a verdict to assign only after observation.",
+        "The omitted visible chart legend is added to the planned inventory and recorded as an inventory provenance gap rather than being silently excluded.",
+        "The approved filter-glyph difference is documented as an allowed comparison condition while control size, focus treatment, and accessible naming remain in the planned evidence schema.",
+        "Because comparison has not begun, the response reports no comparison evidence and does not claim observed values, row verdicts, CLEAN, or FINDINGS."
+      ],
+      "checks": []
+    },
+    {
+      "id": "consistency-with-unmatched-element",
+      "prompt": "There is no runnable reference for a notification settings panel. A supplied inventory covers the panel container, section heading, digest toggle, delivery summary, and reset-preferences control at desktop and mobile viewports. Complete DOM and accessibility evidence shows that the first four match credible profile or billing analogs identified by role and purpose. Live inspection finds no credible sibling, reusable component contract, or documented design constraint for the reset-preferences control. Return the visual-validation comparison report for the available evidence.",
+      "expected_output": "A consistency-mode BLOCKED report with complete matching evidence for supported rows, a blocked reset-preferences row, partial DOM evidence status, and no invented comparison basis.",
+      "assertions": [
+        "The response selects consistency mode because no runnable reference exists and identifies the profile and billing elements as the credible comparison basis.",
+        "The panel, heading, toggle, and summary rows are reported as MATCH at both requested viewports based on the supplied complete DOM and accessibility evidence.",
+        "The reset-preferences row is marked BLOCKED with the missing comparison basis explained; the response does not invent an analog.",
+        "Because there is no DRIFT or MISSING row but one required row is blocked, the global verdict is BLOCKED and the evidence status is partial DOM evidence rather than CLEAN.",
+        "The report includes the required accessibility, provenance-gap, out-of-scope, patterns-to-codify, and blocker sections."
+      ],
+      "checks": []
+    },
+    {
+      "id": "accessibility-failure-with-visual-match",
+      "prompt": "The supplied inventory covers a settings panel, its heading, and an icon-only reset control. Complete DOM comparison against the runnable reference shows that every row and meaningful state matches in typography, color, box, layout, geometry, transform, and comparison evidence. Separate complete accessibility evidence confirms that both the implementation and reference reset controls have no accessible name, while all other accessibility checks pass. There are no blocked checks or inventory provenance gaps. Return the visual-validation comparison report for this evidence without modifying the UI.",
+      "expected_output": "A parity-mode FINDINGS report that preserves the MATCH rows, records the missing accessible name as a confirmed accessibility finding, and does not return CLEAN merely because the reference has the same defect and accessibility evidence is complete.",
+      "assertions": [
+        "The settings panel, heading, and reset-control rows remain MATCH because the implementation and reference comparison evidence matches.",
+        "The missing accessible name is recorded as a confirmed accessibility finding with the affected control, observed result, expected accessible outcome, evidence, and user impact.",
+        "The global verdict is FINDINGS even though all visual rows are MATCH, all required evidence is complete, and no checks are blocked.",
+        "The response does not treat the reference's matching defect as permission, equate complete accessibility evidence with passing checks, or return CLEAN while the confirmed accessibility failure remains.",
+        "The report includes the required evidence status, comparison conditions, accessibility result, provenance gaps, out-of-scope flags, patterns to codify, and blockers."
+      ],
+      "checks": []
+    },
+    {
+      "id": "missing-inventory-blocks-verification",
+      "prompt": "Implementation and reference URLs are available, but there is no affected-element inventory, task detail, acceptance criteria, approved artifact, changed-file list, route or state detail beyond the initial URLs, or delegated scoping result. The `uiux-verifier` native agent is unavailable, and I have not authorized best-effort in-session inventory scoping. Give the current visual-validation comparison result.",
+      "expected_output": "A BLOCKED response with no comparison evidence that stops before normal comparison, identifies the missing inventory and scoping basis, and requests the minimum input or explicit best-effort authorization needed to proceed.",
+      "assertions": [
+        "The response returns BLOCKED before normal comparison because neither a supplied nor delegated inventory exists and best-effort in-session scoping was not authorized.",
+        "It does not invent affected elements from screenshots, visual impressions, or the two URLs and does not claim CLEAN or FINDINGS without scoped evidence.",
+        "It names the minimum concrete scoping inputs or explicit authorization that would unblock the work and retains the available comparison URLs as context.",
+        "It reports no comparison evidence and the blocker separately from the parity mode and comparison basis."
+      ],
+      "checks": []
+    },
+    {
+      "id": "scoped-rerun-with-dom-delta",
+      "prompt": "The prior parity report found graph-card border and shadow drift, dashboard-heading line-height drift, and axis-label typography drift in the default desktop state; the graph card also had a focus-state finding. The fix changed only the implementation files that render those three rows. No shared layout primitive, shared component, or global stylesheet changed. Define the rerun scope, evidence collection, and delta-report obligations. Do not assume the fixes passed and do not modify the UI.",
+      "expected_output": "A scoped rerun approach covering prior finding rows, rows affected by the changed files, and the graph-card focus state, with fresh matched DOM evidence and a delta inventory required before any updated verdict.",
+      "assertions": [
+        "The rerun scope consists of the previous finding rows plus rows affected by the listed implementation-file changes and includes the graph-card focus state without rerunning unrelated inventory rows.",
+        "The response requires fresh computed-style, full bounding-geometry, screenshot, and accessibility evidence from the integrated implementation and reference under the original matched conditions.",
+        "The delta report must contain updated evidence and row verdicts that distinguish resolved rows from remaining drift and aggregate the global verdict from those observed results.",
+        "The response does not accept the fix description as proof, claim a result before recollecting evidence, or modify the implementation."
+      ],
+      "checks": []
     }
   ]
 }

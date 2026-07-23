@@ -71,8 +71,8 @@ color = "green"
 id = "uiux-verifier"
 source = "uiux-verifier.md"
 description = "Visual and accessibility verifier for frontend changes that need DOM-backed layout, style, responsive, parity, or WCAG checks."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "ui-verification"]
-preload_skills = ["ui-verification"]
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "visual-validation"]
+preload_skills = ["visual-validation"]
 
 [agent.codex]
 model_reasoning_effort = "medium"

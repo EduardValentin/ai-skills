@@ -106,29 +106,18 @@ def test_sec_user_agent_raises_when_missing(
 
 
 def test_research_repo_path_follows_unset_contract(
-    monkeypatch: pytest.MonkeyPatch, cfg, script_root
+    monkeypatch: pytest.MonkeyPatch, cfg
 ) -> None:
     monkeypatch.delenv("SR_REPO_PATH", raising=False)
-    monkeypatch.delenv("SR_RESEARCH_REPO", raising=False)
-    env_var = (
-        "SR_RESEARCH_REPO"
-        if script_root.parent.name == "stock-recap"
-        else "SR_REPO_PATH"
-    )
 
-    with pytest.raises(cfg.ConfigError, match=env_var):
+    with pytest.raises(cfg.ConfigError, match="SR_REPO_PATH"):
         cfg.research_repo_path()
 
 
 def test_research_repo_path_uses_env_override(
-    monkeypatch: pytest.MonkeyPatch, tmp_path, cfg, script_root
+    monkeypatch: pytest.MonkeyPatch, tmp_path, cfg
 ) -> None:
-    env_var = (
-        "SR_RESEARCH_REPO"
-        if script_root.parent.name == "stock-recap"
-        else "SR_REPO_PATH"
-    )
-    monkeypatch.setenv(env_var, str(tmp_path))
+    monkeypatch.setenv("SR_REPO_PATH", str(tmp_path))
     assert cfg.research_repo_path() == tmp_path
 
 

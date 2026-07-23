@@ -1,10 +1,11 @@
-"""Tests for the stock-recap quarterly financials merge runtime."""
+"""Tests for the stock-research quarterly financials merge runtime."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -14,20 +15,25 @@ SCRIPT_PATH = (
     REPO_ROOT
     / "skills"
     / "investing-finance"
-    / "stock-recap"
+    / "stock-research"
     / "scripts"
     / "refresh_quarterly_financials.py"
 )
 
 
-def _load_script():
-    assert SCRIPT_PATH.is_file(), "stock-recap quarterly refresh runtime is missing"
+def _load_script(tmp_path: Path):
+    assert SCRIPT_PATH.is_file(), "stock-research quarterly refresh runtime is missing"
     spec = importlib.util.spec_from_file_location(
-        "stock_recap_refresh_quarterly_financials", SCRIPT_PATH
+        "stock_research_refresh_quarterly_financials", SCRIPT_PATH
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    original_pycache_prefix = sys.pycache_prefix
+    try:
+        sys.pycache_prefix = str(tmp_path / "python-pycache")
+        spec.loader.exec_module(module)
+    finally:
+        sys.pycache_prefix = original_pycache_prefix
     return module
 
 
@@ -248,7 +254,7 @@ def _main_args(baseline_path: Path, annual_path: Path, facts_path: Path) -> list
 def test_refresh_preserves_prior_state_and_merges_quarterly_ttm(
     tmp_path: Path,
 ) -> None:
-    refresh = _load_script()
+    refresh = _load_script(tmp_path)
     baseline_path, annual_path, facts_path = _write_inputs(tmp_path)
 
     rc = refresh.main(_main_args(baseline_path, annual_path, facts_path))
@@ -286,7 +292,7 @@ def test_refresh_preserves_prior_state_and_merges_quarterly_ttm(
 def test_ttm_eps_sums_reported_quarterly_diluted_eps_with_changing_shares(
     tmp_path: Path,
 ) -> None:
-    refresh = _load_script()
+    refresh = _load_script(tmp_path)
     company_facts = _quarterly_company_facts(
         diluted_shares=[10.0, 8.0, 6.0, 7.5],
         diluted_eps=[0.10, 0.25, 0.50, 0.67],
@@ -320,7 +326,7 @@ def test_ttm_eps_sums_reported_quarterly_diluted_eps_with_changing_shares(
 def test_ttm_eps_uses_duration_weighted_shares_when_reported_eps_is_incomplete(
     tmp_path: Path, unusable_eps: object
 ) -> None:
-    refresh = _load_script()
+    refresh = _load_script(tmp_path)
     company_facts = _quarterly_company_facts(
         diluted_shares=[10.0, 8.0, 6.0, 7.5],
         diluted_eps=[0.10, unusable_eps, 0.50, 0.67],
@@ -347,7 +353,7 @@ def test_ttm_eps_uses_duration_weighted_shares_when_reported_eps_is_incomplete(
 def test_ttm_eps_marks_missing_or_invalid_share_data_unavailable(
     tmp_path: Path, invalid_share: object
 ) -> None:
-    refresh = _load_script()
+    refresh = _load_script(tmp_path)
     company_facts = _quarterly_company_facts(
         diluted_shares=[10.0, invalid_share, 6.0, 7.5]
     )
@@ -371,7 +377,7 @@ def test_ttm_eps_marks_missing_or_invalid_share_data_unavailable(
 def test_second_refresh_preserves_documented_nested_manual_financial_state(
     tmp_path: Path,
 ) -> None:
-    refresh = _load_script()
+    refresh = _load_script(tmp_path)
     baseline_path, annual_path, facts_path = _write_inputs(tmp_path)
     args = _main_args(baseline_path, annual_path, facts_path)
     assert refresh.main(args) == 0
@@ -452,7 +458,7 @@ def test_second_refresh_preserves_documented_nested_manual_financial_state(
 def test_refresh_keeps_canonical_file_when_atomic_replace_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    refresh = _load_script()
+    refresh = _load_script(tmp_path)
     baseline_path, annual_path, facts_path = _write_inputs(tmp_path)
     original = baseline_path.read_bytes()
 

@@ -1,5 +1,5 @@
 // Inject this file into the inspected page, then call
-// globalThis.uiVerificationExtractElementStyle(selector).
+// globalThis.visualValidationExtractElementStyle(selector).
 
 (() => {
   "use strict";
@@ -77,5 +77,5 @@
     };
   }
 
-  globalThis.uiVerificationExtractElementStyle = extractElementStyle;
+  globalThis.visualValidationExtractElementStyle = extractElementStyle;
 })();

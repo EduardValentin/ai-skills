@@ -9,11 +9,21 @@
     {
       "id": "existing-thesis-quarterly-recap",
       "query": "I already have a saved AAPL thesis. Update it for the latest 10-Q and tell me what changed versus my original assumptions.",
-      "should_trigger": false
+      "should_trigger": true
+    },
+    {
+      "id": "existing-thesis-material-event",
+      "query": "A company in my saved long-term research just announced a major debt-funded acquisition. Reassess the thesis, valuation, sell triggers, and watch items for this event.",
+      "should_trigger": true
     },
     {
       "id": "short-term-chart-options",
       "query": "Analyze NVDA's daily chart, identify support and resistance, and suggest a two-week options entry.",
+      "should_trigger": false
+    },
+    {
+      "id": "portfolio-pnl",
+      "query": "Calculate my portfolio's realized and unrealized profit and loss from these transaction records.",
       "should_trigger": false
     }
   ]

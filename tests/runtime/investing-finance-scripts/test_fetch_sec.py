@@ -108,7 +108,7 @@ def test_fetch_sec_returns_2_for_unknown_ticker(
 def test_list_only_filters_strictly_by_report_date_without_downloading_bodies(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    stock_recap_fetch_sec,
+    fetch_sec,
 ) -> None:
     filings = [
         SimpleNamespace(
@@ -141,7 +141,7 @@ def test_list_only_filters_strictly_by_report_date_without_downloading_bodies(
             pytest.fail(f"list-only requested a filing body for {filing.accession}")
 
     monkeypatch.setattr(
-        stock_recap_fetch_sec,
+        fetch_sec,
         "resolve",
         lambda ticker: SimpleNamespace(
             ticker=ticker,
@@ -149,9 +149,9 @@ def test_list_only_filters_strictly_by_report_date_without_downloading_bodies(
             name="Example Corp",
         ),
     )
-    monkeypatch.setattr(stock_recap_fetch_sec, "SECClient", FakeSECClient)
+    monkeypatch.setattr(fetch_sec, "SECClient", FakeSECClient)
 
-    rc = stock_recap_fetch_sec.main(
+    rc = fetch_sec.main(
         [
             "EXM",
             "--forms",

@@ -15,9 +15,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 STOCK_RESEARCH_ROOT = (
     REPO_ROOT / "skills" / "investing-finance" / "stock-research"
 )
-STOCK_RECAP_ROOT = REPO_ROOT / "skills" / "investing-finance" / "stock-recap"
-SKILL_ROOTS = (STOCK_RESEARCH_ROOT, STOCK_RECAP_ROOT)
-SKILL_IDS = ("stock-research", "stock-recap")
+SKILL_ROOTS = (STOCK_RESEARCH_ROOT,)
+SKILL_IDS = ("stock-research",)
 STOCK_RESEARCH_EVALS = STOCK_RESEARCH_ROOT / "evals" / "evals.json"
 FINANCE_RUNTIME_REQUIREMENTS = (
     "requests==2.34.2",
@@ -202,7 +201,7 @@ def test_bundled_finance_requirements_are_synchronized_and_exact() -> None:
         for skill_root in SKILL_ROOTS
     ]
 
-    assert bundled == [FINANCE_RUNTIME_REQUIREMENTS, FINANCE_RUNTIME_REQUIREMENTS]
+    assert bundled == [FINANCE_RUNTIME_REQUIREMENTS]
 
 
 def test_test_requirements_include_every_finance_runtime_dependency() -> None:

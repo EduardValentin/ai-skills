@@ -16,17 +16,12 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 STOCK_RESEARCH_SCRIPTS = (
     REPO_ROOT / "skills" / "investing-finance" / "stock-research" / "scripts"
 )
-STOCK_RECAP_SCRIPTS = (
-    REPO_ROOT / "skills" / "investing-finance" / "stock-recap" / "scripts"
-)
 SCRIPT_ROOTS = (
     pytest.param(STOCK_RESEARCH_SCRIPTS, id="stock-research"),
-    pytest.param(STOCK_RECAP_SCRIPTS, id="stock-recap"),
 )
 TOP_LEVEL_SCRIPT_MODULES = frozenset(
     path.stem
-    for scripts_root in (STOCK_RESEARCH_SCRIPTS, STOCK_RECAP_SCRIPTS)
-    for path in scripts_root.glob("*.py")
+    for path in STOCK_RESEARCH_SCRIPTS.glob("*.py")
     if path.name != "__init__.py"
 )
 
@@ -80,7 +75,6 @@ def tmp_research_repo(tmp_path: Path) -> Path:
 def isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SR_SEC_USER_AGENT", "Test Suite test@example.com")
     monkeypatch.delenv("SR_REPO_PATH", raising=False)
-    monkeypatch.delenv("SR_RESEARCH_REPO", raising=False)
 
 
 @pytest.fixture(params=SCRIPT_ROOTS)
@@ -105,18 +99,6 @@ def stock_research_script_root(
     _activate_script_root(STOCK_RESEARCH_SCRIPTS, monkeypatch, tmp_path)
     try:
         yield STOCK_RESEARCH_SCRIPTS
-    finally:
-        _clear_script_modules()
-
-
-@pytest.fixture
-def stock_recap_script_root(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> Iterator[Path]:
-    _activate_script_root(STOCK_RECAP_SCRIPTS, monkeypatch, tmp_path)
-    try:
-        yield STOCK_RECAP_SCRIPTS
     finally:
         _clear_script_modules()
 
@@ -163,11 +145,6 @@ def fetch_prices(script_root: Path) -> ModuleType:
 
 @pytest.fixture
 def fetch_sec(script_root: Path) -> ModuleType:
-    return importlib.import_module("fetch_sec")
-
-
-@pytest.fixture
-def stock_recap_fetch_sec(stock_recap_script_root: Path) -> ModuleType:
     return importlib.import_module("fetch_sec")
 
 

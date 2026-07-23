@@ -106,7 +106,7 @@
       "checks": []
     },
     {
-      "id": "bitbucket-pr-ui-verification-context",
+      "id": "bitbucket-pr-visual-validation-context",
       "prompt": "Plan verification of UI changes in a Bitbucket pull request. The repository remote is https://bitbucket.org/acme/widget.git, the branch is feature/auth-panel, and the PR number is unknown. Do not make network or browser calls; give the concrete workflow and identify any point that requires user input.",
       "expected_output": "A workflow that derives Bitbucket PR identity from the remote and branch, proceeds only with one clear candidate, reads current metadata, and distinguishes required PR context from optional discussion context.",
       "assertions": [

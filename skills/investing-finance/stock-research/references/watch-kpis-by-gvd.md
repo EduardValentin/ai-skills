@@ -1,12 +1,12 @@
 ---
 artifact: reference
-purpose: Default quarterly watch-KPI lists per GVD bucket (Phase 9 verdict)
+purpose: Default GVD watch KPIs for initial verdicts and recap-mode evaluation
 schema_version: 1
 ---
 
 # Quarterly Watch KPIs
 
-Each verdict carries a watchlist of KPIs the future `stock-recap` skill checks every quarter. The verdict has **two sets**:
+Each initial-research verdict carries two saved KPI sets that recap mode checks after a new quarter or material event:
 
 - **Generic GVD-default set (5 KPIs)** — taken directly from the table below based on the declared bucket.
 - **Story-custom set (3–5 KPIs)** — brainstormed with the user during Phase 9 because every company has unit economics that matter specifically to it ("restaurants opened per year", "average selling price", "rig count", "ARPU", "active customers").
@@ -21,9 +21,9 @@ Each verdict carries a watchlist of KPIs the future `stock-recap` skill checks e
 | **Dividend** | Dividend per share, payout ratio, FCF / dividend coverage, dividend growth %, total return YTD |
 | **Speculative growth** | Revenue YoY, gross margin, cash burn rate, runway in months, dilution YoY |
 
-## Story-custom set: dialogue
+## Story-custom set: initial-research dialogue
 
-In Phase 9, after presenting the generic defaults, the orchestrator asks:
+While creating the initial verdict, after presenting the generic defaults, the orchestrator asks:
 
 > "Beyond the generic GVD watch list, what 3–5 KPIs specific to *this* business should we track each quarter? Think about what would tell you the thesis is on track or breaking down."
 
@@ -38,6 +38,18 @@ Examples by industry:
 - **Semiconductors:** revenue mix by end market, gross margin trend, capex/revenue, customer concentration
 
 The story-custom KPIs are written in plain English (same shape as the generic ones) and stored in `verdict.json` under `watch_kpis.story_custom` (array of strings).
+
+## Recap-mode evaluation
+
+Use the saved GVD bucket and both saved KPI lists; do not ask the user to choose a new lens. Evaluate every saved KPI and report:
+
+- current value or qualitative evidence, with its as-of date;
+- prior-period and saved bull/base/bear comparison when available;
+- direction and whether the item strengthens, weakens, or does not change the thesis;
+- the valuation or scenario input affected, if any;
+- `cannot-evaluate` when current comparable evidence is unavailable.
+
+Refresh only the financial, market, or event data needed for these saved items. Do not silently drop a KPI because it is company-specific or unavailable, and do not treat missing evidence as unchanged.
 
 ## Output format
 
@@ -58,3 +70,11 @@ In `verdict.md`, the Quarterly Watch KPIs section reads:
 ```
 
 In `verdict.json`, both lists live under `watch_kpis.generic` and `watch_kpis.story_custom`.
+
+In a recap, present one row per saved watch item:
+
+```
+| Watch item | Current vs baseline/scenarios | Thesis impact | Evidence |
+|---|---|---|---|
+| Operating margin | 18.2% vs base 17.5% | strengthens | Q2 10-Q, 2026-06-30 |
+```
