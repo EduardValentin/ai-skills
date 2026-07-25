@@ -29,6 +29,11 @@ skills/<group>/<skill>/
 The skill root may contain only these entries. Do not add empty directories,
 placeholder files, generated output, or test infrastructure. Tests for
 non-trivial bundled scripts belong under `tests/runtime/<suite>/`.
+Do not use installer-omitted names anywhere in a skill tree:
+`metadata.json`, `.git/`, `__pycache__/`, or `__pypackages__/`.
+This applies to contained directory symlinks as well as physical directories.
+Group and skill directory names must also avoid the public discovery exclusions
+`node_modules`, `.git`, `dist`, `build`, and `__pycache__`.
 
 ## Write The Frontmatter
 
@@ -68,6 +73,8 @@ Set `metadata.allows_tool_references: "true"` when the skill names tools,
 harnesses, native agents, or other skills. In that case, `compatibility` must
 state what is required and what happens when the collaborator is unavailable.
 Use only `"true"` or `"false"` because metadata values are strings.
+Do not define `metadata.internal`; the public installer reserves it for
+excluding skills from normal discovery, so repository skills reject it.
 
 ## Write For Progressive Disclosure
 
@@ -87,7 +94,9 @@ procedural:
 Move conditional or detailed material into focused files under `references/`
 and say exactly when to read each file. Keep references shallow and use paths
 relative to the skill root, such as `references/api-errors.md`. Local links and
-symlinks must remain inside the skill.
+symlinks must remain inside the skill. Contained directory aliases are allowed
+only when their directory graph is acyclic. Do not prefix bundled paths with a
+checkout, home, drive, or other absolute location.
 
 The upstream guides provide useful additional advice:
 
@@ -216,12 +225,14 @@ The main enforced bounds are:
 | Behavior case | Path-safe ID up to 64 characters; prompt up to 16 KiB; expected output up to 8 KiB |
 | Assertions | 1-64 per case, each up to 4 KiB |
 | Inputs and checks | At most 64 of each per case; canonical contained paths up to 512 characters |
+| Deterministic schemas | At most 256 KiB each and 512 KiB total per case |
 | Fixture file | Regular file at most 4 MiB below its exact case root |
 | Trigger file | 1-128 queries with path-safe IDs and prompts up to 16 KiB |
 
-Unknown skill-root entries, broken or escaping symlinks, empty directories,
-`.gitkeep` placeholders, non-executable files under `scripts/`, personal paths,
-private-key blocks, and high-confidence credential literals fail validation.
+Unknown skill-root entries, broken, escaping, or cyclic directory symlinks,
+empty directories, `.gitkeep` placeholders, non-executable files under
+`scripts/`, personal paths, private-key blocks, and high-confidence credential
+literals fail validation.
 When bundled runtime material exists, at least one behavior case must name and
 exercise it. MockServer definitions have their own exact matcher, static action,
 finite repetition, and total-call rules described in [Evaluation](EVALUATION.md).
@@ -231,7 +242,7 @@ finite repetition, and total-call rules described in [Evaluation](EVALUATION.md)
 Run the deterministic gate while authoring:
 
 ```bash
-python3 scripts/ai_skills.py validate ci-all
+scripts/ai-skills validate ci-all
 ```
 
 Model-backed trigger and behavior runs cost model usage and require explicit
@@ -240,6 +251,8 @@ user approval. They are described in [Evaluation](EVALUATION.md).
 Before submitting a skill, confirm:
 
 - The name, directory, description, frontmatter, and relative references pass.
+- Installable references and assets contain no credential literals; fake
+  credential values use the `FAKE_` prefix.
 - Runtime material is self-contained and its dependencies are documented.
 - Collaborators have an explicit availability and fallback contract.
 - Behavior prompts are realistic and evaluation-blind.

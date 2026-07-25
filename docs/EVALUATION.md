@@ -15,11 +15,26 @@ them for every skill.
 | `validate evals` | Whether the skill improves task behavior and output | Actors and judges |
 | `validate all` | Trigger and behavior suites through one runtime preflight | Actors and judges |
 
-`validate ci-all` is offline and safe to run routinely:
+`validate ci-all` is offline and model-free:
 
 ```bash
-python3 scripts/ai_skills.py validate ci-all
+scripts/ai-skills validate ci-all
 ```
+
+Its unit and bundled-script subprocesses receive only an allowlisted
+environment plus fresh home and temporary directories. The runner drains raw
+stdout and stderr under a 4 MiB limit per stream, terminates a process that
+exceeds either limit, and displays output only after byte-level secret
+scanning. Each subprocess receives a separate process group, and inherited
+descendants are terminated before the runner returns. Overflow or
+high-confidence secret material quarantines the output and fails the
+deterministic gate.
+
+Unit and runtime suites are reviewed repository code executed on the host.
+Their snapshots, restricted environment, output limits, and process groups are
+deterministic hygiene, not an adversarial sandbox. They do not contain code
+that deliberately creates a new process session. Model-driven or otherwise
+untrusted execution uses Docker Sandboxes instead.
 
 Model-backed commands run only after explicit user approval. A skill change,
 review, or pull-request request is not approval. Before model execution, the
@@ -49,6 +64,28 @@ fixtures, and policy:
 
 Both outputs are graded against the same oracle. The baseline shows what the
 skill adds; only the `with_skill` grade determines the behavior case result.
+Variant identity remains runner-only and is never included in the judge control
+or judge-visible transcript. The invocation declaration and offline aggregator
+both require every behavior attempt in one aggregation group to bind to the
+same judge-control digest.
+Before declaration and again before actor execution, the runner also requires
+exactly one `with_skill` and one `without_skill` attempt with matching run,
+aggregation, contribution, and comparison identities. Offline aggregation
+rejects any persisted behavior attempt whose run and aggregation variants
+disagree. Each arm is also bound to the same complete selected case definition,
+so matching IDs cannot hide different prompts, assertions, checks, or fixtures.
+The shared `scenario_definition_sha256` covers that variant-independent case
+definition, prepared inputs, fixture initialization, deterministic schemas, and
+judge control. Declaration and offline aggregation require both arms to share
+it, the assertion contract, and the deterministic-input digest.
+The `without_skill` attempt fails closed if the adapter reports the target in
+`successful_skill_reads`, identifies its canonical installed `SKILL.md` as
+`expected_skill_path`, or preserves a structured `skill_read` event for that
+path. Every path in those structured fields must be an absolute canonical POSIX
+path: dot segments, parent traversal, duplicate separators, NULs, and
+backslashes are rejected without filesystem resolution. The same path and event
+checks run again during offline aggregation; mentions in ordinary model prose
+are not used as contamination evidence.
 
 ```mermaid
 flowchart LR
@@ -75,8 +112,8 @@ supported.
 Run all behavior cases or narrow the run:
 
 ```bash
-python3 scripts/ai_skills.py validate evals --harness codex
-python3 scripts/ai_skills.py validate evals \
+scripts/ai-skills validate evals --harness codex
+scripts/ai-skills validate evals \
   --harness codex --skill <skill-name> --case <case-id>
 ```
 
@@ -88,22 +125,45 @@ not currently implemented. Codex is the supported evaluation harness.
 Trigger cases use `evals/triggers.json`. The actor receives the full public
 catalog and a query but is not told which skill is expected. For Codex, pickup
 is proven only by a successful command event that reads the exact installed
-target `SKILL.md`; mentioning a skill name is not proof.
+target `SKILL.md`; mentioning a skill name is not proof. The adapter translates
+its descriptor-verified host path to the single canonical logical evidence path
+`/case/codex-home/skills/<skill>/SKILL.md` before returning the execution.
 
 Positive cases require that read. Negative cases require its absence after the
-runner has proven the expected target path existed before execution. Trigger
-grading is deterministic and does not call a separate judge.
+runner has proven the expected target path existed before execution and the
+actor completed one valid thread and turn lifecycle. A positive read must
+immediately follow its matched trusted-reader command completion with the same
+command ID, zero exit status, and successful terminal status. The live runner
+and offline aggregator derive pickup from this same lifecycle validator;
+standalone, failed, unmatched, duplicated, or out-of-order read markers are not
+evidence. Every non-command tool start and completion is likewise paired by
+tool ID and type; unknown lifecycle events fail the attempt. Every configured
+repetition is bound to the same complete selected query, expectation, ordinal,
+assertion contract, and aggregation policy. Trigger grading is deterministic
+and does not call a separate judge.
+Repeated trigger attempts share one `scenario_definition_sha256`, runtime-input
+digest, expected activation, installed catalog path, assertion contract, and
+aggregation policy; only the run identity and ordinal may differ.
+Trigger attempts capture actor-created files through the same frozen output
+boundary used by behavior attempts. Live validation requires
+`expected_skill_path`, target entries in `successful_skill_reads`, and derived
+target `skill_read` events to use the exact logical path. Canonical reads for
+unrelated skills do not activate the target; foreign roots and other
+noncanonical skill paths invalidate the attempt.
 
 ```bash
-python3 scripts/ai_skills.py validate triggers --harness codex
-python3 scripts/ai_skills.py validate triggers \
+scripts/ai-skills validate triggers --harness codex
+scripts/ai-skills validate triggers \
   --harness codex --skill <skill-name> --query <query-id> --runs 3
 ```
 
 Each query runs once by default. `--runs 2` or `--runs 3` applies uniformly to
 every selected query. Unanimous outcomes are stable. A two-of-three match can
 meet the threshold only after the discordant attempt is investigated and the
-preserved results are explicitly aggregated; other disagreement fails.
+preserved results receive complete validated manual grading for every attempt.
+The reviewer then aggregates with `--grade-source manual` or
+`--grade-source both`; judge-only aggregation rejects the pending result.
+Other disagreement fails.
 
 ## Sandboxes, Workers, And Cases
 
@@ -135,6 +195,8 @@ Pinned templates and images provide caching across commands.
 Worker registration binds the sandbox name to the UUID reported by `sbx ls`.
 The runtime keeps state keyed by that UUID, verifies the binding before
 cleanup, and addresses Docker Sandbox CLI operations by the verified name.
+Removal succeeds only when a fresh listing proves that neither the UUID nor a
+same-name replacement remains.
 
 ```mermaid
 flowchart LR
@@ -176,8 +238,12 @@ bridge, and returns the worker projection to read-write before reuse. Public
 skill entries are sealed and verified only in their final actor-visible tmpfs
 location. The sticky catalog root lets Codex replace its own `.system` entry
 without permitting changes to root-owned public skills. After the actor stops,
-the runner reopens the private export staging tree for evidence collection and
-verified reset.
+the actor projection remains read-only while the runner collects evidence.
+Only the later verified reset may return the worker projection to read-write.
+Before execution, a case-user mount-table probe permits only the case-owned
+tmpfs mounts plus a narrow set of kernel pseudo-filesystems. It recursively
+checks every other mounted filesystem, including secondary devices, and
+recycles the worker if any actor-writable persistent path is exposed.
 
 Before the first approved model-backed run, follow Docker's
 [Sandboxes setup guide](https://docs.docker.com/ai/sandboxes/get-started/) and
@@ -229,9 +295,16 @@ Choose the smallest suitable pattern:
 | Certificate behavior | Ephemeral worker CA and server certificates managed by the proxy |
 | Sensitive configuration | Non-secret placeholders whose values start with `FAKE_` |
 
-For production-shaped HTTP(S), the runner starts one MockServer container in
-each actor worker. Commands launched by Codex receive proxy variables; Codex's
-own model route remains separate.
+Static validation scans every fixture byte for high-confidence credential
+patterns, including binary files; invalid UTF-8 and NUL bytes do not disable
+that scan. JSON fixtures still require valid UTF-8 for parsing, and decoded
+JSON strings are scanned again so Unicode escapes cannot hide credentials.
+
+For production-shaped HTTP(S), the runner starts one case-scoped MockServer
+container inside the selected actor worker. Commands launched by Codex receive
+proxy variables; Codex's own model route remains separate. Docker log
+persistence is disabled for the fixture sidecar and its preflight canary;
+bounded authenticated request evidence remains the sole request record.
 
 ```mermaid
 flowchart LR
@@ -254,9 +327,30 @@ fails and is never forwarded to production. MockServer is not a general egress
 firewall; the pinned sandbox network policy governs traffic that does not use
 the proxy, and cases never receive real service credentials.
 
+Before cases run, preflight reads MockServer's authenticated live configuration
+and requires unmatched proxying to be disabled. It then starts a disposable
+canary from the same pinned image, routes one unmatched request toward it, and
+requires a 404 with no canary request recorded. Preflight also attempts the
+actual `PUT` reset operation without credentials and proves that a sentinel
+expectation is unchanged. The runner stages the authenticated sentinel,
+verification, and reset controls before any actor command. Successful
+fixture probes are followed by case quiescence and projection deactivation;
+only then does the runner destroy the preflight sidecar, control directory, and
+generated CA. Codex version, flag, and model probes continue in a fresh case,
+never the retired fixture-preflight case. Any failed quiescence, retirement, or
+case reset invalidates the worker and drops its fixture state. Post-actor
+verification consumes staged controls, then destroys the sidecar and generated
+certificate state without changing the actor projection.
+
 For HTTPS, MockServer presents a temporary server certificate for the requested
 hostname. Actor commands trust the worker's public test CA. The actor receives
-no CA private key or client certificate.
+no CA private key or client certificate. Dynamic certificate updates are
+disabled. For every case, the runner replaces the worker's certificate subject
+configuration with exactly that case's declared DNS names and IP addresses and
+verifies both the effective configuration and a real proxied HTTPS handshake
+for every subject. After successful collection it removes the sidecar and
+certificate directory. A later case can reuse the worker only with a fresh
+sidecar and a newly generated CA.
 
 ```mermaid
 sequenceDiagram
@@ -298,21 +392,43 @@ flowchart TD
     F --> J["Skill-free judge"]
     O --> D
     O --> J
-    D --> G["Schema-valid grading.json"]
-    J --> G
+    J --> B["Exact grading_basis.json"]
+    B --> G["Derived grading.json"]
+    D --> G
 ```
 
-Judge workers are separate from actors. They receive no skill catalog, actor
+Judge workers are separate from actors. They receive no public skill catalog, actor
 workspace, fixture controls, shell, or web access. A response schema requires
 one pass/fail verdict and concrete evidence for every assertion. There are no
-hidden actor or judge retries.
+hidden actor or judge retries. The assertion list and grading authority are
+declared before execution. The live runner and offline aggregator require the
+same exact ordered successful judge lifecycle, with no missing, reordered, or
+additional event. Any observed skill read, command, tool use, actor-output
+capture, or actor workspace access invalidates the judge run. Codex bundled
+skills and skill-instruction injection are disabled explicitly, and the runner
+verifies before and after execution that the judge catalog contains only
+Codex's required empty `.system` directory. The runner preserves the exact safe
+judge response, deterministic definitions and schemas, and deterministic check
+results in `grading_basis.json`. It also preserves the judge control, admitted
+artifact set, and digest of the exact prompt sent to the judge. Offline
+aggregation reconstructs that prompt from the actor events that preceded the
+judge lifecycle, validates the skill-free judge execution, reparses the
+response, reruns the hard checks from the preserved output snapshot, and
+requires `grading.json` to be the exact derived form. The transcript contains
+the task prompt and actor response without revealing the behavior arm. Timing
+and arm identity are preserved for runner accounting but are not admitted as
+judge evidence.
 
 Generated grades remain immutable. A human reviewer can inspect the same
 evidence and add a complete `manual_grading.json` using the grading schema.
+Human grades identify the reviewer with a non-empty `reviewer_identity` or
+`reviewer_label`. Their model and reasoning fields are `null`, and their
+`graded_at` is a distinct manual-review time later than the generated grade and
+not earlier than the completed attempt.
 Offline aggregation can use judge, manual, or both sources:
 
 ```bash
-python3 scripts/ai_skills.py evals aggregate \
+scripts/ai-skills evals aggregate \
   --results-dir <result-directory> \
   --grade-source judge|manual|both
 ```
@@ -323,15 +439,25 @@ effective override. Manual review never edits `grading.json`.
 To grade manually, copy that attempt's generated `grading.json` to
 `manual_grading.json`, then:
 
-1. Keep `schema_version`, run identity, assertion IDs and text, and
-   `aggregation` unchanged.
+1. Keep `schema_version`, run identity, `evidence_sha256`, assertion IDs
+   and text, and `aggregation` unchanged.
 2. Set `grade_source` to `manual`.
 3. Set `grader.type` to `human`, set model and reasoning fields to `null`, and
-   use a non-empty review version such as `manual-v1`.
-4. Record the review time in `graded_at`.
-5. Re-evaluate every assertion, updating `passed`, `checked_by`, concrete
-   `evidence`, `evidence_refs`, and the summary totals.
+   use a non-empty review version such as `manual-v1`. Add a non-empty
+   `grader.reviewer_identity` or `grader.reviewer_label`.
+4. Record the review time in `graded_at`; it must be later than the generated
+   grade timestamp and not earlier than the attempt's `timing.json` `ended_at`.
+5. Set every assertion's `checked_by` to `human`. Re-evaluate semantic
+   assertions and update their `passed`, concrete `evidence`, `evidence_refs`,
+   and the summary totals. For deterministic assertions, preserve `passed`,
+   `evidence`, and `evidence_refs` exactly; human review cannot override a hard
+   contract result.
 6. Validate the result by running the offline aggregate command.
+
+For trigger attempts, activation is a runner-observed fact rather than a
+semantic judgment. Manual grading may add human review metadata, but it must
+preserve the recorded activation outcome, deterministic activation assertion,
+evidence references, and trigger-rate measurements.
 
 The exact record contract is
 [`grading.schema.json`](../schemas/ai-skills/grading.schema.json).
@@ -351,6 +477,7 @@ attempts/<attempt>/outputs/<changed actor files>
 attempts/<attempt>/transcript.md
 attempts/<attempt>/execution_trace.jsonl
 attempts/<attempt>/timing.json
+attempts/<attempt>/grading_basis.json      behavior runs after successful judging
 attempts/<attempt>/grading.json            only after successful grading
 attempts/<attempt>/manual_grading.json     optional, human-authored
 ```
@@ -370,17 +497,105 @@ evals/
 ```
 
 Each sub-run writes its own `benchmark.json` only when its full attempt set is
-trustworthy and complete. A failed attempt still preserves the safe evidence
-and timing that exist, but it does not invent `grading.json`. A two-of-three
-trigger disagreement remains pending review and similarly defers automatic
-benchmark generation.
+trustworthy and complete. A failed attempt preserves its safe runner-owned
+response, transcript, trace, and timing, clears ungraded actor-created files,
+and does not invent `grading.json`. A two-of-three trigger disagreement remains
+pending review and similarly defers automatic benchmark generation.
 
-`outputs/` contains the response plus safe files the actor created or changed
-in its workspace. `summary.md` is the human entry point. `invocation.json` and each
-`attempt.json` declare the exact expected run set. `timing.json` records model
-usage and duration. `grading.json` records automatic verdicts and evidence.
-`benchmark.json` aggregates trustworthy completed attempts and preserves
-with-skill/baseline comparisons or trigger rates.
+For a completed attempt, `outputs/` contains the response plus safe files the
+actor created or changed in its workspace. Every captured pathname and file
+body is scanned under one bounded sensitive-content budget before grading;
+unsafe or incompletely scanned output quarantines the attempt and removes those
+actor-created files from durable incomplete evidence. `summary.md` is the human
+entry point.
+`invocation.json` and each `attempt.json` declare the exact expected run set and
+assertion contract. A fresh random `invocation_id` is created before preflight
+and repeated in every structured attempt artifact and the final benchmark, so
+an otherwise valid artifact from an older run cannot satisfy the current
+invocation. `timing.json` records model usage and duration.
+`grading_basis.json` preserves the exact judge response, control, prompt digest,
+admitted actor evidence, and deterministic definitions, schemas, and results
+for behavior runs. `grading.json` records the derived automatic verdicts and
+evidence. `benchmark.json` aggregates trustworthy completed attempts and
+preserves with-skill/baseline comparisons or trigger rates.
+Generated JSON uses one 4 MiB writer and reader ceiling. Oversized invocation
+plans fail before runtime preflight, and each case's deterministic schemas are
+limited to 512 KiB in aggregate so an accepted case can preserve its grading
+basis. Captured-output entry limits are derived from the complete per-attempt
+artifact layout. Before accepting a completed attempt, the writer checks the
+whole invocation tree, reserves entries for the full attempt layout, and
+reserves byte capacity for `benchmark.json` and `summary.md`. This keeps every
+accepted result within the same limits later enforced by aggregation.
+
+Every generated grading record binds to the complete preserved evidence through
+`evidence_sha256`: the attempt declaration, timing, response, transcript,
+execution trace, and every actor-created output file and directory. Behavior
+evidence also binds the grading basis. The writer verifies fixed evidence before treating
+`grading.json` as a completion marker. Aggregation independently recomputes the
+digest, reparses the exact judge response against the immutable assertion
+contract, reconstructs and reruns every deterministic check against the
+snapshotted outputs, and rejects any generated grade it cannot reproduce
+exactly. If publication or durability fails, the completion marker is removed
+and actor-created outputs are quarantined before the failure returns.
+
+Each attempt manifest binds its variant- or run-specific prepared runtime inputs
+with `runtime_input_sha256` and its shared authored scenario with
+`scenario_definition_sha256`. Behavior attempts separately bind deterministic
+check and schema inputs with `deterministic_input_sha256`. These values are
+declared before preflight and rechecked after preflight before any model call.
+Preflight
+returns an internal receipt bound to the invocation command, file identity,
+content digest, fixture requirement, and exact harness adapter; execution
+cannot accept raw capabilities in its place or reuse another adapter's receipt.
+The receipt also pins actor and judge model and reasoning configurations.
+Requests pass those exact values to the pinned Codex CLI through `--model` and
+`model_reasoning_effort`. The adapter records them only from the bound request;
+it never infers execution metadata from preflight defaults. Codex JSONL does
+not report an independent backend model identity, so persisted model fields
+mean configured request values rather than backend-routing attestation.
+Aggregation rejects harness, actor-model-configuration, or generated
+judge-model-configuration drift across the complete invocation, including when
+manual grades are selected. Replacing an invocation file with byte-identical
+content still invalidates the run because its opened file identity is part of
+the declaration.
+
+Every actor and judge request also carries a fresh execution binding derived
+from `invocation_id`, logical `run_id`, role, and the SHA-256 digest of the
+canonical request. The adapter must echo that exact binding in
+`HarnessExecution`; a missing, stale, or altered binding is rejected before
+response, trace, timing, or grading evidence is trusted. Actor bindings are
+preserved in `timing.json`, and judge bindings in `grading_basis.json`.
+Offline aggregation verifies each binding's digest and requires its invocation,
+run, and role to match the immutable attempt.
+
+The adapter recomputes the canonical digest at the execution boundary, so a
+request changed after binding cannot run. Actor-visible skills, inputs, and
+fixture initialization must already be immutable prepared bytes; path-backed
+runtime material is rejected after binding.
+Judge response schemas are likewise materialized once before binding. Their
+canonical bytes are both covered by the request digest and staged for Codex, so
+mutable caller mappings cannot change the executed schema.
+
+The runner also pins the result root, attempts directory, attempt directory,
+generated artifact directories, and repository identity. Every write or
+cleanup reopens and verifies that exact chain and proves the result root has
+not been relocated into the repository. Actor output capture and restoration
+use pinned attempt and `outputs/` directory handles. If a path is substituted,
+the attempt fails without writing to or deleting from the replacement.
+
+Trigger attempts also declare `expected_activation` in the immutable invocation
+and attempt manifests. They also declare the canonical logical Codex catalog
+path for the target. Aggregation accepts a trigger grade only when that
+expectation, one derived activation event, the underlying exact `skill_read`
+event, `timing.json` skill-read fields, the exact
+`/case/codex-home/skills/<skill>/SKILL.md` logical path, the complete
+deterministic assertion, and trigger-rate measurements agree. Prefixes such as
+`/attacker-controlled/case/...` are rejected even when the remaining path
+matches. The reader operand must be the exact raw canonical path; dot segments,
+duplicate separators, and other aliases are rejected before normalization. A
+successful read must use a trusted absolute system reader and return bytes
+exactly equal to the prepared installed `SKILL.md`; command text alone is not
+activation evidence.
 
 Aggregation rejects missing, injected, changed, partial, or untrustworthy
 attempts. Exit code `0` means the effective grades pass, `1` means trustworthy

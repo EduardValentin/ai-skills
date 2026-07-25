@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-skills/grading-basis.schema.json",
+  "title": "AI Skills behavior grading derivation basis",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "invocation_id",
+    "run_id",
+    "skill_name",
+    "case_id",
+    "run_kind",
+    "judge_response",
+    "judge_control",
+    "judge_prompt_sha256",
+    "allowed_evidence_artifacts",
+    "judge_model",
+    "judge_reasoning_effort",
+    "judge_duration_ms",
+    "judge_total_tokens",
+    "judge_prompt_version",
+    "judge_execution_binding",
+    "graded_at",
+    "deterministic_checks",
+    "deterministic_schemas",
+    "deterministic_results"
+  ],
+  "properties": {
+    "schema_version": {"const": "ai-skills.eval.grading-basis.v1"},
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {"type": "string", "minLength": 1},
+    "skill_name": {"type": "string", "minLength": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "run_kind": {"type": "string", "minLength": 1},
+    "judge_response": {"type": "string", "minLength": 1},
+    "judge_control": {"type": "string", "minLength": 1},
+    "judge_prompt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "allowed_evidence_artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512}
+    },
+    "judge_model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact judge model configuration passed in the bound request."
+    },
+    "judge_reasoning_effort": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact judge reasoning configuration passed in the bound request."
+    },
+    "judge_duration_ms": {"type": "integer", "minimum": 0},
+    "judge_total_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "judge_prompt_version": {"type": "string", "minLength": 1},
+    "judge_execution_binding": {
+      "oneOf": [
+        {"$ref": "#/$defs/execution_binding"},
+        {"type": "null"}
+      ]
+    },
+    "graded_at": {"type": "string", "format": "date-time"},
+    "deterministic_checks": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "file_exists",
+              "path_absent",
+              "json_schema",
+              "exit_code",
+              "no_secret_patterns",
+              "response_protocol"
+            ]
+          },
+          "path": {"type": "string", "minLength": 1, "maxLength": 512},
+          "schema": {"type": "string", "minLength": 1, "maxLength": 512},
+          "expected": {"const": 0},
+          "format": {"enum": ["json", "jsonl"]}
+        }
+      }
+    },
+    "deterministic_schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "content"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+          },
+          "content": {"type": "string"}
+        }
+      }
+    },
+    "deterministic_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "passed",
+          "checked_by",
+          "evidence",
+          "evidence_refs"
+        ],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "kind": {"const": "check"},
+          "text": {"type": "string", "minLength": 1},
+          "passed": {"type": "boolean"},
+          "checked_by": {"const": "deterministic"},
+          "evidence": {"type": "string", "minLength": 1},
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["artifact", "locator"],
+              "properties": {
+                "artifact": {"type": "string", "minLength": 1},
+                "locator": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "execution_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation_id",
+        "run_id",
+        "role",
+        "request_sha256",
+        "binding_sha256"
+      ],
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "run_id": {"type": "string", "minLength": 1},
+        "role": {"const": "judge"},
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "binding_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

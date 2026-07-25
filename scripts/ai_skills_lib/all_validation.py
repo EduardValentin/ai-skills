@@ -11,6 +11,7 @@ from scripts.ai_skills_lib.eval_core import (
     aggregate_results,
     create_result_workspace,
     format_benchmark_summary,
+    preflight_bound_invocations,
     write_result_summary,
 )
 from scripts.ai_skills_lib.eval_definitions import (
@@ -166,9 +167,23 @@ def run_all_evaluation_harness(
             max_concurrency=max_concurrency,
         )
         phase = "preflight"
-        capabilities = session.adapter.preflight(
-            require_fixtures=behavior_plan.require_fixtures
+        preflight_receipt = preflight_bound_invocations(
+            session.adapter,
+            (
+                (
+                    trigger_workspace,
+                    "validate triggers",
+                    trigger_plan.manifests,
+                ),
+                (
+                    behavior_workspace,
+                    "validate evals",
+                    behavior_plan.manifests,
+                ),
+            ),
+            require_fixtures=behavior_plan.require_fixtures,
         )
+        capabilities = preflight_receipt.capabilities
         if not capabilities.available:
             raise BehaviorHarnessError(
                 capabilities.failure or "selected harness is unavailable"
@@ -185,7 +200,7 @@ def run_all_evaluation_harness(
             trigger_plan,
             max_concurrency=max_concurrency,
             actor_timeout_seconds=session.manifest.limits.actor_timeout_seconds,
-            preflighted_capabilities=capabilities,
+            preflight_receipt=preflight_receipt,
         )
         phase = "behavior execution"
         behavior_result = execute_prepared_behavior_plan(
@@ -195,7 +210,7 @@ def run_all_evaluation_harness(
             max_concurrency=max_concurrency,
             actor_timeout_seconds=session.manifest.limits.actor_timeout_seconds,
             judge_timeout_seconds=session.manifest.limits.judge_timeout_seconds,
-            preflighted_capabilities=capabilities,
+            preflight_receipt=preflight_receipt,
         )
     except Exception as error:
         failure = str(error) or type(error).__name__

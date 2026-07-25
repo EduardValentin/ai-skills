@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import patch
 
 import scripts.ai_skills_lib.local_installs as local_installs
+from scripts.ai_skills_lib.issues import ValidationIssue
 from scripts.ai_skills_lib.local_installs import (
     inspect_codex_local_installs,
     repository_source_identifiers,
@@ -25,6 +26,12 @@ def _skill_text(name: str, body: str = "Instructions.") -> str:
 
 
 class LocalInstallDiagnosticTests(unittest.TestCase):
+    def test_local_skill_document_limit_matches_repository_validation(self) -> None:
+        self.assertEqual(
+            local_installs._MAX_SKILL_DOCUMENT_BYTES,
+            local_installs.MAXIMUM_SKILL_DOCUMENT_BYTES,
+        )
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -104,6 +111,73 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
         self.assertEqual(report.issues, ())
         self.assertEqual(report.current, (("ticket-writing", canonical),))
 
+    def test_skill_alias_replacement_after_open_is_not_reported_current(self) -> None:
+        canonical = self.home / ".agents" / "skills" / "ticket-writing"
+        self._copy_source(canonical)
+        alias = self.codex_home / "skills" / "ticket-writing"
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to(canonical, target_is_directory=True)
+        replacement = self.root / "replacement" / "ticket-writing"
+        self._write_skill(replacement, "ticket-writing")
+        swapped = False
+
+        def replace_alias(event: str, path: Path) -> None:
+            nonlocal swapped
+            if (
+                event == "manifest-file-opened"
+                and path == canonical / "SKILL.md"
+                and not swapped
+            ):
+                alias.unlink()
+                alias.symlink_to(replacement, target_is_directory=True)
+                swapped = True
+
+        report = self._inspect(inspection_hook=replace_alias)
+
+        self.assertTrue(swapped)
+        self.assertFalse(report.current)
+        self.assertTrue(
+            any(
+                str(alias) in issue.message
+                and "changed while being inspected" in issue.message
+                for issue in report.issues
+            )
+        )
+
+    def test_root_alias_replacement_after_open_is_reported(self) -> None:
+        canonical_root = self.home / ".agents" / "skills"
+        canonical = canonical_root / "ticket-writing"
+        self._copy_source(canonical)
+        alias = self.codex_home / "skills"
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to(canonical_root, target_is_directory=True)
+        replacement_root = self.root / "replacement-skills"
+        self._write_skill(replacement_root / "ticket-writing", "ticket-writing")
+        swapped = False
+
+        def replace_alias(event: str, path: Path) -> None:
+            nonlocal swapped
+            if (
+                event == "manifest-file-opened"
+                and path == canonical / "SKILL.md"
+                and not swapped
+            ):
+                alias.unlink()
+                alias.symlink_to(replacement_root, target_is_directory=True)
+                swapped = True
+
+        report = self._inspect(inspection_hook=replace_alias)
+
+        self.assertTrue(swapped)
+        self.assertFalse(report.current)
+        self.assertTrue(
+            any(
+                issue.scope == str(alias)
+                and "changed while being inspected" in issue.message
+                for issue in report.issues
+            )
+        )
+
     def test_whole_skill_root_alias_to_unconfigured_directory_is_rejected(self) -> None:
         outside_root = self.root / "outside-skills"
         self._write_skill(outside_root / "ticket-writing", "ticket-writing")
@@ -139,6 +213,39 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
         report = self._inspect()
 
         self.assertIn("stale content", report.issues[0].message)
+
+    def test_contained_source_file_symlink_matches_installer_copy(self) -> None:
+        assets = self.source / "assets"
+        references = self.source / "references"
+        assets.mkdir()
+        references.mkdir()
+        (assets / "shared.txt").write_text("shared\n", encoding="utf-8")
+        (references / "linked.txt").symlink_to("../assets/shared.txt")
+        installed = self.codex_home / "skills" / "ticket-writing"
+        self._copy_source(installed)
+
+        report = self._inspect()
+
+        self.assertEqual(report.issues, ())
+        self.assertEqual(report.current, (("ticket-writing", installed),))
+        self.assertFalse((installed / "references" / "linked.txt").is_symlink())
+
+    def test_contained_source_directory_symlink_matches_installer_copy(self) -> None:
+        assets = self.source / "assets"
+        references = self.source / "references"
+        material = assets / "material"
+        material.mkdir(parents=True)
+        references.mkdir()
+        (material / "guide.md").write_text("guide\n", encoding="utf-8")
+        (references / "linked").symlink_to("../assets/material", target_is_directory=True)
+        installed = self.codex_home / "skills" / "ticket-writing"
+        self._copy_source(installed)
+
+        report = self._inspect()
+
+        self.assertEqual(report.issues, ())
+        self.assertEqual(report.current, (("ticket-writing", installed),))
+        self.assertFalse((installed / "references" / "linked").is_symlink())
 
     def test_distinct_active_copies_are_duplicates(self) -> None:
         self._copy_source(self.codex_home / "skills" / "ticket-writing")
@@ -419,6 +526,26 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
 
         self.assertTrue(any("invalid skill lock" in issue.message for issue in report.issues))
 
+    def test_deeply_nested_lock_is_rejected_without_recursing_in_json_decoder(self) -> None:
+        self._copy_source(self.codex_home / "skills" / "ticket-writing")
+        lock = self.home / ".agents" / ".skill-lock.json"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        nesting = 100_000
+        lock.write_text(
+            '{"version":3,"skills":{},"nested":'
+            + ("[" * nesting)
+            + "null"
+            + ("]" * nesting)
+            + "}",
+            encoding="utf-8",
+        )
+
+        report = self._inspect()
+
+        self.assertTrue(
+            any("invalid skill lock" in issue.message for issue in report.issues)
+        )
+
     def test_nested_symlink_makes_matching_copy_untrustworthy(self) -> None:
         installed = self.codex_home / "skills" / "ticket-writing"
         self._copy_source(installed)
@@ -451,7 +578,7 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
         self.assertTrue(any("unsafe installed path" in issue.message for issue in report.issues))
         self.assertFalse(report.current)
 
-    def test_candidate_path_swap_after_descriptor_open_uses_open_directory(self) -> None:
+    def test_candidate_path_swap_after_descriptor_open_is_not_reported_current(self) -> None:
         installed = self.codex_home / "skills" / "ticket-writing"
         self._copy_source(installed)
         outside = self.root / "outside" / "ticket-writing"
@@ -469,8 +596,10 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
         report = self._inspect(inspection_hook=swap_candidate)
 
         self.assertTrue(swapped)
-        self.assertEqual(report.issues, ())
-        self.assertEqual(report.current, (("ticket-writing", installed),))
+        self.assertTrue(
+            any("changed while being inspected" in issue.message for issue in report.issues)
+        )
+        self.assertFalse(report.current)
 
     def test_manifest_entry_swap_to_symlink_is_not_followed(self) -> None:
         (self.source / "payload.txt").write_text("source payload", encoding="utf-8")
@@ -519,6 +648,86 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
             any("changed while being read: payload.txt" in issue.message for issue in report.issues)
         )
         self.assertFalse(report.current)
+
+    def test_contained_source_symlink_target_restore_is_detected(self) -> None:
+        target = self.source / "assets" / "material"
+        target.mkdir(parents=True)
+        (target / "payload.txt").write_text("original", encoding="utf-8")
+        references = self.source / "references"
+        references.mkdir()
+        linked = references / "linked"
+        linked.symlink_to("../assets/material", target_is_directory=True)
+
+        installed = self.codex_home / "skills" / "ticket-writing"
+        self._copy_source(installed)
+        (installed / "references" / "linked" / "payload.txt").write_text(
+            "transient",
+            encoding="utf-8",
+        )
+
+        parked_original = self.root / "parked-original"
+        transient = self.root / "transient"
+        transient.mkdir()
+        (transient / "payload.txt").write_text("transient", encoding="utf-8")
+        parked_transient = self.root / "parked-transient"
+        swapped = False
+        restored = False
+
+        def swap_and_restore(event: str, path: Path) -> None:
+            nonlocal swapped, restored
+            if (
+                event == "manifest-entry-observed"
+                and path == linked
+                and not swapped
+            ):
+                target.rename(parked_original)
+                transient.rename(target)
+                swapped = True
+            elif (
+                event == "manifest-file-opened"
+                and path == linked / "payload.txt"
+                and swapped
+                and not restored
+            ):
+                target.rename(parked_transient)
+                parked_original.rename(target)
+                restored = True
+
+        with self.assertRaisesRegex(ValueError, "changed while being read"):
+            self._inspect(inspection_hook=swap_and_restore)
+
+        self.assertTrue(swapped)
+        self.assertTrue(restored)
+
+    def test_contained_source_symlink_redirect_after_open_is_detected(self) -> None:
+        first_target = self.source / "assets" / "first"
+        second_target = self.source / "assets" / "second"
+        first_target.mkdir(parents=True)
+        second_target.mkdir(parents=True)
+        (first_target / "payload.txt").write_text("first", encoding="utf-8")
+        (second_target / "payload.txt").write_text("second", encoding="utf-8")
+        references = self.source / "references"
+        references.mkdir()
+        linked = references / "linked"
+        linked.symlink_to("../assets/first", target_is_directory=True)
+        self._copy_source(self.codex_home / "skills" / "ticket-writing")
+        redirected = False
+
+        def redirect_symlink(event: str, path: Path) -> None:
+            nonlocal redirected
+            if (
+                event == "manifest-file-opened"
+                and path == linked / "payload.txt"
+                and not redirected
+            ):
+                linked.unlink()
+                linked.symlink_to("../assets/second", target_is_directory=True)
+                redirected = True
+
+        with self.assertRaisesRegex(ValueError, "changed while being read"):
+            self._inspect(inspection_hook=redirect_symlink)
+
+        self.assertTrue(redirected)
 
     def test_lock_path_swap_after_descriptor_open_is_detected(self) -> None:
         self._copy_source(self.codex_home / "skills" / "ticket-writing")
@@ -587,6 +796,53 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
         messages = [issue.message for issue in report.issues]
         self.assertTrue(any("invalid skill lock" in message for message in messages))
         self.assertFalse(any("extra active install" in message for message in messages))
+
+    def test_lock_parent_replacement_is_detected_even_when_restored(self) -> None:
+        self._copy_source(self.codex_home / "skills" / "ticket-writing")
+        agents_root = self.home / ".agents"
+        lock = agents_root / ".skill-lock.json"
+        self._write_lock(
+            lock,
+            {"ticket-writing": {"source": str(self.repository)}},
+        )
+        parked = self.root / "parked-agents"
+        replacement = self.root / "replacement-agents"
+        replacement.mkdir()
+        self._write_lock(
+            replacement / ".skill-lock.json",
+            {},
+        )
+        real_open_directory = local_installs._open_directory_path
+        replaced = False
+
+        def open_then_restore(path: Path) -> int:
+            nonlocal replaced
+            if path == agents_root and not replaced:
+                agents_root.rename(parked)
+                replacement.rename(agents_root)
+                descriptor = real_open_directory(path)
+                agents_root.rename(replacement)
+                parked.rename(agents_root)
+                replaced = True
+                return descriptor
+            return real_open_directory(path)
+
+        with patch.object(
+            local_installs,
+            "_open_directory_path",
+            side_effect=open_then_restore,
+        ):
+            report = self._inspect()
+
+        self.assertTrue(replaced)
+        self.assertTrue(
+            any(
+                "invalid skill lock" in issue.message
+                and "parent directory changed" in issue.message
+                for issue in report.issues
+            ),
+            report.issues,
+        )
 
     def test_skill_fifo_is_rejected_without_blocking(self) -> None:
         installed = self.codex_home / "skills" / "ticket-writing"
@@ -710,7 +966,7 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
     def test_repository_oversized_skill_file_is_rejected_before_allocation(self) -> None:
         size_limit = (self.source / "SKILL.md").stat().st_size - 1
 
-        with patch.object(local_installs, "_MAX_FRONTMATTER_BYTES", size_limit):
+        with patch.object(local_installs, "_MAX_SKILL_DOCUMENT_BYTES", size_limit):
             with self.assertRaisesRegex(
                 ValueError,
                 "SKILL.md exceeds the diagnostic size limit",
@@ -921,6 +1177,42 @@ class LocalInstallDiagnosticTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("invalid skill lock", output)
         self.assertIn("check-local-installs codex: FAILED", output)
+
+    def test_runner_redacts_secret_shaped_failures_paths_and_issues(self) -> None:
+        secret = "githubToken=actual-prod-value"
+        report = local_installs.LocalInstallReport(
+            expected_count=1,
+            current=((secret, self.home / secret),),
+            issues=(
+                ValidationIssue(
+                    scope=f"skills/{secret}",
+                    message=f"cannot inspect skills/{secret}/SKILL.md",
+                ),
+            ),
+        )
+        with patch.object(
+            local_installs,
+            "inspect_codex_local_installs",
+            return_value=report,
+        ):
+            exit_code, output = self._run_check({"HOME": str(self.home)})
+
+        self.assertEqual(exit_code, 1)
+        self.assertNotIn(secret, output)
+        self.assertNotIn("actual-prod-value", output)
+        self.assertIn("[REDACTED]", output)
+
+        with patch.object(
+            local_installs,
+            "inspect_codex_local_installs",
+            side_effect=ValueError(f"invalid skills/{secret}/SKILL.md"),
+        ):
+            exit_code, output = self._run_check({"HOME": str(self.home)})
+
+        self.assertEqual(exit_code, 2)
+        self.assertNotIn(secret, output)
+        self.assertNotIn("actual-prod-value", output)
+        self.assertIn("[REDACTED]", output)
 
     def test_runner_uses_injected_codex_home(self) -> None:
         configured_codex_home = self.root / "configured-codex"

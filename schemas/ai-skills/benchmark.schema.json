@@ -4,9 +4,19 @@
   "title": "AI Skills generic benchmark aggregation",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "generated_at", "grade_source", "source_summaries"],
+  "required": [
+    "schema_version",
+    "invocation_id",
+    "generated_at",
+    "grade_source",
+    "source_summaries"
+  ],
   "properties": {
     "schema_version": {"const": "ai-skills.eval.benchmark.v1"},
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
     "generated_at": {"type": "string", "format": "date-time"},
     "grade_source": {"enum": ["judge", "manual", "both"]},
     "source_summaries": {

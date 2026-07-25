@@ -12,18 +12,32 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from scripts.ai_skills_lib.authored_content import (
+    AuthoredContentReadError,
+    AuthoredContentTooLarge,
+    AuthoredRepositoryBudget,
+    AuthoredRepositoryBudgetExceeded,
+    BoundedJsonError,
     authored_file,
+    find_additional_decoded_json_secret_issues,
     find_static_secret_issues,
+    read_bounded_authored_bytes,
+    strict_bounded_json_loads,
 )
-from scripts.ai_skills_lib.core import SkillRecord, discover_testable_skills
+from scripts.ai_skills_lib.core import (
+    SkillRecord,
+    discover_testable_skills,
+    snapshot_canonical_skills_tree,
+)
 from scripts.ai_skills_lib.issues import ValidationIssue
 from scripts.ai_skills_lib.secret_patterns import bounded_redacted_runtime_text
+from scripts.ai_skills_lib.static_checks.context import render_safe_diagnostic_issues
 
 
 _SCHEMA_PATH = (
     Path(__file__).resolve().parents[2] / "schemas" / "ai-skills" / "triggers.schema.json"
 )
 _MAX_QUERY_BYTES = 16 * 1024
+MAX_TRIGGER_DEFINITION_BYTES = 2 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -54,22 +68,28 @@ class TriggerDefinitionError(RuntimeError):
 def validate_trigger_query_files(root: Path) -> list[ValidationIssue]:
     """Discover every skill and validate its trigger file with one contract."""
     _, issues = _inspect_trigger_query_files(root)
-    return issues
+    return render_safe_diagnostic_issues(issues)
 
 
 def load_trigger_queries(root: Path) -> tuple[SkillTriggerQueries, ...]:
     """Discover, validate, and load typed trigger definitions in one pass."""
     definitions, issues = _inspect_trigger_query_files(root)
-    if issues:
-        raise TriggerDefinitionError(issues)
+    safe_issues = render_safe_diagnostic_issues(issues)
+    if safe_issues:
+        raise TriggerDefinitionError(safe_issues)
     return definitions
 
 
 def _inspect_trigger_query_files(
     root: Path,
 ) -> tuple[tuple[SkillTriggerQueries, ...], list[ValidationIssue]]:
+    budget = AuthoredRepositoryBudget()
     try:
-        skills = discover_testable_skills(root)
+        initial_skills_tree = snapshot_canonical_skills_tree(
+            root,
+            budget=budget,
+        )
+        skills = discover_testable_skills(root, budget=budget)
     except (OSError, UnicodeDecodeError, ValueError) as error:
         diagnostic = bounded_redacted_runtime_text(str(error), 2048)
         return (), [
@@ -124,8 +144,34 @@ def _inspect_trigger_query_files(
             issues.append(ValidationIssue(scope=scope, message=message))
             continue
         try:
-            text = source.resolved_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as error:
+            raw = read_bounded_authored_bytes(
+                source,
+                maximum_bytes=MAX_TRIGGER_DEFINITION_BYTES,
+                allowed_root=skill.root,
+                containment_root=root,
+                budget=budget,
+            )
+            text = raw.decode("utf-8")
+        except AuthoredRepositoryBudgetExceeded as error:
+            issues.append(
+                ValidationIssue(
+                    scope="trigger discovery",
+                    message=bounded_redacted_runtime_text(str(error), 2048),
+                )
+            )
+            return (), issues
+        except AuthoredContentTooLarge:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        "evals/triggers.json exceeds the "
+                        "2 MiB trigger definition limit"
+                    ),
+                )
+            )
+            continue
+        except (AuthoredContentReadError, UnicodeDecodeError) as error:
             issues.append(
                 ValidationIssue(
                     scope=scope,
@@ -145,8 +191,11 @@ def _inspect_trigger_query_files(
                 )
             )
         try:
-            document = json.loads(text)
-        except json.JSONDecodeError as error:
+            document = strict_bounded_json_loads(
+                text,
+                maximum_bytes=MAX_TRIGGER_DEFINITION_BYTES,
+            )
+        except BoundedJsonError as error:
             issues.append(
                 ValidationIssue(
                     scope=scope,
@@ -154,9 +203,37 @@ def _inspect_trigger_query_files(
                 )
             )
             continue
+        try:
+            decoded_findings = find_additional_decoded_json_secret_issues(
+                document,
+                path,
+                maximum_bytes=MAX_TRIGGER_DEFINITION_BYTES,
+                raw_findings=secret_findings,
+            )
+        except BoundedJsonError as error:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        "evals/triggers.json cannot be secret-scanned after JSON "
+                        f"decoding: {error}"
+                    ),
+                )
+            )
+            continue
+        for finding in decoded_findings:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        "evals/triggers.json contains a high-confidence secret "
+                        f"after JSON decoding: {finding.pattern}; value redacted"
+                    ),
+                )
+            )
         document_issues = validate_trigger_query_document(document, skill.name, scope)
         issues.extend(document_issues)
-        if secret_findings or document_issues:
+        if secret_findings or decoded_findings or document_issues:
             continue
         definitions.append(
             SkillTriggerQueries(
@@ -171,6 +248,30 @@ def _inspect_trigger_query_files(
                 ),
             )
         )
+    try:
+        final_skills_tree = snapshot_canonical_skills_tree(
+            root,
+            budget=budget,
+        )
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        diagnostic = bounded_redacted_runtime_text(str(error), 2048)
+        issues.append(
+            ValidationIssue(
+                scope="trigger discovery",
+                message=f"cannot reverify canonical skills tree: {diagnostic}",
+            )
+        )
+        return (), issues
+    if final_skills_tree != initial_skills_tree:
+        issues.append(
+            ValidationIssue(
+                scope="trigger discovery",
+                message=(
+                    "canonical skills tree changed during definition loading"
+                ),
+            )
+        )
+        return (), issues
     return tuple(definitions), issues
 
 

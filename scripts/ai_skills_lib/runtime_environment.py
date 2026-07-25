@@ -11,6 +11,8 @@ CASE_OWNED_ENVIRONMENT_NAMES = frozenset(
         "USER",
         "LOGNAME",
         "SHELL",
+        "BASH_ENV",
+        "ENV",
         "XDG_CONFIG_HOME",
         "XDG_CACHE_HOME",
         "XDG_DATA_HOME",

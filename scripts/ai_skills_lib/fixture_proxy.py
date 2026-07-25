@@ -6,12 +6,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
+import ipaddress
 import json
 from pathlib import Path
 import re
 import threading
 import time
 from typing import Callable, Protocol
+from urllib.parse import urlsplit
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -40,7 +42,13 @@ from scripts.ai_skills_lib.sandbox_runtime import (
 CONTROL_AUDIENCE = "ai-skills-fixture-control"
 CONTROL_DIRECTORY = "fixture-control"
 CONTROL_PORT = 1080
-CONTROL_TOKEN_LIFETIME = timedelta(minutes=15)
+PASSTHROUGH_CANARY_HOST = "ai-skills-passthrough-canary.invalid"
+PASSTHROUGH_CANARY_PORT = 1081
+PASSTHROUGH_CANARY_PATH = "/ai-skills-no-passthrough-canary"
+CONTROL_TOKEN_GRACE = timedelta(minutes=1)
+# Covers the fixed runner-owned setup, quiescence, evidence, and reset commands
+# that may each consume one preflight timeout around the actor deadline.
+CONTROL_TOKEN_OPERATION_WINDOWS = 32
 MAX_FIXTURE_BYTES = 4 * 1024 * 1024
 MAX_EVIDENCE_BODY_BYTES = 64 * 1024
 MAX_EVIDENCE_EVENT_BYTES = 128 * 1024
@@ -128,11 +136,15 @@ class _WorkerFixtureState:
     jwks_path: Path
     curl_config_path: Path
     expectations_path: Path
+    tls_configuration_path: Path
     empty_request_path: Path
+    control_sentinel_path: Path
+    passthrough_canary_path: Path
     private_key: rsa.RSAPrivateKey
     key_id: str
     public_ca_pem: bytes
     public_ca_sha256: str
+    active_case_id: str | None = None
 
 
 def load_fixture_definition(
@@ -231,7 +243,7 @@ def load_fixture_definition_bytes(
 
 
 class FixtureProxy:
-    """Own one authenticated MockServer sidecar per reusable actor worker."""
+    """Own one authenticated MockServer sidecar per fixture case."""
 
     def __init__(
         self,
@@ -249,15 +261,17 @@ class FixtureProxy:
         self.sleeper = sleeper or time.sleep
         self._states: dict[str, _WorkerFixtureState] = {}
         self._ca_owners: dict[str, str] = {}
+        self._retired_ca_sha256: dict[str, str] = {}
         self._state_lock = threading.RLock()
 
     def preflight(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
-        """Prove fixture startup, private control state, and control-endpoint denial."""
+        """Run actor-visible fixture probes without retiring runner control state."""
         self._require_case(worker, case)
         try:
             state = self._ensure_worker_state(worker)
             self._write_control_config(worker, state)
             self._reset_and_verify_empty(worker, state)
+            self._verify_effective_no_passthrough(worker, state)
             timeout = self.runtime.manifest.limits.preflight_timeout_seconds
             private_state = self.runtime.execute(
                 worker,
@@ -267,6 +281,7 @@ class FixtureProxy:
             )
             if private_state.timed_out or private_state.returncode != 0:
                 raise FixtureProxyError("actor can read fixture private control state")
+            sentinel = self._install_control_preflight_sentinel(worker, state)
             unauthenticated = self.runtime.execute(
                 worker,
                 case,
@@ -277,6 +292,12 @@ class FixtureProxy:
                     "/dev/null",
                     "--write-out",
                     "%{http_code}",
+                    "--request",
+                    "PUT",
+                    "--header",
+                    "Content-Type: application/json",
+                    "--data",
+                    "{}",
                     f"http://127.0.0.1:{CONTROL_PORT}/mockserver/reset",
                 ),
                 timeout_seconds=timeout,
@@ -289,13 +310,47 @@ class FixtureProxy:
                 raise FixtureProxyError(
                     "unauthenticated actor access to fixture control endpoint was not denied"
                 )
-            self._reset_and_verify_empty(worker, state)
-        except Exception as error:
-            raise self._quarantine_failure(
+            if self._retrieve_array(worker, state, "ACTIVE_EXPECTATIONS") != sentinel:
+                raise FixtureProxyError(
+                    "unauthenticated actor reset changed fixture control state"
+                )
+            self._prove_no_passthrough(worker, case, state)
+            self._reset_and_verify_empty(
+                worker,
+                state,
+                remove_expectation_file=False,
+            )
+        except BaseException as error:
+            failure = self._quarantine_failure(
                 worker,
                 error,
                 context="fixture preflight failed",
-            ) from error
+            )
+            if failure is None:
+                raise
+            raise failure from error
+
+    def retire_preflight(self, worker: SandboxWorker) -> None:
+        """Retire fixture preflight state after its actor case is quiescent."""
+        try:
+            with self._state_lock:
+                state = self._states.get(worker.id)
+            if state is None:
+                raise FixtureProxyError("fixture preflight state is unavailable")
+            if state.active_case_id is not None:
+                raise FixtureProxyError(
+                    "fixture preflight state was reused by an evaluation case"
+                )
+            self._retire_worker_sidecar(worker, state)
+        except BaseException as error:
+            failure = self._quarantine_failure(
+                worker,
+                error,
+                context="fixture preflight retirement failed",
+            )
+            if failure is None:
+                raise
+            raise failure from error
 
     def prepare_case(
         self,
@@ -335,8 +390,27 @@ class FixtureProxy:
         self._require_case(worker, case)
         try:
             state = self._ensure_worker_state(worker)
+            if state.active_case_id is not None:
+                raise FixtureProxyError(
+                    "fixture worker already owns an active case"
+                )
             self._write_control_config(worker, state)
             self._reset_and_verify_empty(worker, state)
+            self._configure_case_tls(
+                worker,
+                state,
+                definition.expectations,
+            )
+            self._verify_case_tls_handshakes(
+                worker,
+                state,
+                definition.expectations,
+            )
+            self._reset_and_verify_empty(
+                worker,
+                state,
+                remove_expectation_file=False,
+            )
             payload = json.dumps(
                 [_literal_mockserver_expectation(item) for item in definition.expectations],
                 sort_keys=True,
@@ -356,6 +430,7 @@ class FixtureProxy:
                 "/mockserver/expectation",
                 data_path=state.expectations_path,
             )
+            state.active_case_id = case.case_id
             public_ca_path = case.bootstrap / "mockserver-ca.pem"
             public_ca_path.write_bytes(state.public_ca_pem)
             public_ca_path.chmod(0o444)
@@ -368,12 +443,15 @@ class FixtureProxy:
                 shell_environment=tuple(sorted(environment.items())),
                 expected_requests=_expected_request_sequence(definition.expectations),
             )
-        except Exception as error:
-            raise self._quarantine_failure(
+        except BaseException as error:
+            failure = self._quarantine_failure(
                 worker,
                 error,
                 context="fixture setup failed",
-            ) from error
+            )
+            if failure is None:
+                raise
+            raise failure from error
 
     def collect_and_reset(
         self,
@@ -385,13 +463,21 @@ class FixtureProxy:
         self._require_case(worker, case)
         if session.worker_id != worker.id or session.case_id != case.case_id:
             raise FixtureProxyError("fixture session does not belong to this worker case")
-        with self._state_lock:
-            state = self._states.get(worker.id)
-        if state is None or state.public_ca_sha256 != session.public_ca_sha256:
-            raise FixtureProxyError("fixture worker state is unavailable or changed")
         events: tuple[Mapping[str, object], ...] = ()
         try:
-            self._write_control_config(worker, state)
+            with self._state_lock:
+                state = self._states.get(worker.id)
+            if (
+                state is None
+                or state.public_ca_sha256 != session.public_ca_sha256
+            ):
+                raise FixtureProxyError(
+                    "fixture worker state is unavailable or changed"
+                )
+            if state.active_case_id != case.case_id:
+                raise FixtureProxyError(
+                    "fixture worker active case is unavailable or changed"
+                )
             requests = self._retrieve_array(worker, state, "REQUESTS")
             events = tuple(
                 _normalize_request(item, index)
@@ -406,19 +492,23 @@ class FixtureProxy:
                     evidence=events,
                 )
             _verify_request_sequence(session.expected_requests, requests)
-            self._reset_and_verify_empty(worker, state)
-            self._run(
+            self._reset_and_verify_empty(
                 worker,
-                ("rm", "-f", "--", str(state.expectations_path)),
+                state,
+                remove_expectation_file=False,
             )
+            self._retire_worker_sidecar(worker, state)
             return events
-        except Exception as error:
-            raise self._quarantine_failure(
+        except BaseException as error:
+            failure = self._quarantine_failure(
                 worker,
                 error,
                 context="fixture evidence collection failed",
                 evidence=events,
-            ) from error
+            )
+            if failure is None:
+                raise
+            raise failure from error
 
     def discard_worker_state(self, worker: SandboxWorker) -> None:
         """Forget host-side proxy state after the runtime recycles a worker."""
@@ -432,21 +522,39 @@ class FixtureProxy:
                 and self._ca_owners.get(state.public_ca_sha256) == worker_id
             ):
                 self._ca_owners.pop(state.public_ca_sha256, None)
+            self._retired_ca_sha256.pop(worker_id, None)
 
     def _quarantine_failure(
         self,
         worker: SandboxWorker,
-        error: Exception,
+        error: BaseException,
         *,
         context: str,
         evidence: Sequence[Mapping[str, object]] = (),
-    ) -> FixtureProxyError:
+    ) -> FixtureProxyError | None:
         self._drop_worker_state(worker.id)
         invalidation_failure = None
         try:
             self.runtime.invalidate_worker(worker)
-        except Exception as cleanup_error:
+        except BaseException as cleanup_error:
+            if not isinstance(cleanup_error, Exception):
+                try:
+                    cleanup_error.add_note(
+                        f"{context}; the worker state was dropped before cleanup was interrupted"
+                    )
+                except BaseException:
+                    pass
+                raise
             invalidation_failure = redact_runtime_secrets(str(cleanup_error))
+        if not isinstance(error, Exception):
+            if invalidation_failure:
+                try:
+                    error.add_note(
+                        f"worker invalidation failed: {invalidation_failure}"
+                    )
+                except BaseException:
+                    pass
+            return None
         message = str(error) if isinstance(error, FixtureProxyError) else f"{context}: {error}"
         if invalidation_failure:
             message = f"{message}; worker invalidation failed: {invalidation_failure}"
@@ -481,17 +589,59 @@ class FixtureProxy:
         jwks_path = control_dir / "jwks.json"
         curl_config_path = control_dir / "curl.conf"
         expectations_path = control_dir / "case-expectations.json"
+        tls_configuration_path = control_dir / "case-tls-configuration.json"
         empty_request_path = control_dir / "empty-request.json"
+        control_sentinel_path = control_dir / "control-sentinel.json"
+        passthrough_canary_path = control_dir / "passthrough-canary.json"
         jwks_path.write_text(
             json.dumps({"keys": [jwk]}, sort_keys=True, separators=(",", ":")),
             encoding="utf-8",
         )
         empty_request_path.write_text("{}", encoding="utf-8")
-        for path in (jwks_path, empty_request_path):
+        control_sentinel_path.write_text(
+            json.dumps(
+                {
+                    "id": "ai-skills-control-preflight-sentinel",
+                    "httpRequest": {
+                        "method": "GET",
+                        "path": "/ai-skills-control-preflight-sentinel",
+                    },
+                    "httpResponse": {"statusCode": 204},
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        passthrough_canary_path.write_text(
+            json.dumps(
+                {
+                    "id": "ai-skills-passthrough-canary",
+                    "httpRequest": {
+                        "method": "GET",
+                        "path": PASSTHROUGH_CANARY_PATH,
+                    },
+                    "httpResponse": {"statusCode": 204},
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        immutable_control_paths = (
+            jwks_path,
+            empty_request_path,
+            control_sentinel_path,
+            passthrough_canary_path,
+        )
+        for path in immutable_control_paths:
             path.chmod(0o600)
         self._run(worker, ("chown", "-R", "0:0", str(control_dir)))
         self._run(worker, ("chmod", "0700", str(control_dir), str(certificate_dir)))
-        self._run(worker, ("chmod", "0600", str(jwks_path), str(empty_request_path)))
+        self._run(
+            worker,
+            ("chmod", "0600", *(str(path) for path in immutable_control_paths)),
+        )
         container_name = _container_name(worker)
         self._run(worker, ("docker", "pull", self.runtime.manifest.mockserver.image_reference))
         self._run(
@@ -513,7 +663,10 @@ class FixtureProxy:
             jwks_path=jwks_path,
             curl_config_path=curl_config_path,
             expectations_path=expectations_path,
+            tls_configuration_path=tls_configuration_path,
             empty_request_path=empty_request_path,
+            control_sentinel_path=control_sentinel_path,
+            passthrough_canary_path=passthrough_canary_path,
             private_key=private_key,
             key_id=key_id,
             public_ca_pem=b"",
@@ -534,10 +687,16 @@ class FixtureProxy:
         if fingerprint == self.runtime.manifest.mockserver.bundled_default_ca_sha256:
             raise FixtureProxyError("MockServer reused its bundled default CA")
         with self._state_lock:
+            previous = self._retired_ca_sha256.get(worker.id)
+            if previous == fingerprint:
+                raise FixtureProxyError(
+                    "recreated fixture sidecar reused its retired certificate authority"
+                )
             owner = self._ca_owners.get(fingerprint)
             if owner is not None and owner != worker.id:
                 raise FixtureProxyError("two fixture workers shared the same generated CA")
             self._ca_owners[fingerprint] = worker.id
+            self._retired_ca_sha256.pop(worker.id, None)
         partial_state.public_ca_pem = public_ca_pem
         partial_state.public_ca_sha256 = fingerprint
         return partial_state
@@ -550,7 +709,7 @@ class FixtureProxy:
             result = self._curl(
                 worker,
                 state,
-                "GET",
+                "PUT",
                 "/mockserver/status",
                 accepted=accepted,
             )
@@ -564,6 +723,15 @@ class FixtureProxy:
         self, worker: SandboxWorker, state: _WorkerFixtureState
     ) -> None:
         now = self.clock().astimezone(timezone.utc)
+        token_lifetime = timedelta(
+            seconds=(
+                self.runtime.manifest.limits.actor_timeout_seconds
+                + (
+                    self.runtime.manifest.limits.preflight_timeout_seconds
+                    * CONTROL_TOKEN_OPERATION_WINDOWS
+                )
+            )
+        ) + CONTROL_TOKEN_GRACE
         token = jwt.encode(
             {
                 "iss": "ai-skills-eval",
@@ -572,7 +740,7 @@ class FixtureProxy:
                 "scope": "fixture-control",
                 "iat": int(now.timestamp()),
                 "nbf": int(now.timestamp()) - 1,
-                "exp": int((now + CONTROL_TOKEN_LIFETIME).timestamp()),
+                "exp": int((now + token_lifetime).timestamp()),
             },
             state.private_key,
             algorithm="RS256",
@@ -596,15 +764,427 @@ class FixtureProxy:
         self._run(worker, ("chown", "0:0", str(state.curl_config_path)))
         self._run(worker, ("chmod", "0600", str(state.curl_config_path)))
 
+    def _verify_effective_no_passthrough(
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+    ) -> None:
+        result = self._curl(
+            worker,
+            state,
+            "GET",
+            "/mockserver/configuration",
+        )
+        try:
+            configuration = strict_bounded_json_loads(
+                result.stdout,
+                maximum_bytes=MAX_FIXTURE_BYTES,
+            )
+        except BoundedJsonError as error:
+            raise FixtureProxyError(
+                "MockServer returned an invalid effective configuration"
+            ) from error
+        if (
+            not isinstance(configuration, Mapping)
+            or configuration.get("attemptToProxyIfNoMatchingExpectation") is not False
+            or configuration.get("preventCertificateDynamicUpdate") is not True
+        ):
+            raise FixtureProxyError(
+                "MockServer effective configuration is not fail-closed"
+            )
+
+    def _install_control_preflight_sentinel(
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+    ) -> list[Mapping[str, object]]:
+        self._curl(
+            worker,
+            state,
+            "PUT",
+            "/mockserver/expectation",
+            data_path=state.control_sentinel_path,
+        )
+        active = self._retrieve_array(worker, state, "ACTIVE_EXPECTATIONS")
+        if len(active) != 1:
+            raise FixtureProxyError(
+                "MockServer did not preserve the control preflight sentinel"
+            )
+        return active
+
+    def _prove_no_passthrough(
+        self,
+        worker: SandboxWorker,
+        case: CaseWorkspace,
+        state: _WorkerFixtureState,
+    ) -> None:
+        container_name = _canary_container_name(worker)
+        self._remove_canary_and_verify_absent(worker, container_name)
+        self._run(
+            worker,
+            _docker_canary_run_command(
+                self.runtime.manifest,
+                container_name=container_name,
+            ),
+        )
+        try:
+            self._wait_until_canary_ready(worker)
+            self._canary_curl(worker, "PUT", "/mockserver/reset")
+            self._canary_curl(
+                worker,
+                "PUT",
+                "/mockserver/expectation",
+                data_path=state.passthrough_canary_path,
+            )
+            if self._retrieve_canary_requests(worker, state):
+                raise FixtureProxyError(
+                    "passthrough canary request history was not initially empty"
+                )
+
+            timeout = self.runtime.manifest.limits.preflight_timeout_seconds
+            unmatched = self.runtime.execute(
+                worker,
+                case,
+                (
+                    "curl",
+                    "--silent",
+                    "--output",
+                    "/dev/null",
+                    "--write-out",
+                    "%{http_code}",
+                    "--noproxy",
+                    "",
+                    "--proxy",
+                    f"http://127.0.0.1:{CONTROL_PORT}",
+                    (
+                        f"http://{PASSTHROUGH_CANARY_HOST}:"
+                        f"{PASSTHROUGH_CANARY_PORT}{PASSTHROUGH_CANARY_PATH}"
+                    ),
+                ),
+                timeout_seconds=timeout,
+            )
+            canary_requests = self._retrieve_canary_requests(worker, state)
+            if (
+                unmatched.timed_out
+                or unmatched.returncode != 0
+                or unmatched.stdout.strip() != "404"
+                or canary_requests
+            ):
+                raise FixtureProxyError(
+                    "MockServer forwarded an unmatched request to the passthrough canary"
+                )
+        finally:
+            self._remove_canary_and_verify_absent(worker, container_name)
+
+    def _remove_canary_and_verify_absent(
+        self,
+        worker: SandboxWorker,
+        container_name: str,
+    ) -> None:
+        self._run(
+            worker,
+            ("docker", "rm", "--force", container_name),
+            accepted=(0, 1),
+        )
+        remaining = self._run(
+            worker,
+            (
+                "docker",
+                "ps",
+                "--all",
+                "--quiet",
+                "--filter",
+                f"name=^/{container_name}$",
+            ),
+        )
+        if remaining.stdout.strip():
+            raise FixtureProxyError(
+                "passthrough canary container remains after cleanup"
+            )
+
+    def _wait_until_canary_ready(self, worker: SandboxWorker) -> None:
+        accepted = (0, *STARTUP_RETRY_CODES)
+        for attempt in range(STARTUP_ATTEMPTS):
+            result = self._canary_curl(
+                worker,
+                "PUT",
+                "/mockserver/status",
+                accepted=accepted,
+            )
+            if result.returncode == 0:
+                return
+            if attempt + 1 < STARTUP_ATTEMPTS:
+                self.sleeper(STARTUP_INTERVAL_SECONDS)
+        raise FixtureProxyError(
+            "passthrough canary did not become ready before the startup deadline"
+        )
+
+    def _retrieve_canary_requests(
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+    ) -> list[Mapping[str, object]]:
+        result = self._canary_curl(
+            worker,
+            "PUT",
+            "/mockserver/retrieve?type=REQUESTS",
+            data_path=state.empty_request_path,
+        )
+        try:
+            payload = strict_bounded_json_loads(
+                result.stdout,
+                maximum_bytes=MAX_FIXTURE_BYTES,
+            )
+        except BoundedJsonError as error:
+            raise FixtureProxyError(
+                "passthrough canary retrieval returned invalid JSON"
+            ) from error
+        if not isinstance(payload, list) or not all(
+            isinstance(item, Mapping) for item in payload
+        ):
+            raise FixtureProxyError(
+                "passthrough canary retrieval returned an invalid result shape"
+            )
+        return list(payload)
+
+    def _canary_curl(
+        self,
+        worker: SandboxWorker,
+        method: str,
+        endpoint: str,
+        *,
+        data_path: Path | None = None,
+        accepted: tuple[int, ...] = (0,),
+    ) -> CommandResult:
+        command = [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--fail-with-body",
+            "--request",
+            method,
+            "--url",
+            f"http://127.0.0.1:{PASSTHROUGH_CANARY_PORT}{endpoint}",
+        ]
+        if data_path is not None:
+            command.extend(
+                (
+                    "--header",
+                    "Content-Type: application/json",
+                    "--data-binary",
+                    f"@{data_path}",
+                )
+            )
+        return self._run(worker, tuple(command), accepted=accepted)
+
     def _reset_and_verify_empty(
-        self, worker: SandboxWorker, state: _WorkerFixtureState
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+        *,
+        remove_expectation_file: bool = True,
     ) -> None:
         self._curl(worker, state, "PUT", "/mockserver/reset")
         if self._retrieve_array(worker, state, "REQUESTS"):
             raise FixtureProxyError("MockServer request history did not reset")
         if self._retrieve_array(worker, state, "ACTIVE_EXPECTATIONS"):
             raise FixtureProxyError("MockServer expectations did not reset")
-        self._run(worker, ("rm", "-f", "--", str(state.expectations_path)))
+        if remove_expectation_file:
+            self._run(worker, ("rm", "-f", "--", str(state.expectations_path)))
+
+    def _configure_case_tls(
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+        expectations: Sequence[Mapping[str, object]],
+    ) -> None:
+        domains, addresses = _fixture_tls_subject_names(expectations)
+        self._apply_tls_configuration(
+            worker,
+            state,
+            domains=domains,
+            addresses=addresses,
+            failure_label="exact case TLS subject names",
+        )
+
+    def _verify_case_tls_handshakes(
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+        expectations: Sequence[Mapping[str, object]],
+    ) -> None:
+        domains, addresses = _fixture_tls_subject_names(expectations)
+        subjects = (
+            *((domain, False) for domain in domains),
+            *((address, True) for address in addresses),
+        )
+        if not subjects:
+            raise FixtureProxyError(
+                "fixture TLS verification requires a declared host subject"
+            )
+        timeout = self.runtime.manifest.limits.preflight_timeout_seconds
+        ca_path = state.certificate_dir / "mockserver-ca.pem"
+        for subject, is_address in subjects:
+            authority = f"[{subject}]" if is_address and ":" in subject else subject
+            result = self._run(
+                worker,
+                (
+                    "curl",
+                    "--silent",
+                    "--show-error",
+                    "--output",
+                    "/dev/null",
+                    "--write-out",
+                    "%{ssl_verify_result}",
+                    "--request",
+                    "GET",
+                    "--noproxy",
+                    "",
+                    "--proxy",
+                    f"http://127.0.0.1:{CONTROL_PORT}",
+                    "--cacert",
+                    str(ca_path),
+                    "--connect-timeout",
+                    str(timeout),
+                    "--max-time",
+                    str(timeout),
+                    "--url",
+                    (
+                        f"https://{authority}/"
+                        ".well-known/ai-skills-fixture-tls-probe"
+                    ),
+                ),
+            )
+            if result.stdout.strip() != "0":
+                raise FixtureProxyError(
+                    "MockServer TLS handshake did not verify the exact case subject names"
+                )
+
+    def _apply_tls_configuration(
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+        *,
+        domains: Sequence[str],
+        addresses: Sequence[str],
+        failure_label: str,
+    ) -> None:
+        configuration = {
+            "preventCertificateDynamicUpdate": True,
+            "sslCertificateDomainName": domains[0] if domains else "localhost",
+            "sslSubjectAlternativeNameDomains": list(domains),
+            "sslSubjectAlternativeNameIps": list(addresses),
+        }
+        configuration_path = state.tls_configuration_path
+        configuration_path.write_text(
+            json.dumps(
+                configuration,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        configuration_path.chmod(0o600)
+        self._run(
+            worker,
+            ("chown", "0:0", str(configuration_path)),
+        )
+        self._run(
+            worker,
+            ("chmod", "0600", str(configuration_path)),
+        )
+        self._curl(
+            worker,
+            state,
+            "PUT",
+            "/mockserver/configuration",
+            data_path=configuration_path,
+        )
+        result = self._curl(
+            worker,
+            state,
+            "GET",
+            "/mockserver/configuration",
+        )
+        try:
+            effective = strict_bounded_json_loads(
+                result.stdout,
+                maximum_bytes=MAX_FIXTURE_BYTES,
+            )
+        except BoundedJsonError as error:
+            raise FixtureProxyError(
+                "MockServer returned invalid TLS configuration"
+            ) from error
+        effective_domains = (
+            effective.get("sslSubjectAlternativeNameDomains")
+            if isinstance(effective, Mapping)
+            else None
+        )
+        effective_addresses = (
+            effective.get("sslSubjectAlternativeNameIps")
+            if isinstance(effective, Mapping)
+            else None
+        )
+        if (
+            not isinstance(effective, Mapping)
+            or effective.get("preventCertificateDynamicUpdate") is not True
+            or effective.get("sslCertificateDomainName")
+            != (domains[0] if domains else "localhost")
+            or not isinstance(effective_domains, list)
+            or any(not isinstance(value, str) for value in effective_domains)
+            or set(effective_domains) != set(domains)
+            or not isinstance(effective_addresses, list)
+            or any(not isinstance(value, str) for value in effective_addresses)
+            or set(effective_addresses) != set(addresses)
+        ):
+            raise FixtureProxyError(
+                f"MockServer did not apply {failure_label}"
+            )
+
+    def _retire_worker_sidecar(
+        self,
+        worker: SandboxWorker,
+        state: _WorkerFixtureState,
+    ) -> None:
+        container_name = _container_name(worker)
+        self._run(
+            worker,
+            ("docker", "rm", "--force", container_name),
+            accepted=(0, 1),
+        )
+        remaining = self._run(
+            worker,
+            (
+                "docker",
+                "ps",
+                "--all",
+                "--quiet",
+                "--filter",
+                f"name=^/{container_name}$",
+            ),
+        )
+        if remaining.stdout.strip():
+            raise FixtureProxyError(
+                "fixture sidecar container remains after case cleanup"
+            )
+        self._run(
+            worker,
+            ("rm", "-rf", "--", str(state.control_dir)),
+        )
+        self._run(
+            worker,
+            ("test", "!", "-e", str(state.control_dir)),
+        )
+        with self._state_lock:
+            current = self._states.get(worker.id)
+            if current is not state:
+                raise FixtureProxyError(
+                    "fixture worker state changed during sidecar retirement"
+                )
+            self._states.pop(worker.id)
+            if self._ca_owners.get(state.public_ca_sha256) == worker.id:
+                self._ca_owners.pop(state.public_ca_sha256, None)
+            self._retired_ca_sha256[worker.id] = state.public_ca_sha256
 
     def _retrieve_array(
         self, worker: SandboxWorker, state: _WorkerFixtureState, kind: str
@@ -981,6 +1561,9 @@ def _docker_run_command(
         "MOCKSERVER_LOCAL_BOUND_IP=127.0.0.1",
         "MOCKSERVER_DYNAMICALLY_CREATE_CERTIFICATE_AUTHORITY_CERTIFICATE=true",
         "MOCKSERVER_CERTIFICATE_DIRECTORY_TO_SAVE_DYNAMIC_SSL_CERTIFICATE=/certs",
+        "MOCKSERVER_PREVENT_CERTIFICATE_DYNAMIC_UPDATE=true",
+        "MOCKSERVER_SSL_SUBJECT_ALTERNATIVE_NAME_DOMAINS=localhost",
+        "MOCKSERVER_SSL_SUBJECT_ALTERNATIVE_NAME_IPS=127.0.0.1",
         "MOCKSERVER_ATTEMPT_TO_PROXY_IF_NO_MATCHING_EXPECTATION=false",
         "MOCKSERVER_MATCH_EXACT_CASE=true",
         "MOCKSERVER_CONTROL_PLANE_JWT_AUTHENTICATION_REQUIRED=true",
@@ -999,8 +1582,12 @@ def _docker_run_command(
         "--rm",
         "--name",
         container_name,
+        "--log-driver",
+        "none",
         "--network",
         "host",
+        "--add-host",
+        f"{PASSTHROUGH_CANARY_HOST}:127.0.0.1",
         "--read-only",
         "--cap-drop",
         "ALL",
@@ -1021,6 +1608,99 @@ def _docker_run_command(
         command.extend(("--env", item))
     command.append(manifest.mockserver.image_reference)
     return tuple(command)
+
+
+def _docker_canary_run_command(
+    manifest: EvalRuntimeManifest,
+    *,
+    container_name: str,
+) -> tuple[str, ...]:
+    environment = (
+        f"MOCKSERVER_SERVER_PORT={PASSTHROUGH_CANARY_PORT}",
+        "MOCKSERVER_LOCAL_BOUND_IP=127.0.0.1",
+        "MOCKSERVER_ATTEMPT_TO_PROXY_IF_NO_MATCHING_EXPECTATION=false",
+        "MOCKSERVER_MCP_ENABLED=false",
+        "MOCKSERVER_METRICS_ENABLED=false",
+        "MOCKSERVER_ENABLE_CORS_FOR_API=false",
+        "MOCKSERVER_ENABLE_CORS_FOR_ALL_RESPONSES=false",
+    )
+    command = [
+        "docker",
+        "run",
+        "--detach",
+        "--rm",
+        "--name",
+        container_name,
+        "--log-driver",
+        "none",
+        "--network",
+        "host",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--pids-limit",
+        "256",
+        "--memory",
+        "512m",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=32m",
+    ]
+    for item in environment:
+        command.extend(("--env", item))
+    command.append(manifest.mockserver.image_reference)
+    return tuple(command)
+
+
+def _fixture_tls_subject_names(
+    expectations: Sequence[Mapping[str, object]],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    domains: set[str] = set()
+    addresses: set[str] = set()
+    for expectation in expectations:
+        request = expectation.get("httpRequest")
+        if not isinstance(request, Mapping):
+            continue
+        headers = request.get("headers")
+        if not isinstance(headers, Mapping):
+            continue
+        host_values = next(
+            (
+                _string_tuple(values)
+                for name, values in headers.items()
+                if isinstance(name, str) and name.casefold() == "host"
+            ),
+            None,
+        )
+        if host_values is None or len(host_values) != 1:
+            continue
+        try:
+            hostname = urlsplit(f"//{host_values[0]}").hostname
+        except ValueError:
+            continue
+        if hostname is None:
+            continue
+        normalized = hostname.rstrip(".").lower()
+        try:
+            address = ipaddress.ip_address(normalized)
+        except ValueError:
+            if (
+                len(normalized) <= 253
+                and all(
+                    label
+                    and len(label) <= 63
+                    and re.fullmatch(
+                        r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?",
+                        label,
+                    )
+                    for label in normalized.split(".")
+                )
+            ):
+                domains.add(normalized)
+        else:
+            addresses.add(str(address))
+    return tuple(sorted(domains)), tuple(sorted(addresses))
 
 
 def _fixture_environment(public_ca_path: Path) -> dict[str, str]:
@@ -1143,3 +1823,8 @@ def _bounded_text(value: str) -> str:
 def _container_name(worker: SandboxWorker) -> str:
     suffix = hashlib.sha256(worker.id.encode("utf-8")).hexdigest()[:12]
     return f"ai-skills-mockserver-{suffix}"
+
+
+def _canary_container_name(worker: SandboxWorker) -> str:
+    suffix = hashlib.sha256(worker.id.encode("utf-8")).hexdigest()[:12]
+    return f"ai-skills-mockserver-canary-{suffix}"

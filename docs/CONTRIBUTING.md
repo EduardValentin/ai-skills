@@ -49,26 +49,80 @@ Follow [Creating skills](CREATING-SKILLS.md). In particular:
 The routine pull-request gate is:
 
 ```bash
-python3 scripts/ai_skills.py validate ci-all
+scripts/ai-skills validate ci-all
 ```
 
 It runs:
 
 - repository and skill topology checks;
-- strict frontmatter and local policy checks;
-- pinned `skills-ref` conformance;
-- eval, trigger, fixture, reference, and secret validation;
+- bounded, stable `SKILL.md` discovery plus strict frontmatter and local policy
+  checks under one shared repository entry-and-byte budget;
+- pinned `skills-ref` conformance with Git provenance and source digest
+  verification before the reviewed source is loaded;
+- eval, trigger, fixture, reference, asset, and secret validation;
 - generic unit tests under `tests/ai_skills/`;
 - deterministic bundled-script suites under `tests/runtime/`.
+
+Topology and authored-file checks consume descriptor-backed snapshots for each
+validated tree. Cached `SKILL.md` bytes and file identity are reverified after
+static checks and again after official conformance. Eval JSON is accepted only
+when the complete definition tree remains unchanged across all bounded reads.
+The isolated CLI binds its own `scripts/` package directly without exposing the
+repository root to dependency imports. Generic unit discovery uses the same
+explicit `test*.py` pattern for package-marker preflight and pinned pytest
+execution. The validated files are passed to pytest explicitly, including
+files in otherwise skipped directory names, so both `unittest.TestCase` and
+module-level pytest tests run.
+Strict JSON rejects duplicate object keys and scans decoded strings so escapes
+cannot hide credential patterns. Installable runtime files receive
+high-confidence secret scanning and runner-only `evals/` reference checks,
+including non-Markdown, binary, and non-UTF-8 files. Python multiline
+assignment recovery is invoked only for relevant credential assignments and
+must pass byte and token limits before AST parsing. Binary encoding views are
+decoded and scanned one at a time under one shared finding and decoder budget.
+Authored path components receive the same high-confidence credential checks;
+diagnostics identify the pattern while keeping the component value redacted.
+The curated assignment family includes common snake_case, environment-style,
+camelCase, kebab-case, service-prefixed, and quoted inline-object credential
+keys while retaining the documented fake-value exemptions. Local-install and
+deterministic-test diagnostics apply the same redaction policy to failures,
+paths, names, labels, and grouped issues.
 
 It does not start Docker Sandboxes, call a model, inspect local skill installs,
 or use personal credentials.
 
+Unit and bundled-script tests run from descriptor-copied temporary repository
+snapshots. Every runtime suite receives a fresh snapshot, while all suites
+still share one aggregate deadline. Runtime suites likewise execute their exact
+validated `test*.py` file lists. Supported contained symlinks inside
+installable skills are materialized as ordinary snapshot entries; directory
+symlink cycles, test suites, executable inputs, escapes, and special files
+remain rejected. Public-installer discovery exclusions are rejected at group
+and skill boundaries, and installer-omitted entry names are rejected
+recursively. Entry, byte, and depth limits apply, and nested unit-test
+directories require package markers so discovery cannot silently skip them. An
+empty unit suite or empty declared runtime suite fails instead of passing
+vacuously. Generated Python and pytest caches remain ignored unless they
+contain a `test*.py` module, which fails discovery instead of silently hiding
+the test.
+
+Test subprocesses receive an allowlisted environment with isolated home and
+temporary directories. Stdout and stderr are captured as raw bytes with a
+4 MiB limit per stream, scanned for high-confidence secrets, and emitted only
+when safe. Each subprocess has its own process group so inherited descendants
+are cleaned before validation continues. Exceeding the limit or producing
+unsafe output fails the gate without printing the quarantined content.
+These suites are reviewed repository code executed on the host. The snapshots,
+environment filtering, limits, and process groups provide deterministic test
+hygiene; they are not an adversarial sandbox and do not claim to contain code
+that deliberately creates a new process session. Model-driven and other
+untrusted execution belongs in Docker Sandboxes.
+
 Use narrower commands while iterating:
 
 ```bash
-python3 scripts/ai_skills.py validate static
-python3 scripts/ai_skills.py validate runtime
+scripts/ai-skills validate static
+scripts/ai-skills validate runtime
 ```
 
 ## Model-Backed Checks
@@ -81,10 +135,10 @@ When approved, prefer a filtered first run and inspect the printed attempt
 count and result path before execution:
 
 ```bash
-python3 scripts/ai_skills.py validate triggers \
+scripts/ai-skills validate triggers \
   --harness codex --skill <skill-name> --runs 1
 
-python3 scripts/ai_skills.py validate evals \
+scripts/ai-skills validate evals \
   --harness codex --skill <skill-name> --case <case-id>
 ```
 
@@ -102,7 +156,7 @@ After the user explicitly approves pull-request creation, run the read-only
 Codex install diagnostic:
 
 ```bash
-python3 scripts/ai_skills.py check-local-installs --harness codex
+scripts/ai-skills check-local-installs --harness codex
 ```
 
 Report missing, duplicate, or stale repository skills. Do not sync or repair

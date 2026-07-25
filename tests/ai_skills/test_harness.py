@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
+import json
 from pathlib import Path, PurePosixPath
 import tempfile
 import unittest
@@ -11,6 +12,10 @@ from scripts.ai_skills_lib.harness import (
     HarnessCapabilities,
     HarnessExecution,
     HarnessRequest,
+    PreparedResponseSchema,
+    bind_harness_request,
+    harness_request_matches_execution_binding,
+    validated_actor_skill_read_lifecycle,
 )
 
 
@@ -53,6 +58,144 @@ class RecordingHarness:
 
 
 class HarnessContractTests(unittest.TestCase):
+    def test_skill_read_requires_one_complete_bound_command_lifecycle(self):
+        skill_path = "/case/codex-home/skills/example/SKILL.md"
+        lifecycle = (
+            {"event": "harness_thread_started"},
+            {"event": "harness_turn_started"},
+            {
+                "event": "command_started",
+                "command_id": "read-1",
+                "command": "cat",
+            },
+            {
+                "event": "command_completed",
+                "command_id": "read-1",
+                "command": "cat",
+                "exit_code": 0,
+                "status": "completed",
+            },
+            {
+                "event": "skill_read",
+                "command_id": "read-1",
+                "path": skill_path,
+            },
+            {"event": "harness_turn_completed"},
+        )
+
+        self.assertEqual(
+            validated_actor_skill_read_lifecycle(lifecycle),
+            (skill_path,),
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "not bound to a successful trusted command",
+        ):
+            validated_actor_skill_read_lifecycle(
+                (
+                    {"event": "harness_thread_started"},
+                    {"event": "harness_turn_started"},
+                    {
+                        "event": "skill_read",
+                        "command_id": "read-1",
+                        "path": skill_path,
+                    },
+                    {"event": "harness_turn_completed"},
+                )
+            )
+        with self.assertRaisesRegex(
+            ValueError,
+            "tool completion is malformed or unmatched",
+        ):
+            validated_actor_skill_read_lifecycle(
+                (
+                    {"event": "harness_thread_started"},
+                    {"event": "harness_turn_started"},
+                    {
+                        "event": "tool_completed",
+                        "tool_id": "tool-1",
+                        "tool_type": "mcp_tool_call",
+                    },
+                    *lifecycle[2:],
+                )
+            )
+
+    def test_execution_binding_rejects_request_mutation_after_binding(self):
+        request = HarnessRequest(
+            role="actor",
+            run_variant="candidate",
+            prompt="Perform the case.",
+            timeout_seconds=60,
+        )
+        bound = bind_harness_request(
+            request,
+            invocation_id="a" * 32,
+            run_id="candidate",
+        )
+
+        self.assertTrue(harness_request_matches_execution_binding(bound))
+        self.assertFalse(
+            harness_request_matches_execution_binding(
+                replace(bound, prompt="Perform a different case.")
+            )
+        )
+
+    def test_execution_binding_uses_an_immutable_response_schema_snapshot(self):
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+        }
+        bound = bind_harness_request(
+            HarnessRequest(
+                role="judge",
+                run_variant="semantic-grade",
+                prompt="Grade the evidence.",
+                timeout_seconds=30,
+                response_schema=schema,
+            ),
+            invocation_id="b" * 32,
+            run_id="semantic-grade",
+        )
+        schema["required"] = ["verdict"]
+
+        self.assertTrue(harness_request_matches_execution_binding(bound))
+        self.assertIsInstance(bound.response_schema, PreparedResponseSchema)
+        document = json.loads(bound.response_schema.content)
+        self.assertNotIn("required", document)
+
+    def test_response_schema_mapping_is_read_once_before_binding(self):
+        class AlternatingSchema(dict):
+            def __init__(self):
+                super().__init__(
+                    type="object",
+                    additionalProperties=False,
+                )
+                self.item_calls = 0
+
+            def items(self):
+                self.item_calls += 1
+                return {
+                    "type": "object",
+                    "additionalProperties": self.item_calls % 2 == 0,
+                }.items()
+
+        schema = AlternatingSchema()
+        bound = bind_harness_request(
+            HarnessRequest(
+                role="judge",
+                run_variant="semantic-grade",
+                prompt="Grade the evidence.",
+                timeout_seconds=30,
+                response_schema=schema,
+            ),
+            invocation_id="c" * 32,
+            run_id="semantic-grade",
+        )
+
+        self.assertEqual(schema.item_calls, 1)
+        self.assertTrue(harness_request_matches_execution_binding(bound))
+        self.assertFalse(json.loads(bound.response_schema.content)["additionalProperties"])
+
     def test_contract_records_are_frozen_and_keep_configured_model_defaults_unset(self):
         request = HarnessRequest(
             role="actor",

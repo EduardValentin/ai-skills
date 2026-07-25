@@ -2,19 +2,29 @@ from __future__ import annotations
 
 from contextlib import redirect_stdout
 from dataclasses import fields
+import hashlib
 from io import StringIO
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import scripts.ai_skills as cli
+import scripts.ai_skills_lib.authored_content as authored_content
+import scripts.ai_skills_lib.core as core
+import scripts.ai_skills_lib.eval_definitions as eval_definitions
+import scripts.ai_skills_lib.static_checks.conformance as conformance
+import scripts.ai_skills_lib.static_checks.evals as static_eval_checks
 import scripts.ai_skills_lib.static_validation as static_validation
 from scripts.ai_skills_lib.config import build_parser
 from scripts.ai_skills_lib.core import discover_testable_skills
 from scripts.ai_skills_lib.authored_content import (
+    AuthoredRepositoryBudget,
     SENSITIVE_TEXT_REDACTION,
     scan_static_secret_issues,
 )
@@ -154,6 +164,12 @@ class TemporaryRepositoryTestCase(unittest.TestCase):
 
 
 class RepositoryShapeValidationTests(TemporaryRepositoryTestCase):
+    def test_rejects_missing_or_empty_canonical_skills_directory(self):
+        self.assert_issue("missing canonical skills/ directory")
+
+        (self.repository.root / "skills").mkdir()
+        self.assert_issue("contains no discoverable skills")
+
     def test_accepts_canonical_uppercase_skill_filename(self):
         self.repository.add_skill("alpha")
 
@@ -184,6 +200,49 @@ class RepositoryShapeValidationTests(TemporaryRepositoryTestCase):
                 )
 
 
+class RepositoryResourceBudgetTests(TemporaryRepositoryTestCase):
+    def test_repository_entry_budget_fails_closed(self):
+        self.repository.add_skill("alpha")
+        budget = AuthoredRepositoryBudget(
+            maximum_entries=5,
+            maximum_bytes=1024 * 1024,
+        )
+
+        with patch.object(
+            static_validation,
+            "AuthoredRepositoryBudget",
+            return_value=budget,
+        ):
+            messages = self.messages()
+
+        self.assertTrue(
+            any("authored entry inspection limit" in message for message in messages),
+            messages,
+        )
+
+    def test_repository_aggregate_byte_budget_fails_closed(self):
+        self.repository.add_skill("alpha")
+        budget = AuthoredRepositoryBudget(
+            maximum_entries=10_000,
+            maximum_bytes=1,
+        )
+
+        with patch.object(
+            static_validation,
+            "AuthoredRepositoryBudget",
+            return_value=budget,
+        ):
+            messages = self.messages()
+
+        self.assertTrue(
+            any(
+                "aggregate authored byte inspection limit" in message
+                for message in messages
+            ),
+            messages,
+        )
+
+
 class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
     def test_discovers_only_two_level_public_skills(self):
         skill_root = self.repository.add_skill("alpha", group="procedural")
@@ -192,6 +251,162 @@ class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
 
         self.assertEqual([skill.name for skill in skills], ["alpha"])
         self.assertEqual(skills[0].root, skill_root)
+        self.assertIn("name: \"alpha\"", skills[0].source_text)
+
+    def test_rejects_public_installer_discovery_exclusions_at_both_levels(self):
+        for excluded in sorted(
+            core.PUBLIC_INSTALLER_DISCOVERY_EXCLUDED_DIRECTORIES
+        ):
+            for boundary in ("group", "skill"):
+                with self.subTest(excluded=excluded, boundary=boundary):
+                    repository = TemporaryRepository()
+                    self.addCleanup(repository.cleanup)
+                    if boundary == "group":
+                        repository.add_skill("alpha", group=excluded)
+                    else:
+                        repository.add_skill(excluded)
+                    expected = (
+                        "public installer discovery excludes directory "
+                        f"skills/{excluded}"
+                        if boundary == "group"
+                        else (
+                            "public installer discovery excludes directory "
+                            f"skills/workflows/{excluded}"
+                        )
+                    )
+
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "public installer discovery excludes directory",
+                    ):
+                        discover_testable_skills(repository.root)
+
+                    messages = [
+                        issue.message
+                        for issue in run_static_validation(repository.root)
+                    ]
+                    self.assertTrue(
+                        any(expected in message for message in messages),
+                        messages,
+                    )
+
+    def test_discovery_rejects_skill_documents_over_the_stable_snapshot_limit(self):
+        skill_root = self.repository.add_skill(
+            "alpha",
+            body="A" * 256,
+        )
+        skill_path = skill_root / "SKILL.md"
+
+        with patch(
+            "scripts.ai_skills_lib.core.MAXIMUM_SKILL_DOCUMENT_BYTES",
+            128,
+        ):
+            with self.assertRaisesRegex(ValueError, "SKILL.md exceeds"):
+                discover_testable_skills(self.repository.root)
+            messages = [
+                issue.message for issue in run_static_validation(self.repository.root)
+            ]
+
+        self.assertTrue(any("SKILL.md exceeds" in message for message in messages))
+
+    def test_static_context_rejects_skill_source_replacement_after_discovery(self):
+        skill_root = self.repository.add_skill("alpha")
+        context = static_validation.build_validation_context(
+            self.repository.root,
+            budget=AuthoredRepositoryBudget(),
+        )
+        skill_path = skill_root / "SKILL.md"
+        replacement = skill_root / "SKILL.replacement"
+        replacement.write_text(
+            skill_path.read_text(encoding="utf-8")
+            + "\n"
+            + ("ghp_" + ("a" * 36))
+            + "\n",
+            encoding="utf-8",
+        )
+        replacement.replace(skill_path)
+
+        issues = static_validation._run_static_context(context, [])
+
+        self.assertTrue(
+            any("SKILL.md changed after discovery" in issue.message for issue in issues),
+            issues,
+        )
+
+    def test_static_context_rejects_identical_skill_source_replacement(self):
+        skill_root = self.repository.add_skill("alpha")
+        context = static_validation.build_validation_context(
+            self.repository.root,
+            budget=AuthoredRepositoryBudget(),
+        )
+        skill_path = skill_root / "SKILL.md"
+        replacement = skill_root / "SKILL.replacement"
+        replacement.write_bytes(skill_path.read_bytes())
+        replacement.replace(skill_path)
+
+        issues = static_validation._run_static_context(context, [])
+
+        self.assertTrue(
+            any("SKILL.md changed after discovery" in issue.message for issue in issues),
+            issues,
+        )
+
+    def test_static_context_rejects_any_canonical_skills_tree_change(self):
+        change_kinds = (
+            "addition",
+            "removal",
+            "replacement",
+            "metadata",
+            "symlink",
+            "content",
+        )
+
+        for change_kind in change_kinds:
+            with self.subTest(change_kind=change_kind):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                assets_root = skill_root / "assets"
+                assets_root.mkdir()
+                target = assets_root / "payload.txt"
+                target.write_text("before", encoding="utf-8")
+                alternate = assets_root / "alternate.txt"
+                alias = assets_root / "alias.txt"
+                if change_kind == "symlink":
+                    alternate.write_text("second", encoding="utf-8")
+                    alias.symlink_to(target.name)
+
+                context = static_validation.build_validation_context(
+                    repository.root,
+                    budget=AuthoredRepositoryBudget(),
+                )
+
+                if change_kind == "addition":
+                    (assets_root / "added.txt").write_text("added", encoding="utf-8")
+                elif change_kind == "removal":
+                    target.unlink()
+                elif change_kind == "replacement":
+                    replacement = assets_root / "replacement.txt"
+                    replacement.write_bytes(target.read_bytes())
+                    replacement.replace(target)
+                elif change_kind == "metadata":
+                    target.chmod(0o600)
+                elif change_kind == "symlink":
+                    alias.unlink()
+                    alias.symlink_to(alternate.name)
+                else:
+                    target.write_text("after!", encoding="utf-8")
+
+                issues = static_validation._run_static_context(context, [])
+
+                self.assertTrue(
+                    any(
+                        "canonical skills tree changed after discovery"
+                        in issue.message
+                        for issue in issues
+                    ),
+                    issues,
+                )
 
     def test_discovery_requires_an_exact_regular_non_symlink_skill_document(self):
         malformed_entries = (
@@ -261,6 +476,29 @@ class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_issue(
             "outside the canonical skills/<group>/<skill>/SKILL.md source tree"
+        )
+
+    def test_static_context_rechecks_restored_out_of_tree_skill_documents(self):
+        self.repository.add_skill("alpha")
+        alternate = self.repository.root / "alternate" / "alpha" / "SKILL.md"
+        alternate.parent.mkdir(parents=True)
+        hidden = alternate.with_name("hidden.md")
+        hidden.write_text("duplicate source\n", encoding="utf-8")
+        context = static_validation.build_validation_context(
+            self.repository.root,
+            budget=AuthoredRepositoryBudget(),
+        )
+        hidden.rename(alternate)
+
+        issues = static_validation._run_static_context(context, [])
+
+        self.assertTrue(
+            any(
+                "outside the canonical skills/<group>/<skill>/SKILL.md source tree"
+                in issue.message
+                for issue in issues
+            ),
+            issues,
         )
 
     def test_rejects_non_directory_entries_at_every_skill_layout_boundary(self):
@@ -334,6 +572,83 @@ class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
                         any(expected in message for message in messages), messages
                     )
 
+    def test_discovery_rejects_directory_replacement_during_enumeration(self):
+        self.repository.add_skill("alpha")
+        group = self.repository.root / "skills" / "workflows"
+        moved = self.repository.root / "moved-workflows"
+        outside = self.repository.root / "outside-workflows"
+        outside.mkdir()
+        original_scandir = core.os.scandir
+        calls = 0
+
+        def replacing_scandir(directory):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                group.rename(moved)
+                group.symlink_to(outside, target_is_directory=True)
+            return original_scandir(directory)
+
+        with patch.object(core.os, "scandir", side_effect=replacing_scandir):
+            with self.assertRaisesRegex(
+                ValueError,
+                "changed during enumeration",
+            ):
+                discover_testable_skills(self.repository.root)
+
+    def test_authored_walk_does_not_omit_a_restored_directory(self):
+        skill = self.repository.add_skill("alpha")
+        references = skill / "references"
+        references.mkdir()
+        expected = references / "guide.md"
+        expected.write_text("required reference\n", encoding="utf-8")
+        moved = skill / "moved-references"
+        original_scandir = authored_content.os.scandir
+        references_identity = (
+            references.stat().st_dev,
+            references.stat().st_ino,
+        )
+        replaced = False
+
+        def replacing_scandir(directory):
+            nonlocal replaced
+            if (
+                not replaced
+                and isinstance(directory, int)
+                and (
+                    authored_content.os.fstat(directory).st_dev,
+                    authored_content.os.fstat(directory).st_ino,
+                )
+                == references_identity
+            ):
+                references.rename(moved)
+                references.mkdir()
+                references.rmdir()
+                moved.rename(references)
+                replaced = True
+            return original_scandir(directory)
+
+        with (
+            patch.object(
+                authored_content.os,
+                "scandir",
+                side_effect=replacing_scandir,
+            ),
+            self.assertRaisesRegex(
+                authored_content.AuthoredContentReadError,
+                "changed during traversal",
+            ),
+        ):
+            tuple(
+                authored_content.walk_authored_files(
+                    references,
+                    skill,
+                )
+            )
+
+        self.assertTrue(replaced)
+        self.assertEqual(expected.read_text(encoding="utf-8"), "required reference\n")
+
     def test_rejects_duplicate_names_and_folder_name_mismatches(self):
         self.repository.add_skill("shared", group="one")
         self.repository.add_skill("shared", group="two", folder="alias")
@@ -391,6 +706,35 @@ class DiscoveryAndFrontmatterValidationTests(TemporaryRepositoryTestCase):
 
                 self.assertTrue(issues, label)
 
+    def test_frontmatter_diagnostics_do_not_disclose_unknown_field_names(self):
+        skill_root = self.repository.add_skill("alpha")
+        secret_field = "ghp_" + ("a" * 36)
+        (skill_root / "SKILL.md").write_text(
+            (
+                "---\n"
+                "name: alpha\n"
+                "description: Valid.\n"
+                f"{secret_field}: value\n"
+                "---\n"
+            ),
+            encoding="utf-8",
+        )
+
+        issues = run_static_validation(self.repository.root)
+
+        self.assertTrue(issues)
+        self.assertTrue(
+            any(
+                "unsupported top-level frontmatter field" in issue.message
+                for issue in issues
+            ),
+            issues,
+        )
+        self.assertTrue(
+            all(secret_field not in issue.message for issue in issues),
+            issues,
+        )
+
 
 class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
     def test_config_and_local_required_skills_require_compatibility(self):
@@ -403,6 +747,22 @@ class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
                 messages = [issue.message for issue in run_static_validation(repository.root)]
 
                 self.assertTrue(any("requires non-empty compatibility" in message for message in messages))
+
+    def test_rejects_public_installer_internal_metadata(self):
+        skill_root = self.repository.add_skill(
+            "alpha",
+            metadata={"internal": "true"},
+        )
+        skill_path = skill_root / "SKILL.md"
+        skill_path.write_text(
+            skill_path.read_text(encoding="utf-8").replace(
+                '  internal: "true"',
+                "  internal: true",
+            ),
+            encoding="utf-8",
+        )
+
+        self.assert_issue("metadata.internal is reserved")
 
     def test_config_required_compatibility_names_configuration_variables(self):
         self.repository.add_skill(
@@ -542,6 +902,184 @@ class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
 
 
 class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
+    def test_rejects_secret_shaped_authored_path_components(self):
+        skill_root = self.repository.add_skill("alpha")
+        secret_directory = "ghp_" + ("b" * 36)
+        secret_file = "sk-" + ("c" * 24) + ".md"
+        secret_assignment_file = "clientSecret=actual-client-value.md"
+        nested_file = (
+            skill_root
+            / "references"
+            / secret_directory
+            / secret_file
+        )
+        nested_file.parent.mkdir(parents=True)
+        nested_file.write_text("Benign content.\n", encoding="utf-8")
+        (nested_file.parent / secret_assignment_file).write_text(
+            "Benign content.\n",
+            encoding="utf-8",
+        )
+
+        issues = run_static_validation(self.repository.root)
+        rendered = repr(issues)
+
+        matching = [
+            issue
+            for issue in issues
+            if "high-confidence secret in an authored path component"
+            in issue.message
+        ]
+        self.assertEqual(len(matching), 3, issues)
+        self.assertNotIn(secret_directory, rendered)
+        self.assertNotIn(secret_file.removesuffix(".md"), rendered)
+        self.assertNotIn("actual-client-value", rendered)
+
+    def test_static_diagnostics_redact_secret_shaped_path_components(self):
+        skill_name = "sk-" + ("a" * 24)
+        nested_directory_name = "ghp_" + ("b" * 36)
+        nested_file_name = "sk-" + ("c" * 24) + ".md"
+        assignment_value = "prod-" + "secret-value"
+        assignment_file_name = (
+            f"API_TOKEN=FAKE_example {assignment_value}.md"
+        )
+        commented_assignment_file_name = (
+            f"API_TOKEN=FAKE_example # {assignment_value}.md"
+        )
+        multiline_assignment_file_name = (
+            f"API_TOKEN=FAKE_example\n{assignment_value}.md"
+        )
+        skill_root = self.repository.add_skill(skill_name)
+        nested_file = (
+            skill_root
+            / "references"
+            / nested_directory_name
+            / nested_file_name
+        )
+        nested_file.parent.mkdir(parents=True)
+        nested_file.write_text(
+            "Read /Users/private-user/account.json.\n",
+            encoding="utf-8",
+        )
+        (nested_file.parent / assignment_file_name).write_text(
+            "Read /Users/private-user/credentials.json.\n",
+            encoding="utf-8",
+        )
+        for filename in (
+            commented_assignment_file_name,
+            multiline_assignment_file_name,
+        ):
+            (nested_file.parent / filename).write_text(
+                "Read /Users/private-user/credentials.json.\n",
+                encoding="utf-8",
+            )
+
+        issues = run_static_validation(self.repository.root)
+
+        self.assertTrue(
+            any("contains a personal absolute path" in issue.message for issue in issues),
+            issues,
+        )
+        rendered = repr(issues)
+        for secret_shaped_component in (
+            skill_name,
+            nested_directory_name,
+            nested_file_name.removesuffix(".md"),
+            assignment_value,
+        ):
+            self.assertNotIn(secret_shaped_component, rendered)
+        for issue in issues:
+            self.assertEqual(
+                find_static_secret_issues(issue.scope, Path("diagnostic-scope")),
+                [],
+            )
+            self.assertEqual(
+                find_static_secret_issues(issue.message, Path("diagnostic-message")),
+                [],
+            )
+
+    def test_rejects_entries_omitted_by_the_public_installer_at_any_depth(self):
+        skill_root = self.repository.add_skill("alpha")
+        excluded_file = skill_root / "references" / "nested" / "metadata.json"
+        excluded_file.parent.mkdir(parents=True)
+        excluded_file.write_text("{}\n", encoding="utf-8")
+        for name in (".git", "__pycache__", "__pypackages__"):
+            directory = skill_root / "assets" / "nested" / name
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "content.txt").write_text("content\n", encoding="utf-8")
+
+        messages = self.messages()
+
+        self.assertTrue(
+            any(
+                "public installer excludes entry metadata.json" in message
+                for message in messages
+            )
+        )
+        for name in (".git", "__pycache__", "__pypackages__"):
+            self.assertTrue(
+                any(
+                    f"public installer excludes directory {name}" in message
+                    for message in messages
+                ),
+                messages,
+            )
+
+    def test_rejects_installer_excluded_names_on_directory_symlinks(self):
+        skill_root = self.repository.add_skill("alpha")
+        assets = skill_root / "assets"
+        assets.mkdir()
+        target = assets / "shared-cache"
+        target.mkdir()
+        (target / "content.txt").write_text("content\n", encoding="utf-8")
+        for name in (".git", "__pycache__", "__pypackages__"):
+            (assets / name).symlink_to(target, target_is_directory=True)
+
+        messages = self.messages()
+
+        for name in (".git", "__pycache__", "__pypackages__"):
+            self.assertTrue(
+                any(
+                    f"public installer excludes directory {name}" in message
+                    for message in messages
+                ),
+                messages,
+            )
+
+    def test_rejects_metadata_json_for_every_entry_type(self):
+        for entry_type in ("directory", "symlink"):
+            with self.subTest(entry_type=entry_type):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                references = skill_root / "references"
+                references.mkdir()
+                excluded = references / "metadata.json"
+                if entry_type == "directory":
+                    excluded.mkdir()
+                    (excluded / "content.txt").write_text(
+                        "content\n",
+                        encoding="utf-8",
+                    )
+                else:
+                    target = skill_root / "assets" / "metadata-source.json"
+                    target.parent.mkdir()
+                    target.write_text("{}\n", encoding="utf-8")
+                    excluded.symlink_to(target)
+
+                messages = [
+                    issue.message
+                    for issue in run_static_validation(repository.root)
+                ]
+
+                self.assertTrue(
+                    any(
+                        "public installer excludes entry metadata.json"
+                        in message
+                        for message in messages
+                    ),
+                    messages,
+                )
+
     def test_rejects_parent_and_missing_local_markdown_references(self):
         self.repository.add_skill(
             "alpha",
@@ -594,6 +1132,146 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_issue("referenced local file does not exist: scripts/prepare.py")
 
+    def test_remote_urls_do_not_create_bundled_path_references(self):
+        self.repository.add_skill(
+            "alpha",
+            body="Read https://example.test/scripts/remote-tool.py for background.",
+            allows_tool_references="true",
+            compatibility=(
+                "Uses the linked public documentation; if unavailable, continue "
+                "without it."
+            ),
+        )
+
+        self.assert_no_issues()
+
+    def test_file_urls_and_windows_paths_are_not_treated_as_external(self):
+        self.repository.add_skill(
+            "alpha",
+            body=(
+                "Read [local](file:///Users/example/private.md) and "
+                "[windows](C:\\Users\\example\\private.md)."
+            ),
+        )
+
+        messages = self.messages()
+
+        self.assertTrue(any("must be skill-relative" in message for message in messages))
+        self.assertTrue(any("personal absolute path" in message for message in messages))
+
+    def test_bare_file_uri_is_rejected_even_when_its_bundled_suffix_exists(self):
+        skill_root = self.repository.add_skill(
+            "alpha",
+            body=(
+                "Read file:///tmp/references/guide.md and "
+                "file:/tmp/references/guide.md."
+            ),
+        )
+        guide = skill_root / "references" / "guide.md"
+        guide.parent.mkdir()
+        guide.write_text("# Guide\n", encoding="utf-8")
+        self.repository.exercise_bundled_path(skill_root, "references/guide.md")
+
+        self.assert_issue("local reference must be skill-relative: file:///tmp/references/guide.md")
+        self.assert_issue("local reference must be skill-relative: file:/tmp/references/guide.md")
+
+    def test_windows_drive_relative_reference_is_rejected(self):
+        self.repository.add_skill(
+            "alpha",
+            body="Read [private](C:../private.txt).",
+        )
+
+        self.assert_issue(
+            "reference must be a clean skill-relative path: C:../private.txt"
+        )
+
+    def test_bare_windows_drive_bundled_paths_are_not_reduced_to_relative_paths(self):
+        skill_root = self.repository.add_skill(
+            "alpha",
+            body=(
+                "Read C:/references/guide.md, C:references/guide.md, "
+                "C:\\references\\guide.md, and C:references\\guide.md."
+            ),
+        )
+        guide = skill_root / "references" / "guide.md"
+        guide.parent.mkdir()
+        guide.write_text("# Guide\n", encoding="utf-8")
+        self.repository.exercise_bundled_path(skill_root, "references/guide.md")
+
+        messages = self.messages()
+
+        self.assertGreaterEqual(
+            sum(
+                "must be a clean skill-relative path" in message
+                for message in messages
+            ),
+            4,
+        )
+
+    def test_nested_absolute_paths_are_not_reduced_to_bundled_suffixes(self):
+        skill_root = self.repository.add_skill(
+            "alpha",
+            body=(
+                "Run C:/checkout/scripts/tool.py and read "
+                "/opt/project/references/guide.md."
+            ),
+        )
+        script = skill_root / "scripts" / "tool.py"
+        script.parent.mkdir()
+        script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        script.chmod(0o755)
+        guide = skill_root / "references" / "guide.md"
+        guide.parent.mkdir()
+        guide.write_text("# Guide\n", encoding="utf-8")
+        self.repository.exercise_bundled_path(skill_root, "scripts/tool.py")
+        self.repository.exercise_bundled_path(skill_root, "references/guide.md")
+
+        messages = self.messages()
+
+        self.assertTrue(
+            any(
+                "clean skill-relative path: C:/checkout/scripts/tool.py" in message
+                for message in messages
+            ),
+            messages,
+        )
+        self.assertTrue(
+            any(
+                "clean skill-relative path: /opt/project/references/guide.md"
+                in message
+                for message in messages
+            ),
+            messages,
+        )
+
+    def test_repeated_windows_separators_are_rejected_as_complete_drive_paths(self):
+        skill_root = self.repository.add_skill(
+            "alpha",
+            body=(
+                "Run C://scripts/tool.py and read "
+                r"C:\\references\\guide.md."
+            ),
+        )
+        script = skill_root / "scripts" / "tool.py"
+        script.parent.mkdir()
+        script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        script.chmod(0o755)
+        guide = skill_root / "references" / "guide.md"
+        guide.parent.mkdir()
+        guide.write_text("# Guide\n", encoding="utf-8")
+        self.repository.exercise_bundled_path(skill_root, "scripts/tool.py")
+        self.repository.exercise_bundled_path(skill_root, "references/guide.md")
+
+        messages = self.messages()
+
+        self.assertGreaterEqual(
+            sum(
+                "must be a clean skill-relative path" in message
+                for message in messages
+            ),
+            2,
+        )
+
     def test_scripts_have_an_executable_contract(self):
         skill_root = self.repository.add_skill("alpha", body="Run `scripts/prepare.sh`.")
         script = skill_root / "scripts" / "prepare.sh"
@@ -621,7 +1299,7 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         self.assertGreaterEqual(sum("personal absolute path" in issue.message for issue in issues), 3)
 
-    def test_assets_receive_containment_checks_but_not_content_scanning(self):
+    def test_assets_receive_secret_scanning_without_prose_policy_checks(self):
         skill_root = self.repository.add_skill("alpha")
         assets = skill_root / "assets"
         assets.mkdir()
@@ -631,7 +1309,39 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         )
         self.repository.exercise_bundled_path(skill_root, "assets/sample.txt")
 
-        self.assert_no_issues()
+        messages = self.messages()
+        self.assertEqual(
+            sum("github-token" in message for message in messages),
+            1,
+        )
+        self.assertFalse(
+            any("personal absolute path" in message for message in messages)
+        )
+
+    def test_installable_assets_scan_utf16_secret_values(self):
+        token = "ghp_" + ("a" * 36)
+        for encoding in ("utf-16-le", "utf-16-be"):
+            for prefix in (b"", b"x"):
+                with self.subTest(encoding=encoding, offset=len(prefix)):
+                    repository = TemporaryRepository()
+                    self.addCleanup(repository.cleanup)
+                    skill_root = repository.add_skill("alpha")
+                    asset = skill_root / "assets" / "credential.bin"
+                    asset.parent.mkdir()
+                    asset.write_bytes(prefix + token.encode(encoding))
+                    repository.exercise_bundled_path(
+                        skill_root,
+                        "assets/credential.bin",
+                    )
+
+                    messages = [
+                        issue.message
+                        for issue in run_static_validation(repository.root)
+                    ]
+
+                    self.assertTrue(
+                        any("github-token" in message for message in messages)
+                    )
 
     def test_rejects_unsupported_empty_and_placeholder_entries(self):
         skill_root = self.repository.add_skill("alpha")
@@ -737,7 +1447,7 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_issue("scripts/prepare.sh must be executable")
 
-    def test_follows_contained_directory_symlinks_once_without_cycles(self):
+    def test_follows_acyclic_contained_directory_aliases_once(self):
         skill_root = self.repository.add_skill("alpha")
         assets = skill_root / "assets"
         material = assets / "reference-material"
@@ -748,11 +1458,30 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
         references.mkdir()
         linked = references / "linked"
         linked.symlink_to(material, target_is_directory=True)
-        (material / "cycle").symlink_to(linked, target_is_directory=True)
 
         messages = self.messages()
 
-        self.assertEqual(sum("openai-api-key" in message for message in messages), 1)
+        self.assertEqual(sum("openai-api-key" in message for message in messages), 2)
+        self.assertFalse(
+            any("directory symlink cycle" in message for message in messages)
+        )
+
+    def test_rejects_contained_directory_symlink_cycles(self):
+        skill_root = self.repository.add_skill("alpha")
+        material = skill_root / "assets" / "reference-material"
+        material.mkdir(parents=True)
+        (material / "guide.md").write_text("Guidance.\n", encoding="utf-8")
+        references = skill_root / "references"
+        references.mkdir()
+        linked = references / "linked"
+        linked.symlink_to(material, target_is_directory=True)
+        cycle = material / "cycle"
+        cycle.symlink_to(linked, target_is_directory=True)
+
+        self.assert_issue(
+            "directory symlink cycle is not installable: "
+            "assets/reference-material/cycle"
+        )
 
     def test_directory_symlinks_keep_directory_specific_content_scans(self):
         skill_root = self.repository.add_skill("alpha")
@@ -784,9 +1513,9 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         messages = self.messages()
 
-        self.assertFalse(any("github-token" in message for message in messages))
-        self.assertEqual(sum("slack-token" in message for message in messages), 1)
-        self.assertEqual(sum("aws-access-key-id" in message for message in messages), 1)
+        self.assertEqual(sum("github-token" in message for message in messages), 2)
+        self.assertEqual(sum("slack-token" in message for message in messages), 2)
+        self.assertEqual(sum("aws-access-key-id" in message for message in messages), 2)
 
     def test_repository_readme_is_not_scanned(self):
         self.repository.add_skill("alpha")
@@ -820,8 +1549,157 @@ class PathAndDirectoryValidationTests(TemporaryRepositoryTestCase):
 
         self.assertEqual(sum("personal absolute path" in issue.message for issue in issues), 3)
 
+    def test_personal_path_findings_are_bounded_per_authored_file(self):
+        self.repository.add_skill(
+            "alpha",
+            body="\n".join(
+                f"Use /Users/person-{index}/config."
+                for index in range(256)
+            ),
+        )
+
+        issues = run_static_validation(self.repository.root)
+        personal_issues = [
+            issue
+            for issue in issues
+            if "personal absolute path" in issue.message
+        ]
+
+        self.assertEqual(len(personal_issues), 128)
+        self.assertTrue(
+            any(
+                "exceeds the static personal paths inspection limit" in issue.message
+                for issue in issues
+            )
+        )
+
+    def test_local_reference_inspection_fails_closed_at_its_target_limit(self):
+        self.repository.add_skill(
+            "alpha",
+            body="\n".join(
+                "[guide](references/missing.md)"
+                for _ in range(1100)
+            ),
+        )
+
+        messages = self.messages()
+
+        self.assertTrue(
+            any(
+                "exceeds the static local references inspection limit" in message
+                for message in messages
+            ),
+            messages,
+        )
+
 
 class EvalValidationTests(TemporaryRepositoryTestCase):
+    def test_rejects_duplicate_keys_in_eval_trigger_and_fixture_json(self):
+        for target in ("evals", "triggers", "fixture"):
+            with self.subTest(target=target):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                if target == "evals":
+                    path = skill_root / "evals" / "evals.json"
+                    path.write_text(
+                        '{"skill_name":"alpha","skill_name":"alpha","evals":[]}',
+                        encoding="utf-8",
+                    )
+                elif target == "triggers":
+                    path = skill_root / "evals" / "triggers.json"
+                    path.write_text(
+                        '{"skill_name":"alpha","skill_name":"alpha","queries":[]}',
+                        encoding="utf-8",
+                    )
+                else:
+                    path = repository.declare_basic_case_input(
+                        skill_root,
+                        "duplicate.json",
+                    )
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text('{"value":1,"value":2}', encoding="utf-8")
+
+                messages = [
+                    issue.message for issue in run_static_validation(repository.root)
+                ]
+
+                self.assertTrue(
+                    any("duplicate object key" in message for message in messages),
+                    messages,
+                )
+
+    def test_duplicate_json_key_errors_do_not_disclose_the_key(self):
+        secret_key = "ghp_" + ("a" * 36)
+        document = (
+            '{"'
+            + secret_key
+            + '":1,"'
+            + secret_key
+            + '":2}'
+        )
+
+        with self.assertRaises(authored_content.BoundedJsonError) as raised:
+            authored_content.strict_bounded_json_loads(document)
+
+        self.assertIn("duplicate object key", str(raised.exception))
+        self.assertNotIn(secret_key, str(raised.exception))
+
+    def test_rejects_an_eval_tree_replaced_during_validation(self):
+        skill_root = self.repository.add_skill("alpha")
+        real_read = static_eval_checks.read_bounded_authored_bytes
+        replaced = False
+
+        def replace_after_read(source, **kwargs):
+            nonlocal replaced
+            content = real_read(source, **kwargs)
+            if not replaced and source.logical_path.name == "evals.json":
+                replacement = skill_root / "evals" / "triggers.replacement"
+                replacement.write_text(
+                    (skill_root / "evals" / "triggers.json").read_text(
+                        encoding="utf-8"
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                replacement.replace(skill_root / "evals" / "triggers.json")
+                replaced = True
+            return content
+
+        with patch.object(
+            static_eval_checks,
+            "read_bounded_authored_bytes",
+            side_effect=replace_after_read,
+        ):
+            messages = self.messages()
+
+        self.assertTrue(replaced)
+        self.assertTrue(
+            any("eval definition tree changed during validation" in message for message in messages),
+            messages,
+        )
+
+    def test_required_eval_json_uses_the_bounded_descriptor_reader(self):
+        skill_root = self.repository.add_skill("alpha")
+        evals_path = skill_root / "evals" / "evals.json"
+        original_read_text = Path.read_text
+
+        def reject_unbounded_eval_read(path: Path, *args, **kwargs):
+            if path == evals_path:
+                raise AssertionError("eval JSON must not use Path.read_text")
+            return original_read_text(path, *args, **kwargs)
+
+        with patch.object(Path, "read_text", reject_unbounded_eval_read):
+            messages = self.messages()
+
+        self.assertFalse(
+            any(
+                "evals/evals.json contains invalid JSON" in message
+                for message in messages
+            ),
+            messages,
+        )
+
     def test_required_eval_json_must_parse_as_objects_with_expected_lists(self):
         skill_root = self.repository.add_skill("alpha")
         (skill_root / "evals" / "evals.json").write_text("[]", encoding="utf-8")
@@ -1098,6 +1976,130 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_no_issues()
 
+    def test_runner_only_schema_aggregate_has_an_exact_byte_limit(self):
+        for difference, should_fail in ((0, False), (-1, True)):
+            with self.subTest(difference=difference):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                schema_path = (
+                    skill_root
+                    / "evals"
+                    / "fixtures"
+                    / "basic"
+                    / "result.schema.json"
+                )
+                repository.write_json(
+                    schema_path,
+                    {
+                        "type": "object",
+                        "description": "x" * 1024,
+                    },
+                )
+                evals_path = skill_root / "evals" / "evals.json"
+                document = json.loads(evals_path.read_text(encoding="utf-8"))
+                document["evals"][0]["checks"].append(
+                    {
+                        "type": "json_schema",
+                        "path": "result.json",
+                        "schema": "fixtures/basic/result.schema.json",
+                    }
+                )
+                repository.write_json(evals_path, document)
+                byte_limit = schema_path.stat().st_size + difference
+
+                with patch.object(
+                    eval_definitions,
+                    "MAX_CASE_DETERMINISTIC_SCHEMA_BYTES",
+                    byte_limit,
+                ):
+                    messages = [
+                        issue.message
+                        for issue in run_static_validation(repository.root)
+                    ]
+
+                has_limit_issue = any(
+                    "deterministic schemas exceed" in message
+                    for message in messages
+                )
+                self.assertEqual(has_limit_issue, should_fail, messages)
+
+    def test_deep_runner_only_schema_fails_as_a_bounded_validation_issue(self):
+        skill_root = self.repository.add_skill("alpha")
+        schema_path = (
+            skill_root / "evals" / "fixtures" / "basic" / "result.schema.json"
+        )
+        schema_path.parent.mkdir(parents=True)
+        schema_path.write_text(
+            '{"allOf":[' * 80 + '{"type":"object"}' + "]}" * 80,
+            encoding="utf-8",
+        )
+        evals_path = skill_root / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        document["evals"][0]["checks"].append(
+            {
+                "type": "json_schema",
+                "path": "result.json",
+                "schema": "fixtures/basic/result.schema.json",
+            }
+        )
+        self.repository.write_json(evals_path, document)
+
+        messages = self.messages()
+
+        self.assertTrue(
+            any(
+                "runner-only schema is not a valid JSON Schema object"
+                in message
+                for message in messages
+            ),
+            messages,
+        )
+
+    def test_runner_only_schema_swap_is_rejected_by_the_stable_reader(self):
+        skill_root = self.repository.add_skill("alpha")
+        schema_path = (
+            skill_root / "evals" / "fixtures" / "basic" / "result.schema.json"
+        )
+        self.repository.write_json(schema_path, {"type": "object"})
+        outside = self.repository.root / "outside-schema.json"
+        self.repository.write_json(outside, {"type": "object"})
+        evals_path = skill_root / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        document["evals"][0]["checks"].append(
+            {
+                "type": "json_schema",
+                "path": "result.json",
+                "schema": "fixtures/basic/result.schema.json",
+            }
+        )
+        self.repository.write_json(evals_path, document)
+        stable_authored_file = eval_definitions.authored_file
+        canonical_schema_path = schema_path.resolve()
+
+        def discover_then_swap(path, root):
+            source = stable_authored_file(path, root)
+            if (
+                path == canonical_schema_path
+                and source is not None
+                and not schema_path.is_symlink()
+            ):
+                schema_path.unlink()
+                schema_path.symlink_to(outside)
+            return source
+
+        with patch.object(
+            eval_definitions,
+            "authored_file",
+            side_effect=discover_then_swap,
+        ):
+            messages = self.messages()
+
+        self.assertTrue(
+            any("runner-only schema" in message for message in messages),
+            messages,
+        )
+
     def test_eval_json_rejects_non_fake_secret_values(self):
         skill_root = self.repository.add_skill("alpha")
         unsafe_assignment = "SERVICE_TOKEN=" + "authored" + "-value"
@@ -1136,6 +2138,20 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
         )
         self.assert_no_issues()
 
+    def test_eval_json_scans_secrets_revealed_by_unicode_escapes(self):
+        skill_root = self.repository.add_skill("alpha")
+        evals_path = skill_root / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        token = "ghp_" + ("a" * 36)
+        document["evals"][0]["prompt"] = token
+        encoded = json.dumps(document, separators=(",", ":")).replace(
+            token,
+            r"ghp_\u0061" + ("a" * 35),
+        )
+        evals_path.write_text(encoded, encoding="utf-8")
+
+        self.assert_issue("after JSON decoding: github-token")
+
     def test_eval_text_fixtures_reject_non_fake_secret_values(self):
         skill_root = self.repository.add_skill("alpha")
         fixture = self.repository.declare_basic_case_input(
@@ -1146,13 +2162,126 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
 
         self.assert_issue("sensitive-assignment")
 
-    def test_eval_binary_fixtures_are_not_content_scanned(self):
+    def test_eval_binary_fixtures_reject_non_fake_secret_values(self):
         skill_root = self.repository.add_skill("alpha")
         fixture = self.repository.declare_basic_case_input(skill_root, "sample.bin")
         fixture.parent.mkdir(parents=True)
         fixture.write_bytes(b"\x00SERVICE_TOKEN=authored-value\xff")
 
-        self.assert_no_issues()
+        self.assert_issue("sensitive-assignment")
+
+    def test_eval_binary_fixtures_scan_utf16_secret_values(self):
+        token = "ghp_" + ("a" * 36)
+        for encoding in ("utf-16-le", "utf-16-be"):
+            for prefix in (b"", b"x"):
+                with self.subTest(encoding=encoding, offset=len(prefix)):
+                    repository = TemporaryRepository()
+                    self.addCleanup(repository.cleanup)
+                    skill_root = repository.add_skill("alpha")
+                    fixture = repository.declare_basic_case_input(
+                        skill_root,
+                        "credential.bin",
+                    )
+                    fixture.parent.mkdir(parents=True)
+                    fixture.write_bytes(prefix + token.encode(encoding))
+
+                    messages = [
+                        issue.message
+                        for issue in run_static_validation(repository.root)
+                    ]
+
+                    self.assertTrue(
+                        any("github-token" in message for message in messages)
+                    )
+
+    def test_eval_json_fixtures_scan_escaped_credential_keys(self):
+        skill_root = self.repository.add_skill("alpha")
+        fixture = self.repository.declare_basic_case_input(
+            skill_root,
+            "credentials.JSON",
+        )
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text(
+            r'{"api\u005ftoken":"actual-prod-value"}',
+            encoding="utf-8",
+        )
+
+        self.assert_issue("after JSON decoding: sensitive-assignment")
+
+    def test_eval_json_scans_escaped_service_prefixed_credential_keys(self):
+        skill_root = self.repository.add_skill("alpha")
+        fixture = self.repository.declare_basic_case_input(
+            skill_root,
+            "credentials.JSON",
+        )
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text(
+            r'{"github\u0054oken":"actual-prod-value"}',
+            encoding="utf-8",
+        )
+
+        self.assert_issue("after JSON decoding: sensitive-assignment")
+
+    def test_installable_json_scans_escaped_credential_keys(self):
+        skill_root = self.repository.add_skill("alpha")
+        asset = skill_root / "assets" / "credentials.JSON"
+        asset.parent.mkdir()
+        asset.write_text(
+            r'{"api\u005ftoken":"actual-prod-value"}',
+            encoding="utf-8",
+        )
+
+        self.assert_issue(
+            "high-confidence secret after JSON decoding sensitive-assignment"
+        )
+
+    def test_eval_binary_fixtures_detect_known_tokens_beside_high_bytes(self):
+        skill_root = self.repository.add_skill("alpha")
+        fixture = self.repository.declare_basic_case_input(skill_root, "sample.bin")
+        fixture.parent.mkdir(parents=True)
+        fixture.write_bytes(b"\xffghp_" + (b"a" * 36) + b"\xfe")
+
+        self.assert_issue("github-token")
+
+    def test_eval_fixtures_scan_common_credential_assignment_keys(self):
+        cases = (
+            (
+                "credentials.json",
+                b'{"api_token":"actual-prod-value"}',
+            ),
+            (
+                "credentials-camel.json",
+                b'{"apiKey":"actual-prod-value"}',
+            ),
+            (
+                "environment.env",
+                b"DATABASE_PASSWORD=actual-prod-value\n",
+            ),
+            (
+                "credentials.bin",
+                b"\xffclient_secret=actual-prod-value\xfe",
+            ),
+        )
+        for filename, content in cases:
+            with self.subTest(filename=filename):
+                repository = TemporaryRepository()
+                self.addCleanup(repository.cleanup)
+                skill_root = repository.add_skill("alpha")
+                fixture = repository.declare_basic_case_input(
+                    skill_root,
+                    filename,
+                )
+                fixture.parent.mkdir(parents=True)
+                fixture.write_bytes(content)
+
+                messages = [
+                    issue.message
+                    for issue in run_static_validation(repository.root)
+                ]
+                self.assertTrue(
+                    any("sensitive-assignment" in message for message in messages),
+                    messages,
+                )
 
     def test_eval_fixture_limit_matches_runtime_preparation(self):
         skill_root = self.repository.add_skill("alpha")
@@ -1164,6 +2293,127 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
 
         fixture.write_bytes(b"\x00" * (4 * 1024 * 1024 + 1))
         self.assert_issue("4 MiB eval fixture file limit")
+
+    def test_eval_json_is_parsed_and_scanned_from_one_stable_read(self):
+        skill_root = self.repository.add_skill("alpha")
+        fixture = self.repository.declare_basic_case_input(
+            skill_root,
+            "context.json",
+        )
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text('{"status":"ok"}\n', encoding="utf-8")
+        schema = (
+            skill_root
+            / "evals"
+            / "fixtures"
+            / "basic"
+            / "result.schema.json"
+        )
+        self.repository.write_json(schema, {"type": "object"})
+        evals_path = skill_root / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        document["evals"][0]["checks"].append(
+            {
+                "type": "json_schema",
+                "path": "result.json",
+                "schema": "fixtures/basic/result.schema.json",
+            }
+        )
+        self.repository.write_json(evals_path, document)
+        reads: list[Path] = []
+        real_read = static_eval_checks.read_bounded_authored_bytes
+
+        def recording_read(source, *args, **kwargs):
+            reads.append(source.logical_path)
+            return real_read(source, *args, **kwargs)
+
+        with patch.object(
+            static_eval_checks,
+            "read_bounded_authored_bytes",
+            side_effect=recording_read,
+        ):
+            self.messages()
+
+        expected_paths = (
+            skill_root / "evals" / "evals.json",
+            skill_root / "evals" / "triggers.json",
+            fixture,
+            schema,
+        )
+        for path in expected_paths:
+            self.assertEqual(
+                reads.count(path.resolve()),
+                1,
+                f"{path} must be parsed and scanned from one read",
+            )
+
+    def test_authored_file_swap_to_fifo_is_rejected_without_blocking(self):
+        skill_root = self.repository.add_skill("alpha")
+        reference = skill_root / "references" / "guide.md"
+        reference.parent.mkdir()
+        reference.write_text("guide\n", encoding="utf-8")
+        parked = reference.with_name("guide.parked")
+        real_open = authored_content.os.open
+        replaced = False
+
+        def replace_with_fifo(path, flags, *args, **kwargs):
+            nonlocal replaced
+            if Path(path) == reference.resolve() and not replaced:
+                reference.rename(parked)
+                os.mkfifo(reference)
+                replaced = True
+            return real_open(path, flags, *args, **kwargs)
+
+        source = authored_content.authored_file(reference, skill_root)
+        assert source is not None
+        with (
+            patch.object(
+                authored_content.os,
+                "open",
+                side_effect=replace_with_fifo,
+            ),
+            self.assertRaisesRegex(
+                authored_content.AuthoredContentReadError,
+                "opened safely|changed while it was opened",
+            ),
+        ):
+            authored_content.read_bounded_authored_bytes(
+                source,
+                maximum_bytes=1024,
+                allowed_root=skill_root,
+            )
+
+        self.assertTrue(replaced)
+
+    def test_deep_eval_and_fixture_json_fail_as_bounded_validation_issues(self):
+        skill_root = self.repository.add_skill("alpha")
+        deep_json = "[" * 100 + "0" + "]" * 100
+        evals_path = skill_root / "evals" / "evals.json"
+        evals_path.write_text(deep_json, encoding="utf-8")
+
+        self.assert_issue("JSON input exceeds the depth limit")
+
+        self.repository.write_json(
+            evals_path,
+            {
+                "skill_name": "alpha",
+                "evals": [
+                    {
+                        "id": "basic",
+                        "prompt": "Perform the workflow.",
+                        "expected_output": "A complete workflow result.",
+                        "assertions": ["The result is complete."],
+                        "files": ["fixtures/basic/inputs/deep.json"],
+                        "checks": [],
+                    }
+                ],
+            },
+        )
+        fixture = skill_root / "evals" / "fixtures" / "basic" / "inputs" / "deep.json"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text(deep_json, encoding="utf-8")
+
+        self.assert_issue("JSON input exceeds the depth limit")
 
     def test_logical_eval_aliases_keep_json_specific_validation(self):
         skill_root = self.repository.add_skill("alpha")
@@ -1272,6 +2522,181 @@ class SecretPatternTests(unittest.TestCase):
         self.assertTrue(all(match.confidence == "high" for match in matches))
         self.assertTrue(all(match.line > 0 and match.column > 0 for match in matches))
 
+    def test_known_token_patterns_use_ascii_boundaries(self):
+        values = {
+            "github-token": "gh" + "p_" + ("a" * 36),
+            "slack-token": "xo" + "xb-" + ("a" * 24),
+            "aws-access-key-id": "AK" + "IA" + ("A" * 16),
+            "openai-api-key": "s" + "k-" + ("a" * 24),
+        }
+
+        for expected, token in values.items():
+            with self.subTest(expected=expected):
+                text = (b"\xff" + token.encode("ascii") + b"\xfe").decode(
+                    "latin-1"
+                )
+                matches = find_static_secret_issues(
+                    text,
+                    Path("fixture.bin"),
+                )
+                self.assertEqual(
+                    [match.pattern for match in matches],
+                    [expected],
+                )
+
+    def test_slack_app_tokens_are_detected_in_every_authored_form(self):
+        token = (
+            "xapp-1-A0123456789-1234567890123-"
+            "abcdefghijklmnopqrstuvwxyz0123456789"
+        )
+        text_findings = find_static_secret_issues(
+            token,
+            Path("credential.txt"),
+        )
+        binary_findings = (
+            authored_content.find_static_secret_issues_in_bytes(
+                b"\xff" + token.encode("ascii") + b"\xfe",
+                Path("credential.bin"),
+            )
+        )
+        encoded_token = token.replace("a", r"\u0061", 1)
+        decoded_findings = (
+            authored_content.find_additional_decoded_json_secret_issues(
+                json.loads(f'{{"value":"{encoded_token}"}}'),
+                Path("credential.json"),
+                maximum_bytes=4096,
+            )
+        )
+
+        for findings in (text_findings, binary_findings, decoded_findings):
+            self.assertEqual(
+                [finding.pattern for finding in findings],
+                ["slack-token"],
+            )
+
+    def test_aws_temporary_credential_documents_are_detected(self):
+        access_key_id = "AS" + "IA" + ("A" * 16)
+        credential = {
+            "AccessKeyId": access_key_id,
+            "SecretAccessKey": "actual-secret-value",
+            "SessionToken": "actual-session-token-value",
+        }
+
+        raw_findings = find_static_secret_issues(
+            json.dumps(credential),
+            Path("credentials.json"),
+        )
+
+        self.assertIn(
+            "aws-access-key-id",
+            [finding.pattern for finding in raw_findings],
+        )
+        self.assertGreaterEqual(
+            sum(
+                finding.pattern == "sensitive-assignment"
+                for finding in raw_findings
+            ),
+            2,
+        )
+
+    def test_decoded_aws_credential_keys_are_detected(self):
+        encoded = (
+            r'{"Access\u004beyId":"ABCDEFGHIJKLMNOPQRST",'
+            r'"SecretAccess\u004bey":"actual-secret-value",'
+            r'"Session\u0054oken":"actual-session-token-value"}'
+        )
+        raw_findings = find_static_secret_issues(
+            encoded,
+            Path("credentials.json"),
+        )
+        decoded_findings = (
+            authored_content.find_additional_decoded_json_secret_issues(
+                json.loads(encoded),
+                Path("credentials.json"),
+                maximum_bytes=4096,
+                raw_findings=raw_findings,
+            )
+        )
+
+        self.assertEqual(raw_findings, [])
+        self.assertEqual(
+            sum(
+                finding.pattern == "sensitive-assignment"
+                for finding in decoded_findings
+            ),
+            3,
+        )
+
+    def test_aws_credential_fields_preserve_fake_value_exemptions(self):
+        credential = {
+            "AccessKeyId": "FAKE_ASIA" + ("A" * 16),
+            "SecretAccessKey": "FAKE_documentation-secret",
+            "SessionToken": "FAKE_documentation-session",
+        }
+
+        self.assertEqual(
+            find_static_secret_issues(
+                json.dumps(credential),
+                Path("credentials.json"),
+            ),
+            [],
+        )
+
+    def test_all_official_github_token_families_are_detected_in_every_form(self):
+        tokens = (
+            "ghp_" + ("a" * 36),
+            "gho_" + ("a" * 36),
+            "ghu_" + ("a" * 36),
+            "ghs_" + ("a" * 36),
+            "ghr_" + ("a" * 76),
+            "github_pat_" + ("a" * 82),
+            (
+                "ghs_123456789_"
+                + ("a" * 32)
+                + "."
+                + ("b" * 32)
+                + "."
+                + ("c" * 32)
+            ),
+        )
+
+        for token in tokens:
+            with self.subTest(prefix=token.split("_", 1)[0]):
+                raw_matches = find_static_secret_issues(
+                    token,
+                    Path("credential.txt"),
+                )
+                binary_text = (
+                    b"\xff" + token.encode("ascii") + b"\xfe"
+                ).decode("latin-1")
+                binary_matches = find_static_secret_issues(
+                    binary_text,
+                    Path("credential.bin"),
+                )
+                encoded_token = token.replace("a", r"\u0061", 1)
+                document = json.loads(f'{{"value":"{encoded_token}"}}')
+                decoded_matches = (
+                    authored_content.find_additional_decoded_json_secret_issues(
+                        document,
+                        Path("credential.json"),
+                        maximum_bytes=4096,
+                        raw_findings=(),
+                    )
+                )
+
+                self.assertEqual(
+                    [match.pattern for match in raw_matches],
+                    ["github-token"],
+                )
+                self.assertEqual(
+                    [match.pattern for match in binary_matches],
+                    ["github-token"],
+                )
+                self.assertEqual(
+                    [match.pattern for match in decoded_matches],
+                    ["github-token"],
+                )
+
     def test_allows_environment_references_placeholders_and_fake_values(self):
         safe_text = "\n".join(
             (
@@ -1315,18 +2740,489 @@ class SecretPatternTests(unittest.TestCase):
                 matches = find_static_secret_issues(line, Path("authored.txt"))
                 self.assertEqual([match.pattern for match in matches], ["sensitive-assignment"])
 
+    def test_sensitive_assignment_covers_aws_secret_access_key(self):
+        unsafe_values = (
+            "AWS_SECRET_ACCESS_KEY=" + "authored-value",
+            "aws_secret_access_key = " + "authored-value",
+            '"aws_secret_access_key": "' + 'authored-value"',
+        )
+
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe):
+                matches = find_static_secret_issues(
+                    unsafe,
+                    Path("environment.env"),
+                )
+                self.assertEqual(
+                    [match.pattern for match in matches],
+                    ["sensitive-assignment"],
+                )
+
+    def test_sensitive_assignment_covers_case_insensitive_credential_keys(self):
+        unsafe_values = (
+            '{"api_token":"' + 'actual-prod-value"}',
+            "DATABASE_PASSWORD=" + "actual-prod-value",
+            "client_secret: " + "actual-prod-value",
+            "token: " + "actual-prod-value",
+            "credentials='" + "actual-prod-value'",
+            "process.env.refresh_token = '" + "actual-prod-value'",
+            'os.environ["private_key"] = "' + 'actual-prod-value"',
+            'SERVICE_TOKEN = os.getenv("BASE") + "' + 'actual-prod-value"',
+            'client_secret: data.get("token") + "' + 'actual-prod-value"',
+            "apiKey=" + "actual-prod-value",
+            "accessToken=" + "actual-prod-value",
+            "clientSecret=" + "actual-prod-value",
+            "privateKey=" + "actual-prod-value",
+            "refreshToken=" + "actual-prod-value",
+            "githubToken=" + "actual-prod-value",
+            "linearApiKey=" + "actual-prod-value",
+            '"api-key": "' + 'actual-prod-value"',
+            'const config = { clientSecret: "' + 'actual-prod-value" };',
+            'const config = { api_token: "' + 'actual-prod-value" };',
+        )
+
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe):
+                matches = find_static_secret_issues(
+                    unsafe,
+                    Path("credentials.txt"),
+                )
+                self.assertEqual(
+                    [match.pattern for match in matches],
+                    ["sensitive-assignment"],
+                )
+
+    def test_case_insensitive_credential_keys_keep_safe_value_exemptions(self):
+        safe_values = (
+            "api_token=${API_TOKEN}",
+            "database_password=FAKE_documentation-value",
+            'client_secret="<YOUR_SECRET>"',
+            "credentials=REDACTED",
+            "process.env.refresh_token = process.env.OTHER_TOKEN",
+            'oauth_token = os.environ.get("BITBUCKET_TOKEN", "")',
+            "credentials = base64.b64encode(value)",
+            'PRIVATE_KEY=$(<"$GH_BOT_PRIVATE_KEY_PATH")',
+            "TOKEN=$(printf '%s' \"$RESPONSE\")",
+            'token = data.get("token")',
+            "OAuth 2 access token: set BITBUCKET_TOKEN",
+            "apiKey=FAKE_documentation-value",
+            "accessToken=<YOUR_TOKEN>",
+            "clientSecret=REDACTED",
+            "privateKey=${PRIVATE_KEY}",
+            "refreshToken=process.env.OTHER_TOKEN",
+            "githubToken=FAKE_documentation-value",
+            "linearApiKey=${LINEAR_API_KEY}",
+            '"api-key": "<YOUR_TOKEN>"',
+            'const config = { clientSecret: "FAKE_documentation-value" };',
+            'const config = { api_token: "<YOUR_TOKEN>" };',
+            "type Config = { clientSecret: string };",
+        )
+
+        for safe in safe_values:
+            with self.subTest(safe=safe):
+                self.assertEqual(
+                    find_static_secret_issues(
+                        safe,
+                        Path("credentials.txt"),
+                    ),
+                    [],
+                )
+
+    def test_sensitive_assignment_recursively_inspects_call_arguments_and_defaults(self):
+        unsafe_values = (
+            'API_TOKEN = os.getenv("API_TOKEN", "prod-secret-value")',
+            'API_TOKEN = os.getenv("API_TOKEN", default="prod-secret-value")',
+            'API_TOKEN = choose(os.getenv("API_TOKEN"), fallback("prod-secret-value"))',
+            (
+                "API_TOKEN = os.getenv(\n"
+                '    "API_TOKEN",\n'
+                '    "prod-secret-value",\n'
+                ")\n"
+            ),
+        )
+        safe_values = (
+            'API_TOKEN = os.getenv("API_TOKEN")',
+            'API_TOKEN = os.getenv("API_TOKEN", "")',
+            'API_TOKEN = os.getenv("API_TOKEN", "REDACTED")',
+            'API_TOKEN = os.getenv("API_TOKEN", fallback_token)',
+            (
+                "credentials = base64.b64encode(\n"
+                '    f"{email}:{api_token}".encode("utf-8")\n'
+                ').decode("ascii")\n'
+            ),
+            "VAULT_TOKEN=FAKE_DEV_TOKEN npm run dev",
+        )
+
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe):
+                self.assertEqual(
+                    [
+                        match.pattern
+                        for match in find_static_secret_issues(
+                            unsafe,
+                            Path("credentials.py"),
+                        )
+                    ],
+                    ["sensitive-assignment"],
+                )
+        for safe in safe_values:
+            with self.subTest(safe=safe):
+                self.assertEqual(
+                    find_static_secret_issues(safe, Path("credentials.py")),
+                    [],
+                )
+
+    def test_sensitive_assignment_rejects_calls_and_attributes_on_literal_receivers(self):
+        github_token = "ghp_" + ("a" * 36)
+        disguised_token = f"FAKE_X{github_token}"
+        unsafe_values = (
+            f'TOKEN = "{disguised_token}".removeprefix("FAKE_X")',
+            f'TOKEN = "{disguised_token}".replace("FAKE_X", "")',
+            f'TOKEN = "{disguised_token}".value',
+        )
+
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe):
+                self.assertEqual(
+                    [
+                        finding.pattern
+                        for finding in find_static_secret_issues(
+                            unsafe,
+                            Path("credentials.py"),
+                        )
+                    ],
+                    ["sensitive-assignment"],
+                )
+
+    def test_fake_assignment_exemption_requires_the_complete_value_to_be_fake(self):
+        unsafe_values = (
+            "API_TOKEN=FAKE_example actual-prod-value",
+            'API_TOKEN = FAKE_example + "prod-secret-value"',
+        )
+
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe):
+                self.assertEqual(
+                    [
+                        match.pattern
+                        for match in find_static_secret_issues(
+                            unsafe,
+                            Path("credentials.py"),
+                        )
+                    ],
+                    ["sensitive-assignment"],
+                )
+        self.assertEqual(
+            find_static_secret_issues(
+                "API_TOKEN=FAKE_example",
+                Path("credentials.py"),
+            ),
+            [],
+        )
+
+    def test_safe_assignment_does_not_mask_a_later_assignment(self):
+        findings = find_static_secret_issues(
+            "TOKEN=FAKE_placeholder env "
+            "AWS_SECRET_ACCESS_KEY=actual-prod-value\n",
+            Path("script.sh"),
+        )
+
+        self.assertEqual(
+            [finding.pattern for finding in findings],
+            ["sensitive-assignment"],
+        )
+
+    def test_sensitive_assignment_fails_closed_on_deep_python_expressions(self):
+        authored_expression = "fallback" + (".value" * 1100)
+
+        try:
+            findings = find_static_secret_issues(
+                f"API_TOKEN = {authored_expression}",
+                Path("credentials.py"),
+            )
+        except RecursionError as error:
+            self.fail(f"deep authored expression escaped the bounded scanner: {error}")
+
+        self.assertEqual(
+            [finding.pattern for finding in findings],
+            ["sensitive-assignment"],
+        )
+
+    def test_generic_credential_keys_still_reject_assignment_literals(self):
+        unsafe_values = (
+            "token=actual-prod-value",
+            "credentials='actual-prod-value'",
+            '"password": "actual-prod-value"',
+        )
+
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe):
+                matches = find_static_secret_issues(
+                    unsafe,
+                    Path("credentials.txt"),
+                )
+                self.assertEqual(
+                    [match.pattern for match in matches],
+                    ["sensitive-assignment"],
+                )
+
+    def test_aws_secret_access_key_references_placeholders_and_fake_values_are_allowed(self):
+        safe_values = (
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}",
+            "AWS_SECRET_ACCESS_KEY=<YOUR_SECRET>",
+            "AWS_SECRET_ACCESS_KEY=FAKE_documentation-value",
+        )
+
+        for line in safe_values:
+            with self.subTest(line=line):
+                self.assertEqual(
+                    find_static_secret_issues(line, Path("environment.env")),
+                    [],
+                )
+
     def test_compound_shell_expressions_are_not_treated_as_pure_references(self):
         unsafe_values = (
             "SERVICE_TOKEN=${OTHER_TOKEN:-" + "authored-value}",
             "SERVICE_TOKEN=$OTHER_TOKEN-" + "authored-value",
             "SERVICE_TOKEN=$(printf " + "authored-value)",
             "SERVICE_TOKEN=FAKE_example$(printf " + "authored-value)",
+            "client_secret: ${OTHER_TOKEN} " + "authored-value",
         )
 
         for line in unsafe_values:
             with self.subTest(line=line):
                 matches = find_static_secret_issues(line, Path("environment.env"))
                 self.assertEqual([match.pattern for match in matches], ["sensitive-assignment"])
+
+    def test_shell_substitutions_require_exact_safe_commands_and_arguments(self):
+        github_token = "ghp_" + ("a" * 36)
+        unsafe_values = (
+            f'TOKEN=$(printf %s{github_token} "$EMPTY")',
+            'TOKEN=$(printf "%s" --prefix=authored-value "$EMPTY")',
+            'TOKEN=$(lookup "$OTHER_TOKEN")',
+            'TOKEN=$(printf "%s" "$OTHER_TOKEN"',
+            'TOKEN=$(printf "%s" "$OTHER_TOKEN")authored-value',
+        )
+
+        for unsafe in unsafe_values:
+            with self.subTest(unsafe=unsafe):
+                self.assertEqual(
+                    [
+                        finding.pattern
+                        for finding in find_static_secret_issues(
+                            unsafe,
+                            Path("environment.env"),
+                        )
+                    ],
+                    ["sensitive-assignment"],
+                )
+
+    def test_shell_substitutions_allow_a_terminated_runtime_decoder_pipeline(self):
+        source = (
+            "TOKEN=$(printf '%s' \"$RESPONSE\" | python3 -I -S -c '\n"
+            "import json\n"
+            "import sys\n"
+            "data = json.load(sys.stdin)\n"
+            'token = data.get("token")\n'
+            "print(token)\n"
+            "') || exit 3\n"
+        )
+
+        self.assertEqual(
+            find_static_secret_issues(source, Path("runtime-decoder.sh")),
+            [],
+        )
+
+    def test_shell_substitutions_reject_extra_python_stdout_calls(self):
+        source = (
+            "TOKEN=$(printf '%s' \"$RESPONSE\" | python3 -I -S -c '\n"
+            "import json\n"
+            "import sys\n"
+            "data = json.load(sys.stdin)\n"
+            'token = data.get("token")\n'
+            'sys.stdout.write("actual-prod-value")\n'
+            "print(token)\n"
+            "') || exit 3\n"
+        )
+
+        self.assertEqual(
+            [
+                finding.pattern
+                for finding in find_static_secret_issues(
+                    source,
+                    Path("runtime-decoder.sh"),
+                )
+            ],
+            ["sensitive-assignment"],
+        )
+
+    def test_shell_runtime_decoder_analysis_has_one_shared_work_budget(self):
+        assignments = [
+            "data = json.load(sys.stdin)",
+            "level_0 = data",
+            "level_0 = data",
+        ]
+        for index in range(1, 12):
+            assignments.extend(
+                (
+                    f"level_{index} = level_{index - 1}",
+                    f"level_{index} = level_{index - 1}",
+                )
+            )
+        source = (
+            "TOKEN=$(printf '%s' \"$RESPONSE\" | python3 -I -S -c '\n"
+            "import json\n"
+            "import sys\n"
+            + "\n".join(assignments)
+            + "\nprint(level_11)\n"
+            "') || exit 3\n"
+        )
+
+        with patch.object(
+            authored_content,
+            "_MAX_PYTHON_DECODER_EVALUATION_STEPS",
+            32,
+        ):
+            findings = find_static_secret_issues(
+                source,
+                Path("runtime-decoder.sh"),
+            )
+
+        self.assertEqual(
+            [finding.pattern for finding in findings],
+            ["sensitive-assignment"],
+        )
+
+    def test_shell_runtime_decoder_budget_is_shared_across_candidates(self):
+        def pipeline(response: str) -> str:
+            return (
+                f"SERVICE_TOKEN=$(printf '%s' \"${response}\" | python3 -I -S -c '\n"
+                "import json\n"
+                "import sys\n"
+                "data = json.load(sys.stdin)\n"
+                'token = data.get("token")\n'
+                "print(token)\n"
+                "') || exit 3\n"
+            )
+
+        source = pipeline("RESPONSE_A") + pipeline("RESPONSE_B")
+        with patch.object(
+            authored_content,
+            "_MAX_PYTHON_DECODER_EVALUATION_STEPS",
+            12,
+        ):
+            findings = find_static_secret_issues(
+                source,
+                Path("runtime-decoders.sh"),
+            )
+
+        self.assertEqual(
+            [finding.pattern for finding in findings],
+            ["sensitive-assignment"],
+        )
+
+    def test_python_assignment_recovery_is_deferred_until_needed(self):
+        source = "value = 1\n" * 100
+        with patch.object(
+            authored_content,
+            "_python_assignment_values",
+            side_effect=AssertionError("AST recovery must remain lazy"),
+        ) as recover:
+            findings = find_static_secret_issues(
+                source,
+                Path("large-safe-module.py"),
+            )
+
+        self.assertEqual(findings, [])
+        recover.assert_not_called()
+
+    def test_python_assignment_recovery_has_preparse_resource_limits(self):
+        self.assertTrue(
+            hasattr(
+                authored_content,
+                "_MAX_PYTHON_ASSIGNMENT_RECOVERY_BYTES",
+            )
+        )
+        self.assertTrue(
+            hasattr(
+                authored_content,
+                "_MAX_PYTHON_ASSIGNMENT_RECOVERY_TOKENS",
+            )
+        )
+        oversized = "x" * (
+            authored_content._MAX_PYTHON_ASSIGNMENT_RECOVERY_BYTES + 1
+        )
+        over_tokenized = "x=1;" * (
+            authored_content._MAX_PYTHON_ASSIGNMENT_RECOVERY_TOKENS + 1
+        )
+
+        for label, source in (
+            ("bytes", oversized),
+            ("tokens", over_tokenized),
+        ):
+            with (
+                self.subTest(limit=label),
+                patch.object(
+                    authored_content.ast,
+                    "parse",
+                    side_effect=AssertionError(
+                        "resource guard must run before ast.parse"
+                    ),
+                ) as parse,
+            ):
+                values = authored_content._python_assignment_values(source)
+
+            self.assertEqual(values, {})
+            parse.assert_not_called()
+
+    def test_binary_secret_views_are_decoded_and_scanned_lazily(self):
+        sentinel = object()
+        with patch.object(
+            authored_content,
+            "_scan_static_secret_byte_view",
+            create=True,
+            return_value=(sentinel,),
+        ) as scan_view:
+            findings = authored_content.find_static_secret_issues_in_bytes(
+                b"content",
+                Path("asset.bin"),
+                maximum_findings=1,
+            )
+
+        self.assertEqual(findings, [sentinel])
+        scan_view.assert_called_once()
+
+    def test_utf32_binary_secret_views_cover_supported_secret_contracts(self):
+        cases = (
+            ("github-token", "ghp_" + ("a" * 36)),
+            ("sensitive-assignment", "SERVICE_TOKEN=authored-value"),
+            (
+                "private-key-block",
+                "-----BEGIN PRIVATE KEY-----\n"
+                "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n"
+                "-----END PRIVATE KEY-----",
+            ),
+        )
+        for expected_pattern, text in cases:
+            for encoding in ("utf-32-le", "utf-32-be"):
+                for offset in range(4):
+                    with self.subTest(
+                        pattern=expected_pattern,
+                        encoding=encoding,
+                        offset=offset,
+                    ):
+                        findings = (
+                            authored_content.find_static_secret_issues_in_bytes(
+                                (b"x" * offset) + text.encode(encoding),
+                                Path("asset.bin"),
+                            )
+                        )
+
+                        self.assertIn(
+                            expected_pattern,
+                            [finding.pattern for finding in findings],
+                        )
 
     def test_exact_environment_references_remain_allowed_assignment_values(self):
         safe_values = (
@@ -1387,8 +3283,230 @@ class SecretPatternTests(unittest.TestCase):
         self.assertEqual([match.pattern for match in matches], ["private-key-block"])
         self.assertNotIn("ZmFrZQ", repr(matches))
 
+    def test_unterminated_private_key_blocks_fail_and_redact_through_eof(self):
+        private_key = (
+            "prefix\n-----BEGIN PRIVATE KEY-----\n"
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n"
+        )
+
+        result = scan_static_secret_issues(private_key, Path("fixture.pem"))
+
+        self.assertEqual(
+            [match.pattern for match in result.findings],
+            ["private-key-block"],
+        )
+        self.assertEqual(
+            result.durable_text,
+            "prefix\n" + SENSITIVE_TEXT_REDACTION,
+        )
+        self.assertNotIn("MIIEvQ", repr(result.findings))
+
+    def test_openpgp_private_key_blocks_fail_closed_and_unterminated(self):
+        for label in ("PGP PRIVATE KEY BLOCK", "PGP SECRET KEY BLOCK"):
+            closed = (
+                f"-----BEGIN {label}-----\n"
+                "ZmFrZQ==\n"
+                f"-----END {label}-----"
+            )
+            unterminated = (
+                f"prefix\n-----BEGIN {label}-----\n"
+                "ZmFrZQ==\n"
+            )
+            with self.subTest(label=label, state="closed"):
+                result = scan_static_secret_issues(
+                    closed,
+                    Path("fixture.asc"),
+                )
+                self.assertEqual(
+                    [finding.pattern for finding in result.findings],
+                    ["private-key-block"],
+                )
+                self.assertNotIn("ZmFrZQ", result.durable_text)
+            with self.subTest(label=label, state="unterminated"):
+                result = scan_static_secret_issues(
+                    unterminated,
+                    Path("fixture.asc"),
+                )
+                self.assertEqual(
+                    [finding.pattern for finding in result.findings],
+                    ["private-key-block"],
+                )
+                self.assertEqual(
+                    result.durable_text,
+                    "prefix\n" + SENSITIVE_TEXT_REDACTION,
+                )
+
+
+class _FakeSkillsRefDistribution:
+    def __init__(self, root: Path, commit: str) -> None:
+        self._root = root
+        self._commit = commit
+
+    def locate_file(self, path: str) -> Path:
+        return self._root / path
+
+    def read_text(self, filename: str) -> str | None:
+        if filename != "direct_url.json":
+            return None
+        return json.dumps(
+            {
+                "subdirectory": "skills-ref",
+                "url": "https://github.com/agentskills/agentskills.git",
+                "vcs_info": {
+                    "commit_id": self._commit,
+                    "requested_revision": self._commit,
+                    "vcs": "git",
+                },
+            }
+        )
+
 
 class ReferenceConformanceTests(TemporaryRepositoryTestCase):
+    def test_importing_conformance_does_not_execute_reference_validator(self):
+        repository_root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            attacker = root / "site-packages"
+            marker = root / "reference-validator-imported"
+            package = attacker / "skills_ref"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text(
+                "from pathlib import Path\n"
+                f"Path({str(marker)!r}).write_text('loaded', encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+            command = (
+                "import sys\n"
+                f"sys.path[:0] = [{str(repository_root)!r}, {str(attacker)!r}]\n"
+                "import scripts.ai_skills_lib.static_checks.conformance\n"
+            )
+
+            completed = subprocess.run(
+                [sys.executable, "-I", "-c", command],
+                cwd=root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertFalse(marker.exists())
+
+    def test_preflight_imports_verified_sources_instead_of_a_shadow_package(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            distribution_root = root / "site-packages"
+            installed_module = distribution_root / "skills_ref" / "__init__.py"
+            installed_module.parent.mkdir(parents=True)
+            verified_source = b"def validate(path):\n    return []\n"
+            installed_module.write_bytes(verified_source)
+            attacker_root = root / "attacker"
+            attacker_module = attacker_root / "skills_ref" / "__init__.py"
+            attacker_module.parent.mkdir(parents=True)
+            marker = root / "shadow-package-imported"
+            attacker_module.write_text(
+                "from pathlib import Path\n"
+                f"Path({str(marker)!r}).write_text('loaded', encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+
+            distribution = _FakeSkillsRefDistribution(
+                distribution_root,
+                conformance.EXPECTED_SKILLS_REF_COMMIT,
+            )
+            with (
+                patch.object(
+                    conformance.importlib_metadata,
+                    "distribution",
+                    return_value=distribution,
+                ),
+                patch.object(
+                    conformance,
+                    "_EXPECTED_SKILLS_REF_SOURCES",
+                    {
+                        "__init__.py": (
+                            len(verified_source),
+                            hashlib.sha256(verified_source).hexdigest(),
+                        )
+                    },
+                ),
+                patch.object(
+                    sys,
+                    "path",
+                    [str(attacker_root), *sys.path],
+                ),
+            ):
+                reference = conformance.preflight_reference_conformance()
+
+            self.assertEqual(reference.validate(Path("skill")), [])
+            self.assertFalse(marker.exists())
+
+    def test_preflight_rejects_a_stale_reference_validator_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            distribution_root = Path(directory) / "site-packages"
+            distribution_root.mkdir(parents=True)
+
+            distribution = _FakeSkillsRefDistribution(
+                distribution_root,
+                "0" * 40,
+            )
+            with patch.object(
+                conformance.importlib_metadata,
+                "distribution",
+                return_value=distribution,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "pip install -r requirements-test.txt",
+                ):
+                    conformance.preflight_reference_conformance()
+
+    def test_preflight_rejects_tampered_source_before_import(self):
+        with tempfile.TemporaryDirectory() as directory:
+            distribution_root = Path(directory) / "site-packages"
+            module_path = distribution_root / "skills_ref" / "__init__.py"
+            module_path.parent.mkdir(parents=True)
+            module_path.write_text(
+                "raise RuntimeError('tampered source executed')\n",
+                encoding="utf-8",
+            )
+            expected_source = b"def validate(path):\n    return []\n"
+            distribution = _FakeSkillsRefDistribution(
+                distribution_root,
+                conformance.EXPECTED_SKILLS_REF_COMMIT,
+            )
+            with (
+                patch.object(
+                    conformance.importlib_metadata,
+                    "distribution",
+                    return_value=distribution,
+                ),
+                patch.object(
+                    conformance,
+                    "_EXPECTED_SKILLS_REF_SOURCES",
+                    {
+                        "__init__.py": (
+                            len(expected_source),
+                            hashlib.sha256(expected_source).hexdigest(),
+                        )
+                    },
+                ),
+                patch.object(
+                    conformance.importlib,
+                    "import_module",
+                    side_effect=AssertionError(
+                        "tampered source must fail before import"
+                    ),
+                ) as import_module,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "pip install -r requirements-test.txt",
+                ):
+                    conformance.preflight_reference_conformance()
+
+            import_module.assert_not_called()
+
     def test_pinned_reference_validator_accepts_a_valid_discovered_skill(self):
         self.repository.add_skill("alpha")
 
@@ -1397,17 +3515,39 @@ class ReferenceConformanceTests(TemporaryRepositoryTestCase):
     def test_reference_failures_are_grouped_by_skill_and_preserve_messages(self):
         skill_root = self.repository.add_skill("alpha")
         reference_message = "Reference validator detail is preserved."
+        inspected: list[tuple[Path, str]] = []
 
-        with patch(
-            "scripts.ai_skills_lib.static_checks.conformance.skills_ref.validate",
-            return_value=[reference_message],
-        ) as validate:
+        def validate_snapshot(path: Path) -> list[str]:
+            inspected.append(
+                (
+                    path,
+                    (path / "SKILL.md").read_text(encoding="utf-8"),
+                )
+            )
+            return [reference_message]
+
+        reference = type(
+            "ReferenceValidator",
+            (),
+            {"validate": staticmethod(validate_snapshot)},
+        )()
+        with patch.object(
+            conformance,
+            "preflight_reference_conformance",
+            return_value=reference,
+        ):
             issues = run_reference_conformance(self.repository.root)
 
         self.assertEqual(len(issues), 1)
         self.assertIn("alpha", issues[0].scope)
         self.assertEqual(issues[0].message, reference_message)
-        validate.assert_called_once_with(skill_root.resolve())
+        self.assertEqual(len(inspected), 1)
+        self.assertEqual(inspected[0][0].name, "alpha")
+        self.assertNotEqual(inspected[0][0], skill_root.resolve())
+        self.assertEqual(
+            inspected[0][1],
+            (skill_root / "SKILL.md").read_text(encoding="utf-8"),
+        )
 
     def test_pre_model_gate_runs_static_then_reference_from_one_context(self):
         self.repository.add_skill("alpha")
@@ -1436,7 +3576,63 @@ class ReferenceConformanceTests(TemporaryRepositoryTestCase):
 
         self.assertEqual(issues, [])
         self.assertEqual(order, ["static", "reference"])
-        build_context.assert_called_once_with(self.repository.root.resolve())
+        build_context.assert_called_once_with(
+            self.repository.root.resolve(),
+            budget=ANY,
+        )
+
+    def test_pre_model_gate_rechecks_skill_source_after_reference_conformance(self):
+        skill_root = self.repository.add_skill("alpha")
+        skill_path = skill_root / "SKILL.md"
+
+        def replace_source(_context):
+            replacement = skill_root / "SKILL.replacement"
+            replacement.write_bytes(skill_path.read_bytes())
+            replacement.replace(skill_path)
+            return []
+
+        with patch.object(
+            static_validation,
+            "validate_reference_conformance",
+            side_effect=replace_source,
+        ):
+            issues = static_validation.run_pre_model_validation(
+                self.repository.root
+            )
+
+        self.assertTrue(
+            any("SKILL.md changed after discovery" in issue.message for issue in issues),
+            issues,
+        )
+
+    def test_pre_model_gate_rechecks_out_of_tree_skills_after_conformance(self):
+        self.repository.add_skill("alpha")
+        alternate = self.repository.root / "alternate" / "alpha" / "SKILL.md"
+        alternate.parent.mkdir(parents=True)
+        hidden = alternate.with_name("hidden.md")
+        hidden.write_text("duplicate source\n", encoding="utf-8")
+
+        def restore_out_of_tree_skill(_context):
+            hidden.rename(alternate)
+            return []
+
+        with patch.object(
+            static_validation,
+            "validate_reference_conformance",
+            side_effect=restore_out_of_tree_skill,
+        ):
+            issues = static_validation.run_pre_model_validation(
+                self.repository.root
+            )
+
+        self.assertTrue(
+            any(
+                "outside the canonical skills/<group>/<skill>/SKILL.md source tree"
+                in issue.message
+                for issue in issues
+            ),
+            issues,
+        )
 
 
 class CliValidationTests(TemporaryRepositoryTestCase):

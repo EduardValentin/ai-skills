@@ -28,11 +28,15 @@ never edit installed or generated copies.
   not claims about the public specification.
 - Parse frontmatter with StrictYAML. Keep repository policy in the shared
   validator. Use the pinned official `skills-ref` conformance check through
-  `python3 scripts/ai_skills.py validate ci-all`; review the specification,
-  documentation, and tests before updating that pin.
+  `scripts/ai-skills validate ci-all`; review the specification,
+  documentation, tests, and verified source manifest before updating that pin.
+- Keep the isolated CLI bound to the exact repository `scripts/` package.
+  Never expose the repository root as a general dependency import path before
+  static validation.
 - Each skill root may contain only supported entries. Validate those entries
   statically by directory; reject unknown root directories, broken or escaping
-  symlinks, empty directories, and `.gitkeep` placeholders without scanning
+  symlinks, directory symlink cycles, public-installer discovery or copy
+  exclusions, empty directories, and `.gitkeep` placeholders without scanning
   arbitrary nested prose.
 - Require the repository frontmatter and metadata fields. Set
   `metadata.allows_tool_references: "true"` when a skill references tools,
@@ -51,9 +55,15 @@ never edit installed or generated copies.
 - Trigger requirements are uniform regardless of status. Run each query once
   by default, or uniformly use `--runs 2` or `--runs 3`. Unanimous results are
   stable. Two of three meets the threshold only after investigating the failed
-  run; every other non-unanimous result fails. Preserve every discordant run;
+  run, adding complete validated manual grading for every attempt, and
+  aggregating with the manual source; judge-only aggregation must reject it.
+  Every other non-unanimous result fails. Preserve every discordant run;
   Codex activation requires an exact successful read of the installed
-  `SKILL.md`.
+  `SKILL.md` through a trusted system reader, with returned bytes equal to the
+  prepared installed skill. Derive that read from one complete actor lifecycle
+  with matched command ID, trusted reader, zero exit status, successful command
+  status, matched tool start/completion IDs, and no unknown, out-of-order, or
+  duplicate events; enforce the same lifecycle during offline aggregation.
 - Keep trigger files runner-free: `skill_name` matches the skill, query IDs are
   unique, every query has `query` and boolean `should_trigger`, and each skill
   includes positive and near-miss negative coverage. Require a contained
@@ -68,7 +78,22 @@ never edit installed or generated copies.
   supported values are `1` through `4`. Hidden retries are forbidden; preserve
   every attempted run outside the repository. Declare the exact immutable
   invocation attempt set before preflight so aggregation can reject missing or
-  injected runs.
+  injected runs. Keep generated result JSON within the shared writer/reader
+  ceiling before preflight; deterministic schemas total at most 512 KiB per
+  behavior case. Derive the captured-output entry allowance from the complete
+  per-attempt artifact contract, and reserve final benchmark and summary
+  capacity before accepting a completed attempt. Give each invocation a fresh
+  random identity, carry it
+  through every structured attempt artifact, and bind `attempt.json` into
+  grading evidence. Bind every attempt to a variant-independent scenario
+  digest; require all behavior arms or repeated trigger runs in one group to
+  share that digest and their immutable contracts. Bind preflight capabilities
+  to that exact invocation through the runner-owned receipt and exact adapter;
+  do not add an unbound capabilities bypass. Pass the preflight-selected actor
+  and judge model configurations explicitly into every request and reject
+  configured metadata drift across the complete invocation. Treat persisted
+  model fields as exact bound-request configuration, not independent
+  backend-routing attestation.
 - Create skill-local fixtures only when a case needs them, preferably at
   `evals/fixtures/<eval-id>/`, and reference them from `evals/evals.json`.
   For production-shaped private-integration HTTP(S), use
@@ -80,7 +105,9 @@ never edit installed or generated copies.
   response bodies, or unbounded repetition. Require exact non-empty method,
   path, and `Host` matchers; keep the total declared calls at or below the
   manifest limit. Every declared call is verified. Bind actor inputs and HTTP
-  initialization to the exact current case fixture root.
+  initialization to the exact current case fixture root. Keep MockServer
+  sidecars case-scoped: prove every declared TLS subject with a real handshake,
+  then destroy the sidecar and generated certificate state before worker reuse.
 - Keep behavior definitions generic and runner-owned: actor prompts must not
   contain expected results, grading guidance, or unnecessary disclosure of
   evaluation, sandbox, fixture, mock, or shim mechanics. Describe available
@@ -89,6 +116,9 @@ never edit installed or generated copies.
   contracts. Declared inputs stay below the exact case `inputs/` directory;
   executable `inputs/bin/` collaborators are runner-added to the actor `PATH`;
   runner-only schemas and proxy expectations stay outside `inputs/`.
+- Keep behavior variant identity runner-only. Never include `with_skill` or
+  `without_skill` labels in judge controls or evidence, and require every
+  behavior attempt in an aggregation group to share one judge-control digest.
 - Model-backed runs use reusable Docker Sandboxes worker pools. Give every case
   a fresh actor projection, workspace, `CODEX_HOME`, and ephemeral harness
   session; keep actor and judge workers separate, keep real credentials in the
@@ -110,11 +140,17 @@ never edit installed or generated copies.
   Sandboxes/Codex/MockServer smoke tests belong under
   `tests/integration/eval_runtime/` and run only through model-backed preflight
   or an explicit integration command.
+- Unit and runtime tests are reviewed repository code executed on the host.
+  Their isolated environment, snapshots, output limits, and process groups are
+  deterministic hygiene, not an adversarial sandbox. Keep untrusted or
+  model-driven execution inside Docker Sandboxes.
 - Non-trivial bundled executable code may have deterministic tests under
   `tests/runtime/`. Keep tests and test-only dependencies outside installable
   skill folders. Use one named directory per suite with at least one
   `test_*.py`; do not add root-level files, symlinks, hidden entries, or empty
-  suites. `validate runtime` is included by `validate ci-all`.
+  suites. Give each suite a fresh materialized repository snapshot while
+  preserving the aggregate deadline. `validate runtime` is included by
+  `validate ci-all`.
 - Secret scanning distinguishes values from names: allow documented
   environment-variable identifiers, lookups, references, and recognized
   placeholders; reject private-key blocks and high-confidence credential
@@ -130,6 +166,8 @@ never edit installed or generated copies.
 - Hard absence evidence is allowed for structural, security, artifact, and
   negative-trigger contracts. Do not use brittle absence assertions against
   model prose.
+- Manual grading may override judge-scored semantic assertions, but it must
+  preserve deterministic assertion outcomes and evidence exactly.
 - Config-required skills document environment variables or config-file path
   variables in `compatibility`, avoid personal hardcoded paths, and keep each
   config-reading helper inside its skill folder.
@@ -145,8 +183,8 @@ never edit installed or generated copies.
   python3 scripts/sync_native_agents.py check
   ```
 
-- `python3 scripts/ai_skills.py validate ci-all` is the sole routine PR gate.
+- `scripts/ai-skills validate ci-all` is the sole routine PR gate.
 - Only after the user explicitly approves PR creation, run the read-only
-  `python3 scripts/ai_skills.py check-local-installs --harness codex`
+  `scripts/ai-skills check-local-installs --harness codex`
   diagnostic. Report duplicate, missing, or stale repository skills and never
   repair local state automatically.

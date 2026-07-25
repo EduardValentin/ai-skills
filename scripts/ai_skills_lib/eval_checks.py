@@ -18,6 +18,7 @@ from scripts.ai_skills_lib.authored_content import (
     strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.eval_core import (
+    AssertionContract,
     AssertionResult,
     ResultArtifactError,
     completed_attempt_control_evidence_reference,
@@ -34,6 +35,119 @@ from scripts.ai_skills_lib.json_schema_policy import (
 
 _MAX_EVAL_OUTPUT_JSON_BYTES = 4 * 1024 * 1024
 _MAX_SECRET_EVIDENCE_REFERENCES = 16
+
+
+def behavior_check_to_document(check: BehaviorCheck) -> dict[str, object]:
+    """Serialize one deterministic check without lossy defaults."""
+    document: dict[str, object] = {"type": check.type}
+    if check.path is not None:
+        document["path"] = check.path.as_posix()
+    if check.schema is not None:
+        document["schema"] = check.schema.as_posix()
+    if check.expected is not None:
+        document["expected"] = check.expected
+    if check.format is not None:
+        document["format"] = check.format
+    behavior_check_from_document(document)
+    return document
+
+
+def behavior_check_from_document(document: Mapping[str, object]) -> BehaviorCheck:
+    """Reconstruct one strict deterministic check from preserved JSON data."""
+    if not isinstance(document, Mapping):
+        raise ResultArtifactError("deterministic check definition must be an object")
+    check_type = document.get("type")
+    fields_by_type = {
+        "file_exists": frozenset({"type", "path"}),
+        "path_absent": frozenset({"type", "path"}),
+        "json_schema": frozenset({"type", "path", "schema"}),
+        "exit_code": frozenset({"type", "expected"}),
+        "no_secret_patterns": frozenset({"type"}),
+        "response_protocol": frozenset({"type", "format", "schema"}),
+    }
+    allowed = fields_by_type.get(check_type)
+    if allowed is None or not set(document).issubset(allowed):
+        raise ResultArtifactError("deterministic check definition is unsupported")
+    required = allowed - ({"schema"} if check_type == "response_protocol" else set())
+    if not required.issubset(document):
+        raise ResultArtifactError("deterministic check definition is incomplete")
+
+    def path_value(name: str) -> PurePosixPath | None:
+        value = document.get(name)
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ResultArtifactError("deterministic check path must be text")
+        path = PurePosixPath(value)
+        if (
+            path.is_absolute()
+            or not path.parts
+            or str(path) in ("", ".")
+            or ".." in path.parts
+            or "\\" in value
+        ):
+            raise ResultArtifactError("deterministic check path must be contained")
+        return path
+
+    expected = document.get("expected")
+    if expected is not None and (type(expected) is not int or expected != 0):
+        raise ResultArtifactError("deterministic exit-code check must expect zero")
+    output_format = document.get("format")
+    if output_format is not None and output_format not in ("json", "jsonl"):
+        raise ResultArtifactError("deterministic response protocol is unsupported")
+    return BehaviorCheck(
+        type=str(check_type),
+        path=path_value("path"),
+        schema=path_value("schema"),
+        expected=expected,
+        format=output_format,
+    )
+
+
+def deterministic_check_contracts(
+    checks: Sequence[BehaviorCheck],
+) -> tuple[AssertionContract, ...]:
+    """Declare the exact deterministic assertions before actor execution."""
+    contracts: list[AssertionContract] = []
+    for index, check in enumerate(checks, start=1):
+        check_id = f"check-{index}"
+        if check.type == "file_exists":
+            text = f"The actor creates the regular output file {_required_path(check)}."
+        elif check.type == "path_absent":
+            text = f"The actor does not create outputs/{_required_path(check)}."
+        elif check.type == "json_schema":
+            text = (
+                f"The output {_required_path(check)} conforms to "
+                f"{_required_schema(check)}."
+            )
+        elif check.type == "exit_code":
+            if check.expected is None:
+                raise ResultArtifactError("exit_code check is missing expected")
+            text = f"The actor harness exits with code {check.expected}."
+        elif check.type == "no_secret_patterns":
+            text = (
+                "The final response and captured text outputs contain no "
+                "high-confidence secrets."
+            )
+        elif check.type == "response_protocol":
+            if check.format not in ("json", "jsonl"):
+                raise ResultArtifactError(
+                    "response_protocol check has an unsupported format"
+                )
+            text = f"The final response uses the {check.format} protocol."
+        else:
+            raise ResultArtifactError(
+                f"unsupported deterministic check type: {check.type}"
+            )
+        contracts.append(
+            AssertionContract(
+                id=check_id,
+                kind="check",
+                text=text,
+                checked_by="deterministic",
+            )
+        )
+    return tuple(contracts)
 
 
 def evaluate_deterministic_checks(

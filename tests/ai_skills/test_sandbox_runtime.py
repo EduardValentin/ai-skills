@@ -38,6 +38,7 @@ from scripts.ai_skills_lib.sandbox_runtime import (
     OWNERSHIP_MARKER_PROBE_SCRIPT,
     PROCESS_FULLY_TERMINATED,
     PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+    ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
     ProcessTerminationOutcome,
     SandboxRuntime,
     SandboxRuntimeError,
@@ -77,12 +78,15 @@ class FakeProcessRunner:
         self.results = list(results or [])
         self.side_effect = side_effect
         self.calls: list[tuple[tuple[str, ...], int]] = []
+        self.sandboxes: dict[str, str] = {}
 
     def run(self, argv: tuple[str, ...], *, timeout_seconds: int) -> CommandResult:
         self.calls.append((argv, timeout_seconds))
         if self.side_effect is not None:
             override = self.side_effect(argv)
             if isinstance(override, CommandResult):
+                if argv == ("sbx", "ls", "--json"):
+                    self._remember_sandbox_list(override)
                 return override
         if argv[:3] == ("sbx", "exec", "--user"):
             marker_result = ownership_marker_probe_result(argv)
@@ -104,6 +108,7 @@ class FakeProcessRunner:
                         CASE_PRIVILEGE_PROBE_SCRIPT,
                         DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
                         PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+                        ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
                     )
                 ):
                     return completed()
@@ -120,6 +125,7 @@ class FakeProcessRunner:
                     CASE_PRIVILEGE_PROBE_SCRIPT,
                     DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
                     PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+                    ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
                 )
             ):
                 return completed()
@@ -128,10 +134,22 @@ class FakeProcessRunner:
             if previous not in (("sbx", "create"), ("sbx", "rm")) and (
                 not self.results or not self._is_sandbox_list(self.results[0])
             ):
-                return completed(json.dumps({"sandboxes": []}))
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in self.sandboxes.items()
+                            ]
+                        }
+                    )
+                )
         if not self.results:
             raise AssertionError(f"unexpected process call: {argv!r}")
-        return self.results.pop(0)
+        result = self.results.pop(0)
+        if argv == ("sbx", "ls", "--json"):
+            self._remember_sandbox_list(result)
+        return result
 
     @staticmethod
     def _is_sandbox_list(result: CommandResult) -> bool:
@@ -140,6 +158,18 @@ class FakeProcessRunner:
         except (TypeError, json.JSONDecodeError):
             return False
         return isinstance(payload, dict) and isinstance(payload.get("sandboxes"), list)
+
+    def _remember_sandbox_list(self, result: CommandResult) -> None:
+        if not self._is_sandbox_list(result):
+            return
+        payload = json.loads(result.stdout)
+        self.sandboxes = {
+            item["id"]: item["name"]
+            for item in payload["sandboxes"]
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and isinstance(item.get("name"), str)
+        }
 
 
 def completed(stdout: str = "", stderr: str = "") -> CommandResult:
@@ -255,6 +285,8 @@ class EvalRuntimeManifestTests(unittest.TestCase):
         )
         self.assertEqual(manifest.workers.default_concurrency, 2)
         self.assertEqual(manifest.workers.maximum_concurrency, 4)
+        self.assertEqual(manifest.mockserver.reuse_scope, "case")
+        self.assertEqual(manifest.mockserver.ca_scope, "case")
         self.assertEqual(manifest.case_isolation.writable_filesystem, "tmpfs")
         self.assertEqual(manifest.case_isolation.maximum_writable_bytes, 268435456)
         self.assertEqual(manifest.case_isolation.maximum_writable_inodes, 32768)
@@ -651,6 +683,25 @@ class SubprocessRunnerTests(unittest.TestCase):
             "a reaped leader's numeric process-group ID must only be observed",
         )
 
+    def test_completed_leader_is_not_reaped_until_its_descendants_are_terminated(
+        self,
+    ) -> None:
+        script = (
+            "import os,time;"
+            "child=os.fork();"
+            "(time.sleep(30) if child == 0 else print(child, flush=True));"
+            "os._exit(0)"
+        )
+
+        result = SubprocessRunner(maximum_output_bytes=1024).run(
+            (sys.executable, "-c", script),
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(result.timed_out)
+        self.assertTrue(result.process_outcome.fully_terminated_and_reaped)
+
 
 class SandboxRuntimeTests(unittest.TestCase):
     def test_case_filesystem_scripts_are_valid_python(self) -> None:
@@ -668,12 +719,178 @@ class SandboxRuntimeTests(unittest.TestCase):
             "<public-skill-catalog-probe>",
             "exec",
         )
+        compile(
+            ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
+            "<root-filesystem-write-denial-probe>",
+            "exec",
+        )
         compile(CASE_PRIVILEGE_LOCKDOWN_SCRIPT, "<case-privilege-lockdown>", "exec")
         compile(CASE_PRIVILEGE_PROBE_SCRIPT, "<case-privilege-probe>", "exec")
         compile(CASE_CGROUP_SETUP_SCRIPT, "<case-cgroup-setup>", "exec")
         compile(CASE_CGROUP_EXEC_SCRIPT, "<case-cgroup-exec>", "exec")
         compile(CASE_CGROUP_TERMINATE_SCRIPT, "<case-cgroup-terminate>", "exec")
         compile(CASE_CGROUP_REMOVE_SCRIPT, "<case-cgroup-remove>", "exec")
+
+    def test_root_filesystem_probe_rejects_writable_regular_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            root = temporary / "root"
+            root.mkdir()
+            mountinfo = temporary / "mountinfo"
+            mountinfo.write_text(
+                f"1 0 0:1 / {root.resolve()} ro - ext4 /dev/root ro\n",
+                encoding="utf-8",
+            )
+            nested = root / "read-only-directory"
+            nested.mkdir()
+            writable = nested / "writable.txt"
+            writable.write_text("state", encoding="utf-8")
+            root.chmod(0o555)
+            nested.chmod(0o555)
+            writable.chmod(0o666)
+            try:
+                result = subprocess.run(
+                    (
+                        sys.executable,
+                        "-c",
+                        ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
+                        str(root),
+                        str(mountinfo),
+                    ),
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            finally:
+                writable.chmod(0o600)
+                nested.chmod(0o700)
+                root.chmod(0o700)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("writable root filesystem file", result.stderr)
+
+    def test_root_filesystem_probe_rejects_uninspectable_traversable_directory(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            root = temporary / "root"
+            root.mkdir()
+            mountinfo = temporary / "mountinfo"
+            mountinfo.write_text(
+                f"1 0 0:1 / {root.resolve()} ro - ext4 /dev/root ro\n",
+                encoding="utf-8",
+            )
+            hidden = root / "execute-only"
+            hidden.mkdir()
+            writable = hidden / "writable.txt"
+            writable.write_text("state", encoding="utf-8")
+            root.chmod(0o555)
+            hidden.chmod(0o111)
+            writable.chmod(0o666)
+            try:
+                result = subprocess.run(
+                    (
+                        sys.executable,
+                        "-c",
+                        ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
+                        str(root),
+                        str(mountinfo),
+                    ),
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            finally:
+                hidden.chmod(0o700)
+                writable.chmod(0o600)
+                root.chmod(0o700)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "cannot inspect actor-traversable root filesystem directory",
+            result.stderr,
+        )
+
+    def test_root_filesystem_probe_rejects_writable_secondary_mount(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            root = temporary / "root"
+            secondary_mount = root / "mnt" / "cache"
+            secondary_mount.mkdir(parents=True)
+            mountinfo = temporary / "mountinfo"
+            mountinfo.write_text(
+                (
+                    f"1 0 0:1 / {root.resolve()} ro - ext4 /dev/root ro\n"
+                    f"2 1 0:2 / {secondary_mount.resolve()} rw - tmpfs cache rw\n"
+                ),
+                encoding="utf-8",
+            )
+            root.chmod(0o555)
+            secondary_mount.parent.chmod(0o555)
+            secondary_mount.chmod(0o777)
+            try:
+                result = subprocess.run(
+                    (
+                        sys.executable,
+                        "-c",
+                        ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
+                        str(root),
+                        str(mountinfo),
+                    ),
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            finally:
+                secondary_mount.chmod(0o700)
+                secondary_mount.parent.chmod(0o700)
+                root.chmod(0o700)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "writable filesystem mount outside case tmpfs",
+            result.stderr,
+        )
+
+    def test_root_filesystem_probe_accepts_declared_stacked_case_mount(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            root = temporary / "root"
+            case_mount = root / "case"
+            case_mount.mkdir(parents=True)
+            mountinfo = temporary / "mountinfo"
+            mountinfo.write_text(
+                (
+                    f"1 0 0:1 / {root.resolve()} ro - ext4 /dev/root ro\n"
+                    f"2 1 0:2 / {case_mount.resolve()} rw - tmpfs original rw\n"
+                    f"3 2 0:3 / {case_mount.resolve()} rw - tmpfs selected rw\n"
+                ),
+                encoding="utf-8",
+            )
+            root.chmod(0o555)
+            case_mount.parent.chmod(0o555)
+            case_mount.chmod(0o777)
+            try:
+                result = subprocess.run(
+                    (
+                        sys.executable,
+                        "-c",
+                        ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
+                        str(root),
+                        str(mountinfo),
+                        str(case_mount),
+                    ),
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            finally:
+                case_mount.chmod(0o700)
+                case_mount.parent.chmod(0o700)
+                root.chmod(0o700)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_cgroup_termination_is_idempotent_for_a_stably_empty_group(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1353,6 +1570,163 @@ class SandboxRuntimeTests(unittest.TestCase):
             process.calls,
         )
         self.assertNotIn("personal-sandbox", [part for argv, _ in process.calls for part in argv])
+
+    def test_worker_execution_rejects_same_name_with_a_replacement_id(self) -> None:
+        sandboxes: dict[str, str] = {}
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                sandboxes["actor-id"] = argv[argv.index("--name") + 1]
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                return completed()
+            if argv[:3] == ("sbx", "rm", "--force"):
+                discard_sandbox_by_name(sandboxes, argv[3])
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            calls_before_replacement = len(process.calls)
+            sandboxes = {"replacement-id": worker.name}
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "identity no longer matches"):
+                runtime.run_worker_control(worker, ("true",))
+
+        replacement_calls = [
+            argv for argv, _ in process.calls[calls_before_replacement:]
+        ]
+        self.assertFalse(
+            any(argv[:2] in (("sbx", "exec"), ("sbx", "rm")) for argv in replacement_calls)
+        )
+
+    def test_cleanup_rejects_same_name_with_a_replacement_id(self) -> None:
+        sandboxes: dict[str, str] = {}
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                sandboxes["actor-id"] = argv[argv.index("--name") + 1]
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                return completed()
+            if argv[:3] == ("sbx", "rm", "--force"):
+                discard_sandbox_by_name(sandboxes, argv[3])
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            calls_before_replacement = len(process.calls)
+            sandboxes = {"replacement-id": worker.name}
+
+            with self.assertRaisesRegex(SandboxRuntimeError, "identity no longer matches"):
+                runtime.close()
+
+        replacement_calls = [
+            argv for argv, _ in process.calls[calls_before_replacement:]
+        ]
+        self.assertFalse(
+            any(argv[:2] in (("sbx", "exec"), ("sbx", "rm")) for argv in replacement_calls)
+        )
+
+    def test_cleanup_rejects_replacement_created_during_removal(self) -> None:
+        sandboxes: dict[str, str] = {}
+
+        def run_command(argv: tuple[str, ...]) -> CommandResult:
+            marker_result = ownership_marker_probe_result(argv)
+            if marker_result is not None:
+                return marker_result
+            if argv == ("sbx", "ls", "--json"):
+                return completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {"id": sandbox_id, "name": name}
+                                for sandbox_id, name in sandboxes.items()
+                            ]
+                        }
+                    )
+                )
+            if argv[:2] == ("sbx", "create"):
+                sandboxes["actor-id"] = argv[argv.index("--name") + 1]
+                return completed()
+            if argv[:4] == ("sbx", "exec", "--user", "root"):
+                return completed()
+            if argv[:3] == ("sbx", "rm", "--force"):
+                name = argv[3]
+                discard_sandbox_by_name(sandboxes, name)
+                sandboxes["replacement-id"] = name
+                return completed()
+            raise AssertionError(f"unexpected process call: {argv!r}")
+
+        process = FakeProcessRunner(side_effect=run_command)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "identity no longer matches",
+            ):
+                runtime.close()
+
+            self.assertEqual(sandboxes, {"replacement-id": worker.name})
 
     def test_close_attempts_every_target_and_recovers_by_exact_identity(self) -> None:
         sandboxes = {"unrelated-id": "personal-sandbox"}
@@ -2696,6 +3070,28 @@ class SandboxRuntimeTests(unittest.TestCase):
             worker_write_probe[-1],
             str(worker.host_root / ".worker-write-probe"),
         )
+        root_write_probe = next(
+            wrapped
+            for command in commands
+            if (wrapped := cgroup_wrapped_case_command(command)) is not None
+            and wrapped[:3]
+            == ("python3", "-c", ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT)
+        )
+        self.assertEqual(
+            root_write_probe,
+            (
+                "python3",
+                "-c",
+                ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
+                "/",
+                "/proc/self/mountinfo",
+                str(case.root),
+                "/tmp",
+                "/var/tmp",
+                "/dev/shm",
+                "/run/lock",
+            ),
+        )
 
         expected_binds = {
             (str(case.tmpdir), "/tmp"),
@@ -2885,6 +3281,12 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertLess(commands.index(seed_copy), actor_index)
         self.assertLess(commands.index(privilege_lockdowns[0]), actor_index)
         self.assertLess(commands.index(privilege_probes[-1]), actor_index)
+        root_probe_index = next(
+            index
+            for index, command in enumerate(commands)
+            if cgroup_wrapped_case_command(command) == root_write_probe
+        )
+        self.assertLess(root_probe_index, actor_index)
         self.assertLess(actor_index, commands.index(export_copy))
         self.assertLess(commands.index(export_copy), cleanup_index)
         self.assertLess(cleanup_index, commands.index(worker_mount_restore))
@@ -2969,6 +3371,153 @@ class SandboxRuntimeTests(unittest.TestCase):
                 and argv[-2:] == (f"{case.root}/.", f"{case.host_export_bridge}/")
                 for argv in commands
             )
+        )
+
+    def test_writable_root_filesystem_path_recycles_worker_before_actor_execution(
+        self,
+    ) -> None:
+        def fail_root_write_probe(argv: tuple[str, ...]) -> CommandResult | None:
+            wrapped = cgroup_wrapped_case_command(argv)
+            if (
+                wrapped is not None
+                and wrapped[:3]
+                == ("python3", "-c", ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT)
+            ):
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="writable root filesystem path: /unexpected",
+                )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=fail_root_write_probe,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "root filesystem exposes writable state",
+            ):
+                runtime.execute(
+                    worker,
+                    case,
+                    ("actor-command",),
+                    timeout_seconds=30,
+                )
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertFalse(
+            any(
+                cgroup_wrapped_case_command(argv) == ("actor-command",)
+                for argv in commands
+            )
+        )
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
+        )
+
+    def test_uninspectable_traversable_root_directory_recycles_worker(self) -> None:
+        def fail_root_write_probe(argv: tuple[str, ...]) -> CommandResult | None:
+            wrapped = cgroup_wrapped_case_command(argv)
+            if (
+                wrapped is not None
+                and wrapped[:3]
+                == ("python3", "-c", ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT)
+            ):
+                return CommandResult(
+                    returncode=1,
+                    stdout="",
+                    stderr=(
+                        "cannot inspect actor-traversable root filesystem "
+                        "directory: /execute-only"
+                    ),
+                )
+            return None
+
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "actor-id",
+                                    "name": "ai-skills-unit-test-actor-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed(),
+                completed(json.dumps({"sandboxes": []})),
+            ],
+            side_effect=fail_root_write_probe,
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "case-one")
+
+            with self.assertRaisesRegex(
+                SandboxRuntimeError,
+                "root filesystem exposes writable state",
+            ):
+                runtime.execute(
+                    worker,
+                    case,
+                    ("actor-command",),
+                    timeout_seconds=30,
+                )
+
+        commands = [argv for argv, _ in process.calls]
+        self.assertFalse(
+            any(
+                cgroup_wrapped_case_command(argv) == ("actor-command",)
+                for argv in commands
+            )
+        )
+        self.assertIn(
+            ("sbx", "rm", "--force", "ai-skills-unit-test-actor-1"),
+            commands,
         )
 
     def test_nested_mount_verification_failure_blocks_host_export(self) -> None:

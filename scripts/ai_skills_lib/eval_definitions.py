@@ -6,21 +6,33 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-import json
 from pathlib import Path, PurePosixPath
 import re
 
 from jsonschema import Draft202012Validator
 
 from scripts.ai_skills_lib.authored_content import (
+    AuthoredContentComplexityError,
+    AuthoredContentReadError,
+    AuthoredContentTooLarge,
+    AuthoredRepositoryBudget,
+    AuthoredRepositoryBudgetExceeded,
+    BoundedJsonError,
     authored_file,
     contains_local_eval_runtime_reference,
     extract_bundled_paths,
+    find_additional_decoded_json_secret_issues,
     find_static_secret_issues,
-    read_text_fixture,
+    read_bounded_authored_bytes,
+    render_bounded_decoded_json,
+    strict_bounded_json_loads,
     walk_authored_files,
 )
-from scripts.ai_skills_lib.core import SkillRecord, discover_testable_skills
+from scripts.ai_skills_lib.core import (
+    SkillRecord,
+    discover_testable_skills,
+    snapshot_canonical_skills_tree,
+)
 from scripts.ai_skills_lib.eval_core import AssertionDefinition
 from scripts.ai_skills_lib.issues import ValidationIssue
 from scripts.ai_skills_lib.json_schema_policy import (
@@ -29,6 +41,7 @@ from scripts.ai_skills_lib.json_schema_policy import (
     build_safe_json_schema_validator,
 )
 from scripts.ai_skills_lib.secret_patterns import bounded_redacted_runtime_text
+from scripts.ai_skills_lib.static_checks.context import render_safe_diagnostic_issues
 
 
 _SCHEMA_PATH = (
@@ -37,7 +50,9 @@ _SCHEMA_PATH = (
 _RUNTIME_DIRECTORIES = ("scripts", "references", "assets")
 MAX_EVAL_DEFINITION_BYTES = 2 * 1024 * 1024
 MAX_EVAL_FIXTURE_FILE_BYTES = 4 * 1024 * 1024
+MAX_INSTALLABLE_REFERENCE_SCAN_BYTES = 64 * 1024 * 1024
 _MAX_CASE_ORACLE_BYTES = 320 * 1024
+MAX_CASE_DETERMINISTIC_SCHEMA_BYTES = 512 * 1024
 _CASE_ID_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _PRIVATE_PROVIDER = (
     r"(?:Atlassian|Bitbucket|Clerk|Figma|GitHub|GitLab|Google(?:\s+Drive)?|"
@@ -155,22 +170,28 @@ class BehaviorDefinitionError(RuntimeError):
 def validate_behavior_eval_files(root: Path) -> list[ValidationIssue]:
     """Discover every skill and validate its behavior eval file."""
     _, issues = _inspect_behavior_eval_files(root)
-    return issues
+    return render_safe_diagnostic_issues(issues)
 
 
 def load_behavior_evals(root: Path) -> tuple[SkillBehaviorEvals, ...]:
     """Discover, validate, and load typed behavior definitions in one pass."""
     definitions, issues = _inspect_behavior_eval_files(root)
-    if issues:
-        raise BehaviorDefinitionError(issues)
+    safe_issues = render_safe_diagnostic_issues(issues)
+    if safe_issues:
+        raise BehaviorDefinitionError(safe_issues)
     return definitions
 
 
 def _inspect_behavior_eval_files(
     root: Path,
 ) -> tuple[tuple[SkillBehaviorEvals, ...], list[ValidationIssue]]:
+    budget = AuthoredRepositoryBudget()
     try:
-        skills = discover_testable_skills(root)
+        initial_skills_tree = snapshot_canonical_skills_tree(
+            root,
+            budget=budget,
+        )
+        skills = discover_testable_skills(root, budget=budget)
     except (OSError, UnicodeDecodeError, ValueError) as error:
         diagnostic = bounded_redacted_runtime_text(str(error), 2048)
         return (), [
@@ -222,25 +243,31 @@ def _inspect_behavior_eval_files(
             issues.append(ValidationIssue(scope=scope, message=message))
             continue
         try:
-            if source.resolved_path.stat().st_size > MAX_EVAL_DEFINITION_BYTES:
-                issues.append(
-                    ValidationIssue(
-                        scope=scope,
-                        message="evals/evals.json exceeds the 2 MiB definition limit",
-                    )
+            content = read_bounded_authored_bytes(
+                source,
+                maximum_bytes=MAX_EVAL_DEFINITION_BYTES,
+                allowed_root=skill.root,
+                containment_root=root,
+                budget=budget,
+            )
+            text = content.decode("utf-8")
+        except AuthoredRepositoryBudgetExceeded as error:
+            issues.append(
+                ValidationIssue(
+                    scope="behavior eval discovery",
+                    message=bounded_redacted_runtime_text(str(error), 2048),
                 )
-                continue
-        except OSError as error:
+            )
+            return (), issues
+        except AuthoredContentTooLarge:
             issues.append(
                 ValidationIssue(
                     scope=scope,
-                    message=f"cannot inspect evals/evals.json: {error}",
+                    message="evals/evals.json exceeds the 2 MiB definition limit",
                 )
             )
             continue
-        try:
-            text = source.resolved_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as error:
+        except (AuthoredContentReadError, UnicodeDecodeError) as error:
             issues.append(
                 ValidationIssue(
                     scope=scope,
@@ -260,8 +287,11 @@ def _inspect_behavior_eval_files(
                 )
             )
         try:
-            document = json.loads(text)
-        except json.JSONDecodeError as error:
+            document = strict_bounded_json_loads(
+                content,
+                maximum_bytes=MAX_EVAL_DEFINITION_BYTES,
+            )
+        except BoundedJsonError as error:
             issues.append(
                 ValidationIssue(
                     scope=scope,
@@ -269,11 +299,79 @@ def _inspect_behavior_eval_files(
                 )
             )
             continue
-        issues.extend(validate_behavior_eval_document(document, skill, scope))
+        try:
+            decoded_findings = find_additional_decoded_json_secret_issues(
+                document,
+                path,
+                maximum_bytes=MAX_EVAL_DEFINITION_BYTES,
+                raw_findings=secret_findings,
+            )
+        except BoundedJsonError as error:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        "evals/evals.json cannot be secret-scanned after JSON "
+                        f"decoding: {error}"
+                    ),
+                )
+            )
+            continue
+        for finding in decoded_findings:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        "evals/evals.json contains a high-confidence secret "
+                        f"after JSON decoding: {finding.pattern}; value redacted"
+                    ),
+                )
+            )
+        try:
+            issues.extend(
+                validate_behavior_eval_document(
+                    document,
+                    skill,
+                    scope,
+                    budget=budget,
+                )
+            )
+        except AuthoredRepositoryBudgetExceeded as error:
+            issues.append(
+                ValidationIssue(
+                    scope="behavior eval discovery",
+                    message=bounded_redacted_runtime_text(str(error), 2048),
+                )
+            )
+            return (), issues
         if len(issues) != issue_start:
             continue
         assert isinstance(document, Mapping)
         definitions.append(_typed_definition(skill, document))
+    try:
+        final_skills_tree = snapshot_canonical_skills_tree(
+            root,
+            budget=budget,
+        )
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        diagnostic = bounded_redacted_runtime_text(str(error), 2048)
+        issues.append(
+            ValidationIssue(
+                scope="behavior eval discovery",
+                message=f"cannot reverify canonical skills tree: {diagnostic}",
+            )
+        )
+        return (), issues
+    if final_skills_tree != initial_skills_tree:
+        issues.append(
+            ValidationIssue(
+                scope="behavior eval discovery",
+                message=(
+                    "canonical skills tree changed during definition loading"
+                ),
+            )
+        )
+        return (), issues
     return tuple(definitions), issues
 
 
@@ -281,12 +379,15 @@ def validate_behavior_eval_document(
     document: object,
     skill: SkillRecord,
     scope: str,
+    *,
+    budget: AuthoredRepositoryBudget | None = None,
+    loaded_content: Mapping[Path, bytes] | None = None,
 ) -> list[ValidationIssue]:
     """Validate one parsed behavior document and its skill-local resources."""
     issues: list[ValidationIssue] = []
     try:
         validator = _behavior_validator()
-    except (OSError, json.JSONDecodeError) as error:
+    except (OSError, BoundedJsonError, ValueError) as error:
         return [ValidationIssue(scope=scope, message=f"cannot load eval schema: {error}")]
     for error in sorted(validator.iter_errors(document), key=_validation_error_key):
         issues.append(
@@ -300,7 +401,7 @@ def validate_behavior_eval_document(
         )
     if not isinstance(document, Mapping):
         return issues
-    issues.extend(_installable_eval_reference_issues(skill, scope))
+    issues.extend(_installable_eval_reference_issues(skill, scope, budget=budget))
     skill_name = document.get("skill_name")
     if isinstance(skill_name, str) and skill_name != skill.name:
         issues.append(
@@ -336,7 +437,16 @@ def validate_behavior_eval_document(
         )
         if case_id_is_valid:
             issues.extend(_case_path_issues(scope, case_id, raw_case))
-            issues.extend(_case_resource_issues(skill, scope, case_id, raw_case))
+            issues.extend(
+                _case_resource_issues(
+                    skill,
+                    scope,
+                    case_id,
+                    raw_case,
+                    budget=budget,
+                    loaded_content=loaded_content,
+                )
+            )
         prompt = raw_case.get("prompt")
         has_isolated_resources = case_id_is_valid and (
             _case_has_declared_isolated_resources(
@@ -415,13 +525,31 @@ def validate_behavior_eval_document(
             )
             if isinstance(value, str)
         )
-        if any(
-            authored_file(skill.root / path, skill.root) is not None
-            for path in extract_bundled_paths(authored_text)
-        ):
-            exercises_bundled_file = True
+        try:
+            bundled_paths = extract_bundled_paths(authored_text)
+        except AuthoredContentComplexityError:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        f"eval '{case_id}' exceeds the bundled path inspection limit"
+                    ),
+                )
+            )
+        else:
+            if any(
+                authored_file(skill.root / path, skill.root) is not None
+                for path in bundled_paths
+            ):
+                exercises_bundled_file = True
     has_bundled_files = any(
-        any(walk_authored_files(skill.root / directory, skill.root))
+        any(
+            walk_authored_files(
+                skill.root / directory,
+                skill.root,
+                budget=budget,
+            )
+        )
         for directory in _RUNTIME_DIRECTORIES
     )
     if has_bundled_files and not exercises_bundled_file:
@@ -442,6 +570,9 @@ def _case_resource_issues(
     scope: str,
     case_id: str,
     raw_case: Mapping[object, object],
+    *,
+    budget: AuthoredRepositoryBudget | None = None,
+    loaded_content: Mapping[Path, bytes] | None = None,
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     expected_inputs = PurePosixPath("fixtures") / case_id / "inputs"
@@ -498,6 +629,8 @@ def _case_resource_issues(
                     )
                 )
     raw_checks = raw_case.get("checks")
+    deterministic_schema_bytes = 0
+    counted_schema_paths: set[Path] = set()
     if isinstance(raw_checks, Sequence) and not isinstance(raw_checks, (str, bytes)):
         for raw_check in raw_checks:
             if not isinstance(raw_check, Mapping):
@@ -529,10 +662,8 @@ def _case_resource_issues(
                 )
                 continue
             logical = skill.root / "evals" / schema_path
-            if (
-                _has_symlink_component(logical, skill.root)
-                or authored_file(logical, skill.root) is None
-            ):
+            schema_source = authored_file(logical, skill.root)
+            if _has_symlink_component(logical, skill.root) or schema_source is None:
                 issues.append(
                     ValidationIssue(
                         scope=scope,
@@ -541,18 +672,46 @@ def _case_resource_issues(
                 )
                 continue
             try:
-                if logical.stat().st_size > MAX_JSON_SCHEMA_BYTES:
-                    raise JsonSchemaPolicyError(
-                        "JSON Schema exceeds the 256 KiB byte limit"
+                if loaded_content is None:
+                    schema_content = read_bounded_authored_bytes(
+                        schema_source,
+                        maximum_bytes=MAX_JSON_SCHEMA_BYTES,
+                        allowed_root=skill.root,
+                        containment_root=skill.root.parents[2],
+                        budget=budget,
                     )
-                schema_document = json.loads(logical.read_text(encoding="utf-8"))
+                else:
+                    schema_content = loaded_content.get(logical)
+                    if schema_content is None:
+                        raise AuthoredContentReadError(
+                            "runner-only schema has no validated content snapshot"
+                        )
+                if logical not in counted_schema_paths:
+                    counted_schema_paths.add(logical)
+                    deterministic_schema_bytes += len(schema_content)
+                schema_document = strict_bounded_json_loads(
+                    schema_content,
+                    maximum_bytes=MAX_JSON_SCHEMA_BYTES,
+                )
                 if not isinstance(schema_document, Mapping):
                     raise JsonSchemaPolicyError("JSON Schema root must be an object")
                 build_safe_json_schema_validator(schema_document)
+            except AuthoredContentTooLarge:
+                error = JsonSchemaPolicyError(
+                    "JSON Schema exceeds the 256 KiB byte limit"
+                )
+                issues.append(
+                    ValidationIssue(
+                        scope=scope,
+                        message=(
+                            f"runner-only schema is invalid: {raw_schema}; {error}"
+                        ),
+                    )
+                )
+                continue
             except (
-                OSError,
-                UnicodeDecodeError,
-                json.JSONDecodeError,
+                AuthoredContentReadError,
+                BoundedJsonError,
                 JsonSchemaPolicyError,
             ) as error:
                 policy_detail = (
@@ -568,6 +727,16 @@ def _case_resource_issues(
                     )
                 )
                 continue
+    if deterministic_schema_bytes > MAX_CASE_DETERMINISTIC_SCHEMA_BYTES:
+        issues.append(
+            ValidationIssue(
+                scope=scope,
+                message=(
+                    f"eval '{case_id}' deterministic schemas exceed the "
+                    "512 KiB aggregate byte limit"
+                ),
+            )
+        )
     return issues
 
 
@@ -650,18 +819,81 @@ def _text_names_path(text: str, path: str) -> bool:
 def _installable_eval_reference_issues(
     skill: SkillRecord,
     scope: str,
+    *,
+    budget: AuthoredRepositoryBudget | None = None,
 ) -> list[ValidationIssue]:
     sources = []
     skill_source = authored_file(skill.path, skill.root)
     if skill_source is not None:
         sources.append(skill_source)
     for directory in _RUNTIME_DIRECTORIES:
-        sources.extend(walk_authored_files(skill.root / directory, skill.root))
+        sources.extend(
+            walk_authored_files(
+                skill.root / directory,
+                skill.root,
+                budget=budget,
+            )
+        )
 
     issues: list[ValidationIssue] = []
     for source in sources:
-        text = read_text_fixture(source)
-        if text is None or not contains_local_eval_runtime_reference(text):
+        try:
+            content = read_bounded_authored_bytes(
+                source,
+                maximum_bytes=MAX_INSTALLABLE_REFERENCE_SCAN_BYTES,
+                allowed_root=skill.root,
+                budget=budget,
+            )
+        except AuthoredContentTooLarge:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        f"{source.logical_path.relative_to(skill.root)} "
+                        "exceeds the installable-reference validation byte limit"
+                    ),
+                )
+            )
+            continue
+        except AuthoredContentReadError:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        f"{source.logical_path.relative_to(skill.root)} "
+                        "cannot be inspected for prohibited evals/ references"
+                    ),
+                )
+            )
+            continue
+        inspection_values: list[str | bytes] = [content]
+        if source.logical_path.suffix.casefold() == ".json":
+            try:
+                document = strict_bounded_json_loads(
+                    content,
+                    maximum_bytes=MAX_INSTALLABLE_REFERENCE_SCAN_BYTES,
+                )
+                inspection_values.append(
+                    render_bounded_decoded_json(
+                        document,
+                        maximum_bytes=MAX_INSTALLABLE_REFERENCE_SCAN_BYTES,
+                    )
+                )
+            except BoundedJsonError:
+                issues.append(
+                    ValidationIssue(
+                        scope=scope,
+                        message=(
+                            f"{source.logical_path.relative_to(skill.root)} "
+                            "contains invalid JSON for installable-reference inspection"
+                        ),
+                    )
+                )
+                continue
+        if not any(
+            contains_local_eval_runtime_reference(value)
+            for value in inspection_values
+        ):
             continue
         issues.append(
             ValidationIssue(
@@ -809,7 +1041,13 @@ def _has_symlink_component(path: Path, root: Path) -> bool:
 
 @lru_cache(maxsize=1)
 def _behavior_validator() -> Draft202012Validator:
-    return Draft202012Validator(json.loads(_SCHEMA_PATH.read_text(encoding="utf-8")))
+    schema = strict_bounded_json_loads(
+        _SCHEMA_PATH.read_bytes(),
+        maximum_bytes=MAX_EVAL_DEFINITION_BYTES,
+    )
+    if not isinstance(schema, Mapping):
+        raise ValueError("eval schema root must be an object")
+    return Draft202012Validator(schema)
 
 
 def _validation_error_key(error) -> tuple[tuple[str, ...], str]:

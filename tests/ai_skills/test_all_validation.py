@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import redirect_stdout
 from dataclasses import replace
 from io import StringIO
@@ -132,15 +133,23 @@ class CombinedHarness:
                     ]
                 }
             )
-        elif not request.capture_outputs:
+        elif _is_trigger_request(request):
             expected_path = Path(
-                f"/sandbox/codex-home/skills/{request.expected_skill}/SKILL.md"
+                f"/case/codex-home/skills/{request.expected_skill}/SKILL.md"
             )
             if request.prompt == "Use alpha.":
                 successful_reads = (expected_path,)
+        trace: tuple[Mapping[str, object], ...]
+        if expected_path is not None:
+            trace = _trigger_lifecycle_trace(
+                expected_path,
+                activated=bool(successful_reads),
+            )
+        else:
+            trace = ({"event": f"{request.role}.completed"},)
         return HarnessExecution(
             response=response,
-            trace=({"event": f"{request.role}.completed"},),
+            trace=trace,
             duration_ms=10,
             total_tokens=5,
             input_tokens=3,
@@ -150,10 +159,11 @@ class CombinedHarness:
             successful_skill_reads=successful_reads,
             exit_code=0,
             failure=None,
-            model=f"{request.role}-model",
-            reasoning_effort="high",
+            model=request.model,
+            reasoning_effort=request.reasoning_effort,
             timed_out=False,
             expected_skill_path=expected_path,
+            execution_binding=request.execution_binding,
         )
 
 
@@ -164,7 +174,7 @@ class PendingTriggerHarness(CombinedHarness):
 
     def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
         execution = super().execute(request, artifact_dir)
-        if request.role != "actor" or request.capture_outputs:
+        if not _is_trigger_request(request):
             return execution
         if request.prompt != "Use alpha.":
             return execution
@@ -172,6 +182,10 @@ class PendingTriggerHarness(CombinedHarness):
         assert execution.expected_skill_path is not None
         return replace(
             execution,
+            trace=_trigger_lifecycle_trace(
+                execution.expected_skill_path,
+                activated=activated,
+            ),
             successful_skill_reads=(execution.expected_skill_path,) if activated else (),
         )
 
@@ -193,8 +207,8 @@ class FailingSubrunHarness(CombinedHarness):
 
     def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
         execution = super().execute(request, artifact_dir)
-        is_trigger_actor = request.role == "actor" and not request.capture_outputs
-        is_behavior_actor = request.role == "actor" and request.capture_outputs
+        is_trigger_actor = _is_trigger_request(request)
+        is_behavior_actor = request.role == "actor" and not is_trigger_actor
         if not (
             (self.failing_subrun == "triggers" and is_trigger_actor)
             or (self.failing_subrun == "evals" and is_behavior_actor)
@@ -202,6 +216,11 @@ class FailingSubrunHarness(CombinedHarness):
             return execution
         return replace(
             execution,
+            trace=tuple(
+                event
+                for event in execution.trace
+                if event.get("event") != "skill_read"
+            ),
             successful_skill_reads=(),
             exit_code=1,
             failure=f"{self.failing_subrun} actor failed",
@@ -214,11 +233,52 @@ class FailingPreflightHarness(CombinedHarness):
         raise trigger_validation.TriggerHarnessError("combined preflight failed")
 
 
+def _is_trigger_request(request: HarnessRequest) -> bool:
+    return (
+        request.role == "actor"
+        and request.prompt in {"Use alpha.", "Summarize unrelated work."}
+    )
+
+
+def _trigger_lifecycle_trace(
+    expected_path: Path,
+    *,
+    activated: bool,
+) -> tuple[Mapping[str, object], ...]:
+    trace: tuple[Mapping[str, object], ...] = (
+        {"event": "harness_thread_started"},
+        {"event": "harness_turn_started"},
+    )
+    if activated:
+        trace = (
+            *trace,
+            {
+                "event": "command_started",
+                "command_id": "skill-read-command",
+                "command": "cat",
+            },
+            {
+                "event": "command_completed",
+                "command_id": "skill-read-command",
+                "command": "cat",
+                "exit_code": 0,
+                "status": "completed",
+            },
+            {
+                "event": "skill_read",
+                "command_id": "skill-read-command",
+                "path": str(expected_path),
+            },
+        )
+    return (*trace, {"event": "harness_turn_completed"})
+
+
 class CompleteValidationTests(unittest.TestCase):
     def test_cli_runs_deterministic_gate_before_dispatching_model_suite(self) -> None:
         with (
             patch.object(cli, "run_ci_validation", return_value=[]),
             patch.object(cli, "run_unit_tests", return_value=0),
+            patch.object(cli, "run_runtime_validation", return_value=0) as runtime,
             patch.object(cli, "run_all_evaluation_harness", return_value=1) as run,
         ):
             result = cli.main(
@@ -239,6 +299,7 @@ class CompleteValidationTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 1)
+        runtime.assert_called_once_with(cli.REPOSITORY_ROOT)
         run.assert_called_once_with(
             cli.REPOSITORY_ROOT,
             harness="codex",
@@ -252,12 +313,14 @@ class CompleteValidationTests(unittest.TestCase):
         with (
             patch.object(cli, "run_ci_validation", return_value=[]),
             patch.object(cli, "run_unit_tests", return_value=1),
+            patch.object(cli, "run_runtime_validation", return_value=0) as runtime,
             patch.object(cli, "run_all_evaluation_harness") as run,
             redirect_stdout(StringIO()),
         ):
             result = cli.main(["validate", "all", "--harness", "codex"])
 
         self.assertEqual(result, 1)
+        runtime.assert_called_once_with(cli.REPOSITORY_ROOT)
         run.assert_not_called()
 
     def test_trigger_and_behavior_runners_share_one_preflight(self) -> None:

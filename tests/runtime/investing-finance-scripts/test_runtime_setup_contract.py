@@ -22,8 +22,8 @@ FINANCE_RUNTIME_REQUIREMENTS = (
     "requests==2.34.2",
     "yfinance==0.2.40",
     "beautifulsoup4==4.12.0",
-    "lxml==5.0.0",
-    "PyYAML==6.0",
+    "lxml==6.1.1",
+    "PyYAML==6.0.3",
 )
 DOCUMENTED_BUNDLED_PYTHON_INVOCATION = re.compile(
     r"<skill-python>(?:`)?\s+(?!-B(?:\s|`))"

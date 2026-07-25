@@ -6,39 +6,48 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import hashlib
 import json
-import math
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
+import scripts.ai_skills_lib.actor_evidence as actor_evidence
 from scripts.ai_skills_lib.authored_content import (
-    BoundedJsonError,
-    DEFAULT_MAXIMUM_JSON_DEPTH,
-    DEFAULT_MAXIMUM_JSON_NODES,
-    SecretScanBudget,
-    SecretScanLimitError,
     prepare_durable_sensitive_text,
-    strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.eval_checks import (
+    behavior_check_to_document,
+    deterministic_check_contracts,
     evaluate_deterministic_checks,
-    list_safe_output_files,
 )
 from scripts.ai_skills_lib.eval_core import (
     AggregationMetadata,
+    AssertionContract,
     AttemptManifest,
+    BoundPreflightReceipt,
     EvalRunRecord,
+    GradingBasisRecord,
     JudgeExecutionError,
     JudgeGradingContext,
+    MAX_JUDGE_ARTIFACT_BYTES,
+    MAX_JUDGE_PROMPT_BYTES,
     ResultArtifactError,
     ResultWorkspace,
+    StructuredSkillPathKind,
     aggregate_results,
+    capabilities_from_preflight_receipt,
+    canonical_document_sha256,
+    classify_structured_skill_path,
     combine_grading_results,
     create_attempt_workspace,
     create_result_workspace,
     declare_invocation,
+    enforce_execution_binding,
+    enforce_execution_configuration,
     format_benchmark_summary,
     invoke_judge,
+    preflight_bound_invocations,
+    prepare_exact_judge_evidence,
     record_harness_timing,
     write_eval_run_artifacts,
     write_incomplete_attempt_artifacts,
@@ -47,6 +56,7 @@ from scripts.ai_skills_lib.eval_core import (
 from scripts.ai_skills_lib.eval_definitions import (
     BehaviorEvalCase,
     BehaviorDefinitionError,
+    MAX_CASE_DETERMINISTIC_SCHEMA_BYTES,
     SkillBehaviorEvals,
     load_behavior_evals,
 )
@@ -56,8 +66,9 @@ from scripts.ai_skills_lib.evaluation_runtime import (
 )
 from scripts.ai_skills_lib.harness import (
     ActorInput,
+    bind_harness_request,
+    HarnessArtifactBinding,
     HarnessAdapter,
-    HarnessCapabilities,
     HarnessExecution,
     HarnessRequest,
     PreparedFile,
@@ -70,13 +81,9 @@ from scripts.ai_skills_lib.static_validation import run_pre_model_validation
 BehaviorVariant = Literal["with_skill", "without_skill"]
 _REQUIRED_VARIANTS: tuple[BehaviorVariant, ...] = ("with_skill", "without_skill")
 _JUDGE_PROMPT_VERSION = "agent-skills-eval-v1"
-_MAX_RESPONSE_BYTES = 64 * 1024
 _MAX_TRANSCRIPT_BYTES = 96 * 1024
-_MAX_EXECUTION_TRACE_BYTES = 512 * 1024
-_MAX_EXECUTION_TRACE_JSON_NODES = DEFAULT_MAXIMUM_JSON_NODES
-_MAX_EXECUTION_TRACE_JSON_DEPTH = DEFAULT_MAXIMUM_JSON_DEPTH
-_MAX_JUDGE_ARTIFACT_BYTES = 32 * 1024
-_MAX_JUDGE_PROMPT_BYTES = 512 * 1024
+_MAX_JUDGE_ARTIFACT_BYTES = MAX_JUDGE_ARTIFACT_BYTES
+_MAX_JUDGE_PROMPT_BYTES = MAX_JUDGE_PROMPT_BYTES
 _MIN_JUDGE_EVIDENCE_BYTES = 64 * 1024
 _MAX_SELECTED_CASES = 128
 _MAX_MODEL_CALLS = 512
@@ -120,27 +127,10 @@ class BehaviorHarnessError(RuntimeError):
     """Raised when a selected harness cannot produce trustworthy behavior evidence."""
 
 
-class _ImmutableJsonObject(dict[str, object]):
-    """JSON object snapshot that rejects mutation after trusted parsing."""
-
-    def _reject_mutation(self, *args: object, **kwargs: object) -> None:
-        raise TypeError("frozen trace objects cannot be mutated")
-
-    __setitem__ = _reject_mutation
-    __delitem__ = _reject_mutation
-    clear = _reject_mutation
-    pop = _reject_mutation
-    popitem = _reject_mutation
-    setdefault = _reject_mutation
-    update = _reject_mutation
-    __ior__ = _reject_mutation
-
-
 @dataclass(frozen=True)
 class PreparedJudgeControl:
-    """The exact serialized judge-owned policy and oracle for one variant."""
+    """The exact serialized judge-owned policy and shared case oracle."""
 
-    variant: BehaviorVariant
     prefix: str
 
 
@@ -363,7 +353,7 @@ def execute_behavior_evals(
     max_concurrency: int,
     actor_timeout_seconds: int,
     judge_timeout_seconds: int,
-    preflighted_capabilities: HarnessCapabilities | None = None,
+    preflight_receipt: BoundPreflightReceipt | None = None,
 ) -> BehaviorSuiteResult:
     """Validate definitions and execute selected paired behavior cases."""
     definitions = load_behavior_evals(root)
@@ -376,7 +366,7 @@ def execute_behavior_evals(
         max_concurrency=max_concurrency,
         actor_timeout_seconds=actor_timeout_seconds,
         judge_timeout_seconds=judge_timeout_seconds,
-        preflighted_capabilities=preflighted_capabilities,
+        preflight_receipt=preflight_receipt,
     )
 
 
@@ -390,7 +380,7 @@ def _execute_behavior_evals(
     max_concurrency: int,
     actor_timeout_seconds: int,
     judge_timeout_seconds: int,
-    preflighted_capabilities: HarnessCapabilities | None = None,
+    preflight_receipt: BoundPreflightReceipt | None = None,
     prepared_plan: PreparedBehaviorPlan | None = None,
     invocation_declared: bool = False,
 ) -> BehaviorSuiteResult:
@@ -413,7 +403,7 @@ def _execute_behavior_evals(
         max_concurrency=max_concurrency,
         actor_timeout_seconds=actor_timeout_seconds,
         judge_timeout_seconds=judge_timeout_seconds,
-        preflighted_capabilities=preflighted_capabilities,
+        preflight_receipt=preflight_receipt,
     )
 
 
@@ -466,28 +456,63 @@ def prepare_behavior_plan(
         raise BehaviorHarnessError(
             f"behavior material preparation failed: {diagnostic}"
         ) from error
-    attempts = tuple(
-        PreparedBehaviorAttempt(
-            definition=definition,
-            case=case,
-            variant=variant,
-            manifest=_behavior_attempt_manifest(definition, case, variant),
-            judge_control=_prepare_judge_control(case, variant),
-            actor_inputs=actor_inputs,
-            fixture_root=fixture_root,
-            fixture_initialization=fixture_initialization,
-            deterministic_schemas=deterministic_schemas,
-        )
-        for (
-            definition,
-            case,
-            actor_inputs,
-            fixture_root,
-            fixture_initialization,
-            deterministic_schemas,
-        ) in prepared_cases
-        for variant in _REQUIRED_VARIANTS
-    )
+    attempts: list[PreparedBehaviorAttempt] = []
+    for (
+        definition,
+        case,
+        actor_inputs,
+        fixture_root,
+        fixture_initialization,
+        deterministic_schemas,
+    ) in prepared_cases:
+        judge_control = _prepare_judge_control(case)
+        for variant in _REQUIRED_VARIANTS:
+            attempts.append(
+                PreparedBehaviorAttempt(
+                    definition=definition,
+                    case=case,
+                    variant=variant,
+                    manifest=_behavior_attempt_manifest(
+                        definition,
+                        case,
+                        variant,
+                        runtime_input_sha256=_behavior_runtime_input_sha256(
+                            definition,
+                            case,
+                            variant,
+                            catalog,
+                            judge_control,
+                            actor_inputs,
+                            fixture_initialization,
+                            deterministic_schemas,
+                        ),
+                        scenario_definition_sha256=(
+                            _behavior_scenario_definition_sha256(
+                                definition,
+                                case,
+                                judge_control,
+                                actor_inputs,
+                                fixture_initialization,
+                                deterministic_schemas,
+                            )
+                        ),
+                        deterministic_input_sha256=(
+                            _deterministic_input_sha256(
+                                case,
+                                deterministic_schemas,
+                            )
+                        ),
+                        judge_control_sha256=hashlib.sha256(
+                            judge_control.prefix.encode("utf-8")
+                        ).hexdigest(),
+                    ),
+                    judge_control=judge_control,
+                    actor_inputs=actor_inputs,
+                    fixture_root=fixture_root,
+                    fixture_initialization=fixture_initialization,
+                    deterministic_schemas=deterministic_schemas,
+                )
+            )
     require_fixtures = any(
         fixture_initialization is not None
         for _, _, _, _, fixture_initialization, _ in prepared_cases
@@ -495,7 +520,7 @@ def prepare_behavior_plan(
     return PreparedBehaviorPlan(
         definitions=loaded_definitions,
         selected=selected,
-        attempts=attempts,
+        attempts=tuple(attempts),
         catalog=catalog,
         require_fixtures=require_fixtures,
     )
@@ -503,6 +528,7 @@ def prepare_behavior_plan(
 
 def declare_behavior_plan(workspace: ResultWorkspace, plan: PreparedBehaviorPlan) -> None:
     """Persist a prepared behavior plan before any runtime preflight."""
+    _verify_behavior_plan_contract(plan)
     declare_invocation(workspace, "validate evals", plan.manifests)
 
 
@@ -514,7 +540,7 @@ def execute_prepared_behavior_plan(
     max_concurrency: int,
     actor_timeout_seconds: int,
     judge_timeout_seconds: int,
-    preflighted_capabilities: HarnessCapabilities | None = None,
+    preflight_receipt: BoundPreflightReceipt | None = None,
 ) -> BehaviorSuiteResult:
     """Execute exactly one already declared immutable behavior plan."""
     _validate_execution_options(
@@ -522,14 +548,32 @@ def execute_prepared_behavior_plan(
         actor_timeout_seconds,
         judge_timeout_seconds,
     )
-    if not workspace.invocation_manifest.is_file():
-        raise BehaviorHarnessError("prepared behavior invocation was not declared")
-    capabilities = preflighted_capabilities or adapter.preflight(
-        require_fixtures=plan.require_fixtures
+    _verify_behavior_plan_inputs(plan)
+    receipt = preflight_receipt or preflight_bound_invocations(
+        adapter,
+        ((workspace, "validate evals", plan.manifests),),
+        require_fixtures=plan.require_fixtures,
+    )
+    capabilities = capabilities_from_preflight_receipt(
+        receipt,
+        adapter,
+        workspace,
+        "validate evals",
+        plan.manifests,
+        require_fixtures=plan.require_fixtures,
     )
     if not capabilities.available:
         raise BehaviorHarnessError(
             capabilities.failure or "selected harness is unavailable"
+        )
+    if (
+        capabilities.actor_model is None
+        or capabilities.actor_reasoning_effort is None
+        or capabilities.judge_model is None
+        or capabilities.judge_reasoning_effort is None
+    ):
+        raise BehaviorHarnessError(
+            "selected harness preflight did not pin actor and judge model configurations"
         )
 
     with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
@@ -541,6 +585,10 @@ def execute_prepared_behavior_plan(
                     plan.catalog,
                     attempt,
                     harness_name=capabilities.harness_name,
+                    actor_model=capabilities.actor_model,
+                    actor_reasoning_effort=capabilities.actor_reasoning_effort,
+                    judge_model=capabilities.judge_model,
+                    judge_reasoning_effort=capabilities.judge_reasoning_effort,
                     actor_timeout_seconds=actor_timeout_seconds,
                     judge_timeout_seconds=judge_timeout_seconds,
                 ),
@@ -573,9 +621,14 @@ def _execute_behavior_attempt(
     attempt: PreparedBehaviorAttempt,
     *,
     harness_name: str,
+    actor_model: str,
+    actor_reasoning_effort: str,
+    judge_model: str,
+    judge_reasoning_effort: str,
     actor_timeout_seconds: int,
     judge_timeout_seconds: int,
 ) -> BehaviorAttemptOutcome:
+    _verify_behavior_attempt_contract(attempt)
     definition = attempt.definition
     case = attempt.case
     variant = attempt.variant
@@ -595,21 +648,67 @@ def _execute_behavior_attempt(
         timeout_seconds=actor_timeout_seconds,
         skill_sources=actor_catalog,
         expected_skill=target.name if variant == "with_skill" else None,
+        model=actor_model,
+        reasoning_effort=actor_reasoning_effort,
         actor_inputs=attempt.actor_inputs,
         fixture_root=attempt.fixture_root,
         fixture_initialization=attempt.fixture_initialization,
         capture_outputs=True,
+        artifact_binding=HarnessArtifactBinding(
+            attempt_identity=paths.attempt_identity,
+            outputs_identity=paths.directory_identities[("outputs",)],
+            repository_identity=paths.repository_identity,
+        ),
+    )
+    actor_request = bind_harness_request(
+        actor_request,
+        invocation_id=paths.invocation_id,
+        run_id=manifest.run_id,
     )
     started_at = datetime.now(timezone.utc)
     try:
         execution = adapter.execute(actor_request, paths.root)
     except Exception as error:
         execution = _failed_execution(error, started_at)
-    execution, response = _prepare_durable_actor_execution(execution)
+    execution = enforce_execution_binding(execution, actor_request)
+    execution = enforce_execution_configuration(
+        execution,
+        expected_model=actor_model,
+        expected_reasoning_effort=actor_reasoning_effort,
+        role="actor",
+    )
+    if variant == "without_skill":
+        contamination = _without_skill_contamination(
+            execution,
+            target.name,
+        )
+        if contamination is not None:
+            execution = replace(
+                execution,
+                trace=(
+                    *execution.trace,
+                    {
+                        "event": "without_skill_contamination",
+                        "skill_name": target.name,
+                        "source": contamination,
+                    },
+                ),
+                failure="\n".join(
+                    part
+                    for part in (
+                        execution.failure,
+                        (
+                            "without_skill attempt contains target or "
+                            "noncanonical structured skill-path evidence"
+                        ),
+                    )
+                    if part
+                ),
+            )
+    execution, response = actor_evidence.prepare_durable_actor_execution(execution)
     transcript, transcript_failure = _behavior_transcript(
         case.prompt,
         response,
-        variant,
     )
     if transcript_failure is not None:
         execution = replace(
@@ -624,6 +723,7 @@ def _execute_behavior_attempt(
         )
     ended_at = datetime.now(timezone.utc)
     timing = record_harness_timing(
+        invocation_id=paths.invocation_id,
         run_id=manifest.run_id,
         skill_name=target.name,
         case_id=case.id,
@@ -649,24 +749,39 @@ def _execute_behavior_attempt(
         )
 
     try:
+        output_snapshot = actor_evidence.snapshot_captured_outputs(
+            paths.root / "outputs",
+            expected_parent_identity=paths.attempt_identity,
+            expected_root_identity=paths.directory_identities[("outputs",)],
+        )
         allowed_artifacts, judge_prompt = _judge_prompt(
             case,
-            variant,
             response,
             transcript,
             execution.trace,
             paths.root / "outputs",
             prepared_control=judge_control,
+            output_snapshot=output_snapshot,
         )
-        deterministic = evaluate_deterministic_checks(
-            case.checks,
-            outputs_root=paths.root / "outputs",
-            response=response,
-            execution=execution,
-            skill_root=target.root,
-            prepared_schemas=attempt.deterministic_schemas,
+        with actor_evidence.materialized_output_snapshot(
+            output_snapshot
+        ) as snapshot_root:
+            deterministic = evaluate_deterministic_checks(
+                case.checks,
+                outputs_root=snapshot_root,
+                response=response,
+                execution=execution,
+                skill_root=target.root,
+                prepared_schemas=attempt.deterministic_schemas,
+            )
+        actor_evidence.require_unchanged_output_snapshot(
+            paths.root / "outputs",
+            output_snapshot,
+            expected_parent_identity=paths.attempt_identity,
+            repository_identity=paths.repository_identity,
         )
         context = JudgeGradingContext(
+            invocation_id=paths.invocation_id,
             run_id=manifest.run_id,
             skill_name=target.name,
             case_id=case.id,
@@ -684,12 +799,53 @@ def _execute_behavior_attempt(
                 run_variant=f"{manifest.run_id}-judge",
                 prompt=judge_prompt,
                 timeout_seconds=judge_timeout_seconds,
+                model=judge_model,
+                reasoning_effort=judge_reasoning_effort,
                 response_schema=_judge_response_schema(case),
             ),
             paths.root,
             context,
         )
         grading = combine_grading_results(judge.grading, deterministic)
+        assert judge.execution.model is not None
+        assert judge.execution.reasoning_effort is not None
+        grading_basis = GradingBasisRecord(
+            invocation_id=paths.invocation_id,
+            run_id=manifest.run_id,
+            skill_name=target.name,
+            case_id=case.id,
+            run_kind=variant,
+            judge_response=judge.execution.response,
+            judge_control=judge_control.prefix,
+            judge_prompt_sha256=hashlib.sha256(
+                judge_prompt.encode("utf-8")
+            ).hexdigest(),
+            allowed_evidence_artifacts=allowed_artifacts,
+            judge_model=judge.execution.model,
+            judge_reasoning_effort=judge.execution.reasoning_effort,
+            judge_duration_ms=judge.execution.duration_ms,
+            judge_total_tokens=judge.execution.total_tokens,
+            judge_prompt_version=context.prompt_version,
+            graded_at=context.graded_at,
+            deterministic_checks=tuple(
+                behavior_check_to_document(check) for check in case.checks
+            ),
+            deterministic_schemas=tuple(
+                {
+                    "path": path.as_posix(),
+                    "content": prepared.content.decode("utf-8"),
+                }
+                for path, prepared in attempt.deterministic_schemas
+            ),
+            deterministic_results=deterministic,
+            judge_execution_binding=judge.execution.execution_binding,
+        )
+        actor_evidence.require_unchanged_output_snapshot(
+            paths.root / "outputs",
+            output_snapshot,
+            expected_parent_identity=paths.attempt_identity,
+            repository_identity=paths.repository_identity,
+        )
     except JudgeExecutionError as error:
         failure_trace = _judge_failure_trace(str(error), error.execution)
         write_incomplete_attempt_artifacts(
@@ -726,26 +882,62 @@ def _execute_behavior_attempt(
             artifact_dir=paths.root,
         )
 
-    trace = (
-        *execution.trace,
-        {
-            "event": "judge_completed",
-            "duration_ms": judge.execution.duration_ms,
-            "total_tokens": judge.execution.total_tokens,
-            "model": judge.execution.model,
-            "reasoning_effort": judge.execution.reasoning_effort,
-        },
-    )
-    write_eval_run_artifacts(
-        paths,
-        EvalRunRecord(
+    try:
+        judge_trace = _judge_success_trace(judge.execution)
+    except ResultArtifactError as error:
+        write_incomplete_attempt_artifacts(
+            paths,
             response=response,
             transcript=transcript,
-            execution_trace=trace,
+            execution_trace=(
+                *execution.trace,
+                {
+                    "event": "grading_error",
+                    "message": _bounded_runtime_text(str(error), 4096),
+                },
+            ),
             timing=timing,
-            grading=grading,
-        ),
-    )
+        )
+        return BehaviorAttemptOutcome(
+            variant=variant,
+            passed=None,
+            error=str(error),
+            artifact_dir=paths.root,
+        )
+    trace = (*execution.trace, *judge_trace)
+    try:
+        write_eval_run_artifacts(
+            paths,
+            EvalRunRecord(
+                response=response,
+                transcript=transcript,
+                execution_trace=trace,
+                timing=timing,
+                grading=grading,
+                grading_basis=grading_basis,
+            ),
+            actor_output_directories=tuple(
+                path.as_posix() for path in output_snapshot.directories
+            ),
+            actor_output_files=tuple(
+                (file.path.as_posix(), file.content)
+                for file in output_snapshot.files
+            ),
+            completion_guard=lambda response_written: actor_evidence.require_unchanged_output_snapshot(
+                paths.root / "outputs",
+                output_snapshot,
+                runner_response=response if response_written else None,
+                expected_parent_identity=paths.attempt_identity,
+                repository_identity=paths.repository_identity,
+            ),
+        )
+    except ResultArtifactError as error:
+        return BehaviorAttemptOutcome(
+            variant=variant,
+            passed=None,
+            error=_bounded_runtime_text(str(error), 4096),
+            artifact_dir=paths.root,
+        )
     return BehaviorAttemptOutcome(
         variant=variant,
         passed=grading.summary.failed == 0,
@@ -756,13 +948,13 @@ def _execute_behavior_attempt(
 
 def _judge_prompt(
     case: BehaviorEvalCase,
-    variant: BehaviorVariant,
     response: str,
     transcript: str,
     trace: Sequence[Mapping[str, object]],
     outputs_root: Path,
     *,
     prepared_control: PreparedJudgeControl | None = None,
+    output_snapshot: actor_evidence.CapturedOutputSnapshot | None = None,
 ) -> tuple[tuple[str, ...], str]:
     try:
         serialized_trace = "\n".join(
@@ -788,16 +980,16 @@ def _judge_prompt(
         "transcript.md": transcript,
         "execution_trace.jsonl": serialized_trace,
     }
-    for path in list_safe_output_files(outputs_root):
-        relative = f"outputs/{path.relative_to(outputs_root).as_posix()}"
+    snapshot = output_snapshot or actor_evidence.snapshot_captured_outputs(
+        outputs_root
+    )
+    for file in snapshot.files:
+        relative = f"outputs/{file.path.as_posix()}"
         if relative in artifact_candidates:
             raise ResultArtifactError(
                 "captured output conflicts with a reserved judge evidence path"
             )
-        try:
-            content = path.read_bytes()
-        except (OSError, MemoryError) as error:
-            raise ResultArtifactError("cannot read captured output for judging") from error
+        content = file.content
         if b"\x00" in content:
             raise ResultArtifactError(
                 "captured output cannot be represented as exact UTF-8 judge evidence"
@@ -809,62 +1001,17 @@ def _judge_prompt(
                 "captured output cannot be represented as exact UTF-8 judge evidence"
             ) from error
 
-    control = prepared_control or _prepare_judge_control(case, variant)
-    if control.variant != variant:
-        raise ResultArtifactError("prepared judge control variant does not match attempt")
-    exact_evidence: dict[str, str] = {}
-    evidence_scan = SecretScanBudget()
-    for name, value in artifact_candidates.items():
-        prepared_name = prepare_durable_sensitive_text(
-            name,
-            Path("artifact-name"),
-            maximum_durable_bytes=512,
-            scan_budget=evidence_scan,
-        )
-        if prepared_name.transformed or prepared_name.text != name:
-            raise ResultArtifactError(
-                "actor evidence path required sensitive-content transformation"
-            )
-        prepared_value = prepare_durable_sensitive_text(
-            value,
-            Path(name),
-            maximum_durable_bytes=_MAX_JUDGE_ARTIFACT_BYTES,
-            scan_budget=evidence_scan,
-        )
-        if prepared_value.transformed or prepared_value.text != value:
-            if prepared_value.size_truncated and not (
-                prepared_value.minimum_finding_count
-                or prepared_value.scan_incomplete
-                or prepared_value.finding_count_truncated
-            ):
-                raise ResultArtifactError(
-                    "actor evidence exceeds the per-artifact judge byte limit"
-                )
-            raise ResultArtifactError(
-                "actor evidence required sensitive-content transformation before judging"
-            )
-        exact_evidence[name] = value
-
-    required_artifacts = {
-        "outputs/response.md",
-        "transcript.md",
-        "execution_trace.jsonl",
-    }
-    if not required_artifacts.issubset(exact_evidence):
-        raise ResultArtifactError(
-            "judge control envelope leaves insufficient room for required evidence"
-        )
-    prompt = _render_judge_prompt(control, exact_evidence)
-    if len(prompt.encode("utf-8")) > _MAX_JUDGE_PROMPT_BYTES:
-        raise ResultArtifactError(
-            "exact actor evidence exceeds the aggregate judge prompt byte limit"
-        )
-    return tuple(exact_evidence), prompt
+    control = prepared_control or _prepare_judge_control(case)
+    return prepare_exact_judge_evidence(
+        artifact_candidates,
+        control_prefix=control.prefix,
+        maximum_artifact_bytes=_MAX_JUDGE_ARTIFACT_BYTES,
+        maximum_prompt_bytes=_MAX_JUDGE_PROMPT_BYTES,
+    )
 
 
 def _prepare_judge_control(
     case: BehaviorEvalCase,
-    variant: BehaviorVariant,
 ) -> PreparedJudgeControl:
     policy = (
         "You are an isolated Agent Skills evaluation judge. Grade each assertion "
@@ -876,7 +1023,6 @@ def _prepare_judge_control(
         "Only artifact keys in UNTRUSTED_EVIDENCE_JSON may be cited."
     )
     expected = {
-        "variant": variant,
         "expected_output": case.expected_output,
         "assertions": [
             {"id": assertion.id, "text": assertion.text}
@@ -913,19 +1059,9 @@ def _prepare_judge_control(
     ):
         raise BehaviorHarnessError(
             "judge control envelope leaves insufficient bounded evidence budget "
-            f"for {case.id}/{variant}"
+            f"for {case.id}"
         )
-    return PreparedJudgeControl(variant=variant, prefix=prefix)
-
-
-def _render_judge_prompt(
-    control: PreparedJudgeControl,
-    evidence: Mapping[str, str],
-) -> str:
-    return (
-        f"{control.prefix}"
-        f"UNTRUSTED_EVIDENCE_JSON\n{json.dumps(evidence, sort_keys=True)}"
-    )
+    return PreparedJudgeControl(prefix=prefix)
 
 
 def _judge_response_schema(case: BehaviorEvalCase) -> Mapping[str, object]:
@@ -1029,6 +1165,14 @@ def _prepare_deterministic_schemas(
             material = prepare_deterministic_output_schema(source, fixture_root)
             cache[source] = material
         prepared.append((relative, material))
+    if (
+        sum(len(material.content) for _, material in prepared)
+        > MAX_CASE_DETERMINISTIC_SCHEMA_BYTES
+    ):
+        raise BehaviorHarnessError(
+            f"behavior case {case.id} deterministic schemas exceed the "
+            "512 KiB aggregate byte limit"
+        )
     return tuple(prepared)
 
 
@@ -1060,6 +1204,11 @@ def _behavior_attempt_manifest(
     definition: SkillBehaviorEvals,
     case: BehaviorEvalCase,
     variant: BehaviorVariant,
+    *,
+    runtime_input_sha256: str,
+    scenario_definition_sha256: str,
+    deterministic_input_sha256: str,
+    judge_control_sha256: str,
 ) -> AttemptManifest:
     skill_name = definition.skill.name
     run_variant = variant.replace("_", "-")
@@ -1068,6 +1217,22 @@ def _behavior_attempt_manifest(
         skill_name=skill_name,
         case_id=case.id,
         run_kind=variant,
+        runtime_input_sha256=runtime_input_sha256,
+        scenario_definition_sha256=scenario_definition_sha256,
+        deterministic_input_sha256=deterministic_input_sha256,
+        judge_control_sha256=judge_control_sha256,
+        assertion_contract=(
+            *deterministic_check_contracts(case.checks),
+            *(
+                AssertionContract(
+                    id=assertion.id,
+                    kind=assertion.kind,
+                    text=assertion.text,
+                    checked_by="judge",
+                )
+                for assertion in case.assertions
+            ),
+        ),
         aggregation=AggregationMetadata(
             group_id=f"{skill_name}/{case.id}",
             variant=variant,
@@ -1076,6 +1241,275 @@ def _behavior_attempt_manifest(
             compare_to="without_skill" if variant == "with_skill" else None,
         ),
     )
+
+
+def _deterministic_input_document(
+    case: BehaviorEvalCase,
+    deterministic_schemas: Sequence[tuple[PurePosixPath, PreparedFile]],
+) -> dict[str, object]:
+    return {
+        "checks": [
+            behavior_check_to_document(check)
+            for check in case.checks
+        ],
+        "schemas": [
+            {"path": path.as_posix(), "sha256": prepared.sha256}
+            for path, prepared in deterministic_schemas
+        ],
+    }
+
+
+def _deterministic_input_sha256(
+    case: BehaviorEvalCase,
+    deterministic_schemas: Sequence[tuple[PurePosixPath, PreparedFile]],
+) -> str:
+    return canonical_document_sha256(
+        _deterministic_input_document(case, deterministic_schemas)
+    )
+
+
+def _behavior_runtime_input_sha256(
+    definition: SkillBehaviorEvals,
+    case: BehaviorEvalCase,
+    variant: BehaviorVariant,
+    catalog: Sequence[PreparedSkillSource],
+    judge_control: PreparedJudgeControl,
+    actor_inputs: Sequence[ActorInput],
+    fixture_initialization: PreparedFile | None,
+    deterministic_schemas: Sequence[tuple[PurePosixPath, PreparedFile]],
+) -> str:
+    actor_catalog = (
+        tuple(catalog)
+        if variant == "with_skill"
+        else tuple(source for source in catalog if source.name != definition.skill.name)
+    )
+    prepared_inputs = _prepared_actor_input_documents(actor_inputs)
+    return canonical_document_sha256(
+        {
+            "kind": "behavior",
+            "skill_name": definition.skill.name,
+            "case_id": case.id,
+            "variant": variant,
+            "actor_prompt": case.prompt,
+            "actor_catalog": [
+                {"name": source.name, "sha256": source.sha256}
+                for source in actor_catalog
+            ],
+            "actor_inputs": prepared_inputs,
+            "fixture_initialization_sha256": (
+                fixture_initialization.sha256
+                if fixture_initialization is not None
+                else None
+            ),
+            "judge_control": judge_control.prefix,
+            "deterministic": _deterministic_input_document(
+                case,
+                deterministic_schemas,
+            ),
+        }
+    )
+
+
+def _behavior_scenario_definition_sha256(
+    definition: SkillBehaviorEvals,
+    case: BehaviorEvalCase,
+    judge_control: PreparedJudgeControl,
+    actor_inputs: Sequence[ActorInput],
+    fixture_initialization: PreparedFile | None,
+    deterministic_schemas: Sequence[tuple[PurePosixPath, PreparedFile]],
+) -> str:
+    return canonical_document_sha256(
+        {
+            "kind": "behavior-scenario",
+            "skill_name": definition.skill.name,
+            "case": {
+                "id": case.id,
+                "prompt": case.prompt,
+                "expected_output": case.expected_output,
+                "assertions": [
+                    {
+                        "id": assertion.id,
+                        "kind": assertion.kind,
+                        "text": assertion.text,
+                    }
+                    for assertion in case.assertions
+                ],
+                "files": [path.as_posix() for path in case.files],
+                "checks": [
+                    behavior_check_to_document(check)
+                    for check in case.checks
+                ],
+            },
+            "actor_inputs": _prepared_actor_input_documents(actor_inputs),
+            "fixture_initialization_sha256": (
+                fixture_initialization.sha256
+                if fixture_initialization is not None
+                else None
+            ),
+            "judge_control": judge_control.prefix,
+            "deterministic": _deterministic_input_document(
+                case,
+                deterministic_schemas,
+            ),
+        }
+    )
+
+
+def _prepared_actor_input_documents(
+    actor_inputs: Sequence[ActorInput],
+) -> list[dict[str, object]]:
+    prepared_inputs: list[dict[str, object]] = []
+    for actor_input in actor_inputs:
+        if actor_input.prepared is None:
+            raise BehaviorHarnessError(
+                "actor input was not frozen before declaration"
+            )
+        prepared_inputs.append(
+            {
+                "destination": actor_input.destination.as_posix(),
+                "sha256": actor_input.prepared.sha256,
+                "executable": actor_input.prepared.executable,
+            }
+        )
+    return prepared_inputs
+
+
+def _verify_behavior_plan_inputs(plan: PreparedBehaviorPlan) -> None:
+    _verify_behavior_plan_contract(plan)
+    for attempt in plan.attempts:
+        actual_runtime = _behavior_runtime_input_sha256(
+            attempt.definition,
+            attempt.case,
+            attempt.variant,
+            plan.catalog,
+            attempt.judge_control,
+            attempt.actor_inputs,
+            attempt.fixture_initialization,
+            attempt.deterministic_schemas,
+        )
+        actual_deterministic = _deterministic_input_sha256(
+            attempt.case,
+            attempt.deterministic_schemas,
+        )
+        actual_scenario = _behavior_scenario_definition_sha256(
+            attempt.definition,
+            attempt.case,
+            attempt.judge_control,
+            attempt.actor_inputs,
+            attempt.fixture_initialization,
+            attempt.deterministic_schemas,
+        )
+        if (
+            actual_runtime != attempt.manifest.runtime_input_sha256
+            or actual_scenario
+            != attempt.manifest.scenario_definition_sha256
+            or actual_deterministic
+            != attempt.manifest.deterministic_input_sha256
+        ):
+            raise BehaviorHarnessError(
+                f"prepared behavior inputs changed after declaration: "
+                f"{attempt.manifest.run_id}"
+            )
+
+
+def _verify_behavior_plan_contract(plan: PreparedBehaviorPlan) -> None:
+    selected_by_key: dict[
+        tuple[str, str],
+        tuple[SkillBehaviorEvals, BehaviorEvalCase],
+    ] = {}
+    for definition, case in plan.selected:
+        if definition not in plan.definitions or case not in definition.cases:
+            raise BehaviorHarnessError(
+                "prepared behavior selection is not bound to its loaded definition"
+            )
+        key = (definition.skill.name, case.id)
+        if key in selected_by_key:
+            raise BehaviorHarnessError(
+                "prepared behavior selection contains duplicate case identities"
+            )
+        selected_by_key[key] = (definition, case)
+    expected = {
+        (definition.skill.name, case.id, variant)
+        for definition, case in plan.selected
+        for variant in _REQUIRED_VARIANTS
+    }
+    actual = {
+        (
+            attempt.definition.skill.name,
+            attempt.case.id,
+            attempt.variant,
+        )
+        for attempt in plan.attempts
+    }
+    if len(plan.attempts) != len(expected) or actual != expected:
+        raise BehaviorHarnessError(
+            "prepared behavior plan does not contain one exact paired attempt "
+            "set per selected case"
+        )
+    for attempt in plan.attempts:
+        selected = selected_by_key.get(
+            (attempt.definition.skill.name, attempt.case.id)
+        )
+        if (
+            selected is None
+            or attempt.definition != selected[0]
+            or attempt.case != selected[1]
+        ):
+            raise BehaviorHarnessError(
+                "prepared behavior attempt is not bound to its selected case"
+            )
+        _verify_behavior_attempt_contract(attempt)
+
+
+def _verify_behavior_attempt_contract(
+    attempt: PreparedBehaviorAttempt,
+) -> None:
+    manifest = attempt.manifest
+    aggregation = manifest.aggregation
+    variant = attempt.variant
+    expected_compare_to = "without_skill" if variant == "with_skill" else None
+    expected_assertion_contract = (
+        *deterministic_check_contracts(attempt.case.checks),
+        *(
+            AssertionContract(
+                id=assertion.id,
+                kind=assertion.kind,
+                text=assertion.text,
+                checked_by="judge",
+            )
+            for assertion in attempt.case.assertions
+        ),
+    )
+    if (
+        variant not in _REQUIRED_VARIANTS
+        or manifest.run_kind != variant
+        or aggregation.variant != variant
+        or manifest.skill_name != attempt.definition.skill.name
+        or manifest.case_id != attempt.case.id
+        or aggregation.group_id
+        != f"{attempt.definition.skill.name}/{attempt.case.id}"
+        or aggregation.required_variants != _REQUIRED_VARIANTS
+        or aggregation.contributes_to_outcome is not (variant == "with_skill")
+        or aggregation.compare_to != expected_compare_to
+        or aggregation.minimum_pass_rate is not None
+        or aggregation.configured_runs is not None
+        or aggregation.run_number is not None
+        or manifest.assertion_contract != expected_assertion_contract
+        or manifest.run_id
+        != _injective_run_id(
+            manifest.skill_name,
+            manifest.case_id,
+            variant.replace("_", "-"),
+        )
+        or manifest.judge_control_sha256
+        != hashlib.sha256(
+            attempt.judge_control.prefix.encode("utf-8")
+        ).hexdigest()
+    ):
+        raise BehaviorHarnessError(
+            f"prepared behavior attempt has inconsistent arm identity or "
+            f"aggregation policy: {manifest.run_id}"
+        )
 
 
 def _select_behavior_cases(
@@ -1147,266 +1581,44 @@ def _failed_execution(error: Exception, started_at: datetime) -> HarnessExecutio
     )
 
 
-def _prepare_durable_actor_execution(
+def _without_skill_contamination(
     execution: HarnessExecution,
-) -> tuple[HarnessExecution, str]:
-    """Fail closed whenever actor response or trace bytes require transformation."""
-    response_result = prepare_durable_sensitive_text(
-        execution.response,
-        Path("outputs/response.md"),
-        maximum_durable_bytes=_MAX_RESPONSE_BYTES,
-    )
-    diagnostics: list[str] = []
-    if response_result.transformed:
-        if response_result.scan_incomplete:
-            diagnostics.append(
-                "actor response secret scanning exceeded its bounded budget"
-            )
-        elif response_result.minimum_finding_count:
-            diagnostics.append(
-                "actor response contained classified sensitive material and was redacted"
-            )
-        else:
-            diagnostics.append(
-                "actor response cannot be preserved exactly under the durable 64 KiB policy"
-            )
-
-    trace = _freeze_scanned_actor_trace(execution.trace)
-    if trace is None:
-        trace = (
-            _ImmutableJsonObject(
-                {
-                    "event": "actor_trace_quarantine",
-                    "message": "actor execution trace could not be preserved safely",
-                }
-            ),
-        )
-        diagnostics.append(
-            "actor execution trace required quarantine before durable commit"
-        )
-
-    failure = (
-        _bounded_runtime_text(execution.failure, 4096)
-        if execution.failure is not None
-        else None
-    )
-    if diagnostics:
-        trace = (
-            *trace,
-            *(
-                _ImmutableJsonObject(
-                    {"event": "evidence_error", "message": diagnostic}
-                )
-                for diagnostic in diagnostics
-            ),
-        )
-        failure = "\n".join(part for part in (failure, *diagnostics) if part)
-    return replace(execution, trace=trace, failure=failure), response_result.text
-
-
-def _freeze_scanned_actor_trace(
-    trace: Sequence[Mapping[str, object]],
-) -> tuple[Mapping[str, object], ...] | None:
-    """Freeze, scan, parse, and detach one canonical actor trace snapshot."""
-    try:
-        serialized = _canonical_bounded_actor_trace_bytes(trace)
-        rendered = serialized.decode("ascii")
-        scan_result = SecretScanBudget(
-            maximum_bytes=_MAX_EXECUTION_TRACE_BYTES,
-        ).scan(rendered, Path("execution_trace.json"))
-        if scan_result.transformed:
-            return None
-        parsed = strict_bounded_json_loads(
-            serialized,
-            maximum_bytes=_MAX_EXECUTION_TRACE_BYTES,
-            maximum_nodes=_MAX_EXECUTION_TRACE_JSON_NODES,
-            maximum_depth=_MAX_EXECUTION_TRACE_JSON_DEPTH,
-        )
-        if not isinstance(parsed, list) or not all(
-            isinstance(event, dict) for event in parsed
-        ):
-            return None
-        frozen = _freeze_parsed_trace_json(parsed)
-        if not isinstance(frozen, tuple) or not all(
-            isinstance(event, _ImmutableJsonObject) for event in frozen
-        ):
-            return None
-        return frozen
-    except (
-        BoundedJsonError,
-        SecretScanLimitError,
-        UnicodeError,
-        TypeError,
-        ValueError,
-        OverflowError,
-        RecursionError,
-        RuntimeError,
-        MemoryError,
-        SystemError,
-    ):
-        return None
-
-
-def _canonical_bounded_actor_trace_bytes(
-    trace: Sequence[Mapping[str, object]],
-) -> bytes:
-    snapshot = _materialize_bounded_actor_trace(trace)
-    encoder = json.JSONEncoder(
-        ensure_ascii=True,
-        allow_nan=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    chunks: list[bytes] = []
-    consumed = 0
-    for chunk in encoder.iterencode(snapshot):
-        encoded = chunk.encode("ascii")
-        consumed += len(encoded)
-        if consumed > _MAX_EXECUTION_TRACE_BYTES:
-            raise ValueError("actor trace exceeds its canonical byte limit")
-        chunks.append(encoded)
-    return b"".join(chunks)
-
-
-def _materialize_bounded_actor_trace(
-    trace: Sequence[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    """Deep-snapshot trace JSON while bounding structure and encoded scalar width."""
-    nodes = 0
-    serialized_bytes = 0
-
-    def account(size: int) -> None:
-        nonlocal serialized_bytes
-        serialized_bytes += size
-        if serialized_bytes > _MAX_EXECUTION_TRACE_BYTES:
-            raise ValueError("actor trace exceeds its canonical byte limit")
-
-    def materialize(value: object, depth: int) -> object:
-        nonlocal nodes
-        nodes += 1
+    skill_name: str,
+) -> str | None:
+    for path in execution.successful_skill_reads:
         if (
-            nodes > _MAX_EXECUTION_TRACE_JSON_NODES
-            or depth > _MAX_EXECUTION_TRACE_JSON_DEPTH
+            classify_structured_skill_path(path, skill_name)
+            is not StructuredSkillPathKind.CANONICAL_OTHER
         ):
-            raise ValueError("actor trace exceeds its structural limits")
-
-        if isinstance(value, Mapping):
-            expected_items = len(value)
-            if expected_items > _MAX_EXECUTION_TRACE_JSON_NODES - nodes:
-                raise ValueError("actor trace exceeds its structural limits")
-            account(2)
-            copied: dict[str, object] = {}
-            observed_items = 0
-            for key, nested in value.items():
-                observed_items += 1
-                if (
-                    observed_items > expected_items
-                    or type(key) is not str
-                    or key in copied
-                ):
-                    raise ValueError("actor trace object is unstable")
-                if observed_items > 1:
-                    account(1)
-                account(_actor_trace_json_string_token_size(key))
-                account(1)
-                copied[key] = materialize(nested, depth + 1)
-            if observed_items != expected_items or len(value) != expected_items:
-                raise ValueError("actor trace object changed while preparing")
-            return copied
-
-        if isinstance(value, (list, tuple)):
-            expected_items = len(value)
-            if expected_items > _MAX_EXECUTION_TRACE_JSON_NODES - nodes:
-                raise ValueError("actor trace exceeds its structural limits")
-            account(2 + max(0, expected_items - 1))
-            copied_items: list[object] = []
-            for nested in value:
-                if len(copied_items) >= expected_items:
-                    raise ValueError("actor trace array is unstable")
-                copied_items.append(materialize(nested, depth + 1))
-            if len(copied_items) != expected_items or len(value) != expected_items:
-                raise ValueError("actor trace array changed while preparing")
-            return copied_items
-
-        if type(value) is str:
-            account(_actor_trace_json_string_token_size(value))
-            return value
-        if value is None:
-            account(4)
-            return None
-        if type(value) is bool:
-            account(4 if value else 5)
-            return value
-        if type(value) is int:
-            account(_actor_trace_json_integer_token_size(value))
-            return value
-        if type(value) is float:
-            if not math.isfinite(value):
-                raise ValueError("actor trace contains a non-finite number")
-            account(len(repr(value)))
-            return value
-        raise TypeError("actor trace must contain only JSON values")
-
-    snapshot = materialize(trace, 1)
-    if not isinstance(snapshot, list) or not all(
-        isinstance(event, dict) for event in snapshot
-    ):
-        raise TypeError("actor trace must be a sequence of JSON objects")
-    return snapshot
-
-
-def _actor_trace_json_string_token_size(value: str) -> int:
-    if len(value) + 2 > _MAX_EXECUTION_TRACE_BYTES:
-        raise ValueError("actor trace scalar exceeds its canonical byte limit")
-    size = 2
-    for character in value:
-        codepoint = ord(character)
-        if codepoint in {0x22, 0x5C, 0x08, 0x09, 0x0A, 0x0C, 0x0D}:
-            size += 2
-        elif codepoint < 0x20 or 0x7F <= codepoint <= 0xFFFF:
-            size += 6
-        elif codepoint > 0xFFFF:
-            size += 12
-        else:
-            size += 1
-        if size > _MAX_EXECUTION_TRACE_BYTES:
-            raise ValueError("actor trace scalar exceeds its canonical byte limit")
-    return size
-
-
-def _actor_trace_json_integer_token_size(value: int) -> int:
-    bit_length = value.bit_length()
-    minimum_digits = (
-        ((bit_length - 1) * 3_010_299_956) // 10_000_000_000 + 1
-        if bit_length
-        else 1
-    )
-    if minimum_digits + int(value < 0) > _MAX_EXECUTION_TRACE_BYTES:
-        raise ValueError("actor trace scalar exceeds its canonical byte limit")
-    return len(str(value))
-
-
-def _freeze_parsed_trace_json(value: object) -> object:
-    if isinstance(value, dict):
-        return _ImmutableJsonObject(
-            {
-                key: _freeze_parsed_trace_json(item)
-                for key, item in value.items()
-            }
+            return "successful_skill_reads"
+    if (
+        execution.expected_skill_path is not None
+        and classify_structured_skill_path(
+            execution.expected_skill_path,
+            skill_name,
         )
-    if isinstance(value, list):
-        return tuple(_freeze_parsed_trace_json(item) for item in value)
-    return value
+        is not StructuredSkillPathKind.CANONICAL_OTHER
+    ):
+        return "expected_skill_path"
+    for event in execution.trace:
+        if (
+            event.get("event") == "skill_read"
+            and classify_structured_skill_path(
+                event.get("path"),
+                skill_name,
+            )
+            is not StructuredSkillPathKind.CANONICAL_OTHER
+        ):
+            return "skill_read"
+    return None
 
 
 def _behavior_transcript(
     prompt: str,
     response: str,
-    variant: BehaviorVariant,
 ) -> tuple[str, str | None]:
     transcript = (
         "# Behavior Evaluation\n\n"
-        f"Variant: {variant}\n\n"
         "# User Prompt\n\n"
         f"{prompt}\n\n"
         "# Harness Response\n\n"
@@ -1430,17 +1642,50 @@ def _judge_failure_trace(
     message: str,
     execution: HarnessExecution,
 ) -> tuple[Mapping[str, object], ...]:
+    frozen_trace = actor_evidence.freeze_scanned_execution_trace(execution.trace)
+    if frozen_trace is None:
+        harness_events: tuple[Mapping[str, object], ...] = (
+            {
+                "event": "judge_trace_quarantine",
+                "message": "judge execution trace could not be preserved safely",
+            },
+        )
+    else:
+        harness_events = tuple(
+            {"event": "judge_harness_event", "detail": event}
+            for event in frozen_trace
+        )
     return (
-        *(
-            {"event": "judge_harness_event", "detail": dict(event)}
-            for event in execution.trace
-        ),
+        *harness_events,
         {
             "event": "judge_failure",
             "message": _bounded_runtime_text(message, 4096),
             "response": _bounded_runtime_text(execution.response, 16 * 1024),
             "exit_code": execution.exit_code,
             "timed_out": execution.timed_out,
+        },
+    )
+
+
+def _judge_success_trace(
+    execution: HarnessExecution,
+) -> tuple[Mapping[str, object], ...]:
+    frozen_trace = actor_evidence.freeze_scanned_execution_trace(execution.trace)
+    if frozen_trace is None:
+        raise ResultArtifactError(
+            "successful judge execution trace could not be preserved safely"
+        )
+    return (
+        *(
+            {"event": "judge_harness_event", "detail": event}
+            for event in frozen_trace
+        ),
+        {
+            "event": "judge_completed",
+            "duration_ms": execution.duration_ms,
+            "total_tokens": execution.total_tokens,
+            "model": execution.model,
+            "reasoning_effort": execution.reasoning_effort,
         },
     )
 

@@ -6,7 +6,11 @@ import re
 
 from scripts.ai_skills_lib.core import SkillRecord
 from scripts.ai_skills_lib.issues import ValidationIssue
-from scripts.ai_skills_lib.static_checks.context import ValidationContext, skill_scope
+from scripts.ai_skills_lib.static_checks.context import (
+    ValidationContext,
+    render_safe_diagnostic_text,
+    skill_scope,
+)
 
 
 _APPROVED_STATUSES = frozenset(
@@ -44,6 +48,16 @@ def validate_skill_policy(
     issues: list[ValidationIssue] = []
     metadata = skill.frontmatter.get("metadata")
     metadata = metadata if isinstance(metadata, dict) else {}
+    if "internal" in metadata:
+        issues.append(
+            ValidationIssue(
+                scope=scope,
+                message=(
+                    "metadata.internal is reserved by the public installer "
+                    "and is not allowed"
+                ),
+            )
+        )
     status = metadata.get("status")
     if status is None:
         issues.append(ValidationIssue(scope=scope, message="metadata.status is required"))
@@ -113,7 +127,10 @@ def validate_skill_policy(
         issues.append(
             ValidationIssue(
                 scope=scope,
-                message=f"references unknown public skill '{referenced_name}'",
+                message=(
+                    "references unknown public skill "
+                    f"'{render_safe_diagnostic_text(referenced_name)}'"
+                ),
             )
         )
     return issues

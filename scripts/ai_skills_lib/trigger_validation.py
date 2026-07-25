@@ -9,20 +9,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
+import scripts.ai_skills_lib.actor_evidence as actor_evidence
 from scripts.ai_skills_lib.core import SkillRecord
 from scripts.ai_skills_lib.eval_core import (
     AggregationMetadata,
+    AssertionContract,
     AssertionResult,
     AttemptManifest,
+    BoundPreflightReceipt,
     EvalRunRecord,
     GraderRecord,
     GradingRecord,
     GradingSummary,
+    ResultArtifactError,
     ResultWorkspace,
+    StructuredSkillPathKind,
     aggregate_results,
+    capabilities_from_preflight_receipt,
+    canonical_document_sha256,
+    classify_codex_skill_evidence_path,
     create_attempt_workspace,
     create_result_workspace,
     declare_invocation,
+    enforce_execution_binding,
+    enforce_execution_configuration,
+    preflight_bound_invocations,
     record_harness_timing,
     write_eval_run_artifacts,
     write_incomplete_attempt_artifacts,
@@ -31,10 +42,12 @@ from scripts.ai_skills_lib.eval_core import (
 from scripts.ai_skills_lib.evaluation_runtime import CodexEvaluationRuntime
 from scripts.ai_skills_lib.harness import (
     HarnessAdapter,
-    HarnessCapabilities,
+    HarnessArtifactBinding,
     HarnessExecution,
     HarnessRequest,
     PreparedSkillSource,
+    bind_harness_request,
+    validated_actor_skill_read_lifecycle,
 )
 from scripts.ai_skills_lib.issues import ValidationIssue, print_grouped_issues
 from scripts.ai_skills_lib.secret_patterns import bounded_redacted_runtime_text
@@ -48,7 +61,6 @@ from scripts.ai_skills_lib.trigger_definitions import (
 )
 
 
-_MAX_RESPONSE_BYTES = 64 * 1024
 _MAX_SELECTED_QUERIES = 128
 _MAX_MODEL_CALLS = 384
 
@@ -258,7 +270,7 @@ def execute_trigger_queries(
     actor_timeout_seconds: int = 900,
     skill_filter: str | None = None,
     query_filter: str | None = None,
-    preflighted_capabilities: HarnessCapabilities | None = None,
+    preflight_receipt: BoundPreflightReceipt | None = None,
 ) -> TriggerSuiteResult:
     """Load the validated catalog and run selected trigger cases."""
     _validate_trigger_execution_options(runs, max_concurrency, actor_timeout_seconds)
@@ -273,7 +285,7 @@ def execute_trigger_queries(
         actor_timeout_seconds=actor_timeout_seconds,
         skill_filter=skill_filter,
         query_filter=query_filter,
-        preflighted_capabilities=preflighted_capabilities,
+        preflight_receipt=preflight_receipt,
     )
 
 
@@ -288,7 +300,7 @@ def _execute_trigger_queries(
     actor_timeout_seconds: int,
     skill_filter: str | None,
     query_filter: str | None,
-    preflighted_capabilities: HarnessCapabilities | None = None,
+    preflight_receipt: BoundPreflightReceipt | None = None,
     prepared_plan: PreparedTriggerPlan | None = None,
     invocation_declared: bool = False,
 ) -> TriggerSuiteResult:
@@ -310,7 +322,7 @@ def _execute_trigger_queries(
         plan,
         max_concurrency=max_concurrency,
         actor_timeout_seconds=actor_timeout_seconds,
-        preflighted_capabilities=preflighted_capabilities,
+        preflight_receipt=preflight_receipt,
     )
 
 
@@ -363,6 +375,11 @@ def prepare_trigger_plan(
                 run_number,
                 runs,
                 minimum_pass_rate,
+                runtime_input_sha256=_trigger_runtime_input_sha256(
+                    definition.skill,
+                    query,
+                    catalog,
+                ),
             ),
         )
         for definition, query in selected
@@ -379,6 +396,7 @@ def prepare_trigger_plan(
 
 def declare_trigger_plan(workspace: ResultWorkspace, plan: PreparedTriggerPlan) -> None:
     """Persist a prepared trigger plan before any runtime preflight."""
+    _verify_trigger_plan_contract(plan)
     declare_invocation(workspace, "validate triggers", plan.manifests)
 
 
@@ -389,7 +407,7 @@ def execute_prepared_trigger_plan(
     *,
     max_concurrency: int,
     actor_timeout_seconds: int,
-    preflighted_capabilities: HarnessCapabilities | None = None,
+    preflight_receipt: BoundPreflightReceipt | None = None,
 ) -> TriggerSuiteResult:
     """Execute exactly one already declared immutable trigger plan."""
     _validate_trigger_execution_options(
@@ -397,14 +415,32 @@ def execute_prepared_trigger_plan(
         max_concurrency,
         actor_timeout_seconds,
     )
-    if not workspace.invocation_manifest.is_file():
-        raise TriggerHarnessError("prepared trigger invocation was not declared")
-    capabilities = preflighted_capabilities or adapter.preflight(require_fixtures=False)
+    _verify_trigger_plan_inputs(plan)
+    receipt = preflight_receipt or preflight_bound_invocations(
+        adapter,
+        ((workspace, "validate triggers", plan.manifests),),
+        require_fixtures=False,
+    )
+    capabilities = capabilities_from_preflight_receipt(
+        receipt,
+        adapter,
+        workspace,
+        "validate triggers",
+        plan.manifests,
+        require_fixtures=False,
+    )
     if not capabilities.available:
         raise TriggerHarnessError(capabilities.failure or "selected harness is unavailable")
     if not capabilities.reports_successful_skill_reads:
         raise TriggerHarnessError(
             "selected harness does not expose deterministic successful skill-read evidence"
+        )
+    if (
+        capabilities.actor_model is None
+        or capabilities.actor_reasoning_effort is None
+    ):
+        raise TriggerHarnessError(
+            "selected harness preflight did not pin the actor model configuration"
         )
 
     with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
@@ -418,6 +454,8 @@ def execute_prepared_trigger_plan(
                     attempt.query,
                     attempt.manifest,
                     capabilities.harness_name,
+                    capabilities.actor_model,
+                    capabilities.actor_reasoning_effort,
                     actor_timeout_seconds,
                 ),
                 plan.attempts,
@@ -813,6 +851,8 @@ def _execute_trigger_attempt(
     query: TriggerQuery,
     manifest: AttemptManifest,
     harness_name: str,
+    actor_model: str,
+    actor_reasoning_effort: str,
     actor_timeout_seconds: int,
 ) -> TriggerAttemptOutcome:
     run_id = manifest.run_id
@@ -830,6 +870,19 @@ def _execute_trigger_attempt(
         timeout_seconds=actor_timeout_seconds,
         skill_sources=catalog,
         expected_skill=skill.name,
+        model=actor_model,
+        reasoning_effort=actor_reasoning_effort,
+        capture_outputs=True,
+        artifact_binding=HarnessArtifactBinding(
+            attempt_identity=paths.attempt_identity,
+            outputs_identity=paths.directory_identities[("outputs",)],
+            repository_identity=paths.repository_identity,
+        ),
+    )
+    request = bind_harness_request(
+        request,
+        invocation_id=paths.invocation_id,
+        run_id=run_id,
     )
     started_at = datetime.now(timezone.utc)
     try:
@@ -852,7 +905,15 @@ def _execute_trigger_attempt(
             model=None,
             reasoning_effort=None,
             timed_out=False,
+            execution_binding=request.execution_binding,
         )
+    execution = enforce_execution_binding(execution, request)
+    execution = enforce_execution_configuration(
+        execution,
+        expected_model=actor_model,
+        expected_reasoning_effort=actor_reasoning_effort,
+        role="actor",
+    )
     if (
         not execution.timed_out
         and execution.failure is None
@@ -865,26 +926,43 @@ def _execute_trigger_attempt(
             trace=(*execution.trace, {"type": "evidence_error", "message": diagnostic}),
             failure=diagnostic,
         )
-    durable_response = bounded_redacted_runtime_text(
-        execution.response,
-        _MAX_RESPONSE_BYTES,
+    execution, durable_response = actor_evidence.prepare_durable_actor_execution(
+        execution
     )
-    if durable_response != execution.response:
-        diagnostic = (
-            "actor response cannot be preserved exactly under the durable 64 KiB policy"
-        )
+    activation, activation_error = _validated_trigger_activation(
+        execution,
+        skill.name,
+    )
+    if activation_error is not None:
         execution = replace(
             execution,
             trace=(
                 *execution.trace,
-                {"type": "evidence_error", "message": diagnostic},
+                {"event": "evidence_error", "message": activation_error},
             ),
             failure="\n".join(
-                part for part in (execution.failure, diagnostic) if part
+                part for part in (execution.failure, activation_error) if part
+            ),
+        )
+    else:
+        assert activation is not None
+        execution = replace(
+            execution,
+            trace=(
+                *execution.trace,
+                {
+                    "event": "trigger_activation_evidence",
+                    "expected_skill_path": str(execution.expected_skill_path),
+                    "expected_skill_catalog_path": (
+                        manifest.expected_skill_catalog_path
+                    ),
+                    "successful_exact_read": activation,
+                },
             ),
         )
     ended_at = datetime.now(timezone.utc)
     timing = record_harness_timing(
+        invocation_id=paths.invocation_id,
         run_id=run_id,
         skill_name=skill.name,
         case_id=query.id,
@@ -911,9 +989,36 @@ def _execute_trigger_attempt(
             artifact_dir=paths.root,
         )
 
-    expected_skill_path = execution.expected_skill_path
-    assert expected_skill_path is not None
-    activated = expected_skill_path in execution.successful_skill_reads
+    try:
+        output_snapshot = actor_evidence.snapshot_captured_outputs(
+            paths.root / "outputs",
+            expected_parent_identity=paths.attempt_identity,
+            expected_root_identity=paths.directory_identities[("outputs",)],
+        )
+    except ResultArtifactError as error:
+        write_incomplete_attempt_artifacts(
+            paths,
+            response=durable_response,
+            transcript=transcript,
+            execution_trace=(
+                *execution.trace,
+                {
+                    "event": "evidence_error",
+                    "message": str(error),
+                },
+            ),
+            timing=timing,
+        )
+        return TriggerAttemptOutcome(
+            activated=None,
+            matched_expectation=None,
+            error=str(error),
+            run_number=run_number,
+            artifact_dir=paths.root,
+        )
+
+    assert activation is not None
+    activated = activation
     matched = activated is query.should_trigger
     evidence = _trigger_evidence(skill.name, activated, execution)
     assertion = AssertionResult(
@@ -930,14 +1035,15 @@ def _execute_trigger_attempt(
             {
                 "artifact": "execution_trace.jsonl",
                 "locator": (
-                    "exact successful installed SKILL.md read"
+                    "trigger_activation_evidence successful_exact_read=true"
                     if activated
-                    else "absence of an exact successful installed SKILL.md read"
+                    else "trigger_activation_evidence successful_exact_read=false"
                 ),
             },
         ),
     )
     grading = GradingRecord(
+        invocation_id=paths.invocation_id,
         run_id=run_id,
         skill_name=skill.name,
         case_id=query.id,
@@ -958,18 +1064,48 @@ def _execute_trigger_attempt(
             pass_rate=float(matched),
         ),
         aggregation=aggregation,
-        measurements={"trigger_rate": float(activated)},
+        measurements={
+            "trigger_rate": float(activated),
+            "expected_trigger_rate": float(query.should_trigger),
+        },
     )
-    write_eval_run_artifacts(
-        paths,
-        EvalRunRecord(
-            response=durable_response,
-            transcript=transcript,
-            execution_trace=execution.trace,
-            timing=timing,
-            grading=grading,
-        ),
-    )
+    try:
+        write_eval_run_artifacts(
+            paths,
+            EvalRunRecord(
+                response=durable_response,
+                transcript=transcript,
+                execution_trace=execution.trace,
+                timing=timing,
+                grading=grading,
+            ),
+            actor_output_directories=tuple(
+                path.as_posix() for path in output_snapshot.directories
+            ),
+            actor_output_files=tuple(
+                (file.path.as_posix(), file.content)
+                for file in output_snapshot.files
+            ),
+            completion_guard=lambda response_written: (
+                actor_evidence.require_unchanged_output_snapshot(
+                    paths.root / "outputs",
+                    output_snapshot,
+                    runner_response=(
+                        durable_response if response_written else None
+                    ),
+                    expected_parent_identity=paths.attempt_identity,
+                    repository_identity=paths.repository_identity,
+                )
+            ),
+        )
+    except ResultArtifactError as error:
+        return TriggerAttemptOutcome(
+            activated=None,
+            matched_expectation=None,
+            error=str(error),
+            run_number=run_number,
+            artifact_dir=paths.root,
+        )
     return TriggerAttemptOutcome(
         activated=activated,
         matched_expectation=matched,
@@ -984,12 +1120,33 @@ def _trigger_attempt_manifest(
     run_number: int,
     configured_runs: int,
     minimum_pass_rate: float,
+    *,
+    runtime_input_sha256: str,
 ) -> AttemptManifest:
+    expected_text = (
+        f"The installed harness "
+        f"{'loads' if query.should_trigger else 'does not load'} "
+        f"the {skill.name} skill."
+    )
     return AttemptManifest(
         run_id=_injective_trigger_run_id(skill.name, query.id, run_number),
         skill_name=skill.name,
         case_id=query.id,
         run_kind="trigger",
+        runtime_input_sha256=runtime_input_sha256,
+        scenario_definition_sha256=runtime_input_sha256,
+        expected_activation=query.should_trigger,
+        expected_skill_catalog_path=(
+            f"codex-home/skills/{skill.name}/SKILL.md"
+        ),
+        assertion_contract=(
+            AssertionContract(
+                id="expected-skill-activation",
+                kind="trigger",
+                text=expected_text,
+                checked_by="trigger_runner",
+            ),
+        ),
         aggregation=AggregationMetadata(
             group_id=f"{skill.name}/{query.id}",
             variant="installed_harness",
@@ -1000,6 +1157,119 @@ def _trigger_attempt_manifest(
             run_number=run_number,
         ),
     )
+
+
+def _trigger_runtime_input_sha256(
+    skill: SkillRecord,
+    query: TriggerQuery,
+    catalog: Sequence[PreparedSkillSource],
+) -> str:
+    return canonical_document_sha256(
+        {
+            "kind": "trigger",
+            "skill_name": skill.name,
+            "query_id": query.id,
+            "query": query.query,
+            "should_trigger": query.should_trigger,
+            "actor_catalog": [
+                {"name": source.name, "sha256": source.sha256}
+                for source in catalog
+            ],
+        }
+    )
+
+
+def _verify_trigger_plan_inputs(plan: PreparedTriggerPlan) -> None:
+    _verify_trigger_plan_contract(plan)
+    for attempt in plan.attempts:
+        actual = _trigger_runtime_input_sha256(
+            attempt.definition.skill,
+            attempt.query,
+            plan.catalog,
+        )
+        if (
+            actual != attempt.manifest.runtime_input_sha256
+            or actual != attempt.manifest.scenario_definition_sha256
+        ):
+            raise TriggerHarnessError(
+                f"prepared trigger inputs changed after declaration: "
+                f"{attempt.manifest.run_id}"
+            )
+
+
+def _verify_trigger_plan_contract(plan: PreparedTriggerPlan) -> None:
+    if plan.runs not in (1, 2, 3):
+        raise TriggerHarnessError("prepared trigger plan has an invalid run count")
+    selected_by_key: dict[
+        tuple[str, str],
+        tuple[SkillTriggerQueries, TriggerQuery],
+    ] = {}
+    for definition, query in plan.selected:
+        if definition not in plan.definitions or query not in definition.queries:
+            raise TriggerHarnessError(
+                "prepared trigger selection is not bound to its loaded definition"
+            )
+        key = (definition.skill.name, query.id)
+        if key in selected_by_key:
+            raise TriggerHarnessError(
+                "prepared trigger selection contains duplicate query identities"
+            )
+        selected_by_key[key] = (definition, query)
+
+    expected_keys = {
+        (definition.skill.name, query.id, run_number)
+        for definition, query in plan.selected
+        for run_number in range(1, plan.runs + 1)
+    }
+    actual_keys = {
+        (
+            attempt.definition.skill.name,
+            attempt.query.id,
+            attempt.run_number,
+        )
+        for attempt in plan.attempts
+    }
+    if len(plan.attempts) != len(expected_keys) or actual_keys != expected_keys:
+        raise TriggerHarnessError(
+            "prepared trigger plan does not contain the exact configured run set"
+        )
+
+    minimum_pass_rate = 2 / 3 if plan.runs == 3 else 1.0
+    for attempt in plan.attempts:
+        selected = selected_by_key.get(
+            (attempt.definition.skill.name, attempt.query.id)
+        )
+        if (
+            selected is None
+            or attempt.definition != selected[0]
+            or attempt.query != selected[1]
+        ):
+            raise TriggerHarnessError(
+                "prepared trigger attempt is not bound to its selected query"
+            )
+        expected_manifest = _trigger_attempt_manifest(
+            attempt.definition.skill,
+            attempt.query,
+            attempt.run_number,
+            plan.runs,
+            minimum_pass_rate,
+            runtime_input_sha256=_trigger_runtime_input_sha256(
+                attempt.definition.skill,
+                attempt.query,
+                plan.catalog,
+            ),
+        )
+        if attempt.manifest != replace(
+            expected_manifest,
+            runtime_input_sha256=attempt.manifest.runtime_input_sha256,
+            scenario_definition_sha256=(
+                attempt.manifest.scenario_definition_sha256
+            ),
+        ):
+            raise TriggerHarnessError(
+                "prepared trigger attempt has inconsistent identity, "
+                f"expectation, or aggregation policy: {attempt.manifest.run_id}"
+            )
 
 
 def _injective_trigger_run_id(
@@ -1032,13 +1302,80 @@ def _has_trustworthy_expected_skill_path(
     execution: HarnessExecution,
     skill_name: str,
 ) -> bool:
-    path = execution.expected_skill_path
-    return bool(
-        path is not None
-        and path.is_absolute()
-        and path.name == "SKILL.md"
-        and path.parent.name == skill_name
+    return (
+        classify_codex_skill_evidence_path(
+            execution.expected_skill_path,
+            skill_name,
+        )
+        is StructuredSkillPathKind.CANONICAL_TARGET
     )
+
+
+def _validated_trigger_activation(
+    execution: HarnessExecution,
+    skill_name: str,
+) -> tuple[bool | None, str | None]:
+    expected = execution.expected_skill_path
+    if (
+        classify_codex_skill_evidence_path(expected, skill_name)
+        is not StructuredSkillPathKind.CANONICAL_TARGET
+    ):
+        return (
+            None,
+            "trigger execution has no canonical expected installed SKILL.md path",
+        )
+    read_classifications = tuple(
+        classify_codex_skill_evidence_path(path, skill_name)
+        for path in execution.successful_skill_reads
+    )
+    if any(
+        classification is StructuredSkillPathKind.NONCANONICAL
+        for classification in read_classifications
+    ):
+        return (
+            None,
+            "harness successful_skill_reads contains a noncanonical logical "
+            "Codex skill path",
+        )
+    field_matches = sum(
+        classification is StructuredSkillPathKind.CANONICAL_TARGET
+        for classification in read_classifications
+    )
+    try:
+        lifecycle_skill_reads = validated_actor_skill_read_lifecycle(
+            execution.trace
+        )
+    except ValueError as error:
+        return None, f"trigger actor lifecycle is invalid: {error}"
+    trace_classifications = tuple(
+        classify_codex_skill_evidence_path(path, skill_name)
+        for path in lifecycle_skill_reads
+    )
+    if any(
+        classification is StructuredSkillPathKind.NONCANONICAL
+        for classification in trace_classifications
+    ):
+        return (
+            None,
+            "harness trace contains a noncanonical logical Codex skill_read path",
+        )
+    trace_matches = sum(
+        classification is StructuredSkillPathKind.CANONICAL_TARGET
+        for classification in trace_classifications
+    )
+    field_activated = field_matches == 1
+    trace_activated = trace_matches == 1
+    if (
+        field_matches > 1
+        or trace_matches > 1
+        or field_activated is not trace_activated
+    ):
+        return (
+            None,
+            "harness skill-read metadata does not match the preserved exact "
+            "SKILL.md trace evidence",
+        )
+    return field_activated, None
 
 
 def _trigger_evidence(

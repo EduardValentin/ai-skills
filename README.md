@@ -31,7 +31,7 @@ dependencies, then run the deterministic validation gate:
 
 ```bash
 python3 -m pip install -r requirements-test.txt
-python3 scripts/ai_skills.py validate ci-all
+scripts/ai-skills validate ci-all
 ```
 
 ## Documentation

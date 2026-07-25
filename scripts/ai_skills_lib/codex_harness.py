@@ -6,13 +6,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import hashlib
 import json
-import math
 import os
 from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
 import stat
+import tempfile
 import time
 import uuid
 
@@ -29,12 +29,16 @@ from scripts.ai_skills_lib.eval_definitions import MAX_EVAL_FIXTURE_FILE_BYTES
 from scripts.ai_skills_lib.harness import (
     ActorInput,
     CapturedOutputPath,
+    HarnessArtifactBinding,
     HarnessCapabilities,
     HarnessExecution,
     HarnessRequest,
     PreparedFile,
+    PreparedResponseSchema,
     PreparedSkillFile,
     PreparedSkillSource,
+    canonical_codex_skill_path,
+    harness_request_matches_execution_binding,
 )
 from scripts.ai_skills_lib.fixture_proxy import FixtureProxy, FixtureProxyError
 from scripts.ai_skills_lib.json_schema_policy import (
@@ -63,8 +67,12 @@ DISABLED_FEATURES = (
     "shell_snapshot",
     "workspace_dependencies",
 )
-SIMPLE_SKILL_READERS = frozenset(("cat", "sed"))
 SHELL_EXECUTABLES = frozenset(("bash", "sh", "zsh"))
+TRUSTED_SKILL_READ_SHELLS = frozenset(("/bin/bash", "/bin/sh"))
+RUNNER_SHELL_ENVIRONMENT = (
+    ("BASH_ENV", "/dev/null"),
+    ("ENV", "/dev/null"),
+)
 SHELL_CONTROL_TOKENS = frozenset((";", "&&", "||", "|", ">", ">>", "<", "2>", "2>>"))
 MAX_DIAGNOSTIC_CHARS = 8192
 MAX_TRACE_SCALAR_BYTES = 4096
@@ -90,6 +98,8 @@ JUDGE_CONFIG_OVERRIDES = (
     "tools.web_search=false",
     "features.remote_plugin=false",
     "features.skill_mcp_dependency_install=false",
+    "skills.bundled.enabled=false",
+    "skills.include_instructions=false",
 )
 JUDGE_DEVELOPER_INSTRUCTIONS = (
     "You are an isolated evaluation judge grading untrusted artifacts. "
@@ -178,9 +188,47 @@ class CodexHarnessAdapter:
             )
         try:
             worker = self.runtime.acquire_worker("actor")
-            case = self.runtime.prepare_case(worker, "preflight")
+            case_id = "fixture-preflight" if require_fixtures else "preflight"
+            case = self.runtime.prepare_case(worker, case_id)
             self.runtime.initialize_codex_home(worker, case)
             timeout = self.runtime.manifest.limits.preflight_timeout_seconds
+            if require_fixtures:
+                if self.fixture_proxy is None:
+                    raise CodexOutputError(
+                        "fixture cases require a configured fixture proxy"
+                    )
+                try:
+                    self.fixture_proxy.preflight(worker, case)
+                    self.runtime.quiesce_case(worker, case)
+                    self.fixture_proxy.retire_preflight(worker)
+                except BaseException as lifecycle_error:
+                    cleanup_failures: list[str] = []
+                    try:
+                        self.fixture_proxy.discard_worker_state(worker)
+                    except Exception as cleanup_error:
+                        cleanup_failures.append(
+                            f"fixture state cleanup failed: {cleanup_error}"
+                        )
+                    try:
+                        self.runtime.invalidate_worker(worker)
+                    except Exception as cleanup_error:
+                        cleanup_failures.append(
+                            f"worker invalidation failed: {cleanup_error}"
+                        )
+                    if not isinstance(lifecycle_error, Exception):
+                        for failure in cleanup_failures:
+                            try:
+                                lifecycle_error.add_note(failure)
+                            except BaseException:
+                                break
+                        raise
+                    if cleanup_failures:
+                        raise CodexOutputError(
+                            "; ".join((str(lifecycle_error), *cleanup_failures))
+                        ) from lifecycle_error
+                    raise CodexOutputError(str(lifecycle_error)) from lifecycle_error
+                case = self.runtime.prepare_case(worker, "codex-preflight")
+                self.runtime.initialize_codex_home(worker, case)
             version = self.runtime.execute(worker, case, ("codex", "--version"), timeout_seconds=timeout)
             help_result = self.runtime.execute(
                 worker, case, ("codex", "exec", "--help"), timeout_seconds=timeout
@@ -203,12 +251,6 @@ class CodexHarnessAdapter:
             if missing_flags:
                 raise CodexOutputError("pinned Codex does not expose every required execution flag")
             model, reasoning = _parse_default_model(models_result.stdout)
-            if require_fixtures:
-                if self.fixture_proxy is None:
-                    raise CodexOutputError(
-                        "fixture cases require a configured fixture proxy"
-                    )
-                self.fixture_proxy.preflight(worker, case)
             self.runtime.prepare_case(worker, "preflight-reset")
         except (
             CodexOutputError,
@@ -249,8 +291,17 @@ class CodexHarnessAdapter:
             if request.role == "judge"
             else None
         )
+        if not harness_request_matches_execution_binding(request):
+            raise CodexOutputError(
+                "Codex execution requires an exact runner-created execution binding"
+            )
+        _require_prepared_request_material(request)
         if request.fixture_initialization is not None and self.fixture_proxy is None:
             raise CodexOutputError("fixture request requires a configured fixture proxy")
+        if request.capture_outputs and request.artifact_binding is None:
+            raise CodexOutputError(
+                "actor output capture requires pinned runner artifact identities"
+            )
         fixture_material_is_prepared = _fixture_material_is_prepared(request)
         case_fixture_root = _resolve_case_fixture_root(
             request.fixture_root,
@@ -285,7 +336,13 @@ class CodexHarnessAdapter:
                 case = self.runtime.prepare_case(worker, request.run_variant)
                 if durable_dir == case.root or durable_dir.is_relative_to(case.root):
                     raise CodexOutputError("durable results cannot be mounted into an actor or judge case")
-                durable_dir.mkdir(parents=True, exist_ok=True)
+                if request.capture_outputs:
+                    if durable_dir.is_symlink() or not durable_dir.is_dir():
+                        raise CodexOutputError(
+                            "durable artifact directory must already exist as a regular directory"
+                        )
+                else:
+                    durable_dir.mkdir(parents=True, exist_ok=True)
                 self.runtime.initialize_codex_home(worker, case)
                 response_schema_path = (
                     _stage_judge_response_schema(case.workspace, judge_schema_json)
@@ -341,9 +398,16 @@ class CodexHarnessAdapter:
                         project_actor_skill(resolved, case.skills / resolved.name)
 
                 self.runtime.seal_skill_catalog(worker, case)
+                if request.role == "judge":
+                    _require_empty_judge_skill_catalog(case.skills)
 
                 if request.expected_skill:
                     _validate_skill_name(request.expected_skill)
+                logical_expected_path = (
+                    Path(canonical_codex_skill_path(request.expected_skill))
+                    if request.expected_skill
+                    else None
+                )
                 candidate_expected_path = (
                     case.skills / request.expected_skill / "SKILL.md" if request.expected_skill else None
                 )
@@ -352,10 +416,19 @@ class CodexHarnessAdapter:
                     if candidate_expected_path is not None and candidate_expected_path.is_file()
                     else None
                 )
-                expected_digest = _file_sha256(expected_path) if expected_path is not None else None
-                expected_line_count = (
-                    len(expected_path.read_text(encoding="utf-8").splitlines())
+                expected_content = (
+                    expected_path.read_bytes()
                     if expected_path is not None
+                    else None
+                )
+                expected_digest = (
+                    hashlib.sha256(expected_content).hexdigest()
+                    if expected_content is not None
+                    else None
+                )
+                expected_line_count = (
+                    len(expected_content.decode("utf-8").splitlines())
+                    if expected_content is not None
                     else None
                 )
                 if request.expected_skill is not None and expected_path is None:
@@ -364,6 +437,10 @@ class CodexHarnessAdapter:
                     )
                 shell_environment = _merge_shell_environment(
                     request.shell_environment,
+                    RUNNER_SHELL_ENVIRONMENT,
+                )
+                shell_environment = _merge_shell_environment(
+                    shell_environment,
                     _actor_input_environment(request, case.workspace),
                 )
                 if request.fixture_initialization is not None:
@@ -395,7 +472,9 @@ class CodexHarnessAdapter:
                 parsed = _parse_codex_output(
                     result,
                     expected_path,
+                    logical_expected_path,
                     expected_digest,
+                    expected_content,
                     expected_line_count,
                 )
                 lifecycle_failure = result.lifecycle_failure
@@ -406,6 +485,8 @@ class CodexHarnessAdapter:
                             self.fixture_proxy.discard_worker_state(worker)
                     else:
                         self.runtime.quiesce_case(worker, case)
+                        if request.role == "judge":
+                            _require_empty_judge_skill_catalog(case.skills)
                         if request.capture_outputs:
                             assert initial_workspace is not None
                             captured = _capture_actor_outputs(
@@ -415,6 +496,7 @@ class CodexHarnessAdapter:
                                 maximum_bytes=(
                                     self.runtime.manifest.limits.maximum_captured_output_bytes
                                 ),
+                                artifact_binding=request.artifact_binding,
                             )
                             output_trace = captured.trace
                             captured_output_paths = captured.paths
@@ -431,7 +513,7 @@ class CodexHarnessAdapter:
                             case,
                             fixture_session,
                         )
-                except Exception as lifecycle_error:
+                except BaseException as lifecycle_error:
                     if isinstance(lifecycle_error, FixtureProxyError):
                         fixture_trace = lifecycle_error.evidence
                     diagnostics = [
@@ -442,18 +524,20 @@ class CodexHarnessAdapter:
                         assert self.fixture_proxy is not None
                         try:
                             self.fixture_proxy.discard_worker_state(worker)
-                        except Exception as cleanup_error:
+                        except BaseException as cleanup_error:
                             diagnostics.append(
                                 "fixture state cleanup failed: "
                                 f"{_redact(str(cleanup_error))[:MAX_DIAGNOSTIC_CHARS]}"
                             )
                     try:
                         self.runtime.invalidate_worker(worker)
-                    except Exception as cleanup_error:
+                    except BaseException as cleanup_error:
                         diagnostics.append(
                             "worker invalidation failed: "
                             f"{_redact(str(cleanup_error))[:MAX_DIAGNOSTIC_CHARS]}"
                         )
+                    if not isinstance(lifecycle_error, Exception):
+                        raise
                     lifecycle_failure = "\n".join(
                         item for item in (lifecycle_failure, *diagnostics) if item
                     )[:MAX_DIAGNOSTIC_CHARS]
@@ -478,7 +562,7 @@ class CodexHarnessAdapter:
                     projection_trace = (
                         {"event": "projection_integrity_failure"},
                     )
-                model, reasoning = self._selected_model(request)
+                model, reasoning = self._configured_model(request)
                 failure = "\n".join(
                     item
                     for item in (
@@ -508,14 +592,21 @@ class CodexHarnessAdapter:
                     model=model,
                     reasoning_effort=reasoning,
                     timed_out=result.timed_out,
-                    expected_skill_path=expected_path,
+                    expected_skill_path=logical_expected_path,
                     captured_output_paths=captured_output_paths,
+                    execution_binding=request.execution_binding,
                 )
-            except Exception:
+            except BaseException:
                 if fixture_session is not None:
                     assert self.fixture_proxy is not None
-                    self.fixture_proxy.discard_worker_state(worker)
-                self.runtime.invalidate_worker(worker)
+                    try:
+                        self.fixture_proxy.discard_worker_state(worker)
+                    except BaseException:
+                        pass
+                try:
+                    self.runtime.invalidate_worker(worker)
+                except BaseException:
+                    pass
                 raise
         return execution
 
@@ -568,26 +659,83 @@ class CodexHarnessAdapter:
         command.extend(("-C", str(workspace), "--", request.prompt))
         return tuple(command)
 
-    def _selected_model(self, request: HarnessRequest) -> tuple[str | None, str | None]:
-        if request.model or request.reasoning_effort:
-            defaults = self._capabilities
-            default_model = None
-            default_reasoning = None
-            if defaults is not None and request.role == "judge":
-                default_model = defaults.judge_model
-                default_reasoning = defaults.judge_reasoning_effort
-            elif defaults is not None:
-                default_model = defaults.actor_model
-                default_reasoning = defaults.actor_reasoning_effort
-            return (
-                request.model or default_model,
-                request.reasoning_effort or default_reasoning,
+    @staticmethod
+    def _configured_model(
+        request: HarnessRequest,
+    ) -> tuple[str | None, str | None]:
+        return request.model, request.reasoning_effort
+
+
+def _require_empty_judge_skill_catalog(skills_root: Path) -> None:
+    root_descriptor: int | None = None
+    system_descriptor: int | None = None
+    try:
+        root_descriptor = os.open(skills_root, _directory_open_flags())
+        metadata = os.fstat(root_descriptor)
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise CodexOutputError(
+                "judge skill catalog is not an isolated directory"
             )
-        if self._capabilities is None:
-            return None, None
-        if request.role == "judge":
-            return self._capabilities.judge_model, self._capabilities.judge_reasoning_effort
-        return self._capabilities.actor_model, self._capabilities.actor_reasoning_effort
+        with os.scandir(root_descriptor) as entries:
+            catalog_entries = list(entries)
+        if (
+            len(catalog_entries) != 1
+            or catalog_entries[0].name != ".system"
+            or not stat.S_ISDIR(
+                catalog_entries[0].stat(follow_symlinks=False).st_mode
+            )
+        ):
+            raise CodexOutputError(
+                "judge skill catalog must contain only an empty .system directory"
+            )
+
+        system_descriptor = os.open(
+            ".system",
+            _directory_open_flags(),
+            dir_fd=root_descriptor,
+        )
+        with os.scandir(system_descriptor) as entries:
+            if next(entries, None) is not None:
+                raise CodexOutputError(
+                    "judge skill catalog must contain only an empty .system directory"
+                )
+    except CodexOutputError:
+        raise
+    except OSError as error:
+        raise CodexOutputError(
+            "judge skill catalog cannot be verified"
+        ) from error
+    finally:
+        if system_descriptor is not None:
+            os.close(system_descriptor)
+        if root_descriptor is not None:
+            os.close(root_descriptor)
+
+
+def _require_prepared_request_material(request: HarnessRequest) -> None:
+    """Reject live repository paths after the runner binds an invocation."""
+    if any(not isinstance(source, PreparedSkillSource) for source in request.skill_sources):
+        raise CodexOutputError(
+            "Codex execution requires prepared skill bytes before preflight"
+        )
+    if any(actor_input.prepared is None for actor_input in request.actor_inputs):
+        raise CodexOutputError(
+            "Codex execution requires prepared actor input bytes before preflight"
+        )
+    if request.fixture_initialization is not None and not isinstance(
+        request.fixture_initialization,
+        PreparedFile,
+    ):
+        raise CodexOutputError(
+            "Codex execution requires prepared fixture bytes before preflight"
+        )
+    if request.role == "judge" and not isinstance(
+        request.response_schema,
+        PreparedResponseSchema,
+    ):
+        raise CodexOutputError(
+            "Codex execution requires prepared response schema bytes"
+        )
 
 
 def prepare_actor_skill_source(source: Path) -> PreparedSkillSource:
@@ -943,14 +1091,14 @@ def _write_prepared_file(
 
 
 def _validated_judge_response_schema_json(
-    response_schema: Mapping[str, object] | None,
+    response_schema: PreparedResponseSchema | None,
 ) -> bytes:
     if response_schema is None:
         raise CodexOutputError("judge response schema is required")
+    if not isinstance(response_schema, PreparedResponseSchema):
+        raise CodexOutputError("judge response schema must be prepared before execution")
     try:
-        serialized = _serialize_bounded_judge_schema(
-            response_schema,
-        )
+        serialized = response_schema.content
         document = strict_bounded_json_loads(
             serialized,
             maximum_bytes=MAX_JSON_SCHEMA_BYTES,
@@ -971,163 +1119,6 @@ def _validated_judge_response_schema_json(
     ) as error:
         raise CodexOutputError("judge response schema is invalid") from error
     return serialized
-
-
-def _serialize_bounded_judge_schema(
-    response_schema: Mapping[str, object],
-) -> bytes:
-    """Serialize canonical schema JSON without crossing the fixed file limit."""
-    try:
-        materialized = _materialize_bounded_judge_schema(response_schema)
-        encoder = json.JSONEncoder(
-            ensure_ascii=True,
-            allow_nan=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        chunks: list[bytes] = []
-        consumed = 1  # Account for the final newline staged with the schema.
-        for chunk in encoder.iterencode(materialized):
-            encoded = chunk.encode("utf-8")
-            if consumed + len(encoded) > MAX_JSON_SCHEMA_BYTES:
-                raise CodexOutputError(
-                    "judge response schema exceeds the 256 KiB byte limit"
-                )
-            chunks.append(encoded)
-            consumed += len(encoded)
-        return b"".join(chunks) + b"\n"
-    except CodexOutputError:
-        raise
-    except (
-        TypeError,
-        UnicodeError,
-        ValueError,
-        OverflowError,
-        RecursionError,
-        RuntimeError,
-        MemoryError,
-        SystemError,
-    ) as error:
-        raise CodexOutputError("judge response schema is invalid") from error
-
-
-def _materialize_bounded_judge_schema(
-    response_schema: Mapping[str, object],
-) -> dict[str, object]:
-    """Detach JSON values while accounting for every encoded scalar and delimiter."""
-    nodes = 0
-    serialized_bytes = 1  # The staged schema includes one final newline.
-
-    def account(size: int) -> None:
-        nonlocal serialized_bytes
-        serialized_bytes += size
-        if serialized_bytes > MAX_JSON_SCHEMA_BYTES:
-            raise CodexOutputError(
-                "judge response schema exceeds the 256 KiB byte limit"
-            )
-
-    def materialize(value: object, depth: int) -> object:
-        nonlocal nodes
-        nodes += 1
-        if nodes > MAX_JSON_SCHEMA_NODES or depth > MAX_JSON_SCHEMA_DEPTH:
-            raise ValueError("judge response schema exceeds structural limits")
-
-        if isinstance(value, Mapping):
-            expected_items = len(value)
-            if expected_items > MAX_JSON_SCHEMA_NODES - nodes:
-                raise ValueError("judge response schema exceeds structural limits")
-            account(2)  # Object braces.
-            copied: dict[str, object] = {}
-            observed_items = 0
-            for key, nested in value.items():
-                observed_items += 1
-                if observed_items > expected_items or not isinstance(key, str):
-                    raise ValueError("judge response schema object is unstable")
-                if observed_items > 1:
-                    account(1)  # Comma.
-                account(_bounded_json_string_token_size(key))
-                account(1)  # Colon.
-                copied[key] = materialize(nested, depth + 1)
-            if observed_items != expected_items or len(value) != expected_items:
-                raise ValueError("judge response schema object changed while preparing")
-            return copied
-
-        if isinstance(value, (list, tuple)):
-            expected_items = len(value)
-            if expected_items > MAX_JSON_SCHEMA_NODES - nodes:
-                raise ValueError("judge response schema exceeds structural limits")
-            account(2 + max(0, expected_items - 1))  # Brackets and commas.
-            copied_items: list[object] = []
-            for nested in value:
-                if len(copied_items) >= expected_items:
-                    raise ValueError("judge response schema array is unstable")
-                copied_items.append(materialize(nested, depth + 1))
-            if len(copied_items) != expected_items or len(value) != expected_items:
-                raise ValueError("judge response schema array changed while preparing")
-            return copied_items
-
-        if isinstance(value, str):
-            account(_bounded_json_string_token_size(value))
-            return value
-        if value is None:
-            account(4)
-            return None
-        if isinstance(value, bool):
-            account(4 if value else 5)
-            return value
-        if isinstance(value, int):
-            account(_bounded_json_integer_token_size(value))
-            return value
-        if isinstance(value, float):
-            if not math.isfinite(value):
-                raise ValueError("judge response schema contains a non-finite number")
-            account(len(repr(value)))
-            return value
-        raise TypeError("judge response schema must contain only JSON values")
-
-    materialized = materialize(response_schema, 1)
-    if not isinstance(materialized, dict):
-        raise TypeError("judge response schema must be a JSON object")
-    return materialized
-
-
-def _bounded_json_string_token_size(value: str) -> int:
-    """Return ensure_ascii JSON string width without constructing the token."""
-    if len(value) + 2 > MAX_JSON_SCHEMA_BYTES:
-        raise CodexOutputError(
-            "judge response schema exceeds the 256 KiB byte limit"
-        )
-    size = 2
-    for character in value:
-        codepoint = ord(character)
-        if codepoint in {0x22, 0x5C, 0x08, 0x09, 0x0A, 0x0C, 0x0D}:
-            size += 2
-        elif codepoint < 0x20 or 0x7F <= codepoint <= 0xFFFF:
-            size += 6
-        elif codepoint > 0xFFFF:
-            size += 12
-        else:
-            size += 1
-        if size > MAX_JSON_SCHEMA_BYTES:
-            raise CodexOutputError(
-                "judge response schema exceeds the 256 KiB byte limit"
-            )
-    return size
-
-
-def _bounded_json_integer_token_size(value: int) -> int:
-    """Bound decimal conversion before asking Python to materialize the token."""
-    bit_length = value.bit_length()
-    minimum_digits = (
-        ((bit_length - 1) * 3_010_299_956) // 10_000_000_000 + 1
-        if bit_length
-        else 1
-    )
-    if minimum_digits + int(value < 0) > MAX_JSON_SCHEMA_BYTES:
-        raise CodexOutputError(
-            "judge response schema exceeds the 256 KiB byte limit"
-        )
-    return len(str(value))
 
 
 def _stage_judge_response_schema(workspace: Path, serialized: bytes) -> Path:
@@ -1470,16 +1461,28 @@ def _capture_actor_outputs(
     initial: Mapping[str, _WorkspaceFileSnapshot],
     *,
     maximum_bytes: int,
+    artifact_binding: HarnessArtifactBinding | None = None,
 ) -> _CapturedActorOutputs:
     """Preserve descriptor-observed outputs without committing detected secrets."""
-    if output_root.is_symlink():
-        raise CodexOutputError("actor output capture destination cannot be a symlink")
-    if output_root.exists():
-        if not output_root.is_dir() or any(output_root.iterdir()):
-            raise CodexOutputError("actor output capture destination must be an empty directory")
-    else:
+    if artifact_binding is None and not output_root.exists():
         output_root.parent.mkdir(parents=True, exist_ok=True)
         output_root.mkdir(mode=0o700)
+    attempt_descriptor: int | None = None
+    output_descriptor: int | None = None
+    try:
+        attempt_descriptor, output_descriptor = _open_capture_destination(
+            output_root,
+            artifact_binding,
+        )
+        if _directory_has_entries(output_descriptor):
+            raise CodexOutputError(
+                "actor output capture destination must be an empty directory"
+            )
+    finally:
+        if output_descriptor is not None:
+            os.close(output_descriptor)
+        if attempt_descriptor is not None:
+            os.close(attempt_descriptor)
 
     current = _snapshot_actor_workspace(
         workspace,
@@ -1609,29 +1612,65 @@ def _capture_actor_outputs(
             (relative, safe_relative, preserved_record, quarantined)
         )
 
-    staging = output_root.parent / f".actor-outputs-{uuid.uuid4().hex}"
     try:
-        staging.mkdir(mode=0o700)
-        for relative in changed_directories:
-            if relative in unsafe_paths:
-                continue
-            staging.joinpath(*relative.split("/")).mkdir(
-                parents=True,
-                exist_ok=True,
-                mode=0o700,
-            )
-        for _, safe_relative, record, _ in preserved:
-            destination = staging.joinpath(*safe_relative.split("/"))
-            destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            _write_captured_workspace_file(destination, record)
-        if output_root.exists():
-            output_root.rmdir()
-        os.replace(staging, output_root)
+        with tempfile.TemporaryDirectory(
+            prefix="ai-skills-actor-outputs-"
+        ) as staging_directory:
+            staging = Path(staging_directory)
+            for relative in changed_directories:
+                if relative in unsafe_paths:
+                    continue
+                staging.joinpath(*relative.split("/")).mkdir(
+                    parents=True,
+                    exist_ok=True,
+                    mode=0o700,
+                )
+            for _, safe_relative, record, _ in preserved:
+                destination = staging.joinpath(*safe_relative.split("/"))
+                destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                _write_captured_workspace_file(destination, record)
+
+            staging_descriptor = os.open(staging, _directory_open_flags())
+            attempt_descriptor = None
+            output_descriptor = None
+            try:
+                attempt_descriptor, output_descriptor = _open_capture_destination(
+                    output_root,
+                    artifact_binding,
+                )
+                if _directory_has_entries(output_descriptor):
+                    raise CodexOutputError(
+                        "actor output capture destination must remain empty before commit"
+                    )
+                _copy_capture_tree_at(
+                    staging_descriptor,
+                    output_descriptor,
+                )
+                os.fsync(output_descriptor)
+                _verify_capture_destination(
+                    output_root,
+                    attempt_descriptor,
+                    output_descriptor,
+                    artifact_binding,
+                )
+            except BaseException:
+                if output_descriptor is not None:
+                    try:
+                        _clear_capture_directory_at(output_descriptor)
+                        os.fsync(output_descriptor)
+                    except OSError:
+                        pass
+                raise
+            finally:
+                if output_descriptor is not None:
+                    os.close(output_descriptor)
+                if attempt_descriptor is not None:
+                    os.close(attempt_descriptor)
+                os.close(staging_descriptor)
     except (OSError, RuntimeError) as error:
-        shutil.rmtree(staging, ignore_errors=True)
-        if not output_root.exists():
-            output_root.mkdir(mode=0o700)
-        raise CodexOutputError("actor output capture could not preserve artifacts") from error
+        raise CodexOutputError(
+            "actor output capture could not preserve artifacts"
+        ) from error
 
     file_trace = tuple(
         {
@@ -1696,6 +1735,289 @@ def _capture_actor_outputs(
         paths=paths,
         failure=failure,
     )
+
+
+def _open_capture_destination(
+    output_root: Path,
+    binding: HarnessArtifactBinding | None,
+) -> tuple[int, int]:
+    attempt_descriptor: int | None = None
+    output_descriptor: int | None = None
+    opened_successfully = False
+    try:
+        attempt_metadata = output_root.parent.lstat()
+        if stat.S_ISLNK(attempt_metadata.st_mode) or not stat.S_ISDIR(
+            attempt_metadata.st_mode
+        ):
+            raise CodexOutputError(
+                "actor output capture parent must be a regular directory"
+            )
+        attempt_descriptor = os.open(
+            output_root.parent,
+            _directory_open_flags(),
+        )
+        opened_attempt = os.fstat(attempt_descriptor)
+        if (
+            _stable_inode_metadata(opened_attempt)
+            != _stable_inode_metadata(attempt_metadata)
+            or (
+                binding is not None
+                and _directory_identity(opened_attempt)
+                != binding.attempt_identity
+            )
+        ):
+            raise CodexOutputError(
+                "actor output capture parent changed while being opened"
+            )
+        output_metadata = os.stat(
+            output_root.name,
+            dir_fd=attempt_descriptor,
+            follow_symlinks=False,
+        )
+        if stat.S_ISLNK(output_metadata.st_mode) or not stat.S_ISDIR(
+            output_metadata.st_mode
+        ):
+            raise CodexOutputError(
+                "actor output capture destination must be a regular directory"
+            )
+        output_descriptor = os.open(
+            output_root.name,
+            _directory_open_flags(),
+            dir_fd=attempt_descriptor,
+        )
+        opened_output = os.fstat(output_descriptor)
+        if (
+            _stable_inode_metadata(opened_output)
+            != _stable_inode_metadata(output_metadata)
+            or (
+                binding is not None
+                and _directory_identity(opened_output)
+                != binding.outputs_identity
+            )
+        ):
+            raise CodexOutputError(
+                "actor output capture destination changed while being opened"
+            )
+        _verify_capture_destination(
+            output_root,
+            attempt_descriptor,
+            output_descriptor,
+            binding,
+        )
+        opened_successfully = True
+        return attempt_descriptor, output_descriptor
+    except CodexOutputError:
+        raise
+    except (OSError, RuntimeError) as error:
+        raise CodexOutputError(
+            "actor output capture destination cannot be opened safely"
+        ) from error
+    finally:
+        if not opened_successfully:
+            if output_descriptor is not None:
+                os.close(output_descriptor)
+            if attempt_descriptor is not None:
+                os.close(attempt_descriptor)
+
+
+def _verify_capture_destination(
+    output_root: Path,
+    attempt_descriptor: int,
+    output_descriptor: int,
+    binding: HarnessArtifactBinding | None,
+) -> None:
+    try:
+        opened_attempt = os.fstat(attempt_descriptor)
+        named_attempt = output_root.parent.lstat()
+        opened_output = os.fstat(output_descriptor)
+        named_output = os.stat(
+            output_root.name,
+            dir_fd=attempt_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISDIR(opened_attempt.st_mode)
+            or not stat.S_ISDIR(named_attempt.st_mode)
+            or not stat.S_ISDIR(opened_output.st_mode)
+            or not stat.S_ISDIR(named_output.st_mode)
+            or _directory_identity(opened_attempt)
+            != _directory_identity(named_attempt)
+            or _directory_identity(opened_output)
+            != _directory_identity(named_output)
+        ):
+            raise CodexOutputError(
+                "actor output capture destination changed during access"
+            )
+        if binding is not None:
+            if (
+                _directory_identity(opened_attempt)
+                != binding.attempt_identity
+                or _directory_identity(opened_output)
+                != binding.outputs_identity
+            ):
+                raise CodexOutputError(
+                    "actor output capture destination no longer matches its runner binding"
+                )
+            _verify_capture_ancestry(
+                attempt_descriptor,
+                binding.repository_identity,
+            )
+    except CodexOutputError:
+        raise
+    except (OSError, RuntimeError) as error:
+        raise CodexOutputError(
+            "actor output capture destination changed during access"
+        ) from error
+
+
+def _verify_capture_ancestry(
+    attempt_descriptor: int,
+    repository_identity: tuple[int, int],
+) -> None:
+    current_descriptor: int | None = None
+    try:
+        current_descriptor = os.dup(attempt_descriptor)
+        for _ in range(128):
+            current = os.fstat(current_descriptor)
+            current_identity = (current.st_dev, current.st_ino)
+            if current_identity == repository_identity:
+                raise CodexOutputError(
+                    "actor output capture destination moved inside the repository"
+                )
+            parent_descriptor = os.open(
+                "..",
+                _directory_open_flags(),
+                dir_fd=current_descriptor,
+            )
+            parent = os.fstat(parent_descriptor)
+            if (parent.st_dev, parent.st_ino) == current_identity:
+                os.close(parent_descriptor)
+                return
+            os.close(current_descriptor)
+            current_descriptor = parent_descriptor
+        raise CodexOutputError(
+            "actor output capture destination ancestry exceeds the safety limit"
+        )
+    except CodexOutputError:
+        raise
+    except OSError as error:
+        raise CodexOutputError(
+            "actor output capture destination ancestry cannot be verified"
+        ) from error
+    finally:
+        if current_descriptor is not None:
+            os.close(current_descriptor)
+
+
+def _directory_has_entries(descriptor: int) -> bool:
+    with os.scandir(descriptor) as entries:
+        return next(entries, None) is not None
+
+
+def _clear_capture_directory_at(descriptor: int) -> None:
+    with os.scandir(descriptor) as iterator:
+        entries = sorted(iterator, key=lambda entry: entry.name)
+    for entry in entries:
+        observed = entry.stat(follow_symlinks=False)
+        if stat.S_ISDIR(observed.st_mode) and not stat.S_ISLNK(observed.st_mode):
+            child_descriptor = os.open(
+                entry.name,
+                _directory_open_flags(),
+                dir_fd=descriptor,
+            )
+            try:
+                if (
+                    _stable_inode_metadata(os.fstat(child_descriptor))
+                    != _stable_inode_metadata(observed)
+                ):
+                    raise OSError("captured output directory changed during cleanup")
+                _clear_capture_directory_at(child_descriptor)
+            finally:
+                os.close(child_descriptor)
+            os.rmdir(entry.name, dir_fd=descriptor)
+        else:
+            os.unlink(entry.name, dir_fd=descriptor)
+
+
+def _copy_capture_tree_at(
+    source_descriptor: int,
+    destination_descriptor: int,
+) -> None:
+    with os.scandir(source_descriptor) as iterator:
+        entries = sorted(iterator, key=lambda entry: entry.name)
+    for entry in entries:
+        observed = entry.stat(follow_symlinks=False)
+        if stat.S_ISLNK(observed.st_mode):
+            raise OSError("staged actor output cannot contain symlinks")
+        if stat.S_ISDIR(observed.st_mode):
+            os.mkdir(
+                entry.name,
+                mode=0o700,
+                dir_fd=destination_descriptor,
+            )
+            source_child = os.open(
+                entry.name,
+                _directory_open_flags(),
+                dir_fd=source_descriptor,
+            )
+            destination_child = os.open(
+                entry.name,
+                _directory_open_flags(),
+                dir_fd=destination_descriptor,
+            )
+            try:
+                _copy_capture_tree_at(
+                    source_child,
+                    destination_child,
+                )
+                os.fsync(destination_child)
+            finally:
+                os.close(destination_child)
+                os.close(source_child)
+            continue
+        if not stat.S_ISREG(observed.st_mode):
+            raise OSError("staged actor output must contain only regular files")
+        source_file = os.open(
+            entry.name,
+            _regular_file_open_flags(),
+            dir_fd=source_descriptor,
+        )
+        destination_file: int | None = None
+        try:
+            opened = os.fstat(source_file)
+            if _stable_inode_metadata(opened) != _stable_inode_metadata(observed):
+                raise OSError("staged actor output changed during commit")
+            destination_file = os.open(
+                entry.name,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o700 if observed.st_mode & 0o111 else 0o600,
+                dir_fd=destination_descriptor,
+            )
+            while True:
+                chunk = os.read(source_file, CAPTURE_READ_CHUNK_BYTES)
+                if not chunk:
+                    break
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(destination_file, view)
+                    view = view[written:]
+            os.fsync(destination_file)
+            if _stable_inode_metadata(os.fstat(source_file)) != _stable_inode_metadata(
+                observed
+            ):
+                raise OSError("staged actor output changed during commit")
+        finally:
+            if destination_file is not None:
+                os.close(destination_file)
+            os.close(source_file)
+
+
+def _directory_identity(metadata: os.stat_result) -> tuple[int, int, int]:
+    return metadata.st_dev, metadata.st_ino, metadata.st_mode
 
 
 def _reserved_response_state(
@@ -1789,7 +2111,7 @@ def _resolve_case_fixture_root(
             require_directory=True,
         )
     else:
-        root = declared_root.absolute()
+        root = declared_root.resolve(strict=False)
         if not root.is_relative_to(allowed_skill_root):
             raise CodexOutputError(
                 "prepared case fixture root is outside the allowed repository skill root"
@@ -1845,6 +2167,10 @@ def _prepare_case_fixture_file(
 ) -> PreparedFile:
     if maximum_bytes <= 0:
         raise ValueError("prepared fixture byte limit must be positive")
+    try:
+        root = root.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise CodexOutputError("case fixture root does not exist") from error
     source = _require_case_fixture_file(
         declared_path,
         root,
@@ -2000,7 +2326,9 @@ class _ParsedCodexOutput:
 def _parse_codex_output(
     result: CommandResult,
     expected_skill_path: Path | None,
+    logical_expected_skill_path: Path | None,
     expected_skill_digest: str | None,
+    expected_skill_content: bytes | None,
     expected_skill_line_count: int | None,
 ) -> _ParsedCodexOutput:
     responses: list[str] = []
@@ -2014,7 +2342,12 @@ def _parse_codex_output(
     turn_started = 0
     turn_completed = 0
     terminal_seen = False
-    active_commands: set[str] = set()
+    lifecycle_state = "awaiting_thread"
+    protocol_valid = True
+    active_commands: dict[str, str] = {}
+    active_tools: dict[str, str] = {}
+    active_messages: set[str] = set()
+    completed_item_ids: set[str] = set()
     secret_scan = SecretScanBudget(
         maximum_bytes=MAX_CODEX_JSON_EVENT_BYTES,
         maximum_findings=MAX_SECRET_EVIDENCE_REFERENCES,
@@ -2034,72 +2367,202 @@ def _parse_codex_output(
             )
         except BoundedJsonError:
             diagnostics.append(f"Codex emitted invalid JSONL at line {line_number}")
+            protocol_valid = False
             continue
         if not isinstance(event, Mapping):
             diagnostics.append(f"Codex emitted a non-object JSONL event at line {line_number}")
+            protocol_valid = False
             continue
         event_type = event.get("type")
         if terminal_seen:
             diagnostics.append("Codex emitted events after the terminal turn event")
+            protocol_valid = False
             continue
         if event_type == "thread.started":
+            if lifecycle_state != "awaiting_thread":
+                diagnostics.append("Codex thread.started event is out of order")
+                protocol_valid = False
+            else:
+                lifecycle_state = "awaiting_turn"
             thread_started += 1
             trace.append({"event": "harness_thread_started"})
         elif event_type == "turn.started":
+            if lifecycle_state != "awaiting_turn":
+                diagnostics.append("Codex turn.started event is out of order")
+                protocol_valid = False
+            else:
+                lifecycle_state = "in_turn"
             turn_started += 1
             trace.append({"event": "harness_turn_started"})
         elif event_type in ("item.started", "item.completed"):
+            if lifecycle_state != "in_turn":
+                diagnostics.append(f"Codex {event_type} event is outside an active turn")
+                protocol_valid = False
             item = event.get("item")
             if not isinstance(item, Mapping):
+                diagnostics.append(f"Codex {event_type} event has no item object")
+                protocol_valid = False
                 continue
             item_type = item.get("type")
-            if event_type == "item.completed" and item_type == "agent_message":
-                text = item.get("text")
-                if isinstance(text, str):
-                    try:
-                        secret_result = secret_scan.scan(
-                            text,
-                            Path("outputs/response.md"),
+            if item_type == "agent_message":
+                item_id = item.get("id")
+                if item_id is not None and (
+                    not isinstance(item_id, str) or not item_id
+                ):
+                    diagnostics.append(
+                        "Codex agent message has an invalid item id"
+                    )
+                    protocol_valid = False
+                if event_type == "item.started":
+                    if (
+                        not isinstance(item_id, str)
+                        or not item_id
+                        or item_id in active_commands
+                        or item_id in active_tools
+                        or item_id in active_messages
+                        or item_id in completed_item_ids
+                    ):
+                        diagnostics.append(
+                            "Codex agent message item started more than once"
                         )
-                    except SecretScanLimitError:
-                        secret_scan_incomplete = True
-                        responses.append(SENSITIVE_TEXT_QUARANTINE)
+                        protocol_valid = False
                     else:
-                        minimum_secret_count += secret_result.minimum_finding_count
-                        secret_count_truncated = (
-                            secret_count_truncated
-                            or secret_result.finding_count_truncated
-                        )
-                        for finding in secret_result.findings:
-                            if len(secret_references) >= MAX_SECRET_EVIDENCE_REFERENCES:
-                                break
-                            secret_references.append(
-                                {
-                                    "artifact": "outputs/response.md",
-                                    "locator": (
-                                        f"line {finding.line}; {finding.pattern}; value redacted"
-                                    ),
-                                }
+                        active_messages.add(item_id)
+                else:
+                    if isinstance(item_id, str) and item_id:
+                        if item_id in active_commands or item_id in active_tools:
+                            diagnostics.append(
+                                "Codex agent message completion conflicts with "
+                                "an active item"
                             )
-                        responses.append(secret_result.durable_text)
+                            protocol_valid = False
+                        elif item_id in active_messages:
+                            active_messages.remove(item_id)
+                            completed_item_ids.add(item_id)
+                        elif item_id in completed_item_ids:
+                            diagnostics.append(
+                                "Codex agent message item completed more than once"
+                            )
+                            protocol_valid = False
+                        else:
+                            completed_item_ids.add(item_id)
+                    elif active_messages:
+                        diagnostics.append(
+                            "Codex agent message completion has no matching item id"
+                        )
+                        protocol_valid = False
+                    text = item.get("text")
+                    if isinstance(text, str):
+                        try:
+                            secret_result = secret_scan.scan(
+                                text,
+                                Path("outputs/response.md"),
+                            )
+                        except SecretScanLimitError:
+                            secret_scan_incomplete = True
+                            responses.append(SENSITIVE_TEXT_QUARANTINE)
+                        else:
+                            minimum_secret_count += (
+                                secret_result.minimum_finding_count
+                            )
+                            secret_count_truncated = (
+                                secret_count_truncated
+                                or secret_result.finding_count_truncated
+                            )
+                            for finding in secret_result.findings:
+                                if (
+                                    len(secret_references)
+                                    >= MAX_SECRET_EVIDENCE_REFERENCES
+                                ):
+                                    break
+                                secret_references.append(
+                                    {
+                                        "artifact": "outputs/response.md",
+                                        "locator": (
+                                            f"line {finding.line}; "
+                                            f"{finding.pattern}; value redacted"
+                                        ),
+                                    }
+                                )
+                            responses.append(secret_result.durable_text)
             elif item_type == "command_execution":
                 item_id = item.get("id")
                 if not isinstance(item_id, str) or not item_id:
                     diagnostics.append("Codex command event is missing an item id")
+                    protocol_valid = False
                     continue
+                command = item.get("command")
+                command_lifecycle_matches = False
+                command_exit_code: int | None = None
                 if event_type == "item.started":
-                    if item_id in active_commands:
+                    if (
+                        item_id in active_commands
+                        or item_id in active_tools
+                        or item_id in active_messages
+                        or item_id in completed_item_ids
+                    ):
                         diagnostics.append("Codex command item started more than once")
-                    active_commands.add(item_id)
+                        protocol_valid = False
+                    elif not isinstance(command, str):
+                        diagnostics.append(
+                            "Codex command start event is missing command text"
+                        )
+                        protocol_valid = False
+                    else:
+                        active_commands[item_id] = command
                 elif item_id not in active_commands:
                     diagnostics.append("Codex command completion has no matching start event")
+                    protocol_valid = False
                 else:
-                    active_commands.remove(item_id)
-                command = item.get("command")
+                    started_command = active_commands.pop(item_id)
+                    completed_item_ids.add(item_id)
+                    if not isinstance(command, str):
+                        diagnostics.append(
+                            "Codex command completion is missing command text"
+                        )
+                        protocol_valid = False
+                    elif command != started_command:
+                        diagnostics.append(
+                            "Codex command completion does not match its start event"
+                        )
+                        protocol_valid = False
+                    else:
+                        command_lifecycle_matches = True
+                if event_type == "item.completed":
+                    raw_exit_code = item.get("exit_code")
+                    if type(raw_exit_code) is not int:
+                        diagnostics.append(
+                            "Codex command completion has no exact integer exit code"
+                        )
+                        protocol_valid = False
+                    else:
+                        command_exit_code = raw_exit_code
+                    command_status = item.get("status")
+                    if command_status not in ("completed", "failed"):
+                        diagnostics.append(
+                            "Codex command completion has no valid terminal status"
+                        )
+                        protocol_valid = False
+                    elif command_exit_code == 0 and command_status != "completed":
+                        diagnostics.append(
+                            "Codex command completion status contradicts its exit code"
+                        )
+                        protocol_valid = False
                 command_name = _command_name(command) if isinstance(command, str) else None
                 normalized: dict[str, object] = {
                     "event": "command_completed" if event_type == "item.completed" else "command_started"
                 }
+                command_id_evidence = prepare_durable_sensitive_text(
+                    item_id,
+                    Path("execution_trace.jsonl"),
+                    maximum_durable_bytes=MAX_TRACE_SCALAR_BYTES,
+                )
+                normalized["command_id"] = command_id_evidence.text
+                if command_id_evidence.transformed:
+                    diagnostics.append(
+                        "Codex command id contained sensitive or unbounded material"
+                    )
+                    protocol_valid = False
                 if command_name:
                     command_evidence = prepare_durable_sensitive_text(
                         command_name,
@@ -2111,33 +2574,101 @@ def _parse_codex_output(
                         diagnostics.append(
                             "Codex command trace contained sensitive or unbounded material"
                         )
-                if event_type == "item.completed" and isinstance(item.get("exit_code"), int):
-                    normalized["exit_code"] = item["exit_code"]
+                if command_exit_code is not None:
+                    normalized["exit_code"] = command_exit_code
+                if event_type == "item.completed" and isinstance(
+                    item.get("status"),
+                    str,
+                ):
+                    normalized["status"] = item["status"]
                 trace.append(normalized)
                 if (
                     event_type == "item.completed"
+                    and command_lifecycle_matches
                     and expected_skill_path is not None
-                    and item.get("exit_code") == 0
+                    and command_exit_code == 0
                     and item.get("status") == "completed"
                     and isinstance(command, str)
+                    and isinstance(item.get("aggregated_output"), str)
                     and _command_reads_exact_skill(
                         command,
                         expected_skill_path,
                         expected_skill_line_count,
+                        item["aggregated_output"],
+                        expected_skill_content,
                     )
-                    and expected_skill_path not in successful_reads
+                    and logical_expected_skill_path is not None
+                    and logical_expected_skill_path not in successful_reads
                 ):
-                    successful_reads.append(expected_skill_path)
+                    successful_reads.append(logical_expected_skill_path)
                     trace.append(
                         {
                             "event": "skill_read",
+                            "command_id": command_id_evidence.text,
                             "path": _bounded_runtime_text(
-                                str(expected_skill_path),
+                                str(logical_expected_skill_path),
                                 MAX_TRACE_SCALAR_BYTES,
                             ),
                         }
                     )
+            elif item_type != "reasoning":
+                item_id = item.get("id")
+                if (
+                    not isinstance(item_id, str)
+                    or not item_id
+                    or not isinstance(item_type, str)
+                    or re.fullmatch(r"[a-z][a-z0-9_.-]{0,63}", item_type) is None
+                ):
+                    diagnostics.append(
+                        "Codex tool event is missing a safe item id or type"
+                    )
+                    protocol_valid = False
+                    continue
+                tool_id_evidence = prepare_durable_sensitive_text(
+                    item_id,
+                    Path("execution_trace.jsonl"),
+                    maximum_durable_bytes=MAX_TRACE_SCALAR_BYTES,
+                )
+                if tool_id_evidence.transformed:
+                    diagnostics.append(
+                        "Codex tool id contained sensitive or unbounded material"
+                    )
+                    protocol_valid = False
+                if event_type == "item.started":
+                    if (
+                        item_id in active_commands
+                        or item_id in active_tools
+                        or item_id in active_messages
+                        or item_id in completed_item_ids
+                    ):
+                        diagnostics.append("Codex tool item started more than once")
+                        protocol_valid = False
+                    else:
+                        active_tools[item_id] = item_type
+                elif active_tools.get(item_id) != item_type:
+                    diagnostics.append(
+                        "Codex tool completion has no matching start event"
+                    )
+                    protocol_valid = False
+                else:
+                    del active_tools[item_id]
+                    completed_item_ids.add(item_id)
+                trace.append(
+                    {
+                        "event": (
+                            "tool_completed"
+                            if event_type == "item.completed"
+                            else "tool_started"
+                        ),
+                        "tool_id": tool_id_evidence.text,
+                        "tool_type": item_type,
+                    }
+                )
         elif event_type == "turn.completed":
+            if lifecycle_state != "in_turn":
+                diagnostics.append("Codex turn.completed event is out of order")
+                protocol_valid = False
+            lifecycle_state = "terminal"
             turn_completed += 1
             terminal_seen = True
             usage = event.get("usage")
@@ -2148,11 +2679,18 @@ def _parse_codex_output(
             trace.append({"event": "harness_turn_completed"})
         elif event_type in ("error", "turn.failed"):
             if event_type == "turn.failed":
+                if lifecycle_state != "in_turn":
+                    diagnostics.append("Codex turn.failed event is out of order")
+                    protocol_valid = False
+                lifecycle_state = "terminal"
                 terminal_seen = True
             message = _native_message(event)
             if message:
                 diagnostics.append(message)
                 trace.append({"event": "harness_failure", "message": message})
+        else:
+            diagnostics.append("Codex emitted an unknown top-level JSONL event")
+            protocol_valid = False
 
     if minimum_secret_count or secret_scan_incomplete:
         trace.append(
@@ -2171,15 +2709,22 @@ def _parse_codex_output(
         )
     if result.stdout_truncated or result.stderr_truncated:
         diagnostics.append("Codex output was truncated at the configured capture limit")
+        protocol_valid = False
     if result.returncode == 0:
         if thread_started != 1 or turn_started != 1 or turn_completed != 1:
             diagnostics.append("successful Codex output requires one thread.started, turn.started, and turn.completed")
-        if active_commands:
-            diagnostics.append("Codex output ended with incomplete command events")
+            protocol_valid = False
+        if active_commands or active_tools or active_messages:
+            diagnostics.append("Codex output ended with incomplete item events")
+            protocol_valid = False
         if not responses:
             diagnostics.append("successful Codex output is missing a final agent response")
+            protocol_valid = False
         if input_tokens is None or output_tokens is None:
             diagnostics.append("successful Codex turn.completed is missing token usage")
+            protocol_valid = False
+    if not protocol_valid or result.returncode != 0 or result.timed_out:
+        successful_reads.clear()
     if successful_reads and (
         result.timed_out
         or
@@ -2218,17 +2763,33 @@ def _command_reads_exact_skill(
     command: str,
     expected_path: Path,
     expected_line_count: int | None,
+    aggregated_output: str,
+    expected_content: bytes | None,
 ) -> bool:
-    tokens = _simple_command_tokens(command)
-    if not tokens:
+    tokens = _trusted_skill_read_tokens(command)
+    if not tokens or expected_content is None:
         return False
-    expected = os.path.normpath(str(expected_path))
-    reader = Path(tokens[0]).name
+    expected = str(expected_path)
+    trusted_readers = {
+        "/bin/cat": "cat",
+        "/usr/bin/cat": "cat",
+        "/bin/sed": "sed",
+        "/usr/bin/sed": "sed",
+    }
+    reader = trusted_readers.get(tokens[0])
+    if reader is None:
+        return False
+    try:
+        output_matches = aggregated_output.encode("utf-8") == expected_content
+    except UnicodeError:
+        return False
+    if not output_matches:
+        return False
     arguments = list(tokens[1:])
     if reader == "cat":
         if arguments[:1] == ["--"]:
             arguments = arguments[1:]
-        return len(arguments) == 1 and os.path.normpath(arguments[0]) == expected
+        return len(arguments) == 1 and arguments[0] == expected
     if reader == "sed":
         if len(arguments) == 4 and arguments[2] == "--":
             option, expression, _, operand = arguments
@@ -2236,7 +2797,7 @@ def _command_reads_exact_skill(
             option, expression, operand = arguments
         else:
             return False
-        if option != "-n" or os.path.normpath(operand) != expected:
+        if option != "-n" or operand != expected:
             return False
         match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", expression)
         if not match:
@@ -2245,6 +2806,25 @@ def _command_reads_exact_skill(
             return True
         return expected_line_count is not None and int(match.group(1)) >= expected_line_count
     return False
+
+
+def _trusted_skill_read_tokens(command: str) -> tuple[str, ...] | None:
+    try:
+        outer = shlex.split(command, posix=True)
+    except ValueError:
+        return None
+    if not outer:
+        return None
+    if outer[0] in TRUSTED_SKILL_READ_SHELLS:
+        if len(outer) != 3 or outer[1] != "-c":
+            return None
+        try:
+            outer = shlex.split(outer[2], posix=True)
+        except ValueError:
+            return None
+    if not outer or any(token in SHELL_CONTROL_TOKENS for token in outer):
+        return None
+    return tuple(outer)
 
 
 def _simple_command_tokens(command: str) -> tuple[str, ...] | None:

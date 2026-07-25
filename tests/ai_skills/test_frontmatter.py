@@ -62,6 +62,21 @@ Body
                 with self.assertRaisesRegex(ValueError, r"skills/workflows/ticket-workflow/SKILL.md: invalid YAML frontmatter"):
                     parse_skill_frontmatter(text, source)
 
+    def test_yaml_parse_errors_do_not_echo_authored_secret_material(self):
+        secret = "ghp_" + ("a" * 36)
+        text = (
+            "---\n"
+            "name: ticket-workflow\n"
+            f"description: invalid: {secret}\n"
+            "---\n"
+        )
+
+        with self.assertRaises(ValueError) as raised:
+            parse_skill_frontmatter(text, Path("skills/workflows/ticket-workflow/SKILL.md"))
+
+        self.assertIn("invalid YAML frontmatter", str(raised.exception))
+        self.assertNotIn(secret, str(raised.exception))
+
     def test_rejects_whitespace_only_description_and_compatibility(self):
         whitespace_only_prose = (
             "---\nname: ticket-workflow\ndescription: '   '\n---\nBody\n",

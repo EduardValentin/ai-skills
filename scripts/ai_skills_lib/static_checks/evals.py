@@ -9,24 +9,43 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from scripts.ai_skills_lib.core import SkillRecord
+from scripts.ai_skills_lib.authored_content import (
+    AuthoredContentReadError,
+    AuthoredContentTooLarge,
+    AuthoredTreeEntry,
+    BoundedJsonError,
+    find_additional_decoded_json_secret_issues,
+    find_static_secret_issues_in_bytes,
+    read_bounded_authored_bytes,
+    snapshot_authored_tree,
+    sorted_authored_entries,
+    strict_bounded_json_loads,
+)
 from scripts.ai_skills_lib.eval_definitions import (
     MAX_EVAL_DEFINITION_BYTES,
     MAX_EVAL_FIXTURE_FILE_BYTES,
     validate_behavior_eval_document,
 )
-from scripts.ai_skills_lib.fixture_proxy import FixtureProxyError, load_fixture_definition
+from scripts.ai_skills_lib.fixture_proxy import (
+    FixtureProxyError,
+    load_fixture_definition_bytes,
+)
 from scripts.ai_skills_lib.issues import ValidationIssue
 from scripts.ai_skills_lib.sandbox_runtime import EvalRuntimeManifest, ManifestError
-from scripts.ai_skills_lib.secret_patterns import bounded_redacted_runtime_text
+from scripts.ai_skills_lib.secret_patterns import (
+    SecretMatch,
+    bounded_redacted_runtime_text,
+)
 from scripts.ai_skills_lib.static_checks.content import (
     authored_file,
     find_static_secret_issues,
-    read_text_fixture,
     walk_authored_files,
 )
 from scripts.ai_skills_lib.static_checks.context import (
     AuthoredFile,
     ValidationContext,
+    render_safe_diagnostic_path,
+    render_safe_diagnostic_text,
     skill_scope,
 )
 from scripts.ai_skills_lib.trigger_definitions import validate_trigger_query_document
@@ -56,57 +75,161 @@ def validate_eval_files(
     issues = list(inspection.issues)
     evals_source = inspection.evals_source
     triggers_source = inspection.triggers_source
+    loaded_content: dict[Path, bytes] = {}
+    raw_secret_findings: dict[Path, tuple[SecretMatch, ...]] = {}
+    files: tuple[AuthoredFile, ...] = ()
+    tree_before: tuple[AuthoredTreeEntry, ...] = ()
+    if inspection.evals_root is not None:
+        try:
+            tree_before = snapshot_authored_tree(
+                inspection.evals_root,
+                budget=context.budget,
+            )
+            files = tuple(
+                walk_authored_files(
+                    inspection.evals_root,
+                    skill.root,
+                    budget=context.budget,
+                )
+            )
+        except AuthoredContentReadError as error:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=f"cannot capture one coherent eval definition tree: {error}",
+                )
+            )
+            return issues
 
-    evals_data, load_issues = _load_required_json(context, skill, evals_source)
-    issues.extend(load_issues)
-    triggers_data, load_issues = _load_required_json(context, skill, triggers_source)
-    issues.extend(load_issues)
-
-    files = (
-        list(walk_authored_files(inspection.evals_root, skill.root))
-        if inspection.evals_root is not None
-        else []
-    )
     required_logical = {
         skill.root / "evals" / filename for filename in _REQUIRED_EVAL_FILES
     }
+    mockserver_sources: list[AuthoredFile] = []
     for source in files:
+        if source.logical_path.name == _MOCKSERVER_INITIALIZATION:
+            mockserver_sources.append(source)
         maximum_bytes = (
             MAX_EVAL_DEFINITION_BYTES
             if source.logical_path in required_logical
             else MAX_EVAL_FIXTURE_FILE_BYTES
         )
         try:
-            oversized = source.resolved_path.stat().st_size > maximum_bytes
-        except OSError:
-            oversized = False
-        if oversized:
-            if source.logical_path not in required_logical:
-                issues.append(
-                    ValidationIssue(
-                        scope=scope,
-                        message=(
-                            f"{source.logical_path.relative_to(skill.root)} exceeds the "
-                            "4 MiB eval fixture file limit"
-                        ),
-                    )
+            content = read_bounded_authored_bytes(
+                source,
+                maximum_bytes=maximum_bytes,
+                allowed_root=skill.root,
+                containment_root=context.root,
+                budget=context.budget,
+            )
+            loaded_content[source.logical_path] = content
+        except AuthoredContentTooLarge:
+            limit = (
+                "2 MiB eval definition limit"
+                if source.logical_path in required_logical
+                else "4 MiB eval fixture file limit"
+            )
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        f"{render_safe_diagnostic_path(source.logical_path, relative_to=skill.root)} "
+                        "exceeds the "
+                        f"{limit}"
+                    ),
                 )
+            )
             continue
-        text = read_text_fixture(source)
-        if text is not None:
-            issues.extend(_secret_issues(context, skill, source, text))
+        except AuthoredContentReadError as error:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=(
+                        "cannot read "
+                        f"{render_safe_diagnostic_path(source.logical_path, relative_to=skill.root)}: "
+                        f"{error}"
+                    ),
+                )
+            )
+            continue
+        source_secret_findings = tuple(
+            find_static_secret_issues_in_bytes(
+                content,
+                source.logical_path,
+            )
+        )
+        raw_secret_findings[source.logical_path] = source_secret_findings
+        issues.extend(
+            _secret_issues(context, skill, source, source_secret_findings)
+        )
         if (
-            source.logical_path.suffix == ".json"
+            source.logical_path.suffix.casefold() == ".json"
             and source.logical_path not in required_logical
         ):
-            _, json_issues = _load_json(
+            _, json_issues = _parse_json_content(
                 context,
                 skill,
                 source,
+                content,
                 maximum_bytes=MAX_EVAL_FIXTURE_FILE_BYTES,
-                limit_label="4 MiB eval fixture file limit",
+                raw_secret_findings=source_secret_findings,
             )
             issues.extend(json_issues)
+
+    if inspection.evals_root is not None:
+        try:
+            tree_after = snapshot_authored_tree(
+                inspection.evals_root,
+                budget=context.budget,
+            )
+        except AuthoredContentReadError as error:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=f"cannot verify the captured eval definition tree: {error}",
+                )
+            )
+            return issues
+        if tree_after != tree_before:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message="eval definition tree changed during validation",
+                )
+            )
+            return issues
+
+    evals_data = None
+    if evals_source is not None:
+        evals_content = loaded_content.get(evals_source.logical_path)
+        if evals_content is not None:
+            evals_data, load_issues = _parse_json_content(
+                context,
+                skill,
+                evals_source,
+                evals_content,
+                maximum_bytes=MAX_EVAL_DEFINITION_BYTES,
+                raw_secret_findings=raw_secret_findings.get(
+                    evals_source.logical_path,
+                    (),
+                ),
+            )
+            issues.extend(load_issues)
+    triggers_data = None
+    if triggers_source is not None:
+        triggers_content = loaded_content.get(triggers_source.logical_path)
+        if triggers_content is not None:
+            triggers_data, load_issues = _parse_json_content(
+                context,
+                skill,
+                triggers_source,
+                triggers_content,
+                maximum_bytes=MAX_EVAL_DEFINITION_BYTES,
+                raw_secret_findings=raw_secret_findings.get(
+                    triggers_source.logical_path,
+                    (),
+                ),
+            )
+            issues.extend(load_issues)
 
     issues.extend(
         _validate_fixture_topology(
@@ -117,9 +240,23 @@ def validate_eval_files(
         )
     )
     if evals_data is not None:
-        issues.extend(validate_behavior_eval_document(evals_data, skill, scope))
         issues.extend(
-            _validate_mockserver_initializations(context, skill, evals_data, files)
+            validate_behavior_eval_document(
+                evals_data,
+                skill,
+                scope,
+                budget=context.budget,
+                loaded_content=loaded_content,
+            )
+        )
+        issues.extend(
+            _validate_mockserver_initializations(
+                context,
+                skill,
+                evals_data,
+                mockserver_sources,
+                loaded_content,
+            )
         )
 
     if triggers_data is not None:
@@ -173,7 +310,13 @@ def _inspect_eval_root(
         )
 
     try:
-        entries = {entry.name: entry for entry in evals_root.iterdir()}
+        entries = {
+            entry.name: entry
+            for entry in sorted_authored_entries(
+                evals_root,
+                budget=context.budget,
+            )
+        }
     except OSError as error:
         return _EvalRootInspection(
             evals_root=None,
@@ -187,7 +330,13 @@ def _inspect_eval_root(
 
     for name in sorted(entries.keys() - _ALLOWED_EVAL_ROOT_ENTRIES):
         issues.append(
-            ValidationIssue(scope=scope, message=f"unsupported evals entry: {name}")
+            ValidationIssue(
+                scope=scope,
+                message=(
+                    "unsupported evals entry: "
+                    f"{render_safe_diagnostic_text(name)}"
+                ),
+            )
         )
 
     required_sources: dict[str, AuthoredFile | None] = {}
@@ -245,14 +394,22 @@ def _validate_fixture_topology(
         return []
     scope = skill_scope(context, skill)
     try:
-        case_entries = sorted(fixtures_root.iterdir())
-    except OSError as error:
+        tree = snapshot_authored_tree(
+            fixtures_root,
+            budget=context.budget,
+        )
+    except AuthoredContentReadError as error:
         return [
             ValidationIssue(
                 scope=scope,
                 message=f"cannot inspect evals/fixtures: {error}",
             )
         ]
+    case_entries = tuple(
+        entry
+        for entry in tree
+        if entry.logical_path.parent == fixtures_root
+    )
     if not case_entries:
         return [
             ValidationIssue(
@@ -264,17 +421,22 @@ def _validate_fixture_topology(
     declared_cases = _declared_eval_cases(document)
     resolved_fixtures_root = fixtures_root.resolve(strict=True)
     issues: list[ValidationIssue] = []
-    for case_root in case_entries:
-        relative = case_root.relative_to(skill.root)
-        if not _is_contained_non_symlink_directory(
-            case_root, resolved_fixtures_root
+    for case_entry in case_entries:
+        case_root = case_entry.logical_path
+        if (
+            not case_entry.is_directory
+            or case_entry.resolved_path is None
+            or not case_entry.resolved_path.is_relative_to(
+                resolved_fixtures_root
+            )
         ):
             issues.append(
                 ValidationIssue(
                     scope=scope,
                     message=(
                         "eval fixture case entry must be a contained non-symlink "
-                        f"directory: {relative}"
+                        "directory: "
+                        f"{render_safe_diagnostic_path(case_root, relative_to=skill.root)}"
                     ),
                 )
             )
@@ -286,13 +448,23 @@ def _validate_fixture_topology(
                     scope=scope,
                     message=(
                         "fixture tree belongs to undeclared eval case "
-                        f"'{case_root.name}'"
+                        f"'{render_safe_diagnostic_text(case_root.name)}'"
                     ),
                 )
             )
             continue
         issues.extend(
-            _validate_case_fixture_tree(context, skill, case_root, raw_case)
+            _validate_case_fixture_tree(
+                context,
+                skill,
+                case_entry,
+                tuple(
+                    entry
+                    for entry in tree
+                    if case_root in entry.logical_path.parents
+                ),
+                raw_case,
+            )
         )
     return issues
 
@@ -316,87 +488,84 @@ def _declared_eval_cases(document: object) -> dict[str, Mapping[object, object]]
 def _validate_case_fixture_tree(
     context: ValidationContext,
     skill: SkillRecord,
-    case_root: Path,
+    case_entry: AuthoredTreeEntry,
+    entries: tuple[AuthoredTreeEntry, ...],
     raw_case: Mapping[object, object],
 ) -> list[ValidationIssue]:
     scope = skill_scope(context, skill)
+    case_root = case_entry.logical_path
     allowed_files = _declared_case_fixture_files(skill, case_root.name, raw_case)
-    resolved_case_root = case_root.resolve(strict=True)
+    resolved_case_root = case_entry.resolved_path
+    assert resolved_case_root is not None
     issues: list[ValidationIssue] = []
-    pending = [case_root]
-    while pending:
-        directory = pending.pop()
-        try:
-            entries = sorted(directory.iterdir(), reverse=True)
-        except OSError as error:
-            issues.append(
-                ValidationIssue(
-                    scope=scope,
-                    message=(
-                        f"cannot inspect {directory.relative_to(skill.root)}: {error}"
-                    ),
-                )
+    if case_entry.child_count == 0:
+        issues.append(
+            ValidationIssue(
+                scope=scope,
+                message=(
+                    "empty directory is not allowed: "
+                    f"{render_safe_diagnostic_path(case_root, relative_to=skill.root)}"
+                ),
             )
-            continue
-        if not entries:
-            issues.append(
-                ValidationIssue(
-                    scope=scope,
-                    message=(
-                        "empty directory is not allowed: "
-                        f"{directory.relative_to(skill.root)}"
-                    ),
-                )
-            )
-            continue
-        for entry in entries:
-            relative = entry.relative_to(skill.root)
-            if entry.is_symlink():
-                resolution = _resolve_fixture_symlink(entry)
-                if resolution is None:
-                    issues.append(
-                        ValidationIssue(
-                            scope=scope,
-                            message=f"broken eval fixture symlink: {relative}",
-                        )
-                    )
-                    continue
-                if not resolution.is_relative_to(resolved_case_root):
-                    issues.append(
-                        ValidationIssue(
-                            scope=scope,
-                            message=(
-                                "eval fixture symlink target must stay inside its case: "
-                                f"{relative}"
-                            ),
-                        )
-                    )
-                    continue
-                if not _path_is_declared(entry, allowed_files):
-                    issues.append(
-                        ValidationIssue(
-                            scope=scope,
-                            message=f"undeclared eval fixture entry: {relative}",
-                        )
-                    )
-                continue
-            if entry.is_dir():
-                pending.append(entry)
-            elif entry.is_file():
-                if entry not in allowed_files:
-                    issues.append(
-                        ValidationIssue(
-                            scope=scope,
-                            message=f"undeclared eval fixture file: {relative}",
-                        )
-                    )
-            else:
+        )
+    for entry in entries:
+        relative = render_safe_diagnostic_path(
+            entry.logical_path,
+            relative_to=skill.root,
+        )
+        if entry.is_symlink:
+            resolution = entry.resolved_path
+            if resolution is None:
+                kind = entry.symlink_error or "invalid"
                 issues.append(
                     ValidationIssue(
                         scope=scope,
-                        message=f"unsupported eval fixture entry: {relative}",
+                        message=f"{kind} eval fixture symlink: {relative}",
                     )
                 )
+                continue
+            if not resolution.is_relative_to(resolved_case_root):
+                issues.append(
+                    ValidationIssue(
+                        scope=scope,
+                        message=(
+                            "eval fixture symlink target must stay inside its case: "
+                            f"{relative}"
+                        ),
+                    )
+                )
+                continue
+            if not _path_is_declared(entry.logical_path, allowed_files):
+                issues.append(
+                    ValidationIssue(
+                        scope=scope,
+                        message=f"undeclared eval fixture entry: {relative}",
+                    )
+                )
+            continue
+        if entry.is_directory:
+            if entry.child_count == 0:
+                issues.append(
+                    ValidationIssue(
+                        scope=scope,
+                        message=f"empty directory is not allowed: {relative}",
+                    )
+                )
+        elif entry.is_regular_file:
+            if entry.logical_path not in allowed_files:
+                issues.append(
+                    ValidationIssue(
+                        scope=scope,
+                        message=f"undeclared eval fixture file: {relative}",
+                    )
+                )
+        else:
+            issues.append(
+                ValidationIssue(
+                    scope=scope,
+                    message=f"unsupported eval fixture entry: {relative}",
+                )
+            )
     return issues
 
 
@@ -447,13 +616,6 @@ def _path_is_declared(path: Path, declared_files: set[Path]) -> bool:
     )
 
 
-def _resolve_fixture_symlink(path: Path) -> Path | None:
-    try:
-        return path.resolve(strict=True)
-    except (OSError, RuntimeError):
-        return None
-
-
 def _is_contained_non_symlink_directory(path: Path, resolved_root: Path) -> bool:
     if path.is_symlink() or not path.is_dir():
         return False
@@ -477,6 +639,7 @@ def _validate_mockserver_initializations(
     skill: SkillRecord,
     document: object,
     authored_files: list[AuthoredFile],
+    loaded_content: Mapping[Path, bytes],
 ) -> list[ValidationIssue]:
     if not isinstance(document, dict):
         return []
@@ -498,7 +661,12 @@ def _validate_mockserver_initializations(
     resolved_skill_root = skill.root.resolve(strict=True)
     if _is_contained_non_symlink_directory(fixture_root, resolved_skill_root):
         try:
-            case_roots = tuple(fixture_root.iterdir())
+            case_roots = tuple(
+                sorted_authored_entries(
+                    fixture_root,
+                    budget=context.budget,
+                )
+            )
         except OSError:
             case_roots = ()
         for case_root in case_roots:
@@ -534,11 +702,15 @@ def _validate_mockserver_initializations(
             issues.append(
                 ValidationIssue(
                     scope=skill_scope(context, skill),
-                    message=f"MockServer fixture belongs to unknown eval case '{case_id}'",
+                    message=(
+                        "MockServer fixture belongs to unknown eval case "
+                        f"'{render_safe_diagnostic_text(case_id)}'"
+                    ),
                 )
             )
             continue
-        if _has_symlink_component(path, evals_root) or not path.is_file():
+        source = authored_file(path, skill.root)
+        if _has_symlink_component(path, evals_root) or source is None:
             issues.append(
                 ValidationIssue(
                     scope=skill_scope(context, skill),
@@ -549,13 +721,23 @@ def _validate_mockserver_initializations(
         try:
             if manifest is None:
                 manifest = EvalRuntimeManifest.load(_RUNTIME_MANIFEST_PATH)
-            load_fixture_definition(
-                path,
+            content = loaded_content.get(source.logical_path)
+            if content is None:
+                raise AuthoredContentReadError(
+                    "fixture bytes were not captured during authored traversal"
+                )
+            load_fixture_definition_bytes(
+                content,
+                source=path,
                 manifest=manifest,
                 repository_root=_REPOSITORY_ROOT,
-                allowed_fixture_root=path.parent,
             )
-        except (FixtureProxyError, ManifestError, OSError) as error:
+        except (
+            AuthoredContentReadError,
+            FixtureProxyError,
+            ManifestError,
+            OSError,
+        ) as error:
             diagnostic = bounded_redacted_runtime_text(str(error), 2048)
             issues.append(
                 ValidationIssue(
@@ -578,55 +760,77 @@ def _has_symlink_component(path: Path, root: Path) -> bool:
         current = current.parent
 
 
-def _load_required_json(
-    context: ValidationContext, skill: SkillRecord, source: AuthoredFile | None
-) -> tuple[Any | None, list[ValidationIssue]]:
-    if source is None:
-        return None, []
-    return _load_json(context, skill, source)
-
-
-def _load_json(
+def _parse_json_content(
     context: ValidationContext,
     skill: SkillRecord,
     source: AuthoredFile,
+    content: bytes,
     *,
-    maximum_bytes: int = MAX_EVAL_DEFINITION_BYTES,
-    limit_label: str = "2 MiB eval definition limit",
+    maximum_bytes: int,
+    raw_secret_findings: Sequence[SecretMatch] = (),
 ) -> tuple[Any | None, list[ValidationIssue]]:
     try:
-        if source.resolved_path.stat().st_size > maximum_bytes:
-            return None, [
-                ValidationIssue(
-                    scope=skill_scope(context, skill),
-                    message=(
-                        f"{source.logical_path.relative_to(skill.root)} exceeds the "
-                        f"{limit_label}"
-                    ),
-                )
-            ]
-        return json.loads(source.resolved_path.read_text(encoding="utf-8")), []
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        text = content.decode("utf-8")
+        document = strict_bounded_json_loads(
+            text,
+            maximum_bytes=maximum_bytes,
+        )
+    except (UnicodeDecodeError, BoundedJsonError) as error:
         return None, [
             ValidationIssue(
                 scope=skill_scope(context, skill),
                 message=(
-                    f"{source.logical_path.relative_to(skill.root)} contains invalid JSON: {error}"
+                    f"{render_safe_diagnostic_path(source.logical_path, relative_to=skill.root)} "
+                    f"contains invalid JSON: {error}"
                 ),
             )
         ]
+    try:
+        decoded_findings = find_additional_decoded_json_secret_issues(
+            document,
+            source.logical_path,
+            maximum_bytes=maximum_bytes,
+            raw_findings=raw_secret_findings,
+        )
+    except BoundedJsonError as error:
+        return None, [
+            ValidationIssue(
+                scope=skill_scope(context, skill),
+                message=(
+                    f"{render_safe_diagnostic_path(source.logical_path, relative_to=skill.root)} "
+                    "cannot be "
+                    f"secret-scanned after JSON decoding: {error}"
+                ),
+            )
+        ]
+    return document, [
+        ValidationIssue(
+            scope=skill_scope(context, skill),
+            message=(
+                f"{render_safe_diagnostic_path(source.logical_path, relative_to=skill.root)} "
+                "contains a "
+                f"high-confidence secret after JSON decoding: {finding.pattern} "
+                f"({finding.category}); value redacted"
+            ),
+        )
+        for finding in decoded_findings
+    ]
 
 
 def _secret_issues(
-    context: ValidationContext, skill: SkillRecord, source: AuthoredFile, text: str
+    context: ValidationContext,
+    skill: SkillRecord,
+    source: AuthoredFile,
+    findings: Sequence[SecretMatch],
 ) -> list[ValidationIssue]:
     return [
         ValidationIssue(
             scope=skill_scope(context, skill),
             message=(
-                f"{source.logical_path.relative_to(skill.root)}:{finding.line}:{finding.column}: "
+                f"{render_safe_diagnostic_path(source.logical_path, relative_to=skill.root)}:"
+                f"{finding.line}:{finding.column}: "
                 f"high-confidence secret {finding.pattern} ({finding.category}); value redacted"
             ),
         )
-        for finding in find_static_secret_issues(text, source.logical_path)
+        for finding in findings
     ]

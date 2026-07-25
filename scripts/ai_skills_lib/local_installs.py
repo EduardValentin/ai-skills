@@ -16,11 +16,25 @@ import stat
 from typing import Callable, Iterable, Iterator, Mapping
 from urllib.parse import urlparse
 
+from scripts.ai_skills_lib.authored_content import (
+    JsonPreflightError,
+    preflight_bounded_json_structure,
+)
+from scripts.ai_skills_lib.core import MAXIMUM_SKILL_DOCUMENT_BYTES
 from scripts.ai_skills_lib.frontmatter import parse_skill_frontmatter
 from scripts.ai_skills_lib.issues import ValidationIssue, print_grouped_issues
+from scripts.ai_skills_lib.static_checks.context import (
+    render_safe_diagnostic_issues,
+    render_safe_diagnostic_path,
+    render_safe_diagnostic_text,
+)
 
 
 _MAX_LOCK_BYTES = 4 * 1024 * 1024
+_MAX_LOCK_DEPTH = 64
+_MAX_LOCK_NODES = 100_000
+_MAX_LOCK_SCALAR_BYTES = 1024 * 1024
+_MAX_LOCK_NUMBER_CHARACTERS = 128
 _MAX_SKILL_FILE_BYTES = 64 * 1024 * 1024
 _MAX_SKILL_TOTAL_BYTES = 512 * 1024 * 1024
 _MAX_AGGREGATE_READ_BYTES = 512 * 1024 * 1024
@@ -28,12 +42,16 @@ _MAX_AGGREGATE_MANIFEST_ENTRIES = 8192
 _MAX_ROOT_ENTRIES = 8192
 _MAX_SOURCE_ENTRIES = 8192
 _MAX_DIRECTORY_DEPTH = 64
-_MAX_FRONTMATTER_BYTES = 1024 * 1024
+_MAX_SKILL_DOCUMENT_BYTES = MAXIMUM_SKILL_DOCUMENT_BYTES
 _MAX_GIT_PATH_BYTES = 64 * 1024
 _MAX_GIT_CONFIG_BYTES = 4 * 1024 * 1024
 _MAX_SYMLINK_TRAVERSALS = 40
 _READ_CHUNK_BYTES = 1024 * 1024
-_DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+_DIRECTORY_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_CLOEXEC", 0)
+)
 _DIRECTORY_NOFOLLOW_FLAGS = _DIRECTORY_FLAGS | getattr(os, "O_NOFOLLOW", 0)
 _FILE_NOFOLLOW_FLAGS = (
     os.O_RDONLY
@@ -114,6 +132,14 @@ class _RepositorySkillSnapshot:
 
 
 @dataclass(frozen=True)
+class _ManifestAnchor:
+    logical_parts: tuple[str, ...]
+    resolved_parts: tuple[str, ...]
+    signature: tuple[int, int, int, int, int, int]
+    relative: str
+
+
+@dataclass(frozen=True)
 class LocalInstallReport:
     expected_count: int
     current: tuple[tuple[str, Path], ...]
@@ -136,7 +162,16 @@ def run_local_install_check(
 ) -> int:
     """Inspect local harness state without modifying it."""
     if harness != "codex":
-        print(f"check-local-installs {harness}: unsupported harness")
+        print(
+            "check-local-installs "
+            f"{render_safe_diagnostic_text(harness)}: unsupported harness"
+        )
+        return 2
+    if not _descriptor_install_diagnostic_supported():
+        print(
+            "check-local-installs codex: unsupported platform "
+            "(POSIX descriptor-relative filesystem operations are required)"
+        )
         return 2
 
     environment = os.environ if environ is None else environ
@@ -150,13 +185,19 @@ def run_local_install_check(
             lock_path=_skill_lock_path(environment, home),
         )
     except (OSError, ValueError) as error:
-        print(f"check-local-installs codex: FAILED: {error}")
+        print(
+            "check-local-installs codex: FAILED: "
+            f"{render_safe_diagnostic_text(str(error))}"
+        )
         return 2
 
     for name, path in report.current:
-        print(f"{name}: current ({path})")
+        print(
+            f"{render_safe_diagnostic_text(name)}: current "
+            f"({render_safe_diagnostic_path(path)})"
+        )
     if report.issues:
-        print_grouped_issues(report.issues)
+        print_grouped_issues(render_safe_diagnostic_issues(report.issues))
         print(f"check-local-installs codex: FAILED ({len(report.issues)} issues)")
         return 1
     print(f"check-local-installs codex: OK ({report.expected_count} skills)")
@@ -285,7 +326,38 @@ def inspect_codex_local_installs(
                             )
                         )
                         continue
+                    changed_aliases = tuple(
+                        path
+                        for path in candidate.aliases
+                        if not _path_still_names_directory(
+                            path,
+                            candidate.descriptor,
+                        )
+                    )
+                    if changed_aliases:
+                        issues.append(
+                            ValidationIssue(
+                                name,
+                                f"installed path changed while being inspected: "
+                                f"{changed_aliases[0]}",
+                            )
+                        )
+                        continue
                     current.append((name, candidate.display_path))
+
+            root_changed = False
+            for root in open_roots:
+                for alias in root.aliases:
+                    if not _path_still_names_directory(alias, root.descriptor):
+                        root_changed = True
+                        issues.append(
+                            ValidationIssue(
+                                str(alias),
+                                "Codex skill root changed while being inspected",
+                            )
+                        )
+            if root_changed:
+                current.clear()
 
         report = LocalInstallReport(
             expected_count=len(expected),
@@ -807,7 +879,7 @@ def _snapshot_repository_skill(
         raise _InspectionError(
             f"repository skill {skill_root} requires a regular non-symlink SKILL.md"
         )
-    if observed.st_size > _MAX_FRONTMATTER_BYTES:
+    if observed.st_size > _MAX_SKILL_DOCUMENT_BYTES:
         raise _InspectionError("SKILL.md exceeds the diagnostic size limit")
 
     captured: dict[str, bytes] = {}
@@ -818,8 +890,9 @@ def _snapshot_repository_skill(
         read_budget=read_budget,
         entry_budget=entry_budget,
         inspection_hook=inspection_hook,
-        capture_limits={"SKILL.md": _MAX_FRONTMATTER_BYTES},
+        capture_limits={"SKILL.md": _MAX_SKILL_DOCUMENT_BYTES},
         captured_files=captured,
+        follow_contained_symlinks=True,
     )
     raw = captured.get("SKILL.md")
     if raw is None:
@@ -1014,7 +1087,7 @@ def _installed_name(candidate: _OpenCandidate, read_budget: _ReadBudget) -> str:
         raw = _read_regular_child(
             candidate.descriptor,
             "SKILL.md",
-            limit=_MAX_FRONTMATTER_BYTES,
+            limit=_MAX_SKILL_DOCUMENT_BYTES,
             label=f"installed SKILL.md at {skill_path}",
             read_budget=read_budget,
         )
@@ -1081,13 +1154,20 @@ def _skill_manifest(
     inspection_hook: Callable[[str, Path], None] | None,
     capture_limits: Mapping[str, int] | None = None,
     captured_files: dict[str, bytes] | None = None,
+    follow_contained_symlinks: bool = False,
 ) -> dict[str, tuple[str, int]]:
     manifest: dict[str, tuple[str, int]] = {}
+    anchors: list[_ManifestAnchor] = []
     state = {"bytes": 0}
     descriptor = os.open(".", _DIRECTORY_NOFOLLOW_FLAGS, dir_fd=root_descriptor)
     try:
+        anchors.append(
+            _manifest_anchor((), (), os.fstat(descriptor), relative=".")
+        )
         _walk_manifest_directory(
             descriptor,
+            descriptor,
+            (),
             (),
             display_root,
             label,
@@ -1098,8 +1178,12 @@ def _skill_manifest(
             inspection_hook,
             {} if capture_limits is None else capture_limits,
             {} if captured_files is None else captured_files,
+            follow_contained_symlinks=follow_contained_symlinks,
+            active_directories={_descriptor_identity(os.fstat(descriptor))},
+            anchors=anchors,
             depth=0,
         )
+        _verify_manifest_anchors(root_descriptor, anchors, label=label)
     finally:
         os.close(descriptor)
     return manifest
@@ -1107,7 +1191,9 @@ def _skill_manifest(
 
 def _walk_manifest_directory(
     directory_descriptor: int,
+    root_descriptor: int,
     relative_parts: tuple[str, ...],
+    physical_parts: tuple[str, ...],
     display_root: Path,
     label: str,
     manifest: dict[str, tuple[str, int]],
@@ -1118,6 +1204,9 @@ def _walk_manifest_directory(
     capture_limits: Mapping[str, int],
     captured_files: dict[str, bytes],
     *,
+    follow_contained_symlinks: bool,
+    active_directories: set[tuple[int, int]],
+    anchors: list[_ManifestAnchor],
     depth: int,
 ) -> None:
     if depth > _MAX_DIRECTORY_DEPTH:
@@ -1136,7 +1225,88 @@ def _walk_manifest_directory(
                 )
                 _notify(inspection_hook, "manifest-entry-observed", display_path)
                 if stat.S_ISLNK(observed.st_mode):
-                    raise _InspectionError(f"{label} contains a symlink: {relative}")
+                    if not follow_contained_symlinks:
+                        raise _InspectionError(
+                            f"{label} contains a symlink: {relative}"
+                        )
+                    target_descriptor: int | None = None
+                    try:
+                        target_descriptor, target_metadata, target_parts = (
+                            _open_contained_manifest_target(
+                                root_descriptor,
+                                (*physical_parts, entry.name),
+                                label=label,
+                                relative=relative,
+                            )
+                        )
+                        after = os.stat(
+                            entry.name,
+                            dir_fd=directory_descriptor,
+                            follow_symlinks=False,
+                        )
+                        if not _same_observed_entry(observed, after):
+                            raise _InspectionError(
+                                f"{label} changed while being read: {relative}"
+                            )
+                        anchors.append(
+                            _manifest_anchor(
+                                parts,
+                                target_parts,
+                                target_metadata,
+                                relative=relative,
+                            )
+                        )
+                        if stat.S_ISDIR(target_metadata.st_mode):
+                            identity = _descriptor_identity(target_metadata)
+                            if identity in active_directories:
+                                raise _InspectionError(
+                                    f"{label} contains a symlink cycle: {relative}"
+                                )
+                            active_directories.add(identity)
+                            try:
+                                _walk_manifest_directory(
+                                    target_descriptor,
+                                    root_descriptor,
+                                    parts,
+                                    target_parts,
+                                    display_root,
+                                    label,
+                                    manifest,
+                                    state,
+                                    read_budget,
+                                    entry_budget,
+                                    inspection_hook,
+                                    capture_limits,
+                                    captured_files,
+                                    follow_contained_symlinks=True,
+                                    active_directories=active_directories,
+                                    anchors=anchors,
+                                    depth=depth + 1,
+                                )
+                            finally:
+                                active_directories.remove(identity)
+                            continue
+                        if not stat.S_ISREG(target_metadata.st_mode):
+                            raise _InspectionError(
+                                f"{label} contains a special file: {relative}"
+                            )
+                        _record_manifest_file(
+                            target_descriptor,
+                            target_metadata,
+                            relative,
+                            display_path,
+                            label,
+                            manifest,
+                            state,
+                            read_budget,
+                            inspection_hook,
+                            capture_limits,
+                            captured_files,
+                        )
+                        continue
+                    finally:
+                        if target_descriptor is not None:
+                            os.close(target_descriptor)
                 if stat.S_ISDIR(observed.st_mode):
                     try:
                         child_descriptor = _open_observed_directory(
@@ -1151,9 +1321,26 @@ def _walk_manifest_directory(
                             ) from error
                         raise
                     try:
+                        child_metadata = os.fstat(child_descriptor)
+                        anchors.append(
+                            _manifest_anchor(
+                                parts,
+                                (*physical_parts, entry.name),
+                                child_metadata,
+                                relative=relative,
+                            )
+                        )
+                        identity = _descriptor_identity(child_metadata)
+                        if identity in active_directories:
+                            raise _InspectionError(
+                                f"{label} contains a directory cycle: {relative}"
+                            )
+                        active_directories.add(identity)
                         _walk_manifest_directory(
                             child_descriptor,
+                            root_descriptor,
                             parts,
+                            (*physical_parts, entry.name),
                             display_root,
                             label,
                             manifest,
@@ -1163,9 +1350,15 @@ def _walk_manifest_directory(
                             inspection_hook,
                             capture_limits,
                             captured_files,
+                            follow_contained_symlinks=follow_contained_symlinks,
+                            active_directories=active_directories,
+                            anchors=anchors,
                             depth=depth + 1,
                         )
                     finally:
+                        active_directories.discard(
+                            _descriptor_identity(os.fstat(child_descriptor))
+                        )
                         os.close(child_descriptor)
                     continue
                 if not stat.S_ISREG(observed.st_mode):
@@ -1185,32 +1378,234 @@ def _walk_manifest_directory(
                         ) from error
                     raise
                 try:
-                    if state["bytes"] + opened.st_size > _MAX_SKILL_TOTAL_BYTES:
-                        raise _InspectionError(f"{label} exceeds the total size limit")
-                    _notify(inspection_hook, "manifest-file-opened", display_path)
-                    digest, read_bytes, captured = _digest_regular_file(
+                    anchors.append(
+                        _manifest_anchor(
+                            parts,
+                            (*physical_parts, entry.name),
+                            opened,
+                            relative=relative,
+                        )
+                    )
+                    _record_manifest_file(
                         file_descriptor,
                         opened,
                         relative,
+                        display_path,
                         label,
+                        manifest,
+                        state,
                         read_budget,
-                        capture_limit=capture_limits.get(relative),
+                        inspection_hook,
+                        capture_limits,
+                        captured_files,
                     )
                 finally:
                     os.close(file_descriptor)
-                state["bytes"] += read_bytes
-                if state["bytes"] > _MAX_SKILL_TOTAL_BYTES:
-                    raise _InspectionError(f"{label} exceeds the total size limit")
-                manifest[relative] = (
-                    digest,
-                    stat.S_IMODE(opened.st_mode) & 0o111,
-                )
-                if captured is not None:
-                    captured_files[relative] = captured
     except _InspectionError:
         raise
     except OSError as error:
         raise _InspectionError(f"{label} cannot be read: {error}") from error
+
+
+def _manifest_anchor(
+    logical_parts: tuple[str, ...],
+    resolved_parts: tuple[str, ...],
+    metadata: os.stat_result,
+    *,
+    relative: str,
+) -> _ManifestAnchor:
+    return _ManifestAnchor(
+        logical_parts=logical_parts,
+        resolved_parts=resolved_parts,
+        signature=(
+            metadata.st_dev,
+            metadata.st_ino,
+            stat.S_IFMT(metadata.st_mode),
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+        ),
+        relative=relative,
+    )
+
+
+def _verify_manifest_anchors(
+    root_descriptor: int,
+    anchors: Iterable[_ManifestAnchor],
+    *,
+    label: str,
+) -> None:
+    for anchor in anchors:
+        descriptor: int | None = None
+        try:
+            descriptor, metadata, resolved_parts = _open_contained_manifest_target(
+                root_descriptor,
+                anchor.logical_parts,
+                label=label,
+                relative=anchor.relative,
+            )
+            current = _manifest_anchor(
+                anchor.logical_parts,
+                resolved_parts,
+                metadata,
+                relative=anchor.relative,
+            )
+            if (
+                resolved_parts != anchor.resolved_parts
+                or current.signature != anchor.signature
+            ):
+                raise _InspectionError(
+                    f"{label} changed while being read: {anchor.relative}"
+                )
+        except FileNotFoundError as error:
+            raise _InspectionError(
+                f"{label} changed while being read: {anchor.relative}"
+            ) from error
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+
+
+def _record_manifest_file(
+    descriptor: int,
+    opened: os.stat_result,
+    relative: str,
+    display_path: Path,
+    label: str,
+    manifest: dict[str, tuple[str, int]],
+    state: dict[str, int],
+    read_budget: _ReadBudget,
+    inspection_hook: Callable[[str, Path], None] | None,
+    capture_limits: Mapping[str, int],
+    captured_files: dict[str, bytes],
+) -> None:
+    if state["bytes"] + opened.st_size > _MAX_SKILL_TOTAL_BYTES:
+        raise _InspectionError(f"{label} exceeds the total size limit")
+    _notify(inspection_hook, "manifest-file-opened", display_path)
+    digest, read_bytes, captured = _digest_regular_file(
+        descriptor,
+        opened,
+        relative,
+        label,
+        read_budget,
+        capture_limit=capture_limits.get(relative),
+    )
+    state["bytes"] += read_bytes
+    if state["bytes"] > _MAX_SKILL_TOTAL_BYTES:
+        raise _InspectionError(f"{label} exceeds the total size limit")
+    manifest[relative] = (
+        digest,
+        stat.S_IMODE(opened.st_mode) & 0o111,
+    )
+    if captured is not None:
+        captured_files[relative] = captured
+
+
+def _open_contained_manifest_target(
+    root_descriptor: int,
+    requested_parts: tuple[str, ...],
+    *,
+    label: str,
+    relative: str,
+) -> tuple[int, os.stat_result, tuple[str, ...]]:
+    pending = deque(_normalize_contained_parts(requested_parts, label, relative))
+    resolved: list[str] = []
+    descriptor = os.dup(root_descriptor)
+    traversals = 0
+    try:
+        while pending:
+            component = pending.popleft()
+            observed = os.stat(
+                component,
+                dir_fd=descriptor,
+                follow_symlinks=False,
+            )
+            if stat.S_ISLNK(observed.st_mode):
+                traversals += 1
+                if traversals > _MAX_SYMLINK_TRAVERSALS:
+                    raise _InspectionError(
+                        f"{label} contains an invalid symlink: {relative}"
+                    )
+                target = os.readlink(component, dir_fd=descriptor)
+                after = os.stat(
+                    component,
+                    dir_fd=descriptor,
+                    follow_symlinks=False,
+                )
+                if not _same_observed_entry(observed, after):
+                    raise _InspectionError(
+                        f"{label} changed while being read: {relative}"
+                    )
+                target_path = Path(target)
+                if target_path.is_absolute():
+                    raise _InspectionError(
+                        f"{label} contains an escaping symlink: {relative}"
+                    )
+                requested = _normalize_contained_parts(
+                    (*resolved, *target_path.parts, *pending),
+                    label,
+                    relative,
+                )
+                os.close(descriptor)
+                descriptor = os.dup(root_descriptor)
+                pending = deque(requested)
+                resolved = []
+                continue
+
+            is_final = not pending
+            if not is_final:
+                child = _open_observed_directory(descriptor, component, observed)
+                os.close(descriptor)
+                descriptor = child
+                resolved.append(component)
+                continue
+
+            if stat.S_ISDIR(observed.st_mode):
+                target = _open_observed_directory(descriptor, component, observed)
+            elif stat.S_ISREG(observed.st_mode):
+                target, observed = _open_observed_regular_file(
+                    descriptor,
+                    component,
+                    observed,
+                )
+            else:
+                raise _InspectionError(
+                    f"{label} contains a special symlink target: {relative}"
+                )
+            os.close(descriptor)
+            return target, os.fstat(target), (*resolved, component)
+
+        return descriptor, os.fstat(descriptor), ()
+    except BaseException:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        raise
+
+
+def _normalize_contained_parts(
+    parts: Iterable[str],
+    label: str,
+    relative: str,
+) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for part in parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not normalized:
+                raise _InspectionError(
+                    f"{label} contains an escaping symlink: {relative}"
+                )
+            normalized.pop()
+            continue
+        if not _safe_entry_name(part):
+            raise _InspectionError(
+                f"{label} contains an invalid symlink: {relative}"
+            )
+        normalized.append(part)
+    return tuple(normalized)
 
 
 def _digest_regular_file(
@@ -1302,6 +1697,30 @@ def _open_nofollow_directory(path: Path, *, label: str) -> int:
         raise _InspectionError(f"{label} cannot be opened safely: {error}") from error
     finally:
         os.close(parent_descriptor)
+
+
+def _path_still_names_directory(path: Path, descriptor: int) -> bool:
+    verification: int | None = None
+    try:
+        verification = _open_directory_path(path)
+        return _descriptor_identity(os.fstat(verification)) == _descriptor_identity(
+            os.fstat(descriptor)
+        )
+    except (OSError, _InspectionError):
+        return False
+    finally:
+        if verification is not None:
+            os.close(verification)
+
+
+def _descriptor_install_diagnostic_supported() -> bool:
+    return (
+        os.name == "posix"
+        and hasattr(os, "O_DIRECTORY")
+        and os.open in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.readlink in os.supports_dir_fd
+    )
 
 
 def _open_directory_path(path: Path) -> int:
@@ -1483,7 +1902,15 @@ def _repository_lock_names(
             label="skill lock",
             inspection_hook=inspection_hook,
         )
-        document = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+        text = raw.decode("utf-8")
+        preflight_bounded_json_structure(
+            text,
+            maximum_nodes=_MAX_LOCK_NODES,
+            maximum_depth=_MAX_LOCK_DEPTH,
+            maximum_scalar_bytes=_MAX_LOCK_SCALAR_BYTES,
+            maximum_number_characters=_MAX_LOCK_NUMBER_CHARACTERS,
+        )
+        document = json.loads(text, object_pairs_hook=_unique_object)
         if not isinstance(document, dict) or not isinstance(document.get("skills"), dict):
             raise _InspectionError("skill lock must contain a skills object")
         version = document.get("version")
@@ -1493,7 +1920,18 @@ def _repository_lock_names(
             )
     except FileNotFoundError:
         return frozenset()
-    except (OSError, UnicodeError, json.JSONDecodeError, _InspectionError) as error:
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        JsonPreflightError,
+        MemoryError,
+        OverflowError,
+        RecursionError,
+        RuntimeError,
+        SystemError,
+        _InspectionError,
+    ) as error:
         issues.append(ValidationIssue(str(lock_path), f"invalid skill lock: {error}"))
         return frozenset()
 
@@ -1536,8 +1974,13 @@ def _read_absolute_regular_file(
     inspection_hook: Callable[[str, Path], None] | None,
 ) -> bytes:
     parent_descriptor = _open_directory_path(path.parent)
+    descriptor: int | None = None
     try:
-        observed = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        observed = os.stat(
+            path.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
         if not stat.S_ISREG(observed.st_mode):
             raise _NotRegularFile(f"{label} must be a regular non-symlink file")
         _notify(inspection_hook, "lock-entry-observed", path)
@@ -1546,19 +1989,23 @@ def _read_absolute_regular_file(
             path.name,
             observed,
         )
-    finally:
-        os.close(parent_descriptor)
-    try:
         _notify(inspection_hook, "lock-file-opened", path)
-        return _read_bounded_descriptor(
+        content = _read_bounded_descriptor(
             descriptor,
             opened,
             limit=limit,
             label=label,
             read_budget=None,
         )
+        if not _path_still_names_directory(path.parent, parent_descriptor):
+            raise _InspectionError(
+                f"{label} parent directory changed while being read"
+            )
+        return content
     finally:
-        os.close(descriptor)
+        if descriptor is not None:
+            os.close(descriptor)
+        os.close(parent_descriptor)
 
 
 def _safe_entry_name(name: str) -> bool:

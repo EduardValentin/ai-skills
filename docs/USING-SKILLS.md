@@ -96,7 +96,7 @@ Maintainers can compare this repository with active Codex skill roots using a
 read-only diagnostic:
 
 ```bash
-python3 scripts/ai_skills.py check-local-installs --harness codex
+scripts/ai-skills check-local-installs --harness codex
 ```
 
 It reports missing, stale, duplicate, malformed, and attributable extra

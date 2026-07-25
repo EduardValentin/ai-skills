@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import replace
 from io import StringIO
@@ -12,16 +13,20 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import scripts.ai_skills as cli
+import scripts.ai_skills_lib.actor_evidence as actor_evidence
 import scripts.ai_skills_lib.codex_harness as codex_harness
 import scripts.ai_skills_lib.trigger_definitions as trigger_definitions
 import scripts.ai_skills_lib.trigger_validation as trigger_validation
+from scripts.ai_skills_lib.authored_content import find_static_secret_issues
 from scripts.ai_skills_lib.config import build_parser
 from scripts.ai_skills_lib.eval_core import (
     ResultArtifactError,
     aggregate_results,
     create_result_workspace,
+    digest_evidence_bundle,
 )
 from scripts.ai_skills_lib.harness import (
+    bind_harness_request,
     HarnessCapabilities,
     HarnessExecution,
     HarnessRequest,
@@ -41,6 +46,40 @@ from scripts.ai_skills_lib.trigger_validation import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def rebind_attempt_evidence(attempt: Path) -> None:
+    outputs = attempt / "outputs"
+    directories = tuple(
+        path.relative_to(attempt).as_posix()
+        for path in outputs.rglob("*")
+        if path.is_dir()
+    )
+    evidence_paths = {
+        attempt / "attempt.json",
+        attempt / "timing.json",
+        attempt / "transcript.md",
+        attempt / "execution_trace.jsonl",
+        *(
+            path
+            for path in outputs.rglob("*")
+            if path.is_file()
+        ),
+    }
+    digest = digest_evidence_bundle(
+        directories,
+        tuple(
+            (path.relative_to(attempt).as_posix(), path.read_bytes())
+            for path in evidence_paths
+        ),
+    )
+    grading_path = attempt / "grading.json"
+    grading = json.loads(grading_path.read_text(encoding="utf-8"))
+    grading["evidence_sha256"] = digest
+    grading_path.write_text(
+        f"{json.dumps(grading, indent=2, sort_keys=True)}\n",
+        encoding="utf-8",
+    )
 
 
 class TemporaryTriggerRepository:
@@ -93,22 +132,51 @@ class TemporaryTriggerRepository:
         return skill_root
 
 
-def completed_execution(request: HarnessRequest, *, activated: bool) -> HarnessExecution:
+def completed_execution(
+    request: HarnessRequest,
+    *,
+    activated: bool,
+    artifact_dir: Path,
+) -> HarnessExecution:
+    manifest = json.loads(
+        (artifact_dir / "attempt.json").read_text(encoding="utf-8")
+    )
+    if request.execution_binding is None:
+        request = bind_harness_request(
+            request,
+            invocation_id=manifest["invocation_id"],
+            run_id=manifest["run_id"],
+        )
     expected_path = Path(
-        f"/sandbox/codex-home/skills/{request.expected_skill}/SKILL.md"
+        f"/case/codex-home/skills/{request.expected_skill}/SKILL.md"
     )
     reads = (expected_path,) if activated else ()
-    trace = (
-        (
+    trace: tuple[Mapping[str, object], ...] = (
+        {"event": "harness_thread_started"},
+        {"event": "harness_turn_started"},
+    )
+    if activated:
+        trace = (
+            *trace,
             {
-                "type": "skill_read",
-                "path": str(expected_path),
+                "event": "command_started",
+                "command_id": "skill-read-command",
+                "command": "cat",
+            },
+            {
+                "event": "command_completed",
+                "command_id": "skill-read-command",
+                "command": "cat",
+                "exit_code": 0,
                 "status": "completed",
             },
+            {
+                "event": "skill_read",
+                "command_id": "skill-read-command",
+                "path": str(expected_path),
+            },
         )
-        if activated
-        else ({"type": "turn.completed"},)
-    )
+    trace = (*trace, {"event": "harness_turn_completed"})
     return HarnessExecution(
         response="Actor response",
         trace=trace,
@@ -125,6 +193,7 @@ def completed_execution(request: HarnessRequest, *, activated: bool) -> HarnessE
         reasoning_effort="medium",
         timed_out=False,
         expected_skill_path=expected_path,
+        execution_binding=request.execution_binding,
     )
 
 
@@ -148,7 +217,11 @@ class FakeTriggerHarness:
     def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
         self.requests.append(request)
         activated = self.activations.pop(0) if self.activations else "unrelated" not in request.prompt
-        return completed_execution(request, activated=activated)
+        return completed_execution(
+            request,
+            activated=activated,
+            artifact_dir=artifact_dir,
+        )
 
 
 class TriggerDefinitionValidationTests(unittest.TestCase):
@@ -337,7 +410,9 @@ class TriggerDefinitionValidationTests(unittest.TestCase):
         ) as discover:
             load_trigger_queries(self.repository.root)
 
-        discover.assert_called_once_with(self.repository.root)
+        discover.assert_called_once()
+        self.assertEqual(discover.call_args.args, (self.repository.root,))
+        self.assertIn("budget", discover.call_args.kwargs)
 
     def test_discovery_failure_becomes_a_definition_error(self) -> None:
         skill = self.repository.add_skill("alpha")
@@ -361,6 +436,112 @@ class TriggerDefinitionValidationTests(unittest.TestCase):
 
         self.assertTrue(any("contained non-symlink regular file" in message for message in messages))
 
+    def test_trigger_file_swap_after_discovery_is_rejected(self) -> None:
+        skill = self.repository.add_skill("alpha")
+        trigger_path = skill / "evals" / "triggers.json"
+        outside = self.repository.root / "outside.json"
+        outside.write_text(
+            trigger_path.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        stable_read = trigger_definitions.read_bounded_authored_bytes
+
+        def swap_before_read(source, **kwargs):
+            if source.logical_path == trigger_path and not trigger_path.is_symlink():
+                trigger_path.unlink()
+                trigger_path.symlink_to(outside)
+            return stable_read(source, **kwargs)
+
+        with patch.object(
+            trigger_definitions,
+            "read_bounded_authored_bytes",
+            side_effect=swap_before_read,
+        ):
+            messages = [
+                issue.message
+                for issue in validate_trigger_query_files(self.repository.root)
+            ]
+
+        self.assertTrue(
+            any("cannot read evals/triggers.json" in message for message in messages),
+            messages,
+        )
+
+    def test_trigger_loader_rejects_atomic_skill_directory_replacement(self) -> None:
+        skill_root = self.repository.add_skill("alpha")
+        replacement_root = self.repository.root / "replacement-alpha"
+        archived_root = self.repository.root / "archived-alpha"
+        shutil.copytree(skill_root, replacement_root)
+        replacement_path = replacement_root / "evals" / "triggers.json"
+        replacement_document = json.loads(
+            replacement_path.read_text(encoding="utf-8")
+        )
+        replacement_document["queries"][0]["query"] = (
+            "Use the replacement alpha workflow."
+        )
+        replacement_path.write_text(
+            json.dumps(replacement_document),
+            encoding="utf-8",
+        )
+        stable_read = trigger_definitions.read_bounded_authored_bytes
+        swapped = False
+
+        def swap_before_definition_read(source, **kwargs):
+            nonlocal swapped
+            if (
+                not swapped
+                and source.logical_path
+                == skill_root / "evals" / "triggers.json"
+            ):
+                skill_root.rename(archived_root)
+                replacement_root.rename(skill_root)
+                swapped = True
+            return stable_read(source, **kwargs)
+
+        with patch.object(
+            trigger_definitions,
+            "read_bounded_authored_bytes",
+            side_effect=swap_before_definition_read,
+        ):
+            with self.assertRaises(TriggerDefinitionError) as raised:
+                load_trigger_queries(self.repository.root)
+
+        self.assertTrue(swapped)
+        self.assertTrue(
+            any(
+                "canonical skills tree changed during definition loading"
+                in issue.message
+                for issue in raised.exception.issues
+            ),
+            raised.exception.issues,
+        )
+
+    def test_oversized_trigger_file_is_rejected_before_its_contents_are_read(self) -> None:
+        skill = self.repository.add_skill("alpha")
+        trigger_path = skill / "evals" / "triggers.json"
+        original_read_text = Path.read_text
+
+        def guarded_read_text(path: Path, *args, **kwargs):
+            if path == trigger_path:
+                raise AssertionError("oversized trigger definition was read")
+            return original_read_text(path, *args, **kwargs)
+
+        with (
+            patch.object(
+                trigger_definitions,
+                "MAX_TRIGGER_DEFINITION_BYTES",
+                trigger_path.stat().st_size - 1,
+                create=True,
+            ),
+            patch.object(Path, "read_text", new=guarded_read_text),
+        ):
+            messages = [
+                issue.message
+                for issue in validate_trigger_query_files(self.repository.root)
+            ]
+
+        self.assertTrue(any("2 MiB trigger definition limit" in message for message in messages))
+
     def test_secret_bearing_trigger_query_fails_without_echoing_the_value(self) -> None:
         secret = "sk-" + "A" * 30
         self.repository.add_skill(
@@ -382,6 +563,104 @@ class TriggerDefinitionValidationTests(unittest.TestCase):
 
         self.assertTrue(any("high-confidence secret" in issue.message for issue in issues))
         self.assertNotIn(secret, repr(issues))
+
+    def test_trigger_loading_scans_secrets_revealed_by_json_escape_decoding(self) -> None:
+        secret = "prod-" + "secret-value"
+        skill = self.repository.add_skill(
+            "alpha",
+            trigger_document={
+                "skill_name": "alpha",
+                "queries": [
+                    {
+                        "id": "positive",
+                        "query": f"Use alpha with API_TOKEN={secret}.",
+                        "should_trigger": True,
+                    },
+                    {
+                        "id": "negative",
+                        "query": "Unrelated work.",
+                        "should_trigger": False,
+                    },
+                ],
+            },
+        )
+        trigger_path = skill / "evals" / "triggers.json"
+        raw = trigger_path.read_text(encoding="utf-8").replace(
+            "API_TOKEN",
+            r"API\u005fTOKEN",
+        )
+        trigger_path.write_text(raw, encoding="utf-8")
+
+        with self.assertRaises(TriggerDefinitionError) as raised:
+            load_trigger_queries(self.repository.root)
+
+        self.assertTrue(
+            any(
+                "high-confidence secret after JSON decoding" in issue.message
+                for issue in raised.exception.issues
+            ),
+            raised.exception.issues,
+        )
+        self.assertNotIn(secret, repr(raised.exception.issues))
+
+    def test_trigger_loader_redacts_secret_shaped_definition_paths(self) -> None:
+        secret_group = "ghp_" + ("a" * 36)
+        secret_skill = "sk-" + ("b" * 24)
+        skill = self.repository.add_skill(secret_skill, group=secret_group)
+        (skill / "evals" / "triggers.json").write_text("{", encoding="utf-8")
+
+        with self.assertRaises(TriggerDefinitionError) as raised:
+            load_trigger_queries(self.repository.root)
+
+        self.assertTrue(raised.exception.issues)
+        rendered = repr(raised.exception.issues)
+        self.assertNotIn(secret_group, rendered)
+        self.assertNotIn(secret_skill, rendered)
+        for issue in raised.exception.issues:
+            self.assertEqual(
+                find_static_secret_issues(
+                    issue.scope,
+                    Path("trigger-diagnostic-scope"),
+                ),
+                [],
+            )
+            self.assertEqual(
+                find_static_secret_issues(
+                    issue.message,
+                    Path("trigger-diagnostic-message"),
+                ),
+                [],
+            )
+
+    def test_trigger_loader_redacts_secret_shaped_issue_messages(self) -> None:
+        secret_name = "sk-" + ("a" * 24)
+        self.repository.add_skill(
+            "alpha",
+            trigger_document={
+                "skill_name": secret_name,
+                "queries": [
+                    {
+                        "id": "positive",
+                        "query": "Use alpha.",
+                        "should_trigger": True,
+                    },
+                    {
+                        "id": "negative",
+                        "query": "Do not use alpha.",
+                        "should_trigger": False,
+                    },
+                ],
+            },
+        )
+
+        with self.assertRaises(TriggerDefinitionError) as raised:
+            load_trigger_queries(self.repository.root)
+
+        self.assertNotIn(secret_name, repr(raised.exception.issues))
+        self.assertTrue(
+            any(issue.message == "[REDACTED]" for issue in raised.exception.issues),
+            raised.exception.issues,
+        )
 
 
 class TriggerClassificationTests(unittest.TestCase):
@@ -671,6 +950,139 @@ class TriggerExecutionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prepared skill material"):
             replace(plan, catalog=(alpha,))
 
+    def test_prepared_plan_rejects_replaced_runtime_material_before_preflight(self):
+        self.repository.add_skill("alpha")
+        definitions = load_trigger_queries(self.repository.root)
+        plan = trigger_validation.prepare_trigger_plan(
+            definitions,
+            runs=1,
+            skill_filter="alpha",
+            query_filter="alpha-positive",
+        )
+        source = plan.catalog[0]
+        changed_source = replace(
+            source,
+            files=(
+                replace(source.files[0], content=b"changed trigger runtime"),
+                *source.files[1:],
+            ),
+        )
+        tampered = replace(plan, catalog=(changed_source, *plan.catalog[1:]))
+        workspace = self.workspace()
+        trigger_validation.declare_trigger_plan(workspace, plan)
+
+        class PreflightRecordingHarness(FakeTriggerHarness):
+            def __init__(self):
+                super().__init__([True])
+                self.preflight_calls = 0
+
+            def preflight(self, *, require_fixtures: bool = False):
+                self.preflight_calls += 1
+                return super().preflight(require_fixtures=require_fixtures)
+
+        adapter = PreflightRecordingHarness()
+        with self.assertRaisesRegex(
+            trigger_validation.TriggerHarnessError,
+            "prepared trigger inputs changed",
+        ):
+            trigger_validation.execute_prepared_trigger_plan(
+                adapter,
+                workspace,
+                tampered,
+                max_concurrency=1,
+                actor_timeout_seconds=60,
+            )
+        self.assertEqual(adapter.preflight_calls, 0)
+
+    def test_prepared_plan_rejects_one_run_with_a_different_same_id_query(
+        self,
+    ) -> None:
+        self.repository.add_skill("alpha")
+        plan = trigger_validation.prepare_trigger_plan(
+            load_trigger_queries(self.repository.root),
+            runs=2,
+            skill_filter="alpha",
+            query_filter="alpha-positive",
+        )
+        original = plan.attempts[1]
+        changed_query = replace(
+            original.query,
+            query="A different query under the same query ID.",
+        )
+        changed_manifest = trigger_validation._trigger_attempt_manifest(
+            original.definition.skill,
+            changed_query,
+            original.run_number,
+            plan.runs,
+            1.0,
+            runtime_input_sha256=(
+                trigger_validation._trigger_runtime_input_sha256(
+                    original.definition.skill,
+                    changed_query,
+                    plan.catalog,
+                )
+            ),
+        )
+        tampered = replace(
+            plan,
+            attempts=(
+                plan.attempts[0],
+                replace(
+                    original,
+                    query=changed_query,
+                    manifest=changed_manifest,
+                ),
+            ),
+        )
+        workspace = self.workspace()
+
+        with self.assertRaisesRegex(
+            trigger_validation.TriggerHarnessError,
+            "not bound to its selected query",
+        ):
+            trigger_validation.declare_trigger_plan(workspace, tampered)
+
+        self.assertFalse(workspace.invocation_manifest.exists())
+
+    def test_preflight_rejects_an_equivalent_replaced_invocation(self) -> None:
+        self.repository.add_skill("alpha")
+        plan = trigger_validation.prepare_trigger_plan(
+            load_trigger_queries(self.repository.root),
+            runs=1,
+            skill_filter="alpha",
+            query_filter="alpha-positive",
+        )
+        workspace = self.workspace()
+        trigger_validation.declare_trigger_plan(workspace, plan)
+
+        class ReplacingInvocationHarness(FakeTriggerHarness):
+            def preflight(
+                self,
+                *,
+                require_fixtures: bool = False,
+            ) -> HarnessCapabilities:
+                content = workspace.invocation_manifest.read_bytes()
+                workspace.invocation_manifest.unlink()
+                workspace.invocation_manifest.write_bytes(content)
+                return super().preflight(
+                    require_fixtures=require_fixtures
+                )
+
+        adapter = ReplacingInvocationHarness([True])
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "invocation declaration was replaced",
+        ):
+            trigger_validation.execute_prepared_trigger_plan(
+                adapter,
+                workspace,
+                plan,
+                max_concurrency=1,
+                actor_timeout_seconds=60,
+            )
+
+        self.assertEqual(adapter.requests, [])
+
     def test_completed_run_writes_human_and_machine_reviewable_artifacts(self) -> None:
         self.repository.add_skill("alpha")
         adapter = FakeTriggerHarness([True])
@@ -709,6 +1121,435 @@ class TriggerExecutionTests(unittest.TestCase):
             workspace.output_summary.read_text(encoding="utf-8"),
         )
 
+    def test_trigger_attempt_preserves_and_binds_actor_created_outputs(self) -> None:
+        self.repository.add_skill("alpha")
+
+        class OutputWritingHarness(FakeTriggerHarness):
+            def execute(
+                self,
+                request: HarnessRequest,
+                artifact_dir: Path,
+            ) -> HarnessExecution:
+                self.requests.append(request)
+                self.assert_capture_outputs(request)
+                report = artifact_dir / "outputs" / "reports" / "pickup.json"
+                report.parent.mkdir()
+                report.write_text('{"selected":"alpha"}\n', encoding="utf-8")
+                return completed_execution(
+                    request,
+                    activated=True,
+                    artifact_dir=artifact_dir,
+                )
+
+            @staticmethod
+            def assert_capture_outputs(request: HarnessRequest) -> None:
+                if not request.capture_outputs:
+                    raise AssertionError("trigger actor outputs must be captured")
+
+        adapter = OutputWritingHarness()
+        workspace = self.workspace()
+        result = execute_trigger_queries(
+            self.repository.root,
+            adapter,
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(
+            (attempt / "outputs" / "reports" / "pickup.json").read_text(
+                encoding="utf-8"
+            ),
+            '{"selected":"alpha"}\n',
+        )
+        finalization = trigger_validation.finalize_trigger_result(
+            self.repository.root,
+            workspace,
+            result,
+        )
+        self.assertEqual(finalization.terminal.key, "pass")
+
+    def test_aggregation_rejects_trigger_grade_that_contradicts_activation_trace(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        trace_path = attempt / "execution_trace.jsonl"
+        events = [
+            json.loads(line)
+            for line in trace_path.read_text(encoding="utf-8").splitlines()
+        ]
+        activation = next(
+            event
+            for event in events
+            if event.get("event") == "trigger_activation_evidence"
+        )
+        activation["successful_exact_read"] = False
+        trace_path.write_text(
+            "".join(f"{json.dumps(event, sort_keys=True)}\n" for event in events),
+            encoding="utf-8",
+        )
+        rebind_attempt_evidence(attempt)
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "does not match the raw exact skill-read evidence",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
+    def test_aggregation_rejects_trigger_marker_for_another_skill_path(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        trace_path = attempt / "execution_trace.jsonl"
+        events = [
+            json.loads(line)
+            for line in trace_path.read_text(encoding="utf-8").splitlines()
+        ]
+        activation = next(
+            event
+            for event in events
+            if event.get("event") == "trigger_activation_evidence"
+        )
+        activation["expected_skill_path"] = (
+            "/case/codex-home/skills/beta/SKILL.md"
+        )
+        trace_path.write_text(
+            "".join(f"{json.dumps(event, sort_keys=True)}\n" for event in events),
+            encoding="utf-8",
+        )
+        rebind_attempt_evidence(attempt)
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "invalid installed skill path",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
+    def test_aggregation_rejects_a_skill_read_outside_the_installed_catalog(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        substituted_path = "/tmp/not-an-installed-catalog/alpha/SKILL.md"
+        trace_path = attempt / "execution_trace.jsonl"
+        events = [
+            json.loads(line)
+            for line in trace_path.read_text(encoding="utf-8").splitlines()
+        ]
+        for event in events:
+            if event.get("event") == "skill_read":
+                event["path"] = substituted_path
+            if event.get("event") == "trigger_activation_evidence":
+                event["expected_skill_path"] = substituted_path
+        trace_path.write_text(
+            "".join(f"{json.dumps(event, sort_keys=True)}\n" for event in events),
+            encoding="utf-8",
+        )
+        grading_path = attempt / "grading.json"
+        grading = json.loads(grading_path.read_text(encoding="utf-8"))
+        grading["assertion_results"][0]["evidence"] = (
+            "The harness recorded a successful exact installed SKILL.md read at "
+            f"{substituted_path}."
+        )
+        grading_path.write_text(
+            f"{json.dumps(grading, indent=2, sort_keys=True)}\n",
+            encoding="utf-8",
+        )
+        rebind_attempt_evidence(attempt)
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "invalid installed skill path",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
+    def test_aggregation_rejects_a_foreign_root_with_the_expected_suffix(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        substituted_path = (
+            "/attacker-controlled/case/codex-home/skills/alpha/SKILL.md"
+        )
+        trace_path = attempt / "execution_trace.jsonl"
+        events = [
+            json.loads(line)
+            for line in trace_path.read_text(encoding="utf-8").splitlines()
+        ]
+        for event in events:
+            if event.get("event") == "skill_read":
+                event["path"] = substituted_path
+            if event.get("event") == "trigger_activation_evidence":
+                event["expected_skill_path"] = substituted_path
+        trace_path.write_text(
+            "".join(f"{json.dumps(event, sort_keys=True)}\n" for event in events),
+            encoding="utf-8",
+        )
+        timing_path = attempt / "timing.json"
+        timing = json.loads(timing_path.read_text(encoding="utf-8"))
+        timing["successful_skill_reads"] = [substituted_path]
+        timing["expected_skill_path"] = substituted_path
+        timing_path.write_text(
+            f"{json.dumps(timing, indent=2, sort_keys=True)}\n",
+            encoding="utf-8",
+        )
+        grading_path = attempt / "grading.json"
+        grading = json.loads(grading_path.read_text(encoding="utf-8"))
+        grading["assertion_results"][0]["evidence"] = (
+            "The harness recorded a successful exact installed SKILL.md read at "
+            f"{substituted_path}."
+        )
+        grading_path.write_text(
+            f"{json.dumps(grading, indent=2, sort_keys=True)}\n",
+            encoding="utf-8",
+        )
+        rebind_attempt_evidence(attempt)
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "invalid installed skill path",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
+    def test_aggregation_rejects_foreign_root_trigger_timing_paths(self) -> None:
+        self.repository.add_skill("alpha")
+        foreign_path = (
+            "/attacker-controlled/case/codex-home/skills/alpha/SKILL.md"
+        )
+        timing_updates = (
+            ("expected_skill_path", foreign_path),
+            ("successful_skill_reads", [foreign_path]),
+        )
+        for field, value in timing_updates:
+            with (
+                self.subTest(field=field),
+                tempfile.TemporaryDirectory() as results_directory,
+            ):
+                workspace = create_result_workspace(
+                    "trigger-test",
+                    results_dir=Path(results_directory) / "results",
+                    repository_root=self.repository.root,
+                )
+                execute_trigger_queries(
+                    self.repository.root,
+                    FakeTriggerHarness([True]),
+                    workspace,
+                    runs=1,
+                    max_concurrency=1,
+                    query_filter="alpha-positive",
+                )
+                attempt = next(workspace.attempts.iterdir())
+                timing_path = attempt / "timing.json"
+                timing = json.loads(timing_path.read_text(encoding="utf-8"))
+                timing[field] = value
+                timing_path.write_text(
+                    f"{json.dumps(timing, indent=2, sort_keys=True)}\n",
+                    encoding="utf-8",
+                )
+                rebind_attempt_evidence(attempt)
+
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "trigger timing has an invalid installed skill path",
+                ):
+                    aggregate_results(
+                        workspace.root,
+                        "judge",
+                        repository_root=self.repository.root,
+                    )
+
+    def test_aggregation_requires_raw_exact_skill_read_for_positive_marker(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        trace_path = attempt / "execution_trace.jsonl"
+        events = [
+            json.loads(line)
+            for line in trace_path.read_text(encoding="utf-8").splitlines()
+        ]
+        trace_path.write_text(
+            "".join(
+                f"{json.dumps(event, sort_keys=True)}\n"
+                for event in events
+                if event.get("event") != "skill_read"
+            ),
+            encoding="utf-8",
+        )
+        rebind_attempt_evidence(attempt)
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "does not match the raw exact skill-read evidence",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
+    def test_aggregation_rejects_bare_skill_read_without_command_lifecycle(
+        self,
+    ) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        trace_path = attempt / "execution_trace.jsonl"
+        events = [
+            json.loads(line)
+            for line in trace_path.read_text(encoding="utf-8").splitlines()
+        ]
+        bare_trace = [
+            event
+            for event in events
+            if event.get("event")
+            in ("skill_read", "trigger_activation_evidence")
+        ]
+        trace_path.write_text(
+            "".join(
+                f"{json.dumps(event, sort_keys=True)}\n"
+                for event in bare_trace
+            ),
+            encoding="utf-8",
+        )
+        rebind_attempt_evidence(attempt)
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "actor lifecycle is invalid",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
+    def test_aggregation_requires_the_deterministic_trigger_assertion_text(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        grading_path = attempt / "grading.json"
+        grading = json.loads(grading_path.read_text(encoding="utf-8"))
+        grading["assertion_results"][0]["text"] = (
+            "The installed harness does not load the alpha skill."
+        )
+        grading_path.write_text(
+            f"{json.dumps(grading, indent=2, sort_keys=True)}\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "immutable assertion contract",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
+    def test_aggregation_rejects_undeclared_trigger_measurements(self) -> None:
+        self.repository.add_skill("alpha")
+        workspace = self.workspace()
+        execute_trigger_queries(
+            self.repository.root,
+            FakeTriggerHarness([True]),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+        attempt = next(workspace.attempts.iterdir())
+        grading_path = attempt / "grading.json"
+        grading = json.loads(grading_path.read_text(encoding="utf-8"))
+        grading["measurements"]["forged_metric"] = 42
+        grading_path.write_text(
+            f"{json.dumps(grading, indent=2, sort_keys=True)}\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "trigger grading measurements",
+        ):
+            aggregate_results(
+                workspace.root,
+                "judge",
+                repository_root=self.repository.root,
+            )
+
     def test_failed_expectation_finalization_persists_terminal_decision(self) -> None:
         self.repository.add_skill("alpha")
         workspace = self.workspace()
@@ -744,6 +1585,7 @@ class TriggerExecutionTests(unittest.TestCase):
             1,
             1,
             1.0,
+            runtime_input_sha256="0" * 64,
         )
         second = trigger_validation._trigger_attempt_manifest(
             SimpleNamespace(name="a-b"),
@@ -755,6 +1597,7 @@ class TriggerExecutionTests(unittest.TestCase):
             1,
             1,
             1.0,
+            runtime_input_sha256="0" * 64,
         )
 
         self.assertNotEqual(first.run_id, second.run_id)
@@ -764,7 +1607,11 @@ class TriggerExecutionTests(unittest.TestCase):
 
         class OversizedResponseHarness(FakeTriggerHarness):
             def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
-                execution = completed_execution(request, activated=True)
+                execution = completed_execution(
+                    request,
+                    activated=True,
+                    artifact_dir=artifact_dir,
+                )
                 return replace(
                     execution,
                     response=json.dumps({"value": "x" * (64 * 1024)}),
@@ -841,16 +1688,100 @@ class TriggerExecutionTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.query_results[0].classification.status, "pass_stable")
 
+    def test_negative_query_rejects_invalid_command_completion_protocol(self) -> None:
+        self.repository.add_skill("alpha")
+
+        class InvalidCompletionHarness(FakeTriggerHarness):
+            def execute(
+                self,
+                request: HarnessRequest,
+                artifact_dir: Path,
+            ) -> HarnessExecution:
+                execution = completed_execution(
+                    request,
+                    activated=False,
+                    artifact_dir=artifact_dir,
+                )
+                return replace(
+                    execution,
+                    failure="Codex command completion has no valid terminal status",
+                )
+
+        workspace = self.workspace()
+        result = execute_trigger_queries(
+            self.repository.root,
+            InvalidCompletionHarness(),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-negative",
+        )
+
+        attempt = next(workspace.attempts.iterdir())
+        self.assertEqual(result.exit_code, 2)
+        self.assertEqual(result.query_results[0].classification.status, "error")
+        self.assertFalse((attempt / "grading.json").exists())
+
+    def test_foreign_root_with_the_expected_suffix_is_rejected_live(self) -> None:
+        self.repository.add_skill("alpha")
+
+        class ForeignRootHarness(FakeTriggerHarness):
+            def execute(
+                self,
+                request: HarnessRequest,
+                artifact_dir: Path,
+            ) -> HarnessExecution:
+                execution = completed_execution(
+                    request,
+                    activated=True,
+                    artifact_dir=artifact_dir,
+                )
+                foreign_path = Path(
+                    "/attacker-controlled/case/codex-home/skills/"
+                    "alpha/SKILL.md"
+                )
+                return replace(
+                    execution,
+                    trace=(
+                        {
+                            "event": "skill_read",
+                            "path": str(foreign_path),
+                        },
+                    ),
+                    successful_skill_reads=(foreign_path,),
+                    expected_skill_path=foreign_path,
+                )
+
+        workspace = self.workspace()
+        result = execute_trigger_queries(
+            self.repository.root,
+            ForeignRootHarness(),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+
+        attempt = next(workspace.attempts.iterdir())
+        trace = (attempt / "execution_trace.jsonl").read_text(encoding="utf-8")
+        self.assertEqual(result.exit_code, 2)
+        self.assertIn("expected installed SKILL.md path", trace)
+        self.assertFalse((attempt / "grading.json").exists())
+
     def test_unrelated_successful_skill_read_does_not_activate_the_target(self) -> None:
         self.repository.add_skill("alpha")
 
         class UnrelatedReadHarness(FakeTriggerHarness):
             def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
-                execution = completed_execution(request, activated=False)
+                execution = completed_execution(
+                    request,
+                    activated=False,
+                    artifact_dir=artifact_dir,
+                )
                 return replace(
                     execution,
                     successful_skill_reads=(
-                        Path("/sandbox/codex-home/skills/beta/SKILL.md"),
+                        Path("/case/codex-home/skills/beta/SKILL.md"),
                     ),
                 )
 
@@ -870,12 +1801,16 @@ class TriggerExecutionTests(unittest.TestCase):
 
         class ExpectedReadAfterUnrelatedHarness(FakeTriggerHarness):
             def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
-                execution = completed_execution(request, activated=True)
+                execution = completed_execution(
+                    request,
+                    activated=True,
+                    artifact_dir=artifact_dir,
+                )
                 assert execution.expected_skill_path is not None
                 return replace(
                     execution,
                     successful_skill_reads=(
-                        Path("/sandbox/codex-home/skills/beta/SKILL.md"),
+                        Path("/case/codex-home/skills/beta/SKILL.md"),
                         execution.expected_skill_path,
                     ),
                 )
@@ -897,13 +1832,52 @@ class TriggerExecutionTests(unittest.TestCase):
         self.assertIn("/alpha/SKILL.md", evidence)
         self.assertNotIn("/beta/SKILL.md", evidence)
 
+    def test_successful_read_metadata_without_trace_evidence_is_rejected(self) -> None:
+        self.repository.add_skill("alpha")
+
+        class UnboundReadHarness(FakeTriggerHarness):
+            def execute(
+                self,
+                request: HarnessRequest,
+                artifact_dir: Path,
+            ) -> HarnessExecution:
+                execution = completed_execution(
+                    request,
+                    activated=True,
+                    artifact_dir=artifact_dir,
+                )
+                return replace(
+                    execution,
+                    trace=({"event": "harness_turn_completed"},),
+                )
+
+        workspace = self.workspace()
+        result = execute_trigger_queries(
+            self.repository.root,
+            UnboundReadHarness(),
+            workspace,
+            runs=1,
+            max_concurrency=1,
+            query_filter="alpha-positive",
+        )
+
+        attempt = next(workspace.attempts.iterdir())
+        trace = (attempt / "execution_trace.jsonl").read_text(encoding="utf-8")
+        self.assertEqual(result.exit_code, 2)
+        self.assertIn("actor lifecycle is invalid", trace)
+        self.assertFalse((attempt / "grading.json").exists())
+
     def test_missing_expected_installed_path_is_an_evidence_error(self) -> None:
         self.repository.add_skill("alpha")
 
         class MissingExpectedPathHarness(FakeTriggerHarness):
             def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
                 return replace(
-                    completed_execution(request, activated=False),
+                    completed_execution(
+                        request,
+                        activated=False,
+                        artifact_dir=artifact_dir,
+                    ),
                     expected_skill_path=None,
                 )
 
@@ -1044,6 +2018,11 @@ class TriggerExecutionTests(unittest.TestCase):
         class FailingHarness(FakeTriggerHarness):
             def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
                 self.requests.append(request)
+                rejected_output = artifact_dir / "outputs" / "credential.txt"
+                rejected_output.write_text(
+                    "ghp_" + ("a" * 36),
+                    encoding="utf-8",
+                )
                 return HarnessExecution(
                     response="Partial actor response",
                     trace=({"type": "turn.failed", "message": "native failure"},),
@@ -1059,6 +2038,7 @@ class TriggerExecutionTests(unittest.TestCase):
                     model="fake-model",
                     reasoning_effort="medium",
                     timed_out=False,
+                    execution_binding=request.execution_binding,
                 )
 
         workspace = self.workspace()
@@ -1075,10 +2055,80 @@ class TriggerExecutionTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 2)
         self.assertEqual(result.query_results[0].classification.status, "error")
         self.assertTrue((attempt / "timing.json").is_file())
+        self.assertFalse((attempt / "outputs" / "credential.txt").exists())
+        self.assertTrue((attempt / "outputs" / "response.md").is_file())
         self.assertFalse((attempt / "grading.json").exists())
         human_summary = format_trigger_summary(result)
         self.assertIn("run 1: error", human_summary)
         self.assertIn("native failure", human_summary)
+
+    def test_untrustworthy_trigger_traces_are_quarantined_before_grading(self) -> None:
+        self.repository.add_skill("alpha")
+        deep: dict[str, object] = {"value": "leaf"}
+        for _ in range(actor_evidence.MAX_EXECUTION_TRACE_JSON_DEPTH + 1):
+            deep = {"nested": deep}
+        cases = (
+            (
+                "sensitive",
+                {"type": "turn.completed", "Cookie": "session=private-session-value"},
+                "private-session-value",
+            ),
+            (
+                "nonfinite",
+                {"type": "turn.completed", "value": float("nan")},
+                "NaN",
+            ),
+            (
+                "oversized",
+                {
+                    "type": "turn.completed",
+                    "detail": "x" * (actor_evidence.MAX_EXECUTION_TRACE_BYTES + 1),
+                },
+                "x" * 256,
+            ),
+            ("deep", {"type": "turn.completed", "detail": deep}, "leaf"),
+        )
+
+        for label, event, forbidden in cases:
+            with self.subTest(label=label):
+                workspace = create_result_workspace(
+                    "trigger-test",
+                    results_dir=(
+                        Path(self.results_directory.name) / f"results-{label}"
+                    ),
+                    repository_root=self.repository.root,
+                )
+
+                class UnsafeTraceHarness(FakeTriggerHarness):
+                    def execute(
+                        self,
+                        request: HarnessRequest,
+                        artifact_dir: Path,
+                    ) -> HarnessExecution:
+                        self.requests.append(request)
+                        execution = completed_execution(
+                            request,
+                            activated=True,
+                            artifact_dir=artifact_dir,
+                        )
+                        return replace(execution, trace=(event,))
+
+                result = execute_trigger_queries(
+                    self.repository.root,
+                    UnsafeTraceHarness(),
+                    workspace,
+                    runs=1,
+                    max_concurrency=1,
+                    query_filter="alpha-positive",
+                )
+
+                attempt = next(workspace.attempts.iterdir())
+                trace = (attempt / "execution_trace.jsonl").read_text(encoding="utf-8")
+                self.assertEqual(result.exit_code, 2)
+                self.assertIn("actor_trace_quarantine", trace)
+                self.assertNotIn(forbidden, trace)
+                self.assertFalse((attempt / "grading.json").exists())
+                self.assertLess(len(trace.encode("utf-8")), 16 * 1024)
 
     def test_adapter_exception_is_preserved_as_an_incomplete_attempt(self) -> None:
         self.repository.add_skill("alpha")
@@ -1296,6 +2346,47 @@ class TriggerCliTests(unittest.TestCase):
             self.assertIn("Review Required", summary)
             self.assertIn("run 2: mismatch", summary)
             self.assertIn("validate triggers: PENDING REVIEW", output.getvalue())
+            with self.assertRaisesRegex(
+                ResultArtifactError,
+                "require complete validated manual grading",
+            ):
+                aggregate_results(
+                    results,
+                    "judge",
+                    repository_root=repository.root,
+                )
+            self.assertFalse((results / "benchmark.json").exists())
+
+            for attempt in (results / "attempts").iterdir():
+                grading_path = attempt / "grading.json"
+                manual = json.loads(grading_path.read_text(encoding="utf-8"))
+                manual["grade_source"] = "manual"
+                manual["graded_at"] = "2099-01-01T00:00:00Z"
+                manual["grader"] = {
+                    "type": "human",
+                    "model": None,
+                    "reasoning_effort": None,
+                    "prompt_version": "manual-review-v1",
+                    "reviewer_label": "trigger disagreement reviewer",
+                }
+                for assertion in manual["assertion_results"]:
+                    assertion["checked_by"] = "human"
+                (attempt / "manual_grading.json").write_text(
+                    f"{json.dumps(manual, indent=2, sort_keys=True)}\n",
+                    encoding="utf-8",
+                )
+
+            benchmark = aggregate_results(
+                results,
+                "manual",
+                repository_root=repository.root,
+            )
+            self.assertEqual(
+                benchmark["source_summaries"]["manual"]["summary"][
+                    "passed_cases"
+                ],
+                1,
+            )
 
     def test_post_workspace_harness_failure_writes_terminal_summary(self) -> None:
         with (

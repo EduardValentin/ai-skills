@@ -4,8 +4,10 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -13,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 import jwt
 
 from scripts.ai_skills_lib.fixture_proxy import (
+    CONTROL_TOKEN_OPERATION_WINDOWS,
     FixtureProxy,
     FixtureProxyError,
     load_fixture_definition,
@@ -108,15 +111,21 @@ def worker_and_case(root: Path, identifier: str = "actor-one") -> tuple[SandboxW
 
 
 class FakeFixtureRuntime:
-    def __init__(self, certificates: dict[str, bytes]) -> None:
+    def __init__(self, certificates: dict[str, bytes | list[bytes]]) -> None:
         self.manifest = MANIFEST
         self.certificates = certificates
+        self.certificate_reads: dict[str, int] = {}
         self.calls: list[tuple[str, tuple[str, ...], tuple[int, ...]]] = []
         self.invalidated: list[str] = []
         self.requests: dict[str, list[dict[str, object]]] = {}
+        self.expectations: dict[str, list[dict[str, object]]] = {}
+        self.canary_requests: dict[str, list[dict[str, object]]] = {}
+        self.canary_expectations: dict[str, list[dict[str, object]]] = {}
+        self.configurations: dict[str, dict[str, object]] = {}
         self.status_failures_remaining = 0
         self.actor_calls: list[tuple[str, tuple[str, ...]]] = []
         self.invalidate_error: Exception | None = None
+        self.tls_probe_failure = False
 
     def run_worker_control(
         self,
@@ -127,19 +136,96 @@ class FakeFixtureRuntime:
     ) -> CommandResult:
         self.calls.append((worker.id, argv, accepted_returncodes))
         if argv[:2] == ("cat", "--") and argv[-1].endswith("mockserver-ca.pem"):
-            return CommandResult(0, self.certificates[worker.id].decode(), "")
+            certificates = self.certificates[worker.id]
+            if isinstance(certificates, bytes):
+                certificate = certificates
+            else:
+                index = self.certificate_reads.get(worker.id, 0)
+                certificate = certificates[index]
+                self.certificate_reads[worker.id] = index + 1
+            return CommandResult(0, certificate.decode(), "")
+        if argv[:3] == ("rm", "-rf", "--"):
+            shutil.rmtree(Path(argv[-1]), ignore_errors=True)
+            return CommandResult(0, "", "")
         if argv[:1] == ("curl",):
             url = argv[argv.index("--url") + 1]
+            method = argv[argv.index("--request") + 1]
+            if (
+                "--write-out" in argv
+                and argv[argv.index("--write-out") + 1]
+                == "%{ssl_verify_result}"
+            ):
+                return (
+                    CommandResult(60, "20", "certificate verify failed")
+                    if self.tls_probe_failure
+                    else CommandResult(0, "0", "")
+                )
+            data_path = (
+                Path(argv[argv.index("--data-binary") + 1][1:])
+                if "--data-binary" in argv
+                else None
+            )
+            is_canary = ":1081/" in url
+            if url.endswith("/mockserver/status") and method != "PUT":
+                return CommandResult(22, "", "status requires PUT")
             if url.endswith("/mockserver/status") and self.status_failures_remaining:
                 self.status_failures_remaining -= 1
                 return CommandResult(7, "", "not ready")
             if url.endswith("/mockserver/reset"):
-                self.requests[worker.id] = []
+                if is_canary:
+                    self.canary_requests[worker.id] = []
+                    self.canary_expectations[worker.id] = []
+                else:
+                    self.requests[worker.id] = []
+                    self.expectations[worker.id] = []
+                return CommandResult(0, "{}", "")
+            if url.endswith("/mockserver/configuration"):
+                configuration = self.configurations.setdefault(
+                    worker.id,
+                    {
+                        "attemptToProxyIfNoMatchingExpectation": False,
+                        "preventCertificateDynamicUpdate": True,
+                        "sslSubjectAlternativeNameDomains": ["localhost"],
+                        "sslSubjectAlternativeNameIps": ["127.0.0.1"],
+                    },
+                )
+                if method == "PUT":
+                    assert data_path is not None
+                    configuration.update(
+                        json.loads(data_path.read_text(encoding="utf-8"))
+                    )
+                return CommandResult(
+                    0,
+                    json.dumps(configuration),
+                    "",
+                )
+            if url.endswith("/mockserver/expectation") and method == "PUT":
+                assert data_path is not None
+                loaded = json.loads(data_path.read_text(encoding="utf-8"))
+                normalized = loaded if isinstance(loaded, list) else [loaded]
+                if is_canary:
+                    self.canary_expectations[worker.id] = normalized
+                else:
+                    self.expectations[worker.id] = normalized
                 return CommandResult(0, "{}", "")
             if "retrieve?type=REQUESTS" in url:
-                return CommandResult(0, json.dumps(self.requests.get(worker.id, [])), "")
+                requests = (
+                    self.canary_requests
+                    if is_canary
+                    else self.requests
+                )
+                return CommandResult(0, json.dumps(requests.get(worker.id, [])), "")
             if "retrieve?type=ACTIVE_EXPECTATIONS" in url:
-                return CommandResult(0, "[]", "")
+                expectations = (
+                    self.canary_expectations
+                    if is_canary
+                    else self.expectations
+                )
+                return CommandResult(
+                    0,
+                    json.dumps(expectations.get(worker.id, [])),
+                    "",
+                )
             return CommandResult(0, "{}", "")
         return CommandResult(0, "", "")
 
@@ -162,6 +248,8 @@ class FakeFixtureRuntime:
         if argv[:1] == ("test",):
             return CommandResult(0, "", "")
         if argv[:1] == ("curl",):
+            if any("ai-skills-passthrough-canary.invalid" in item for item in argv):
+                return CommandResult(0, "404", "")
             return CommandResult(0, "403", "")
         return CommandResult(1, "", "unexpected actor command")
 
@@ -427,11 +515,369 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             )
 
             proxy.preflight(worker, case)
+            self.assertIn(worker.id, proxy._states)
+            proxy.retire_preflight(worker)
 
         commands = [argv for _, argv in runtime.actor_calls]
         self.assertTrue(any(argv[:1] == ("test",) for argv in commands))
         self.assertTrue(any(argv[:1] == ("curl",) for argv in commands))
+        reset = next(
+            argv
+            for argv in commands
+            if argv[:1] == ("curl",)
+            and argv[-1].endswith("/mockserver/reset")
+        )
+        self.assertEqual(reset[reset.index("--request") + 1], "PUT")
+        status_methods = [
+            argv[argv.index("--request") + 1]
+            for _, argv, _ in runtime.calls
+            if argv[:1] == ("curl",)
+            and argv[argv.index("--url") + 1].endswith("/mockserver/status")
+        ]
+        self.assertTrue(status_methods)
+        self.assertEqual(set(status_methods), {"PUT"})
         self.assertEqual(runtime.invalidated, [])
+        self.assertNotIn(worker.id, proxy._states)
+        self.assertTrue(
+            any(
+                argv[:3] == ("docker", "rm", "--force")
+                and "canary" not in argv[-1]
+                for _, argv, _ in runtime.calls
+            )
+        )
+        self.assertTrue(
+            any(
+                argv[:3] == ("test", "!", "-e")
+                and argv[-1].endswith("fixture-control")
+                for _, argv, _ in runtime.calls
+            )
+        )
+
+    def test_preflight_does_not_mutate_fixture_projection_after_actor_execution(self) -> None:
+        class ProtectedProjectionRuntime(FakeFixtureRuntime):
+            def __init__(self, certificates):
+                super().__init__(certificates)
+                self.actor_started = False
+
+            def run_worker_control(
+                self,
+                worker,
+                argv,
+                *,
+                accepted_returncodes=(0,),
+            ):
+                if (
+                    self.actor_started
+                    and argv[:1] in {("chown",), ("chmod",), ("rm",)}
+                    and any(
+                        item == str(worker.host_root)
+                        or item.startswith(f"{worker.host_root}/")
+                        for item in argv
+                    )
+                ):
+                    return CommandResult(30, "", "read-only projection")
+                return super().run_worker_control(
+                    worker,
+                    argv,
+                    accepted_returncodes=accepted_returncodes,
+                )
+
+            def execute(
+                self,
+                worker,
+                case,
+                argv,
+                *,
+                timeout_seconds,
+                environment=None,
+            ):
+                self.actor_started = True
+                return super().execute(
+                    worker,
+                    case,
+                    argv,
+                    timeout_seconds=timeout_seconds,
+                    environment=environment,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = ProtectedProjectionRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            proxy.preflight(worker, case)
+            self.assertIn(worker.id, proxy._states)
+            runtime.actor_started = False
+            proxy.retire_preflight(worker)
+
+        self.assertEqual(runtime.invalidated, [])
+        self.assertNotIn(worker.id, proxy._states)
+
+    def test_preflight_retirement_failure_drops_state_and_invalidates_worker(
+        self,
+    ) -> None:
+        class ControlRemovalFailureRuntime(FakeFixtureRuntime):
+            def run_worker_control(
+                self,
+                worker,
+                argv,
+                *,
+                accepted_returncodes=(0,),
+            ):
+                if (
+                    argv[:3] == ("rm", "-rf", "--")
+                    and argv[-1] == str(worker.host_root / "fixture-control")
+                ):
+                    self.calls.append((worker.id, argv, accepted_returncodes))
+                    return CommandResult(30, "", "read-only worker projection")
+                return super().run_worker_control(
+                    worker,
+                    argv,
+                    accepted_returncodes=accepted_returncodes,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = ControlRemovalFailureRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+            proxy.preflight(worker, case)
+
+            with self.assertRaisesRegex(
+                FixtureProxyError,
+                "fixture control command failed",
+            ):
+                proxy.retire_preflight(worker)
+
+        self.assertEqual(runtime.invalidated, [worker.id])
+        self.assertNotIn(worker.id, proxy._states)
+
+    def test_preflight_rejects_actor_access_to_the_actual_put_reset_operation(self) -> None:
+        class PutResetAllowedRuntime(FakeFixtureRuntime):
+            def execute(self, worker, case, argv, *, timeout_seconds, environment=None):
+                if (
+                    argv[:1] == ("curl",)
+                    and argv[-1].endswith("/mockserver/reset")
+                ):
+                    method = (
+                        argv[argv.index("--request") + 1]
+                        if "--request" in argv
+                        else "GET"
+                    )
+                    if method == "PUT":
+                        self.expectations[worker.id] = []
+                        return CommandResult(0, "200", "")
+                    return CommandResult(0, "403", "")
+                return super().execute(
+                    worker,
+                    case,
+                    argv,
+                    timeout_seconds=timeout_seconds,
+                    environment=environment,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = PutResetAllowedRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            with self.assertRaisesRegex(
+                FixtureProxyError,
+                "control endpoint was not denied",
+            ):
+                proxy.preflight(worker, case)
+
+        self.assertEqual(runtime.invalidated, [worker.id])
+
+    def test_preflight_rejects_effective_passthrough_configuration(self) -> None:
+        class PassthroughConfigurationRuntime(FakeFixtureRuntime):
+            def run_worker_control(
+                self,
+                worker,
+                argv,
+                *,
+                accepted_returncodes=(0,),
+            ):
+                if (
+                    argv[:1] == ("curl",)
+                    and "--url" in argv
+                    and argv[argv.index("--url") + 1].endswith(
+                        "/mockserver/configuration"
+                    )
+                ):
+                    self.calls.append((worker.id, argv, accepted_returncodes))
+                    return CommandResult(
+                        0,
+                        json.dumps(
+                            {"attemptToProxyIfNoMatchingExpectation": True}
+                        ),
+                        "",
+                    )
+                return super().run_worker_control(
+                    worker,
+                    argv,
+                    accepted_returncodes=accepted_returncodes,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = PassthroughConfigurationRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            with self.assertRaisesRegex(
+                FixtureProxyError,
+                "effective configuration",
+            ):
+                proxy.preflight(worker, case)
+
+        self.assertEqual(runtime.invalidated, [worker.id])
+
+    def test_preflight_canary_detects_an_unmatched_forward(self) -> None:
+        class ForwardingRuntime(FakeFixtureRuntime):
+            def execute(self, worker, case, argv, *, timeout_seconds, environment=None):
+                if any(
+                    "ai-skills-passthrough-canary.invalid" in item
+                    for item in argv
+                ):
+                    self.canary_requests.setdefault(worker.id, []).append(
+                        {
+                            "method": "GET",
+                            "path": "/ai-skills-no-passthrough-canary",
+                        }
+                    )
+                    return CommandResult(0, "204", "")
+                return super().execute(
+                    worker,
+                    case,
+                    argv,
+                    timeout_seconds=timeout_seconds,
+                    environment=environment,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = ForwardingRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            with self.assertRaisesRegex(
+                FixtureProxyError,
+                "forwarded an unmatched request",
+            ):
+                proxy.preflight(worker, case)
+
+        self.assertEqual(runtime.invalidated, [worker.id])
+        canary_removals = [
+            argv
+            for _, argv, _ in runtime.calls
+            if argv[:3] == ("docker", "rm", "--force")
+            and "canary" in argv[-1]
+        ]
+        canary_run = next(
+            argv
+            for _, argv, _ in runtime.calls
+            if argv[:2] == ("docker", "run")
+            and "canary" in argv[argv.index("--name") + 1]
+        )
+        self.assertGreaterEqual(len(canary_removals), 2)
+        self.assertIn(
+            ("--log-driver", "none"),
+            tuple(zip(canary_run, canary_run[1:])),
+        )
+
+    def test_preflight_recycles_worker_when_canary_cleanup_is_unproven(self) -> None:
+        class UnprovenCanaryCleanupRuntime(FakeFixtureRuntime):
+            def __init__(self, certificates):
+                super().__init__(certificates)
+                self.canary_removals = 0
+                self.failed_final_removal = False
+
+            def run_worker_control(
+                self,
+                worker,
+                argv,
+                *,
+                accepted_returncodes=(0,),
+            ):
+                is_canary = "canary" in argv[-1] if argv else False
+                if argv[:3] == ("docker", "rm", "--force") and is_canary:
+                    self.calls.append((worker.id, argv, accepted_returncodes))
+                    self.canary_removals += 1
+                    if self.canary_removals == 2:
+                        self.failed_final_removal = True
+                        return CommandResult(1, "", "daemon error")
+                    return CommandResult(1, "", "not found")
+                if (
+                    argv[:3] == ("docker", "ps", "--all")
+                    and self.failed_final_removal
+                ):
+                    self.calls.append((worker.id, argv, accepted_returncodes))
+                    return CommandResult(0, "still-running-container\n", "")
+                return super().run_worker_control(
+                    worker,
+                    argv,
+                    accepted_returncodes=accepted_returncodes,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = UnprovenCanaryCleanupRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            with self.assertRaisesRegex(
+                FixtureProxyError,
+                "canary container remains",
+            ):
+                proxy.preflight(worker, case)
+
+        self.assertEqual(runtime.invalidated, [worker.id])
+        self.assertEqual(runtime.canary_removals, 2)
 
     def test_starts_pinned_fail_closed_sidecar_and_exposes_only_public_ca(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -475,12 +921,113 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             )
             rendered = " ".join(docker_run)
             self.assertIn(MANIFEST.mockserver.image_reference, docker_run)
+            self.assertIn(
+                ("--log-driver", "none"),
+                tuple(zip(docker_run, docker_run[1:])),
+            )
             self.assertIn("127.0.0.1", rendered)
             self.assertIn("MOCKSERVER_DYNAMICALLY_CREATE_CERTIFICATE_AUTHORITY_CERTIFICATE=true", docker_run)
+            self.assertIn(
+                "MOCKSERVER_PREVENT_CERTIFICATE_DYNAMIC_UPDATE=true",
+                docker_run,
+            )
             self.assertIn("MOCKSERVER_ATTEMPT_TO_PROXY_IF_NO_MATCHING_EXPECTATION=false", docker_run)
             self.assertIn("MOCKSERVER_CONTROL_PLANE_JWT_AUTHENTICATION_REQUIRED=true", docker_run)
             self.assertIn("MOCKSERVER_MATCH_EXACT_CASE=true", docker_run)
             self.assertNotIn("Authorization: Bearer", rendered)
+
+    def test_proves_declared_tls_subjects_with_real_proxy_handshakes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = FakeFixtureRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            proxy.prepare_case(worker, case, fixture, fixture.parent)
+
+        probes = [
+            argv
+            for _, argv, _ in runtime.calls
+            if argv[:1] == ("curl",)
+            and "--write-out" in argv
+            and argv[argv.index("--write-out") + 1]
+            == "%{ssl_verify_result}"
+        ]
+        self.assertEqual(len(probes), 1)
+        self.assertEqual(
+            probes[0][probes[0].index("--url") + 1],
+            (
+                "https://api.bitbucket.org/"
+                ".well-known/ai-skills-fixture-tls-probe"
+            ),
+        )
+
+    def test_tls_handshake_failure_invalidates_the_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = FakeFixtureRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
+            runtime.tls_probe_failure = True
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            with self.assertRaises(FixtureProxyError):
+                proxy.prepare_case(worker, case, fixture, fixture.parent)
+
+        self.assertEqual(runtime.invalidated, [worker.id])
+        self.assertNotIn(worker.id, proxy._states)
+
+    def test_recreated_sidecar_must_not_reuse_the_retired_ca(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = FakeFixtureRuntime(
+                {worker.id: generated_ca("reused-worker-ca")}
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+            session = proxy.prepare_case(
+                worker,
+                case,
+                fixture,
+                fixture.parent,
+            )
+            runtime.requests[worker.id] = [
+                {
+                    "method": "GET",
+                    "path": "/2.0/repositories/acme/widget",
+                    "headers": {"Host": ["api.bitbucket.org"]},
+                    "queryStringParameters": {"page": ["1"]},
+                    "body": {"type": "JSON", "json": '{"owner":"acme"}'},
+                }
+            ]
+            proxy.collect_and_reset(worker, case, session)
+
+            with self.assertRaisesRegex(
+                FixtureProxyError,
+                "retired certificate authority",
+            ):
+                proxy.prepare_case(worker, case, fixture, fixture.parent)
+
+        self.assertEqual(runtime.invalidated, [worker.id])
+        self.assertNotIn(worker.id, proxy._states)
 
     def test_uploads_authored_request_strings_as_literal_matchers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -493,7 +1040,7 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                         "httpRequest": {
                             "method": "GET",
                             "path": "/v1/.*",
-                            "headers": {"Host": [".*.example.com"]},
+                            "headers": {"Host": ["api.example.com"]},
                         },
                         "httpResponse": {"statusCode": 200},
                     }
@@ -517,14 +1064,52 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
         self.assertEqual(uploaded[0]["httpRequest"]["path"], r"\Q/v1/.*\E")
         self.assertEqual(
             uploaded[0]["httpRequest"]["headers"][r"\QHost\E"],
-            [r"\Q.*.example.com\E"],
+            [r"\Qapi.example.com\E"],
         )
         self.assertEqual(session.expected_requests[0]["path"], "/v1/.*")
 
-    def test_reuses_one_sidecar_but_resets_and_reloads_each_case(self) -> None:
+    def test_interruption_after_expectation_upload_recycles_worker_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            worker, first_case = worker_and_case(root)
+            worker, case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = FakeFixtureRuntime(
+                {
+                    worker.id: [
+                        generated_ca("preflight"),
+                        generated_ca("first-case"),
+                    ]
+                }
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+            proxy.preflight(worker, case)
+            proxy.retire_preflight(worker)
+            original_curl = proxy._curl
+
+            def interrupt_after_upload(*args, **kwargs):
+                result = original_curl(*args, **kwargs)
+                if args[2:4] == ("PUT", "/mockserver/expectation"):
+                    raise KeyboardInterrupt()
+                return result
+
+            with (
+                mock.patch.object(proxy, "_curl", side_effect=interrupt_after_upload),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                proxy.prepare_case(worker, case, fixture, fixture.parent)
+
+        self.assertIn(worker.id, runtime.invalidated)
+        self.assertNotIn(worker.id, proxy._states)
+        self.assertEqual(runtime.certificate_reads[worker.id], 2)
+
+    def test_interruption_after_request_capture_recycles_worker_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, case = worker_and_case(root)
             fixture = self._fixture(root)
             runtime = FakeFixtureRuntime({worker.id: generated_ca("worker-one")})
             proxy = FixtureProxy(
@@ -532,8 +1117,71 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
+            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            runtime.requests[worker.id] = [
+                {
+                    "method": "GET",
+                    "path": "/2.0/repositories/acme/widget",
+                    "headers": {"Host": ["api.bitbucket.org"]},
+                    "queryStringParameters": {"page": ["1"]},
+                    "body": {"type": "JSON", "json": '{"owner":"acme"}'},
+                }
+            ]
+            original_reset = proxy._reset_and_verify_empty
 
-            proxy.prepare_case(worker, first_case, fixture, fixture.parent)
+            def interrupt_after_reset(*args, **kwargs):
+                result = original_reset(*args, **kwargs)
+                raise KeyboardInterrupt()
+
+            with (
+                mock.patch.object(
+                    proxy,
+                    "_reset_and_verify_empty",
+                    side_effect=interrupt_after_reset,
+                ),
+                self.assertRaises(KeyboardInterrupt),
+            ):
+                proxy.collect_and_reset(worker, case, session)
+
+        self.assertIn(worker.id, runtime.invalidated)
+        self.assertNotIn(worker.id, proxy._states)
+
+    def test_reuses_worker_with_a_fresh_sidecar_and_ca_for_each_case(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker, first_case = worker_and_case(root)
+            fixture = self._fixture(root)
+            runtime = FakeFixtureRuntime(
+                {
+                    worker.id: [
+                        generated_ca("worker-one-first"),
+                        generated_ca("worker-one-second"),
+                    ]
+                }
+            )
+            proxy = FixtureProxy(
+                runtime,
+                repository_root=REPOSITORY_ROOT,
+                allowed_fixture_root=fixture.parent,
+            )
+
+            first_session = proxy.prepare_case(
+                worker,
+                first_case,
+                fixture,
+                fixture.parent,
+            )
+            first_ca = (first_case.bootstrap / "mockserver-ca.pem").read_bytes()
+            runtime.requests[worker.id] = [
+                {
+                    "method": "GET",
+                    "path": "/2.0/repositories/acme/widget",
+                    "headers": {"Host": ["api.bitbucket.org"]},
+                    "queryStringParameters": {"page": ["1"]},
+                    "body": {"type": "JSON", "json": '{"owner":"acme"}'},
+                }
+            ]
+            proxy.collect_and_reset(worker, first_case, first_session)
             second_root = root / "second-case"
             _, second_case = worker_and_case(second_root, "actor-two")
             second_case = CaseWorkspace(
@@ -561,18 +1209,46 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             ):
                 path.mkdir(parents=True, exist_ok=True)
 
+            second_definition = valid_expectations()
+            second_definition[0]["httpRequest"]["headers"]["Host"] = [
+                "api.github.com"
+            ]
+            fixture.write_text(
+                json.dumps(second_definition),
+                encoding="utf-8",
+            )
             proxy.prepare_case(worker, second_case, fixture, fixture.parent)
+            second_ca = (second_case.bootstrap / "mockserver-ca.pem").read_bytes()
 
         docker_runs = [argv for _, argv, _ in runtime.calls if argv[:2] == ("docker", "run")]
-        reset_calls = [argv for _, argv, _ in runtime.calls if argv[:1] == ("curl",) and "/reset" in " ".join(argv)]
+        sidecar_removals = [
+            argv
+            for _, argv, _ in runtime.calls
+            if argv[:3] == ("docker", "rm", "--force")
+            and "canary" not in argv[-1]
+        ]
         expectation_calls = [
             argv
             for _, argv, _ in runtime.calls
             if argv[:1] == ("curl",) and "/expectation" in " ".join(argv)
         ]
-        self.assertEqual(len(docker_runs), 1)
-        self.assertEqual(len(reset_calls), 2)
+        self.assertEqual(len(docker_runs), 2)
+        self.assertGreaterEqual(len(sidecar_removals), 3)
         self.assertEqual(len(expectation_calls), 2)
+        self.assertNotEqual(first_ca, second_ca)
+        self.assertEqual(runtime.certificate_reads[worker.id], 2)
+        self.assertEqual(
+            runtime.configurations[worker.id][
+                "sslSubjectAlternativeNameDomains"
+            ],
+            ["api.github.com"],
+        )
+        self.assertNotIn(
+            "api.bitbucket.org",
+            runtime.configurations[worker.id][
+                "sslSubjectAlternativeNameDomains"
+            ],
+        )
 
     def test_waits_for_cold_mockserver_startup_with_a_bounded_probe(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -723,6 +1399,8 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
         self.assertIn("[REDACTED]", serialized)
         self.assertTrue(any(event.get("event") == "fixture_request" for event in events))
         self.assertTrue(any("/reset" in " ".join(argv) for _, argv, _ in runtime.calls))
+        self.assertNotIn(worker.id, proxy._states)
+        self.assertIn(worker.id, proxy._retired_ca_sha256)
 
     def test_omits_oversized_request_body_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -923,12 +1601,44 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(FixtureProxyError, "call 1"):
                 proxy.collect_and_reset(worker, case, session)
 
-    def test_refreshes_control_credentials_before_post_run_collection(self) -> None:
+    def test_collection_retires_only_runner_private_control_state(self) -> None:
+        class ProtectedProjectionRuntime(FakeFixtureRuntime):
+            def __init__(self, certificates):
+                super().__init__(certificates)
+                self.projection_protected = False
+
+            def run_worker_control(
+                self,
+                worker,
+                argv,
+                *,
+                accepted_returncodes=(0,),
+            ):
+                if (
+                    self.projection_protected
+                    and argv[:1] in {("chown",), ("chmod",)}
+                    and any(str(worker.host_root) in item for item in argv)
+                ):
+                    return CommandResult(30, "", "read-only projection")
+                if (
+                    self.projection_protected
+                    and argv[:3] == ("rm", "-rf", "--")
+                    and argv[-1] != str(worker.host_root / "fixture-control")
+                ):
+                    return CommandResult(30, "", "read-only projection")
+                return super().run_worker_control(
+                    worker,
+                    argv,
+                    accepted_returncodes=accepted_returncodes,
+                )
+
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             worker, case = worker_and_case(root)
             fixture = self._fixture(root)
-            runtime = FakeFixtureRuntime({worker.id: generated_ca("worker-one")})
+            runtime = ProtectedProjectionRuntime(
+                {worker.id: generated_ca("worker-one")}
+            )
             now = [datetime(2026, 7, 19, 8, 0, tzinfo=timezone.utc)]
             proxy = FixtureProxy(
                 runtime,
@@ -952,21 +1662,24 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                     "body": {"type": "JSON", "json": '{"owner":"acme"}'},
                 }
             ]
-            now[0] += timedelta(minutes=16)
+            now[0] += timedelta(
+                seconds=(
+                        MANIFEST.limits.actor_timeout_seconds
+                        + (
+                            MANIFEST.limits.preflight_timeout_seconds
+                            * CONTROL_TOKEN_OPERATION_WINDOWS
+                        )
+                )
+            )
+            runtime.projection_protected = True
 
             proxy.collect_and_reset(worker, case, session)
-            second_token = (
-                (worker.host_root / "fixture-control" / "curl.conf")
-                .read_text(encoding="utf-8")
-                .split("Bearer ", 1)[1]
-                .split('"', 1)[0]
-            )
 
-        self.assertNotEqual(first_token, second_token)
         self.assertGreater(
-            jwt.decode(second_token, options={"verify_signature": False})["exp"],
+            jwt.decode(first_token, options={"verify_signature": False})["exp"],
             int(now[0].timestamp()),
         )
+        self.assertFalse((worker.host_root / "fixture-control").exists())
 
 
 if __name__ == "__main__":

@@ -4,9 +4,13 @@
   "title": "AI Skills evaluation invocation declaration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "command", "attempts"],
+  "required": ["schema_version", "invocation_id", "command", "attempts"],
   "properties": {
     "schema_version": {"const": "ai-skills.eval.invocation.v1"},
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
     "command": {"type": "string", "minLength": 1},
     "attempts": {
       "type": "array",
@@ -16,18 +20,65 @@
         "additionalProperties": false,
         "required": [
           "schema_version",
+          "invocation_id",
           "run_id",
           "skill_name",
           "case_id",
           "run_kind",
+          "runtime_input_sha256",
+          "scenario_definition_sha256",
+          "assertion_contract",
           "aggregation"
         ],
         "properties": {
           "schema_version": {"const": "ai-skills.eval.attempt.v1"},
+          "invocation_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          },
           "run_id": {"type": "string", "minLength": 1},
           "skill_name": {"type": "string", "minLength": 1},
           "case_id": {"type": "string", "minLength": 1},
           "run_kind": {"type": "string", "minLength": 1},
+          "runtime_input_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "scenario_definition_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "deterministic_input_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "judge_control_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expected_activation": {"type": "boolean"},
+          "expected_skill_catalog_path": {
+            "type": "string",
+            "pattern": "^codex-home/skills/[a-z0-9]+(?:-[a-z0-9]+)*/SKILL\\.md$"
+          },
+          "assertion_contract": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "kind", "text", "checked_by"],
+              "properties": {
+                "id": {"type": "string", "minLength": 1},
+                "kind": {"type": "string", "minLength": 1},
+                "text": {"type": "string", "minLength": 1},
+                "checked_by": {
+                  "enum": ["judge", "deterministic", "trigger_runner"]
+                }
+              }
+            }
+          },
           "aggregation": {
             "type": "object",
             "additionalProperties": false,
@@ -62,7 +113,29 @@
               "run_number": ["minimum_pass_rate", "configured_runs"]
             }
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["run_kind"],
+              "properties": {"run_kind": {"const": "trigger"}}
+            },
+            "then": {
+              "required": ["expected_activation", "expected_skill_catalog_path"],
+              "allOf": [
+                {"not": {"required": ["deterministic_input_sha256"]}},
+                {"not": {"required": ["judge_control_sha256"]}}
+              ]
+            },
+            "else": {
+              "required": ["deterministic_input_sha256", "judge_control_sha256"],
+              "allOf": [
+                {"not": {"required": ["expected_activation"]}},
+                {"not": {"required": ["expected_skill_catalog_path"]}}
+              ]
+            }
+          }
+        ]
       }
     }
   }

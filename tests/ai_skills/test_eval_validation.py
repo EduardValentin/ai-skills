@@ -7,15 +7,19 @@ import hashlib
 from io import StringIO
 import json
 from pathlib import Path, PurePosixPath
+import shutil
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
 
 import scripts.ai_skills as cli
+import scripts.ai_skills_lib.actor_evidence as actor_evidence
+import scripts.ai_skills_lib.eval_definitions as eval_definitions
 from scripts.ai_skills_lib.authored_content import (
     BoundedJsonError,
     SENSITIVE_TEXT_QUARANTINE,
+    find_static_secret_issues,
     strict_bounded_json_loads,
 )
 import scripts.ai_skills_lib.eval_validation as eval_validation
@@ -26,6 +30,8 @@ from scripts.ai_skills_lib.eval_core import (
     ResultArtifactError,
     aggregate_results,
     create_result_workspace,
+    digest_evidence_bundle,
+    preflight_bound_invocations,
 )
 from scripts.ai_skills_lib.eval_definitions import (
     BehaviorCheck,
@@ -36,6 +42,7 @@ from scripts.ai_skills_lib.eval_definitions import (
 from scripts.ai_skills_lib.eval_validation import execute_behavior_evals
 from scripts.ai_skills_lib.harness import (
     CapturedOutputPath,
+    bind_harness_request,
     HarnessCapabilities,
     HarnessExecution,
     HarnessRequest,
@@ -55,6 +62,11 @@ class RecordingBehaviorHarness:
         captured_report_text: str = '{"status": "ok"}\n',
         judge_response: str | None = None,
         judge_timed_out: bool = False,
+        judge_trace_factory: Callable[
+            [], tuple[Mapping[str, object], ...]
+        ] | None = None,
+        judge_mutation: Callable[[Path], None] | None = None,
+        judge_exception: Exception | None = None,
     ) -> None:
         self.failed_variants = failed_variants
         self.actor_failure_variant = actor_failure_variant
@@ -63,6 +75,9 @@ class RecordingBehaviorHarness:
         self.captured_report_text = captured_report_text
         self.judge_response = judge_response
         self.judge_timed_out = judge_timed_out
+        self.judge_trace_factory = judge_trace_factory
+        self.judge_mutation = judge_mutation
+        self.judge_exception = judge_exception
         self.preflight_calls: list[bool] = []
         self.requests: list[tuple[HarnessRequest, Path]] = []
         self.expected_invocation_manifest: Path | None = None
@@ -113,10 +128,15 @@ class RecordingBehaviorHarness:
                 model="actor-model",
                 reasoning_effort="high",
                 timed_out=False,
+                execution_binding=request.execution_binding,
             )
         passed = not any(
             variant in request.run_variant for variant in self.failed_variants
         )
+        if self.judge_exception is not None:
+            raise self.judge_exception
+        if self.judge_mutation is not None:
+            self.judge_mutation(artifact_dir)
         response = {
             "assertion_results": [
                 {
@@ -134,7 +154,11 @@ class RecordingBehaviorHarness:
         }
         return HarnessExecution(
             response=self.judge_response or json.dumps(response),
-            trace=({"event": "judge.completed"},),
+            trace=(
+                self.judge_trace_factory()
+                if self.judge_trace_factory is not None
+                else ({"event": "judge.completed"},)
+            ),
             duration_ms=10,
             total_tokens=6,
             input_tokens=4,
@@ -147,6 +171,7 @@ class RecordingBehaviorHarness:
             model="judge-model",
             reasoning_effort="high",
             timed_out=self.judge_timed_out,
+            execution_binding=request.execution_binding,
         )
 
 
@@ -234,6 +259,125 @@ class BehaviorDefinitionValidationTests(unittest.TestCase):
         self.assertEqual(definitions[1].skill.root, alpha)
         self.assertEqual(definitions[1].cases[0].id, "alpha-core")
         self.assertEqual(definitions[1].cases[0].assertions[0].id, "assertion-1")
+
+    def test_behavior_discovery_scans_secrets_revealed_by_json_escapes(self) -> None:
+        skill = self.repository.add_skill("alpha")
+        evals_path = skill / "evals" / "evals.json"
+        document = json.loads(evals_path.read_text(encoding="utf-8"))
+        token = "ghp_" + ("a" * 36)
+        document["evals"][0]["prompt"] = token
+        encoded = json.dumps(document, separators=(",", ":")).replace(
+            token,
+            r"ghp_\u0061" + ("a" * 35),
+        )
+        evals_path.write_text(encoded, encoding="utf-8")
+
+        self.assert_issue("after JSON decoding: github-token")
+
+    def test_behavior_loader_redacts_secret_shaped_definition_paths(self) -> None:
+        secret_group = "ghp_" + ("a" * 36)
+        secret_skill = "sk-" + ("b" * 24)
+        skill = self.repository.add_skill(secret_skill, group=secret_group)
+        (skill / "evals" / "evals.json").write_text("{", encoding="utf-8")
+
+        with self.assertRaises(BehaviorDefinitionError) as raised:
+            load_behavior_evals(self.repository.root)
+
+        self.assertTrue(raised.exception.issues)
+        rendered = repr(raised.exception.issues)
+        self.assertNotIn(secret_group, rendered)
+        self.assertNotIn(secret_skill, rendered)
+        for issue in raised.exception.issues:
+            self.assertEqual(
+                find_static_secret_issues(
+                    issue.scope,
+                    Path("behavior-diagnostic-scope"),
+                ),
+                [],
+            )
+            self.assertEqual(
+                find_static_secret_issues(
+                    issue.message,
+                    Path("behavior-diagnostic-message"),
+                ),
+                [],
+            )
+
+    def test_behavior_loader_redacts_secret_shaped_issue_messages(self) -> None:
+        secret_name = "sk-" + ("a" * 24)
+        self.repository.add_skill(
+            "alpha",
+            document={
+                "skill_name": secret_name,
+                "evals": [
+                    {
+                        "id": "alpha-core",
+                        "prompt": "Perform the alpha task.",
+                        "expected_output": "A complete user-facing result.",
+                        "assertions": ["The result completes the requested task."],
+                        "checks": [],
+                    }
+                ],
+            },
+        )
+
+        with self.assertRaises(BehaviorDefinitionError) as raised:
+            load_behavior_evals(self.repository.root)
+
+        self.assertNotIn(secret_name, repr(raised.exception.issues))
+        self.assertTrue(
+            any(issue.message == "[REDACTED]" for issue in raised.exception.issues),
+            raised.exception.issues,
+        )
+
+    def test_behavior_loader_rejects_atomic_skill_directory_replacement(self) -> None:
+        skill_root = self.repository.add_skill("alpha")
+        replacement_root = self.repository.root / "replacement-alpha"
+        archived_root = self.repository.root / "archived-alpha"
+        shutil.copytree(skill_root, replacement_root)
+        replacement_path = replacement_root / "evals" / "evals.json"
+        replacement_document = json.loads(
+            replacement_path.read_text(encoding="utf-8")
+        )
+        replacement_document["evals"][0]["prompt"] = (
+            "Perform the replacement alpha task."
+        )
+        replacement_path.write_text(
+            json.dumps(replacement_document),
+            encoding="utf-8",
+        )
+        stable_read = eval_definitions.read_bounded_authored_bytes
+        swapped = False
+
+        def swap_before_definition_read(source, **kwargs):
+            nonlocal swapped
+            if (
+                not swapped
+                and source.logical_path
+                == skill_root / "evals" / "evals.json"
+            ):
+                skill_root.rename(archived_root)
+                replacement_root.rename(skill_root)
+                swapped = True
+            return stable_read(source, **kwargs)
+
+        with patch.object(
+            eval_definitions,
+            "read_bounded_authored_bytes",
+            side_effect=swap_before_definition_read,
+        ):
+            with self.assertRaises(BehaviorDefinitionError) as raised:
+                load_behavior_evals(self.repository.root)
+
+        self.assertTrue(swapped)
+        self.assertTrue(
+            any(
+                "canonical skills tree changed during definition loading"
+                in issue.message
+                for issue in raised.exception.issues
+            ),
+            raised.exception.issues,
+        )
 
     def test_identity_unique_ids_and_nonempty_assertions_are_required(self) -> None:
         self.repository.add_skill(
@@ -629,6 +773,53 @@ class BehaviorDefinitionValidationTests(unittest.TestCase):
                     issues,
                 )
 
+    def test_large_installable_text_is_still_checked_for_eval_references(self):
+        skill = self.repository.add_skill("alpha")
+        asset = skill / "assets" / "large-guide.txt"
+        asset.parent.mkdir()
+        asset.write_text(
+            ("ordinary content\n" * 300_000)
+            + "Read evals/evals.json.\n",
+            encoding="utf-8",
+        )
+
+        issues = validate_behavior_eval_files(self.repository.root)
+
+        self.assertTrue(
+            any(
+                "installable content must not reference evals/" in issue.message
+                for issue in issues
+            ),
+            issues,
+        )
+
+    def test_binary_installable_content_cannot_hide_eval_oracle_references(self):
+        cases = (
+            b"prefix\x00read ../evals/evals.json\xff",
+            b"prefix\xffread ../evals/triggers.json\xfe",
+            b"read C://evals/evals.json",
+        )
+        for index, content in enumerate(cases):
+            with self.subTest(content=content):
+                repository = TemporaryBehaviorRepository(
+                    Path(self.temporary_directory.name) / f"binary-oracle-{index}"
+                )
+                skill = repository.add_skill("alpha")
+                asset = skill / "assets" / "payload.bin"
+                asset.parent.mkdir()
+                asset.write_bytes(content)
+
+                issues = validate_behavior_eval_files(repository.root)
+
+                self.assertTrue(
+                    any(
+                        "installable content must not reference evals/"
+                        in issue.message
+                        for issue in issues
+                    ),
+                    issues,
+                )
+
     def test_schema_fixtures_must_be_runner_only_and_case_contained(self) -> None:
         skill = self.repository.add_skill(
             "alpha",
@@ -812,6 +1003,85 @@ class DeterministicBehaviorCheckTests(unittest.TestCase):
 
         self.assertFalse(any(result.passed for result in results))
         self.assertNotIn(credential, json.dumps([result.to_dict() for result in results]))
+
+    def test_actor_output_snapshot_rejects_secrets_in_names_and_content(self) -> None:
+        credential = "gh" + "p_" + ("a" * 36)
+        cases = {
+            "path": lambda: (self.outputs / credential).write_text(
+                "safe",
+                encoding="utf-8",
+            ),
+            "content": lambda: (self.outputs / "result.txt").write_text(
+                credential,
+                encoding="utf-8",
+            ),
+        }
+        for location, arrange in cases.items():
+            with self.subTest(location=location):
+                for path in tuple(self.outputs.iterdir()):
+                    path.unlink()
+                arrange()
+
+                with self.assertRaisesRegex(
+                    ResultArtifactError,
+                    "classified sensitive material",
+                ) as raised:
+                    actor_evidence.snapshot_captured_outputs(self.outputs)
+
+                self.assertNotIn(credential, str(raised.exception))
+
+    def test_actor_output_snapshot_rejects_a_nested_directory_replacement(self) -> None:
+        nested = self.outputs / "nested"
+        nested.mkdir()
+        (nested / "safe.txt").write_text("safe", encoding="utf-8")
+        outside = self.root / "runner-only"
+        outside.mkdir()
+        (outside / "oracle.txt").write_text("oracle", encoding="utf-8")
+        parked = self.root / "parked-output"
+        original_open = actor_evidence._open_stable_output_directory_at
+
+        def open_then_replace(parent_descriptor, name, observed):
+            descriptor = original_open(parent_descriptor, name, observed)
+            if name == "nested":
+                nested.rename(parked)
+                nested.symlink_to(outside, target_is_directory=True)
+            return descriptor
+
+        with patch.object(
+            actor_evidence,
+            "_open_stable_output_directory_at",
+            side_effect=open_then_replace,
+        ):
+            with self.assertRaisesRegex(
+                ResultArtifactError,
+                "directory changed while it was read",
+            ):
+                actor_evidence.snapshot_captured_outputs(self.outputs)
+
+    def test_actor_output_restore_never_deletes_a_replacement_directory(self) -> None:
+        (self.outputs / "safe.txt").write_text("safe", encoding="utf-8")
+        snapshot = actor_evidence.snapshot_captured_outputs(self.outputs)
+        displaced = self.root / "displaced-outputs"
+        outside = self.root / "outside"
+        outside.mkdir()
+        outside_marker = outside / "marker.txt"
+        outside_marker.write_text("unrelated", encoding="utf-8")
+        self.outputs.rename(displaced)
+        self.outputs.symlink_to(outside, target_is_directory=True)
+
+        with self.assertRaisesRegex(
+            ResultArtifactError,
+            "outputs root was replaced",
+        ):
+            actor_evidence.require_unchanged_output_snapshot(
+                self.outputs,
+                snapshot,
+            )
+
+        self.assertEqual(
+            outside_marker.read_text(encoding="utf-8"),
+            "unrelated",
+        )
 
     def test_secret_check_classifies_generic_auth_and_preserves_safe_fake_values(self) -> None:
         sensitive_responses = (
@@ -1003,6 +1273,48 @@ class DeterministicBehaviorCheckTests(unittest.TestCase):
 
 
 class BehaviorRunnerTests(unittest.TestCase):
+    def _echo_adapter_execution_binding(self, adapter) -> None:
+        execute = adapter.execute
+
+        def echo(request, artifact_dir):
+            return replace(
+                execute(request, artifact_dir),
+                execution_binding=request.execution_binding,
+            )
+
+        adapter.execute = echo
+
+    def _rebind_grading_evidence(self, attempt: Path) -> None:
+        outputs = attempt / "outputs"
+        directories = tuple(
+            path.relative_to(attempt).as_posix()
+            for path in outputs.rglob("*")
+            if path.is_dir()
+        )
+        evidence_files = {
+            attempt / "attempt.json",
+            attempt / "timing.json",
+            attempt / "transcript.md",
+            attempt / "execution_trace.jsonl",
+            attempt / "grading_basis.json",
+            *(
+                path
+                for path in outputs.rglob("*")
+                if path.is_file()
+            ),
+        }
+        evidence_sha256 = digest_evidence_bundle(
+            directories,
+            tuple(
+                (path.relative_to(attempt).as_posix(), path.read_bytes())
+                for path in evidence_files
+            ),
+        )
+        grading_path = attempt / "grading.json"
+        grading = json.loads(grading_path.read_text(encoding="utf-8"))
+        grading["evidence_sha256"] = evidence_sha256
+        grading_path.write_text(json.dumps(grading), encoding="utf-8")
+
     def _assert_durable_tree_excludes(
         self,
         root: Path,
@@ -1183,12 +1495,312 @@ class BehaviorRunnerTests(unittest.TestCase):
                 all("A complete alpha result." in request.prompt for request in judges)
             )
             self.assertTrue(all("untrusted evidence" in request.prompt.lower() for request in judges))
+            prepared = eval_validation.prepare_behavior_plan(
+                load_behavior_evals(repository.root),
+                skill_filter="alpha",
+                case_filter="alpha-core",
+            )
+            paired_controls = {
+                attempt.judge_control.prefix
+                for attempt in prepared.attempts
+                if attempt.case.id == "alpha-core"
+            }
+            self.assertEqual(len(paired_controls), 1)
+            self.assertNotIn('"variant"', next(iter(paired_controls)))
+            judge_prompts = [request.prompt for request in judges]
+            self.assertEqual(len(set(judge_prompts)), 1)
+            self.assertTrue(
+                all(
+                    arm_label not in judge_prompts[0]
+                    for arm_label in ("with_skill", "without_skill")
+                )
+            )
             source = benchmark["source_summaries"]["judge"]
             self.assertEqual(source["summary"]["failed_cases"], 0)
             self.assertEqual(
                 set(source["groups"][0]["variants"]),
                 {"with_skill", "without_skill"},
             )
+            for attempt in workspace.attempts.iterdir():
+                trace = (attempt / "execution_trace.jsonl").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("judge_harness_event", trace)
+                self.assertIn("judge.completed", trace)
+
+    def test_prepared_plan_rejects_replaced_runtime_material_before_preflight(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = self._repository(base)
+            definitions = load_behavior_evals(repository.root)
+            plan = eval_validation.prepare_behavior_plan(
+                definitions,
+                skill_filter="alpha",
+                case_filter=None,
+            )
+            source = plan.catalog[0]
+            skill_file = source.files[0]
+            changed_source = replace(
+                source,
+                files=(
+                    replace(skill_file, content=b"changed runtime bytes"),
+                    *source.files[1:],
+                ),
+            )
+            tampered = replace(
+                plan,
+                catalog=(changed_source, *plan.catalog[1:]),
+            )
+            workspace = create_result_workspace(
+                "validate-evals",
+                results_dir=base / "results",
+                repository_root=repository.root,
+            )
+            eval_validation.declare_behavior_plan(workspace, plan)
+            adapter = RecordingBehaviorHarness()
+
+            with self.assertRaisesRegex(
+                eval_validation.BehaviorHarnessError,
+                "prepared behavior inputs changed",
+            ):
+                eval_validation.execute_prepared_behavior_plan(
+                    adapter,
+                    workspace,
+                    tampered,
+                    max_concurrency=1,
+                    actor_timeout_seconds=60,
+                    judge_timeout_seconds=30,
+                )
+            self.assertEqual(adapter.preflight_calls, [])
+
+    def test_prepared_plan_rejects_split_behavior_arm_identity_before_declaration(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = self._repository(base)
+            plan = eval_validation.prepare_behavior_plan(
+                load_behavior_evals(repository.root),
+                skill_filter="alpha",
+                case_filter="alpha-core",
+            )
+            baseline = next(
+                attempt
+                for attempt in plan.attempts
+                if attempt.variant == "without_skill"
+            )
+            tampered = replace(
+                plan,
+                attempts=tuple(
+                    replace(attempt, variant="with_skill")
+                    if attempt is baseline
+                    else attempt
+                    for attempt in plan.attempts
+                ),
+            )
+            workspace = create_result_workspace(
+                "validate-evals",
+                results_dir=base / "results",
+                repository_root=repository.root,
+            )
+
+            with self.assertRaisesRegex(
+                eval_validation.BehaviorHarnessError,
+                "exact paired attempt set",
+            ):
+                eval_validation.declare_behavior_plan(workspace, tampered)
+
+            self.assertFalse(workspace.invocation_manifest.exists())
+
+    def test_prepared_plan_rejects_one_arm_with_a_different_same_id_prompt(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = self._repository(base)
+            plan = eval_validation.prepare_behavior_plan(
+                load_behavior_evals(repository.root),
+                skill_filter="alpha",
+                case_filter="alpha-core",
+            )
+            baseline = next(
+                attempt
+                for attempt in plan.attempts
+                if attempt.variant == "without_skill"
+            )
+            changed_case = replace(
+                baseline.case,
+                prompt="Perform a different task under the same case ID.",
+            )
+            changed_manifest = replace(
+                baseline.manifest,
+                runtime_input_sha256=eval_validation._behavior_runtime_input_sha256(
+                    baseline.definition,
+                    changed_case,
+                    baseline.variant,
+                    plan.catalog,
+                    baseline.judge_control,
+                    baseline.actor_inputs,
+                    baseline.fixture_initialization,
+                    baseline.deterministic_schemas,
+                ),
+                deterministic_input_sha256=(
+                    eval_validation._deterministic_input_sha256(
+                        changed_case,
+                        baseline.deterministic_schemas,
+                    )
+                ),
+            )
+            tampered_attempt = replace(
+                baseline,
+                case=changed_case,
+                manifest=changed_manifest,
+            )
+            tampered = replace(
+                plan,
+                attempts=tuple(
+                    tampered_attempt if attempt is baseline else attempt
+                    for attempt in plan.attempts
+                ),
+            )
+            workspace = create_result_workspace(
+                "validate-evals",
+                results_dir=base / "results",
+                repository_root=repository.root,
+            )
+
+            with self.assertRaisesRegex(
+                eval_validation.BehaviorHarnessError,
+                "not bound to its selected case",
+            ):
+                eval_validation.declare_behavior_plan(workspace, tampered)
+
+            self.assertFalse(workspace.invocation_manifest.exists())
+
+    def test_prepared_plan_rejects_manifest_rubric_drift_before_declaration(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = self._repository(base)
+            plan = eval_validation.prepare_behavior_plan(
+                load_behavior_evals(repository.root),
+                skill_filter="alpha",
+                case_filter="alpha-core",
+            )
+            original = plan.attempts[0]
+            changed_contract = tuple(
+                replace(
+                    assertion,
+                    text="A different assertion under the same identifier.",
+                )
+                for assertion in original.manifest.assertion_contract
+            )
+            tampered_attempt = replace(
+                original,
+                manifest=replace(
+                    original.manifest,
+                    assertion_contract=changed_contract,
+                ),
+            )
+            tampered = replace(
+                plan,
+                attempts=(
+                    tampered_attempt,
+                    *plan.attempts[1:],
+                ),
+            )
+            workspace = create_result_workspace(
+                "validate-evals",
+                results_dir=base / "results",
+                repository_root=repository.root,
+            )
+
+            with self.assertRaisesRegex(
+                eval_validation.BehaviorHarnessError,
+                "inconsistent arm identity or aggregation policy",
+            ):
+                eval_validation.declare_behavior_plan(workspace, tampered)
+
+            self.assertFalse(workspace.invocation_manifest.exists())
+
+    def test_preflight_rejects_an_equivalent_replaced_invocation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = self._repository(base)
+            plan = eval_validation.prepare_behavior_plan(
+                load_behavior_evals(repository.root),
+                skill_filter="alpha",
+                case_filter=None,
+            )
+            workspace = create_result_workspace(
+                "validate-evals",
+                results_dir=base / "results",
+                repository_root=repository.root,
+            )
+            eval_validation.declare_behavior_plan(workspace, plan)
+
+            class ReplacingInvocationHarness(RecordingBehaviorHarness):
+                def preflight(
+                    self,
+                    *,
+                    require_fixtures: bool = False,
+                ) -> HarnessCapabilities:
+                    content = workspace.invocation_manifest.read_bytes()
+                    workspace.invocation_manifest.unlink()
+                    workspace.invocation_manifest.write_bytes(content)
+                    return super().preflight(
+                        require_fixtures=require_fixtures
+                    )
+
+            adapter = ReplacingInvocationHarness()
+            with self.assertRaisesRegex(
+                ResultArtifactError,
+                "invocation declaration was replaced",
+            ):
+                eval_validation.execute_prepared_behavior_plan(
+                    adapter,
+                    workspace,
+                    plan,
+                    max_concurrency=1,
+                    actor_timeout_seconds=60,
+                    judge_timeout_seconds=30,
+                )
+
+            self.assertEqual(adapter.requests, [])
+
+    def test_aggregation_recomputes_deterministic_checks_from_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            adapter = RecordingBehaviorHarness()
+            repository, workspace, result = self._execute(base, adapter)
+            self.assertEqual(result.exit_code, 0)
+            attempt = next(workspace.attempts.iterdir())
+            basis_path = attempt / "grading_basis.json"
+            grading_path = attempt / "grading.json"
+            basis = json.loads(basis_path.read_text(encoding="utf-8"))
+            grading = json.loads(grading_path.read_text(encoding="utf-8"))
+            basis["deterministic_results"][0]["passed"] = False
+            grading["assertion_results"][0]["passed"] = False
+            grading["summary"] = {
+                "passed": 1,
+                "failed": 1,
+                "total": 2,
+                "pass_rate": 0.5,
+            }
+            basis_path.write_text(json.dumps(basis), encoding="utf-8")
+            grading_path.write_text(json.dumps(grading), encoding="utf-8")
+            self._rebind_grading_evidence(attempt)
+
+            with self.assertRaisesRegex(
+                ResultArtifactError,
+                "not derived from preserved evidence",
+            ):
+                aggregate_results(
+                    workspace.root,
+                    "judge",
+                    repository_root=repository.root,
+                )
 
     def test_missing_output_checks_persist_control_evidence_and_aggregate(self) -> None:
         cases = (
@@ -1300,6 +1912,148 @@ class BehaviorRunnerTests(unittest.TestCase):
 
                 self.assertEqual(result.exit_code, expected_exit)
 
+    def test_without_skill_classifies_structured_skill_metadata_live(self) -> None:
+        evidence_kinds = (
+            "successful_skill_reads",
+            "expected_skill_path",
+            "raw_trace",
+        )
+        path_cases = (
+            (
+                "canonical_target",
+                "/sandbox/case/codex-home/skills/alpha/SKILL.md",
+                True,
+            ),
+            (
+                "dotdot_target_alias",
+                (
+                    "/sandbox/case/codex-home/skills/"
+                    "beta/../alpha/SKILL.md"
+                ),
+                True,
+            ),
+            (
+                "dotdot_other_alias",
+                (
+                    "/sandbox/case/codex-home/skills/"
+                    "alpha/../beta/SKILL.md"
+                ),
+                True,
+            ),
+            (
+                "unstructured_absolute",
+                "/sandbox/case/alpha/SKILL.md",
+                True,
+            ),
+            (
+                "canonical_other_skill",
+                "/sandbox/case/codex-home/skills/beta/SKILL.md",
+                False,
+            ),
+        )
+        for evidence_kind in evidence_kinds:
+            for case_name, path_text, rejected in path_cases:
+                with (
+                    self.subTest(
+                        evidence_kind=evidence_kind,
+                        case_name=case_name,
+                    ),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    class ContaminatedBaselineHarness(
+                        RecordingBehaviorHarness
+                    ):
+                        def execute(self, request, artifact_dir):
+                            execution = super().execute(request, artifact_dir)
+                            if (
+                                request.role != "actor"
+                                or not request.run_variant.endswith(
+                                    "without-skill"
+                                )
+                            ):
+                                return execution
+                            path = Path(path_text)
+                            if evidence_kind == "successful_skill_reads":
+                                return replace(
+                                    execution,
+                                    successful_skill_reads=(path,),
+                                )
+                            if evidence_kind == "expected_skill_path":
+                                return replace(
+                                    execution,
+                                    expected_skill_path=path,
+                                )
+                            return replace(
+                                execution,
+                                trace=(
+                                    *execution.trace,
+                                    {
+                                        "event": "skill_read",
+                                        "path": path_text,
+                                    },
+                                ),
+                            )
+
+                    _, workspace, result = self._execute(
+                        Path(directory),
+                        ContaminatedBaselineHarness(),
+                    )
+                    without_skill = next(
+                        attempt
+                        for attempt in workspace.attempts.iterdir()
+                        if json.loads(
+                            (attempt / "attempt.json").read_text(
+                                encoding="utf-8"
+                            )
+                        )["run_kind"]
+                        == "without_skill"
+                    )
+
+                    self.assertEqual(result.exit_code, 2 if rejected else 0)
+                    self.assertEqual(
+                        (without_skill / "grading.json").exists(),
+                        not rejected,
+                    )
+                    if rejected:
+                        self.assertIn(
+                            "without_skill",
+                            (
+                                without_skill / "execution_trace.jsonl"
+                            ).read_text(encoding="utf-8"),
+                        )
+
+    def test_actor_rejects_execution_replayed_from_another_invocation(self) -> None:
+        class ReplayActorHarness(RecordingBehaviorHarness):
+            def execute(self, request, artifact_dir):
+                execution = super().execute(request, artifact_dir)
+                if request.role != "actor":
+                    return execution
+                stale_request = bind_harness_request(
+                    replace(request, execution_binding=None),
+                    invocation_id="f" * 32,
+                    run_id=request.run_variant,
+                )
+                return replace(
+                    execution,
+                    execution_binding=stale_request.execution_binding,
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            _, workspace, result = self._execute(
+                Path(directory),
+                ReplayActorHarness(),
+            )
+
+            self.assertEqual(result.exit_code, 2)
+            for attempt in workspace.attempts.iterdir():
+                self.assertFalse((attempt / "grading.json").exists())
+                self.assertIn(
+                    "execution_binding_mismatch",
+                    (attempt / "execution_trace.jsonl").read_text(
+                        encoding="utf-8"
+                    ),
+                )
+
     def test_actor_failure_is_an_execution_error_with_preserved_incomplete_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             adapter = RecordingBehaviorHarness(
@@ -1319,6 +2073,12 @@ class BehaviorRunnerTests(unittest.TestCase):
             )
             self.assertIsNotNone(failed.error)
             self.assertTrue((failed.artifact_dir / "timing.json").is_file())
+            self.assertFalse(
+                (failed.artifact_dir / "outputs" / "report.json").exists()
+            )
+            self.assertTrue(
+                (failed.artifact_dir / "outputs" / "response.md").is_file()
+            )
             self.assertFalse((failed.artifact_dir / "grading.json").exists())
             self.assertTrue(workspace.invocation_manifest.is_file())
 
@@ -1328,33 +2088,131 @@ class BehaviorRunnerTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
-    def test_preflighted_capabilities_are_reused_without_another_preflight(self) -> None:
+    def test_bound_preflight_receipt_is_reused_without_another_preflight(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             adapter = RecordingBehaviorHarness()
-            capabilities = adapter.preflight(require_fixtures=False)
-            adapter.preflight_calls.clear()
             repository = self._repository(base)
             workspace = create_result_workspace(
                 "validate-evals",
                 results_dir=base / "results",
                 repository_root=repository.root,
             )
-
-            result = execute_behavior_evals(
-                repository.root,
-                adapter,
-                workspace,
+            definitions = load_behavior_evals(repository.root)
+            plan = eval_validation.prepare_behavior_plan(
+                definitions,
                 skill_filter="alpha",
                 case_filter=None,
+            )
+            eval_validation.declare_behavior_plan(workspace, plan)
+            receipt = preflight_bound_invocations(
+                adapter,
+                ((workspace, "validate evals", plan.manifests),),
+                require_fixtures=False,
+            )
+            adapter.preflight_calls.clear()
+
+            result = eval_validation.execute_prepared_behavior_plan(
+                adapter,
+                workspace,
+                plan,
                 max_concurrency=2,
                 actor_timeout_seconds=60,
                 judge_timeout_seconds=30,
-                preflighted_capabilities=capabilities,
+                preflight_receipt=receipt,
             )
 
             self.assertEqual(result.exit_code, 0)
             self.assertEqual(adapter.preflight_calls, [])
+            actor_requests = [
+                request
+                for request, _ in adapter.requests
+                if request.role == "actor"
+            ]
+            judge_requests = [
+                request
+                for request, _ in adapter.requests
+                if request.role == "judge"
+            ]
+            self.assertTrue(actor_requests)
+            self.assertTrue(judge_requests)
+            self.assertTrue(
+                all(
+                    request.model == "actor-model"
+                    and request.reasoning_effort == "high"
+                    for request in actor_requests
+                )
+            )
+            self.assertTrue(
+                all(
+                    request.model == "judge-model"
+                    and request.reasoning_effort == "high"
+                    for request in judge_requests
+                )
+            )
+
+    def test_bound_preflight_receipt_cannot_cross_adapter_instances(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            original_adapter = RecordingBehaviorHarness()
+            replacement_adapter = RecordingBehaviorHarness()
+            repository = self._repository(base)
+            workspace = create_result_workspace(
+                "validate-evals",
+                results_dir=base / "results",
+                repository_root=repository.root,
+            )
+            plan = eval_validation.prepare_behavior_plan(
+                load_behavior_evals(repository.root),
+                skill_filter="alpha",
+                case_filter=None,
+            )
+            eval_validation.declare_behavior_plan(workspace, plan)
+            receipt = preflight_bound_invocations(
+                original_adapter,
+                ((workspace, "validate evals", plan.manifests),),
+                require_fixtures=False,
+            )
+
+            with self.assertRaisesRegex(
+                ResultArtifactError,
+                "different harness adapter",
+            ):
+                eval_validation.execute_prepared_behavior_plan(
+                    replacement_adapter,
+                    workspace,
+                    plan,
+                    max_concurrency=1,
+                    actor_timeout_seconds=60,
+                    judge_timeout_seconds=30,
+                    preflight_receipt=receipt,
+                )
+
+            self.assertEqual(replacement_adapter.requests, [])
+
+    def test_successful_actor_metadata_drift_fails_the_attempt(self) -> None:
+        class DriftingHarness(RecordingBehaviorHarness):
+            def execute(self, request, artifact_dir):
+                execution = super().execute(request, artifact_dir)
+                if request.role == "actor":
+                    return replace(execution, model="unexpected-model")
+                return execution
+
+        with tempfile.TemporaryDirectory() as directory:
+            _, _, result = self._execute(
+                Path(directory),
+                DriftingHarness(),
+            )
+
+        self.assertEqual(result.exit_code, 2)
+        self.assertTrue(
+            all(
+                attempt.error is not None
+                and "preflight-selected configuration" in attempt.error
+                for case in result.case_results
+                for attempt in case.attempts
+            )
+        )
 
     def test_actor_response_must_be_preserved_exactly_before_checks_or_judging(self) -> None:
         actor_response = json.dumps({"value": "x" * (64 * 1024)})
@@ -1411,7 +2269,7 @@ class BehaviorRunnerTests(unittest.TestCase):
             )
             self.assertLessEqual(
                 len(durable_response.encode("utf-8")),
-                eval_validation._MAX_RESPONSE_BYTES,
+                actor_evidence.MAX_RESPONSE_BYTES,
             )
             self.assertIn("[TRUNCATED]", durable_response)
             self.assertIn("cannot be preserved exactly", trace)
@@ -1625,7 +2483,7 @@ class BehaviorRunnerTests(unittest.TestCase):
             return (event,)
 
         adapter = RecordingBehaviorHarness(actor_trace_factory=actor_trace)
-        prepare_execution = eval_validation._prepare_durable_actor_execution
+        prepare_execution = actor_evidence.prepare_durable_actor_execution
 
         def prepare_then_mutate(execution: HarnessExecution):
             durable_execution, response = prepare_execution(execution)
@@ -1653,8 +2511,8 @@ class BehaviorRunnerTests(unittest.TestCase):
             return durable_execution, response
 
         with tempfile.TemporaryDirectory() as directory, patch.object(
-            eval_validation,
-            "_prepare_durable_actor_execution",
+            actor_evidence,
+            "prepare_durable_actor_execution",
             side_effect=prepare_then_mutate,
         ):
             _, workspace, result = self._execute(Path(directory), adapter)
@@ -1676,17 +2534,17 @@ class BehaviorRunnerTests(unittest.TestCase):
         trace = (
             {
                 "event": "actor.completed",
-                "detail": "x" * (eval_validation._MAX_EXECUTION_TRACE_BYTES + 1),
+                "detail": "x" * (actor_evidence.MAX_EXECUTION_TRACE_BYTES + 1),
             },
         )
         with patch.object(
-            eval_validation.json,
+            actor_evidence.json,
             "JSONEncoder",
             side_effect=AssertionError(
                 "oversized trace scalar must be rejected before encoder construction"
             ),
         ) as encoder:
-            frozen = eval_validation._freeze_scanned_actor_trace(trace)
+            frozen = actor_evidence.freeze_scanned_actor_trace(trace)
 
         self.assertIsNone(frozen)
         encoder.assert_not_called()
@@ -1695,46 +2553,46 @@ class BehaviorRunnerTests(unittest.TestCase):
         cases = (
             (
                 "nodes",
-                "_MAX_EXECUTION_TRACE_JSON_NODES",
+                "MAX_EXECUTION_TRACE_JSON_NODES",
                 3,
                 ({"event": "actor.completed", "detail": "safe"},),
             ),
             (
                 "depth",
-                "_MAX_EXECUTION_TRACE_JSON_DEPTH",
+                "MAX_EXECUTION_TRACE_JSON_DEPTH",
                 2,
                 ({"event": "actor.completed"},),
             ),
         )
         for case_name, limit_name, limit, trace in cases:
             with self.subTest(case_name=case_name), patch.object(
-                eval_validation,
+                actor_evidence,
                 limit_name,
                 limit,
             ), patch.object(
-                eval_validation.json,
+                actor_evidence.json,
                 "JSONEncoder",
                 side_effect=AssertionError(
                     "structurally invalid trace must be rejected before encoding"
                 ),
             ) as encoder:
-                frozen = eval_validation._freeze_scanned_actor_trace(trace)
+                frozen = actor_evidence.freeze_scanned_actor_trace(trace)
 
             self.assertIsNone(frozen)
             encoder.assert_not_called()
 
     def test_composed_eval_quarantines_trace_scan_limit_failure(self) -> None:
-        original_scan = eval_validation.SecretScanBudget.scan
+        original_scan = actor_evidence.SecretScanBudget.scan
 
         def fail_trace_scan(scan_budget, text, source):
             if source == Path("execution_trace.json"):
-                raise eval_validation.SecretScanLimitError(
+                raise actor_evidence.SecretScanLimitError(
                     "injected trace scan exhaustion"
                 )
             return original_scan(scan_budget, text, source)
 
         with tempfile.TemporaryDirectory() as directory, patch.object(
-            eval_validation.SecretScanBudget,
+            actor_evidence.SecretScanBudget,
             "scan",
             new=fail_trace_scan,
         ):
@@ -1877,6 +2735,7 @@ class BehaviorRunnerTests(unittest.TestCase):
                 runtime,
                 allowed_skill_root=repository.root / "skills",
             )
+            self._echo_adapter_execution_binding(adapter)
             capabilities = HarnessCapabilities(
                 harness_name="codex",
                 available=True,
@@ -1888,6 +2747,9 @@ class BehaviorRunnerTests(unittest.TestCase):
                 reports_successful_skill_reads=True,
             )
             adapter._capabilities = capabilities
+            adapter.preflight = (
+                lambda *, require_fixtures=False: capabilities
+            )
             workspace = create_result_workspace(
                 "validate-evals",
                 results_dir=runtime.results_root / "invocation",
@@ -1903,7 +2765,6 @@ class BehaviorRunnerTests(unittest.TestCase):
                 max_concurrency=1,
                 actor_timeout_seconds=60,
                 judge_timeout_seconds=30,
-                preflighted_capabilities=capabilities,
             )
 
             self.assertEqual(result.exit_code, 2)
@@ -1999,6 +2860,7 @@ class BehaviorRunnerTests(unittest.TestCase):
                     runtime,
                     allowed_skill_root=repository.root / "skills",
                 )
+                self._echo_adapter_execution_binding(adapter)
                 capabilities = HarnessCapabilities(
                     harness_name="codex",
                     available=True,
@@ -2010,6 +2872,9 @@ class BehaviorRunnerTests(unittest.TestCase):
                     reports_successful_skill_reads=True,
                 )
                 adapter._capabilities = capabilities
+                adapter.preflight = (
+                    lambda *, require_fixtures=False: capabilities
+                )
                 workspace = create_result_workspace(
                     "validate-evals",
                     results_dir=runtime.results_root / "invocation",
@@ -2025,7 +2890,6 @@ class BehaviorRunnerTests(unittest.TestCase):
                     max_concurrency=1,
                     actor_timeout_seconds=60,
                     judge_timeout_seconds=30,
-                    preflighted_capabilities=capabilities,
                 )
 
                 self.assertEqual(result.exit_code, 2)
@@ -2131,6 +2995,7 @@ class BehaviorRunnerTests(unittest.TestCase):
                 runtime,
                 allowed_skill_root=repository.root / "skills",
             )
+            self._echo_adapter_execution_binding(adapter)
             capabilities = HarnessCapabilities(
                 harness_name="codex",
                 available=True,
@@ -2142,6 +3007,9 @@ class BehaviorRunnerTests(unittest.TestCase):
                 reports_successful_skill_reads=True,
             )
             adapter._capabilities = capabilities
+            adapter.preflight = (
+                lambda *, require_fixtures=False: capabilities
+            )
             workspace = create_result_workspace(
                 "validate-evals",
                 results_dir=runtime.results_root / "invocation",
@@ -2157,7 +3025,6 @@ class BehaviorRunnerTests(unittest.TestCase):
                 max_concurrency=1,
                 actor_timeout_seconds=60,
                 judge_timeout_seconds=30,
-                preflighted_capabilities=capabilities,
             )
 
             self.assertEqual(result.exit_code, 0)
@@ -2209,6 +3076,100 @@ class BehaviorRunnerTests(unittest.TestCase):
             self.assertIn('"timed_out":true', trace.replace(" ", ""))
             self.assertFalse((failed.artifact_dir / "grading.json").exists())
 
+    def test_judge_adapter_exception_preserves_only_normalized_failure(self) -> None:
+        secret = "sk-" + ("b" * 48)
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = RecordingBehaviorHarness(
+                judge_exception=RuntimeError(
+                    f"Authorization: Bearer {secret} " + ("detail " * 10_000)
+                )
+            )
+
+            _, workspace, result = self._execute(Path(directory), adapter)
+
+            self.assertEqual(result.exit_code, 2)
+            for case_result in result.case_results:
+                for attempt in case_result.attempts:
+                    self.assertNotIn(secret, attempt.error or "")
+                    self.assertFalse((attempt.artifact_dir / "grading.json").exists())
+                    self.assertTrue((attempt.artifact_dir / "timing.json").is_file())
+                    trace = (
+                        attempt.artifact_dir / "execution_trace.jsonl"
+                    ).read_text(encoding="utf-8")
+                    self.assertNotIn(secret, trace)
+                    self.assertIn("judge_failure", trace)
+            self.assertEqual(len(tuple(workspace.attempts.iterdir())), 2)
+
+    def test_judge_cannot_mutate_captured_outputs_and_publish_a_grade(self) -> None:
+        original = '{"status": "actor"}\n'
+        mutated = '{"status": "judge-mutated"}\n'
+
+        def mutate_outputs(artifact_dir: Path) -> None:
+            (artifact_dir / "outputs" / "report.json").write_text(
+                mutated,
+                encoding="utf-8",
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = RecordingBehaviorHarness(
+                captured_report_text=original,
+                judge_mutation=mutate_outputs,
+            )
+
+            _, workspace, result = self._execute(Path(directory), adapter)
+
+            self.assertEqual(result.exit_code, 2)
+            self.assertEqual(len(tuple(workspace.attempts.iterdir())), 2)
+            for request, _ in adapter.requests:
+                if request.role != "judge":
+                    continue
+                evidence = json.loads(
+                    request.prompt.split("UNTRUSTED_EVIDENCE_JSON\n", 1)[1]
+                )
+                self.assertEqual(evidence["outputs/report.json"], original)
+            for attempt in workspace.attempts.iterdir():
+                self.assertFalse((attempt / "grading.json").exists())
+                self.assertFalse((attempt / "outputs" / "report.json").exists())
+                self.assertTrue((attempt / "outputs" / "response.md").is_file())
+                trace = (attempt / "execution_trace.jsonl").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("captured outputs changed", trace)
+
+    def test_failed_judge_trace_is_bounded_scanned_and_quarantined(self) -> None:
+        secret = "opaque-private-session-cookie"
+        unsafe_traces = (
+            ({"Cookie": f"session={secret}"},),
+            (
+                {
+                    "event": "judge.completed",
+                    "detail": "x"
+                    * (actor_evidence.MAX_EXECUTION_TRACE_BYTES + 1),
+                },
+            ),
+        )
+        for unsafe_trace in unsafe_traces:
+            with self.subTest(kind=tuple(unsafe_trace)[0].keys()):
+                with tempfile.TemporaryDirectory() as directory:
+                    adapter = RecordingBehaviorHarness(
+                        judge_timed_out=True,
+                        judge_trace_factory=lambda trace=unsafe_trace: trace,
+                    )
+
+                    _, workspace, result = self._execute(
+                        Path(directory),
+                        adapter,
+                    )
+
+                    self.assertEqual(result.exit_code, 2)
+                    for attempt in workspace.attempts.iterdir():
+                        trace = (attempt / "execution_trace.jsonl").read_text(
+                            encoding="utf-8"
+                        )
+                        self.assertIn("judge_trace_quarantine", trace)
+                        self.assertNotIn(secret, trace)
+                        self.assertFalse((attempt / "grading.json").exists())
+
     def test_judge_prompt_requires_all_evidence_to_fit_aggregate_capacity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
@@ -2222,11 +3183,10 @@ class BehaviorRunnerTests(unittest.TestCase):
             case = load_behavior_evals(
                 self._repository(base / "repo").root
             )[0].cases[0]
-            control = eval_validation._prepare_judge_control(case, "with_skill")
+            control = eval_validation._prepare_judge_control(case)
 
             allowed, prompt = eval_validation._judge_prompt(
                 case,
-                "with_skill",
                 "response",
                 "transcript",
                 (),
@@ -2249,7 +3209,6 @@ class BehaviorRunnerTests(unittest.TestCase):
             ):
                 boundary_allowed, boundary_prompt = eval_validation._judge_prompt(
                     case,
-                    "with_skill",
                     "response",
                     "transcript",
                     (),
@@ -2270,7 +3229,6 @@ class BehaviorRunnerTests(unittest.TestCase):
                 ):
                     eval_validation._judge_prompt(
                         case,
-                        "with_skill",
                         "response",
                         "transcript",
                         (),

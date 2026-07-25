@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from strictyaml import StrictYAMLError, load
+from strictyaml import load
+from strictyaml.ruamel.error import YAMLError
 
 
 _ALLOWED_FIELDS = frozenset(
@@ -19,16 +20,15 @@ def parse_skill_frontmatter(text: str, source: Path) -> dict[str, object]:
     document = _extract_frontmatter_document(text, source)
     try:
         parsed = load(document).data
-    except StrictYAMLError as error:
-        raise ValueError(f"{source}: invalid YAML frontmatter: {error}") from error
+    except YAMLError as error:
+        raise ValueError(f"{source}: invalid YAML frontmatter") from error
 
     if not isinstance(parsed, dict):
         raise ValueError(f"{source}: frontmatter must be a mapping")
 
     unknown_fields = set(parsed) - _ALLOWED_FIELDS
     if unknown_fields:
-        field = sorted(unknown_fields)[0]
-        raise ValueError(f"{source}: unsupported top-level frontmatter field: {field}")
+        raise ValueError(f"{source}: unsupported top-level frontmatter field")
 
     _validate_name(parsed, source)
     _validate_required_string(parsed, "description", source, maximum_length=1024)

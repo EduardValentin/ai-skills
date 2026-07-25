@@ -58,8 +58,8 @@
       "image": "mockserver/mockserver",
       "digest": "sha256:fed9b2089e021947f785d1f0bfda3723352bb2c1634ce7b0bcd42dfd1b0fd02f",
       "bind": "microvm-loopback",
-      "reuse_scope": "worker",
-      "ca_scope": "worker",
+      "reuse_scope": "case",
+      "ca_scope": "case",
       "maximum_expected_requests": 128,
       "bundled_default_ca_sha256": "26fc755116841c1c31ff004fb6c727b00de6d4b57b77557e09f2eaaae022b846",
       "schema": {

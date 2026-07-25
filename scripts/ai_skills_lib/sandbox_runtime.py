@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import select
 import signal
 import shutil
 import stat
@@ -79,6 +80,7 @@ PROCESS_KILL_GRACE_SECONDS = 2.0
 PROCESS_GROUP_PROOF_SECONDS = 1.0
 PROCESS_DRAIN_JOIN_SECONDS = 1.0
 PROCESS_POLL_SECONDS = 0.01
+_SUBPROCESS_POPEN_TYPE = subprocess.Popen
 
 CASE_FILESYSTEM_PROBE_SCRIPT = r"""import os
 import pathlib
@@ -781,6 +783,195 @@ else:
     raise SystemExit("directory accepts writes from the case user")
 """
 
+ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT = r"""import os
+import pathlib
+import re
+import stat
+import sys
+
+if len(sys.argv) < 3:
+    raise SystemExit("root filesystem probe contract is incomplete")
+
+probe_root = os.path.realpath(sys.argv[1])
+mountinfo_path = pathlib.Path(sys.argv[2])
+allowed_writable_roots = tuple(
+    os.path.normpath(os.path.realpath(path))
+    for path in sys.argv[3:]
+)
+if len(set(allowed_writable_roots)) != len(allowed_writable_roots):
+    raise SystemExit("allowed writable filesystem roots are duplicated")
+
+def is_within(path, root):
+    return path == root or path.startswith(root.rstrip("/") + "/")
+
+if any(not is_within(path, probe_root) for path in allowed_writable_roots):
+    raise SystemExit("allowed writable filesystem root escapes the probe root")
+
+def decode_mount_field(value):
+    return re.sub(
+        r"\\([0-7]{3})",
+        lambda match: chr(int(match.group(1), 8)),
+        value,
+    )
+
+try:
+    mountinfo_lines = mountinfo_path.read_text(encoding="utf-8").splitlines()
+except OSError as error:
+    raise SystemExit("filesystem mount table is unavailable") from error
+
+mounts = []
+for line_number, line in enumerate(mountinfo_lines, start=1):
+    fields = line.split()
+    try:
+        separator = fields.index("-")
+    except ValueError as error:
+        raise SystemExit(
+            f"filesystem mount table entry is malformed: line {line_number}"
+        ) from error
+    if len(fields) <= separator + 3 or len(fields) < 6:
+        raise SystemExit(
+            f"filesystem mount table entry is incomplete: line {line_number}"
+        )
+    mount_point = os.path.normpath(decode_mount_field(fields[4]))
+    if not os.path.isabs(mount_point):
+        raise SystemExit(
+            f"filesystem mount point is not absolute: line {line_number}"
+        )
+    mounts.append(
+        (
+            mount_point,
+            fields[separator + 1],
+            set(fields[5].split(",")) | set(fields[separator + 3].split(",")),
+        )
+    )
+
+visible_mounts = {}
+for mount in mounts:
+    mount_point = mount[0]
+    if not is_within(mount_point, probe_root):
+        continue
+    visible_mounts[mount_point] = mount
+if probe_root not in visible_mounts:
+    raise SystemExit("probe root is absent from the filesystem mount table")
+
+for allowed_root in allowed_writable_roots:
+    mount = visible_mounts.get(allowed_root)
+    if mount is None:
+        raise SystemExit(f"allowed writable filesystem mount is absent: {allowed_root}")
+    options = mount[2]
+    if "rw" not in options or "ro" in options:
+        raise SystemExit(
+            f"allowed writable filesystem mount is not writable: {allowed_root}"
+        )
+
+pseudo_filesystems = {
+    "/proc": {
+        "binfmt_misc",
+        "proc",
+        "tmpfs",
+    },
+    "/sys": {
+        "bpf",
+        "cgroup",
+        "cgroup2",
+        "configfs",
+        "debugfs",
+        "efivarfs",
+        "fusectl",
+        "pstore",
+        "securityfs",
+        "sysfs",
+        "tmpfs",
+        "tracefs",
+    },
+    "/dev": {
+        "devpts",
+        "devtmpfs",
+        "hugetlbfs",
+        "mqueue",
+        "tmpfs",
+    },
+}
+
+def pseudo_root_for(path):
+    for root in pseudo_filesystems:
+        if is_within(path, root):
+            return root
+    return None
+
+for mount_point, filesystem, _ in visible_mounts.values():
+    if mount_point in allowed_writable_roots:
+        continue
+    if any(
+        mount_point != allowed_root and is_within(mount_point, allowed_root)
+        for allowed_root in allowed_writable_roots
+    ):
+        raise SystemExit(
+            f"unexpected nested mount beneath case tmpfs: {mount_point}"
+        )
+    pseudo_root = pseudo_root_for(mount_point)
+    if pseudo_root is not None:
+        if filesystem not in pseudo_filesystems[pseudo_root]:
+            raise SystemExit(
+                f"unsupported pseudo-filesystem mount: {mount_point} ({filesystem})"
+            )
+        continue
+    try:
+        metadata = os.stat(mount_point, follow_symlinks=False)
+    except OSError as error:
+        if os.access(os.path.dirname(mount_point), os.X_OK):
+            raise SystemExit(
+                f"cannot inspect actor-traversable filesystem mount: {mount_point}"
+            ) from error
+        continue
+    if stat.S_ISDIR(metadata.st_mode):
+        writable = os.access(mount_point, os.W_OK | os.X_OK)
+    elif stat.S_ISREG(metadata.st_mode):
+        writable = os.access(mount_point, os.W_OK)
+    else:
+        writable = False
+    if writable:
+        raise SystemExit(
+            f"writable filesystem mount outside case tmpfs: {mount_point}"
+        )
+
+skipped_roots = (*allowed_writable_roots, *pseudo_filesystems)
+pending = [probe_root]
+while pending:
+    current = pending.pop()
+    if current != probe_root and any(is_within(current, root) for root in skipped_roots):
+        continue
+    try:
+        metadata = os.stat(current, follow_symlinks=False)
+    except OSError:
+        continue
+    if not stat.S_ISDIR(metadata.st_mode):
+        continue
+    if os.access(current, os.W_OK | os.X_OK):
+        raise SystemExit(f"writable root filesystem path: {current}")
+    try:
+        entries = os.scandir(current)
+    except OSError as error:
+        if os.access(current, os.X_OK):
+            raise SystemExit(
+                f"cannot inspect actor-traversable root filesystem directory: {current}"
+            ) from error
+        continue
+    with entries:
+        for entry in entries:
+            try:
+                child = entry.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            if stat.S_ISDIR(child.st_mode):
+                pending.append(entry.path)
+            elif (
+                stat.S_ISREG(child.st_mode)
+                and os.access(entry.path, os.W_OK)
+            ):
+                raise SystemExit(f"writable root filesystem file: {entry.path}")
+"""
+
 PUBLIC_SKILL_CATALOG_PROBE_SCRIPT = """import errno
 import os
 import pathlib
@@ -964,13 +1155,32 @@ class SubprocessRunner:
                 thread.start()
 
             try:
-                returncode = process.wait(timeout=timeout_seconds)
-                outcome = self._settle_process(
-                    process,
-                    drains,
-                    leader_reaped=True,
-                    terminate_group=False,
-                )
+                if isinstance(process, _SUBPROCESS_POPEN_TYPE):
+                    completed = self._wait_for_leader_exit_without_reaping(
+                        process,
+                        timeout_seconds,
+                    )
+                    if not completed:
+                        raise subprocess.TimeoutExpired(argv, timeout_seconds)
+                    outcome = self._settle_process(
+                        process,
+                        drains,
+                        leader_reaped=False,
+                        terminate_group=True,
+                    )
+                    if process.returncode is None:
+                        raise SandboxRuntimeError(
+                            "host process leader completion could not be reaped"
+                        )
+                    returncode = process.returncode
+                else:
+                    returncode = process.wait(timeout=timeout_seconds)
+                    outcome = self._settle_process(
+                        process,
+                        drains,
+                        leader_reaped=True,
+                        terminate_group=False,
+                    )
             except subprocess.TimeoutExpired:
                 timed_out = True
                 returncode = 124
@@ -1077,6 +1287,57 @@ class SubprocessRunner:
             else:
                 return True
         return process.returncode is not None
+
+    @staticmethod
+    def _wait_for_leader_exit_without_reaping(
+        process: subprocess.Popen[bytes],
+        maximum_seconds: float,
+    ) -> bool:
+        waitid_names = ("waitid", "P_PID", "WEXITED", "WNOHANG", "WNOWAIT")
+        if all(hasattr(os, name) for name in waitid_names):
+            return SubprocessRunner._waitid_for_leader_exit(
+                process,
+                maximum_seconds,
+            )
+        kqueue_names = (
+            "kqueue",
+            "kevent",
+            "KQ_FILTER_PROC",
+            "KQ_EV_ADD",
+            "KQ_EV_ONESHOT",
+            "KQ_NOTE_EXIT",
+        )
+        if all(hasattr(select, name) for name in kqueue_names):
+            queue = select.kqueue()
+            try:
+                event = select.kevent(
+                    process.pid,
+                    filter=select.KQ_FILTER_PROC,
+                    flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                    fflags=select.KQ_NOTE_EXIT,
+                )
+                return bool(queue.control((event,), 1, maximum_seconds))
+            finally:
+                queue.close()
+        raise SandboxRuntimeError(
+            "host cannot observe process completion without reaping its leader"
+        )
+
+    @staticmethod
+    def _waitid_for_leader_exit(
+        process: subprocess.Popen[bytes],
+        maximum_seconds: float,
+    ) -> bool:
+        deadline = time.monotonic() + maximum_seconds
+        flags = os.WEXITED | os.WNOHANG | os.WNOWAIT
+        while True:
+            result = os.waitid(os.P_PID, process.pid, flags)
+            if result is not None and getattr(result, "si_pid", process.pid) == process.pid:
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            SubprocessRunner._pause(min(PROCESS_POLL_SECONDS, remaining))
 
     @classmethod
     def _prove_process_group_absent(cls, process_group_id: int) -> bool:
@@ -1522,8 +1783,8 @@ class EvalRuntimeManifest:
         if (
             self.mockserver.image != "mockserver/mockserver"
             or self.mockserver.bind != "microvm-loopback"
-            or self.mockserver.reuse_scope != "worker"
-            or self.mockserver.ca_scope != "worker"
+            or self.mockserver.reuse_scope != "case"
+            or self.mockserver.ca_scope != "case"
             or self.mockserver.maximum_expected_requests != 128
             or self.mockserver.schema_release != expected_schema_release
             or self.mockserver.schema_source != expected_schema_source
@@ -2296,6 +2557,8 @@ class SandboxRuntime:
                 "USER": case.user_name,
                 "LOGNAME": case.user_name,
                 "SHELL": "/bin/bash",
+                "BASH_ENV": "/dev/null",
+                "ENV": "/dev/null",
                 "XDG_CONFIG_HOME": str(case.home / ".config"),
                 "XDG_CACHE_HOME": str(case.home / ".cache"),
                 "XDG_DATA_HOME": str(case.home / ".local" / "share"),
@@ -2333,6 +2596,7 @@ class SandboxRuntime:
         command.extend(argv)
         try:
             self._activate_case_filesystem(worker, case)
+            self._require_exact_live_identity(worker.name, worker.id)
             result = self.process.run(tuple(command), timeout_seconds=timeout_seconds)
         except BaseException as error:
             try:
@@ -2695,6 +2959,23 @@ class SandboxRuntime:
             ),
             "case user can mutate the worker mount root",
         )
+        self._case_user_checked(
+            worker,
+            case,
+            (
+                "python3",
+                "-c",
+                ROOT_FILESYSTEM_WRITE_DENIAL_PROBE_SCRIPT,
+                "/",
+                "/proc/self/mountinfo",
+                str(case.root),
+                "/tmp",
+                "/var/tmp",
+                "/dev/shm",
+                "/run/lock",
+            ),
+            "root filesystem exposes writable state outside the case tmpfs",
+        )
         if case.filesystem_source not in self._sealed_skill_catalogs:
             return
         self._case_user_checked(
@@ -2829,13 +3110,10 @@ class SandboxRuntime:
             None,
             case,
         )
-        result = self.process.run(
+        result = self._worker_command_by_name(
+            sandbox_name,
+            worker_id,
             (
-                "sbx",
-                "exec",
-                "--user",
-                "root",
-                sandbox_name,
                 "python3",
                 "-c",
                 CASE_FILESYSTEM_CLEANUP_SCRIPT,
@@ -2844,6 +3122,7 @@ class SandboxRuntime:
                 str(bridge_mount),
                 *(target for _, target in system_mounts),
             ),
+            user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
         )
         if result.timed_out or result.returncode != 0:
@@ -2851,6 +3130,7 @@ class SandboxRuntime:
         if worker_id in self._guarded_worker_mounts:
             mount_restore = self._worker_command_by_name(
                 sandbox_name,
+                worker_id,
                 (
                     "python3",
                     "-c",
@@ -2871,6 +3151,7 @@ class SandboxRuntime:
                 raise SandboxRuntimeError("worker host mount could not be restored read-write")
         staging_tree_restore = self._worker_command_by_name(
             sandbox_name,
+            worker_id,
             ("chmod", "-R", "u+rwX", str(case.root)),
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -2879,6 +3160,7 @@ class SandboxRuntime:
             raise SandboxRuntimeError("case host staging tree could not be reopened for reset")
         restore = self._worker_command_by_name(
             sandbox_name,
+            worker_id,
             ("chmod", "0700", str(case.root)),
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -2887,6 +3169,7 @@ class SandboxRuntime:
             raise SandboxRuntimeError("case host staging permissions could not be restored")
         verification = self._worker_command_by_name(
             sandbox_name,
+            worker_id,
             ("stat", "--format=%a", str(case.root)),
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -3026,10 +3309,10 @@ class SandboxRuntime:
                 "ownership marker, and staging are retained"
             )
         self._require_removal_process_settled(target)
-        if not target.sandbox_removed and target.id is None:
+        if not target.sandbox_removed:
             sandbox_id = self._record_exact_cleanup_identity(target)
             if sandbox_id is None:
-                if target.create_started:
+                if target.id is None and target.create_started:
                     raise SandboxRuntimeError(
                         "sandbox create operation has no authoritative completion or "
                         "cancellation; exact cleanup target, ownership marker, and "
@@ -3048,11 +3331,10 @@ class SandboxRuntime:
                 raise
         if not target.sandbox_removed:
             assert target.id is not None
-            remaining_items = self._list_sandboxes()
-            present = any(item.get("id") == target.id for item in remaining_items)
-            if present:
-                self._quarantine_cleanup_target(target)
-                raise SandboxRuntimeError("worker cleanup could not be verified")
+            self._require_cleanup_target_absent(
+                target,
+                "worker cleanup could not be verified",
+            )
             target.sandbox_removed = True
             self._forget_worker_state(target)
         self._remove_host_cleanup_target(target)
@@ -3087,9 +3369,10 @@ class SandboxRuntime:
         except BaseException:
             self._quarantine_cleanup_target(target)
             raise
-        if self._exact_cleanup_identity(target, self._list_sandboxes()) is not None:
-            self._quarantine_cleanup_target(target)
-            raise SandboxRuntimeError("worker cleanup reconciliation could not verify absence")
+        self._require_cleanup_target_absent(
+            target,
+            "worker cleanup reconciliation could not verify absence",
+        )
         target.sandbox_removed = True
         self._forget_worker_state(target)
         self._remove_host_cleanup_target(target)
@@ -3108,6 +3391,10 @@ class SandboxRuntime:
     ) -> None:
         if target.id is None:
             raise SandboxRuntimeError("sandbox removal requires a verified identity")
+        if self._record_exact_cleanup_identity(target) is None:
+            target.sandbox_removed = True
+            self._forget_worker_state(target)
+            return
         target.removal_started = True
         target.removal_process_settled = False
         try:
@@ -3162,6 +3449,23 @@ class SandboxRuntime:
 
     def _record_exact_cleanup_identity(self, target: CleanupTarget) -> str | None:
         return self._exact_cleanup_identity(target, self._list_sandboxes())
+
+    def _require_cleanup_target_absent(
+        self,
+        target: CleanupTarget,
+        message: str,
+    ) -> None:
+        try:
+            remaining_id = self._exact_cleanup_identity(
+                target,
+                self._list_sandboxes(),
+            )
+        except BaseException:
+            self._quarantine_cleanup_target(target)
+            raise
+        if remaining_id is not None:
+            self._quarantine_cleanup_target(target)
+            raise SandboxRuntimeError(message)
 
     def _prove_candidate_ownership(
         self,
@@ -3247,6 +3551,7 @@ class SandboxRuntime:
     def _purge_cleanup_target_host_root(self, target: CleanupTarget) -> None:
         if target.id is None:
             raise SandboxRuntimeError("worker host-root purge requires proven sandbox ownership")
+        self._require_exact_live_identity(target.name, target.id)
         try:
             active_case = self._active_cases.get(target.id)
             if active_case is not None:
@@ -3254,23 +3559,25 @@ class SandboxRuntime:
                 if not quiesced:
                     self._terminate_and_prove_case_cgroup_empty_by_name(
                         target.name,
+                        target.id,
                         active_case,
                     )
-                    self._clear_case_ipc_by_name(target.name, active_case)
+                    self._clear_case_ipc_by_name(target.name, target.id, active_case)
                     self._cleanup_case_filesystem_mounts(
                         target.name,
                         target.id,
                         active_case,
                     )
                     self._mounted_case_filesystems.discard(target.id)
-                    self._remove_case_cgroup_by_name(target.name, active_case)
-            self._checked(
+                    self._remove_case_cgroup_by_name(
+                        target.name,
+                        target.id,
+                        active_case,
+                    )
+            purge = self._worker_command_by_name(
+                target.name,
+                target.id,
                 (
-                    "sbx",
-                    "exec",
-                    "--user",
-                    "root",
-                    target.name,
                     "find",
                     str(target.host_root),
                     "-mindepth",
@@ -3284,8 +3591,18 @@ class SandboxRuntime:
                     "{}",
                     "+",
                 ),
-                self.manifest.limits.preflight_timeout_seconds,
+                user="root",
+                timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
             )
+            if purge.timed_out or purge.returncode != 0:
+                diagnostic = _safe_diagnostic(
+                    purge.stderr.strip()
+                    or purge.stdout.strip()
+                    or ("command timed out" if purge.timed_out else "no diagnostic")
+                )
+                raise SandboxRuntimeError(
+                    f"worker host-root purge failed: {diagnostic}"
+                )
         except BaseException:
             self._quarantine_cleanup_target(target)
             raise
@@ -3382,6 +3699,18 @@ class SandboxRuntime:
     def _require_owned_worker(self, worker: SandboxWorker) -> None:
         if self._workers.get((worker.role, worker.slot)) is not worker:
             raise SandboxRuntimeError("worker is not owned by this invocation")
+
+    def _require_exact_live_identity(self, sandbox_name: str, sandbox_id: str) -> None:
+        sandboxes = self._list_sandboxes()
+        name_matches = [item for item in sandboxes if item.get("name") == sandbox_name]
+        id_matches = [item for item in sandboxes if item.get("id") == sandbox_id]
+        if (
+            len(name_matches) != 1
+            or len(id_matches) != 1
+            or name_matches[0].get("id") != sandbox_id
+            or id_matches[0].get("name") != sandbox_name
+        ):
+            raise SandboxRuntimeError("sandbox identity no longer matches")
 
     def _prepare_case_identity(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
         self._admin_checked(worker, ("chmod", "0700", "/home/agent"))
@@ -3551,6 +3880,7 @@ class SandboxRuntime:
         cgroup_path = self._case_cgroup_contract(worker, case)
         self._checked_case_cgroup_control(
             worker.name,
+            worker.id,
             ("python3", "-c", CASE_CGROUP_SETUP_SCRIPT, str(cgroup_path)),
             "setup",
         )
@@ -3561,11 +3891,16 @@ class SandboxRuntime:
         case: CaseWorkspace,
     ) -> None:
         self._case_cgroup_contract(worker, case)
-        self._terminate_and_prove_case_cgroup_empty_by_name(worker.name, case)
+        self._terminate_and_prove_case_cgroup_empty_by_name(
+            worker.name,
+            worker.id,
+            case,
+        )
 
     def _terminate_and_prove_case_cgroup_empty_by_name(
         self,
         sandbox_name: str,
+        sandbox_id: str,
         case: CaseWorkspace,
     ) -> None:
         cgroup_path = self._case_cgroup_contract(None, case)
@@ -3575,6 +3910,7 @@ class SandboxRuntime:
         )
         self._checked_case_cgroup_control(
             sandbox_name,
+            sandbox_id,
             (
                 "python3",
                 "-c",
@@ -3591,16 +3927,18 @@ class SandboxRuntime:
         case: CaseWorkspace,
     ) -> None:
         self._case_cgroup_contract(worker, case)
-        self._remove_case_cgroup_by_name(worker.name, case)
+        self._remove_case_cgroup_by_name(worker.name, worker.id, case)
 
     def _remove_case_cgroup_by_name(
         self,
         sandbox_name: str,
+        sandbox_id: str,
         case: CaseWorkspace,
     ) -> None:
         cgroup_path = self._case_cgroup_contract(None, case)
         self._checked_case_cgroup_control(
             sandbox_name,
+            sandbox_id,
             ("python3", "-c", CASE_CGROUP_REMOVE_SCRIPT, str(cgroup_path)),
             "removal",
         )
@@ -3608,11 +3946,13 @@ class SandboxRuntime:
     def _checked_case_cgroup_control(
         self,
         sandbox_name: str,
+        sandbox_id: str,
         argv: tuple[str, ...],
         operation: str,
     ) -> None:
         result = self._worker_command_by_name(
             sandbox_name,
+            sandbox_id,
             argv,
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -3651,15 +3991,17 @@ class SandboxRuntime:
         return cgroup_path
 
     def _clear_case_ipc(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
-        self._clear_case_ipc_by_name(worker.name, case)
+        self._clear_case_ipc_by_name(worker.name, worker.id, case)
 
     def _clear_case_ipc_by_name(
         self,
         sandbox_name: str,
+        sandbox_id: str,
         case: CaseWorkspace,
     ) -> None:
         result = self._worker_command_by_name(
             sandbox_name,
+            sandbox_id,
             ("python3", "-c", IPC_CLEANUP_SCRIPT, str(case.uid)),
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -3733,6 +4075,7 @@ class SandboxRuntime:
         self._require_owned_worker(worker)
         return self._worker_command_by_name(
             worker.name,
+            worker.id,
             argv,
             user=user,
             timeout_seconds=timeout_seconds,
@@ -3741,11 +4084,13 @@ class SandboxRuntime:
     def _worker_command_by_name(
         self,
         sandbox_name: str,
+        sandbox_id: str,
         argv: Sequence[str],
         *,
         user: str,
         timeout_seconds: int,
     ) -> CommandResult:
+        self._require_exact_live_identity(sandbox_name, sandbox_id)
         command = ("sbx", "exec", "--user", user, sandbox_name, *argv)
         return self.process.run(command, timeout_seconds=timeout_seconds)
 

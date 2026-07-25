@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import replace
+import errno
 import hashlib
 import json
 import os
@@ -18,7 +19,13 @@ from scripts.ai_skills_lib.codex_harness import (
     CodexOutputError,
     project_actor_skill,
 )
-from scripts.ai_skills_lib.harness import ActorInput, HarnessRequest, PreparedFile
+from scripts.ai_skills_lib.harness import (
+    ActorInput,
+    HarnessArtifactBinding,
+    HarnessRequest,
+    PreparedFile,
+    bind_harness_request,
+)
 from scripts.ai_skills_lib.fixture_proxy import FixtureProxyError, FixtureSession
 from scripts.ai_skills_lib.sandbox_runtime import (
     CaseWorkspace,
@@ -31,6 +38,56 @@ from scripts.ai_skills_lib.sandbox_runtime import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = EvalRuntimeManifest.load(REPOSITORY_ROOT / "config" / "eval-runtime.json")
+EXAMPLE_SKILL_CONTENT = "---\nname: example\n---\nFollow me.\n"
+
+
+def bound_harness_request(**kwargs: object) -> HarnessRequest:
+    arguments = dict(kwargs)
+    arguments["skill_sources"] = tuple(
+        source
+        if not isinstance(source, Path)
+        else codex_harness.prepare_actor_skill_source(source)
+        for source in arguments.get("skill_sources", ())
+    )
+    fixture_root = arguments.get("fixture_root")
+    if isinstance(fixture_root, Path):
+        arguments["actor_inputs"] = tuple(
+            actor_input
+            if actor_input.prepared is not None
+            else codex_harness.prepare_actor_input(
+                actor_input.source,
+                actor_input.destination,
+                fixture_root,
+            )
+            for actor_input in arguments.get("actor_inputs", ())
+        )
+        fixture_initialization = arguments.get("fixture_initialization")
+        if isinstance(fixture_initialization, Path):
+            arguments["fixture_initialization"] = (
+                codex_harness.prepare_fixture_initialization(
+                    fixture_initialization,
+                    fixture_root,
+                )
+            )
+    request = HarnessRequest(**arguments)
+    return bind_harness_request(
+        request,
+        invocation_id="0" * 32,
+        run_id=f"unit-{request.run_variant}",
+    )
+
+
+def prepare_bound_artifact_directory(path: Path) -> HarnessArtifactBinding:
+    outputs = path / "outputs"
+    outputs.mkdir(parents=True, exist_ok=True)
+    attempt = path.stat()
+    output = outputs.stat()
+    repository = REPOSITORY_ROOT.stat()
+    return HarnessArtifactBinding(
+        attempt_identity=(attempt.st_dev, attempt.st_ino, attempt.st_mode),
+        outputs_identity=(output.st_dev, output.st_ino, output.st_mode),
+        repository_identity=(repository.st_dev, repository.st_ino),
+    )
 
 
 def command_result(stdout: str = "", *, returncode: int = 0, stderr: str = "", timed_out: bool = False):
@@ -42,14 +99,20 @@ def command_result(stdout: str = "", *, returncode: int = 0, stderr: str = "", t
     )
 
 
-def codex_jsonl(expected_skill_path: Path | None = None) -> str:
+def codex_jsonl(
+    expected_skill_path: Path | None = None,
+    *,
+    skill_output: str = EXAMPLE_SKILL_CONTENT,
+) -> str:
     events: list[dict[str, object]] = [
         {"type": "thread.started", "thread_id": "private-thread-id"},
         {"type": "turn.started"},
         {"type": "item.completed", "item": {"id": "message-1", "type": "agent_message", "text": "working"}},
     ]
     if expected_skill_path is not None:
-        command = f"/bin/bash -lc \"sed -n '1,240p' {expected_skill_path}\""
+        command = (
+            f"/bin/bash -c \"/usr/bin/sed -n '1,240p' {expected_skill_path}\""
+        )
         events.extend(
             [
                 {
@@ -69,7 +132,7 @@ def codex_jsonl(expected_skill_path: Path | None = None) -> str:
                         "command": command,
                         "exit_code": 0,
                         "status": "completed",
-                        "aggregated_output": "the entire private skill body",
+                        "aggregated_output": skill_output,
                     },
                 },
             ]
@@ -127,6 +190,8 @@ class FakeSandboxRuntime:
         self.case_sequence = 0
         self.remove_case_on_lease_release = False
         self.quiesce_error: Exception | None = None
+        self.projection_protected = False
+        self.lifecycle_events: list[str] = []
 
     def preflight(self) -> PreflightReport:
         return PreflightReport(available=True, details=("runtime ready",))
@@ -156,6 +221,8 @@ class FakeSandboxRuntime:
                 shutil.rmtree(self.last_case.root)
 
     def prepare_case(self, worker: SandboxWorker, case_id: str) -> CaseWorkspace:
+        self.lifecycle_events.append(f"prepare:{case_id}")
+        self.projection_protected = False
         self.case_sequence += 1
         root = worker.host_root / "case"
         root.mkdir(parents=True, exist_ok=True)
@@ -167,6 +234,7 @@ class FakeSandboxRuntime:
         bootstrap = root / "bootstrap"
         for path in (home, codex_home, tmpdir, workspace, skills, bootstrap):
             path.mkdir(parents=True, exist_ok=True)
+        (skills / ".system").mkdir(exist_ok=True)
         self.last_case = CaseWorkspace(
             case_id=case_id,
             root=root,
@@ -196,12 +264,21 @@ class FakeSandboxRuntime:
         case.skills.chmod(0o555)
 
     def invalidate_worker(self, worker: SandboxWorker) -> None:
+        self.lifecycle_events.append("invalidate")
+        self.projection_protected = False
         self.invalidated_workers.append(worker)
 
     def quiesce_case(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
+        self.lifecycle_events.append(f"quiesce:{case.case_id}")
         self.quiesced_cases.append((worker, case))
         if self.quiesce_error is not None:
             raise self.quiesce_error
+        self.projection_protected = False
+
+    def mutate_worker_host(self, worker: SandboxWorker, path: Path) -> None:
+        if self.projection_protected and path.is_relative_to(worker.host_root):
+            raise OSError(errno.EROFS, "read-only worker projection", path)
+        self.lifecycle_events.append(f"mutate:{path.relative_to(worker.host_root)}")
 
     def execute(
         self,
@@ -212,22 +289,48 @@ class FakeSandboxRuntime:
         timeout_seconds: int,
         environment: dict[str, str] | None = None,
     ) -> CommandResult:
+        self.lifecycle_events.append(f"execute:{case.case_id}:{argv[0]}")
+        self.projection_protected = True
         self.calls.append((worker, case, argv, timeout_seconds, dict(environment or {})))
+        if argv == ("fixture-probe",):
+            return command_result()
         if not self.execution_results:
             raise AssertionError(f"unexpected execution: {argv!r}")
         return self.execution_results.pop(0)
 
 
 class FakeFixtureProxy:
-    def __init__(self) -> None:
+    def __init__(self, runtime: FakeSandboxRuntime | None = None) -> None:
+        self.runtime = runtime
         self.prepared: list[tuple[SandboxWorker, CaseWorkspace, Path, Path]] = []
         self.collected: list[tuple[SandboxWorker, CaseWorkspace, FixtureSession]] = []
         self.discarded: list[SandboxWorker] = []
-        self.collect_error: FixtureProxyError | None = None
+        self.collect_error: BaseException | None = None
         self.preflighted: list[tuple[SandboxWorker, CaseWorkspace]] = []
+        self.retired_preflights: list[SandboxWorker] = []
+        self.retire_error: Exception | None = None
 
     def preflight(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
         self.preflighted.append((worker, case))
+        if self.runtime is not None:
+            self.runtime.lifecycle_events.append("fixture-probe")
+            self.runtime.execute(
+                worker,
+                case,
+                ("fixture-probe",),
+                timeout_seconds=1,
+            )
+
+    def retire_preflight(self, worker: SandboxWorker) -> None:
+        if self.runtime is not None:
+            self.runtime.mutate_worker_host(
+                worker,
+                worker.host_root / "fixture-control",
+            )
+            self.runtime.lifecycle_events.append("fixture-retire")
+        self.retired_preflights.append(worker)
+        if self.retire_error is not None:
+            raise self.retire_error
 
     def prepare_case(
         self,
@@ -735,8 +838,143 @@ class ActorWorkspaceCaptureTests(unittest.TestCase):
                         maximum_bytes=1024,
                     )
 
+    def test_capture_rejects_destination_relocated_inside_repository_before_commit(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = root / "repository"
+            repository.mkdir()
+            workspace = root / "workspace"
+            workspace.mkdir()
+            initial = self.snapshot(workspace)
+            (workspace / "result.txt").write_text(
+                "actor output\n",
+                encoding="utf-8",
+            )
+            external_parent = root / "external"
+            output_root = external_parent / "attempt" / "outputs"
+            output_root.mkdir(parents=True)
+            attempt = output_root.parent.stat()
+            outputs = output_root.stat()
+            repository_stat = repository.stat()
+            binding = HarnessArtifactBinding(
+                attempt_identity=(
+                    attempt.st_dev,
+                    attempt.st_ino,
+                    attempt.st_mode,
+                ),
+                outputs_identity=(
+                    outputs.st_dev,
+                    outputs.st_ino,
+                    outputs.st_mode,
+                ),
+                repository_identity=(
+                    repository_stat.st_dev,
+                    repository_stat.st_ino,
+                ),
+            )
+            real_write = codex_harness._write_captured_workspace_file
+            relocated = repository / "external"
+            redirected = False
+
+            def redirect_after_staging(destination, record):
+                nonlocal redirected
+                real_write(destination, record)
+                if not redirected:
+                    external_parent.rename(relocated)
+                    external_parent.symlink_to(
+                        relocated,
+                        target_is_directory=True,
+                    )
+                    redirected = True
+
+            with mock.patch.object(
+                codex_harness,
+                "_write_captured_workspace_file",
+                side_effect=redirect_after_staging,
+            ):
+                with self.assertRaises(CodexOutputError):
+                    codex_harness._capture_actor_outputs(
+                        workspace,
+                        output_root,
+                        initial,
+                        maximum_bytes=1024,
+                        artifact_binding=binding,
+                    )
+
+            self.assertTrue(redirected)
+            self.assertEqual(
+                tuple((relocated / "attempt" / "outputs").iterdir()),
+                (),
+            )
+
 
 class CodexHarnessAdapterTests(unittest.TestCase):
+    def test_execute_requires_a_runner_created_execution_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = FakeSandboxRuntime(Path(directory))
+            adapter = CodexHarnessAdapter(runtime)
+            request = HarnessRequest(
+                role="actor",
+                run_variant="unbound",
+                prompt="Perform the scenario.",
+                timeout_seconds=60,
+            )
+
+            with self.assertRaisesRegex(CodexOutputError, "execution binding"):
+                adapter.execute(request, runtime.results_root / "unbound")
+
+        self.assertEqual(runtime.case_sequence, 0)
+
+    def test_execute_rejects_a_request_changed_after_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = FakeSandboxRuntime(Path(directory))
+            adapter = CodexHarnessAdapter(runtime)
+            request = bound_harness_request(
+                role="actor",
+                run_variant="bound",
+                prompt="Perform the original scenario.",
+                timeout_seconds=60,
+            )
+
+            with self.assertRaisesRegex(CodexOutputError, "execution binding"):
+                adapter.execute(
+                    replace(request, prompt="Perform a different scenario."),
+                    runtime.results_root / "changed",
+                )
+
+        self.assertEqual(runtime.case_sequence, 0)
+
+    def test_execute_rejects_live_path_material_after_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                EXAMPLE_SKILL_CONTENT,
+                encoding="utf-8",
+            )
+            runtime = FakeSandboxRuntime(root)
+            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skill.parent)
+            request = bind_harness_request(
+                HarnessRequest(
+                    role="actor",
+                    run_variant="live-path",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                    skill_sources=(skill,),
+                    expected_skill="example",
+                ),
+                invocation_id="c" * 32,
+                run_id="live-path",
+            )
+
+            with self.assertRaisesRegex(CodexOutputError, "prepared skill bytes"):
+                adapter.execute(request, runtime.results_root / "live-path")
+
+        self.assertEqual(runtime.case_sequence, 0)
+
     def test_preflight_reports_pinned_codex_and_discovered_defaults(self) -> None:
         models = {
             "models": [
@@ -768,6 +1006,51 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertEqual(runtime.case_sequence, 2)
         self.assertEqual([call[2][0:2] for call in runtime.calls], [("codex", "--version"), ("codex", "exec"), ("codex", "debug")])
 
+    def test_execution_does_not_report_preflight_defaults_as_observed_metadata(
+        self,
+    ) -> None:
+        models = {
+            "models": [
+                {
+                    "slug": "configured-model",
+                    "default_reasoning_level": "high",
+                    "visibility": "list",
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = FakeSandboxRuntime(
+                Path(directory),
+                [
+                    command_result("codex-cli 0.142.4\n"),
+                    command_result(
+                        "--json --ephemeral --ignore-rules "
+                        "--skip-git-repo-check "
+                        "--dangerously-bypass-approvals-and-sandbox"
+                    ),
+                    command_result(json.dumps(models)),
+                ],
+            )
+            adapter = CodexHarnessAdapter(runtime)
+            capabilities = adapter.preflight()
+            runtime.execution_results.append(
+                command_result(codex_jsonl())
+            )
+
+            execution = adapter.execute(
+                bound_harness_request(
+                    role="actor",
+                    run_variant="implicit-default",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                ),
+                runtime.results_root / "implicit-default",
+            )
+
+        self.assertTrue(capabilities.available)
+        self.assertIsNone(execution.model)
+        self.assertIsNone(execution.reasoning_effort)
+
     def test_preflight_proves_fixture_runtime_before_fixture_cases_are_scheduled(self) -> None:
         models = {
             "models": [
@@ -790,28 +1073,82 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                     command_result(json.dumps(models)),
                 ],
             )
-            fixture_proxy = FakeFixtureProxy()
+            fixture_proxy = FakeFixtureProxy(runtime)
             adapter = CodexHarnessAdapter(runtime, fixture_proxy=fixture_proxy)
 
             capabilities = adapter.preflight(require_fixtures=True)
 
         self.assertTrue(capabilities.available, capabilities.failure)
         self.assertEqual(len(fixture_proxy.preflighted), 1)
-        self.assertEqual(fixture_proxy.preflighted[0][1].case_id, "preflight")
+        fixture_case = fixture_proxy.preflighted[0][1]
+        self.assertEqual(fixture_case.case_id, "fixture-preflight")
+        self.assertEqual(runtime.quiesced_cases, [(runtime.worker, fixture_case)])
+        self.assertEqual(fixture_proxy.retired_preflights, [runtime.worker])
+        codex_cases = [call[1] for call in runtime.calls if call[2][0] == "codex"]
+        self.assertEqual({case.case_id for case in codex_cases}, {"codex-preflight"})
+        self.assertTrue(all(case is not fixture_case for case in codex_cases))
+        self.assertEqual(
+            runtime.lifecycle_events,
+            [
+                "prepare:fixture-preflight",
+                "fixture-probe",
+                "execute:fixture-preflight:fixture-probe",
+                "quiesce:fixture-preflight",
+                "mutate:fixture-control",
+                "fixture-retire",
+                "prepare:codex-preflight",
+                "execute:codex-preflight:codex",
+                "execute:codex-preflight:codex",
+                "execute:codex-preflight:codex",
+                "prepare:preflight-reset",
+            ],
+        )
+
+    def test_fixture_preflight_quiescence_failure_invalidates_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = FakeSandboxRuntime(Path(directory))
+            runtime.quiesce_error = RuntimeError("case reset failed")
+            fixture_proxy = FakeFixtureProxy(runtime)
+            adapter = CodexHarnessAdapter(runtime, fixture_proxy=fixture_proxy)
+
+            capabilities = adapter.preflight(require_fixtures=True)
+
+        self.assertFalse(capabilities.available)
+        self.assertIn("case reset failed", capabilities.failure or "")
+        self.assertEqual(runtime.invalidated_workers, [runtime.worker])
+        self.assertEqual(fixture_proxy.discarded, [runtime.worker])
+        self.assertEqual(fixture_proxy.retired_preflights, [])
+
+    def test_fixture_preflight_retirement_failure_invalidates_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = FakeSandboxRuntime(Path(directory))
+            fixture_proxy = FakeFixtureProxy(runtime)
+            fixture_proxy.retire_error = FixtureProxyError(
+                "fixture sidecar cleanup failed"
+            )
+            adapter = CodexHarnessAdapter(runtime, fixture_proxy=fixture_proxy)
+
+            capabilities = adapter.preflight(require_fixtures=True)
+
+        self.assertFalse(capabilities.available)
+        self.assertIn("fixture sidecar cleanup failed", capabilities.failure or "")
+        self.assertEqual(runtime.invalidated_workers, [runtime.worker])
+        self.assertEqual(fixture_proxy.discarded, [runtime.worker])
+        self.assertEqual(fixture_proxy.retired_preflights, [runtime.worker])
 
     def test_execute_projects_skill_invokes_pinned_flags_and_normalizes_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             skill = root / "source" / "example"
             skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("---\nname: example\n---\nFollow me.\n", encoding="utf-8")
+            (skill / "SKILL.md").write_text(EXAMPLE_SKILL_CONTENT, encoding="utf-8")
             runtime = FakeSandboxRuntime(root)
             adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skill.parent)
             worker = runtime.acquire_worker("actor")
             case = runtime.prepare_case(worker, "candidate")
             expected_path = case.skills / "example" / "SKILL.md"
             runtime.execution_results.append(command_result(codex_jsonl(expected_path)))
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate",
                 prompt="Perform the scenario.",
@@ -820,18 +1157,34 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 expected_skill="example",
             )
             artifact_dir = runtime.results_root / "with-skill"
-            artifact_dir.mkdir()
 
             execution = adapter.execute(request, artifact_dir)
             projected_skill_exists = expected_path.is_file()
+            logical_expected_path = Path(
+                "/case/codex-home/skills/example/SKILL.md"
+            )
 
         self.assertEqual(execution.response, "final response")
         self.assertEqual(execution.total_tokens, 25)
         self.assertEqual(execution.input_tokens, 20)
         self.assertEqual(execution.output_tokens, 5)
         self.assertEqual(execution.cached_tokens, 7)
-        self.assertEqual(execution.successful_skill_reads, (expected_path,))
-        self.assertNotIn("the entire private skill body", json.dumps(execution.trace))
+        self.assertEqual(execution.execution_binding, request.execution_binding)
+        self.assertEqual(
+            execution.successful_skill_reads,
+            (logical_expected_path,),
+        )
+        self.assertEqual(execution.expected_skill_path, logical_expected_path)
+        self.assertEqual(
+            tuple(
+                event.get("path")
+                for event in execution.trace
+                if event.get("event") == "skill_read"
+            ),
+            (str(logical_expected_path),),
+        )
+        self.assertNotIn(str(expected_path.parent.parent.parent), json.dumps(execution.trace))
+        self.assertNotIn(EXAMPLE_SKILL_CONTENT, json.dumps(execution.trace))
         self.assertNotIn("private-thread-id", json.dumps(execution.trace))
         codex_argv = runtime.calls[-1][2]
         for flag in MANIFEST.codex.exec_flags:
@@ -849,7 +1202,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             adapter = CodexHarnessAdapter(runtime)
 
             adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="actor-profile",
                     prompt="Perform the scenario.",
@@ -864,6 +1217,12 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         expected_command.extend(("-c", "shell_environment_policy.inherit=core"))
         expected_command.extend(
             ("-c", "shell_environment_policy.ignore_default_excludes=false")
+        )
+        expected_command.extend(
+            ("-c", 'shell_environment_policy.set.BASH_ENV="/dev/null"')
+        )
+        expected_command.extend(
+            ("-c", 'shell_environment_policy.set.ENV="/dev/null"')
         )
         for feature in codex_harness.DISABLED_FEATURES:
             expected_command.extend(("--disable", feature))
@@ -909,7 +1268,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             runtime.execute = inspect_judge_profile
             adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="judge",
                     run_variant="semantic-grade",
                     prompt="Grade the supplied evidence.",
@@ -947,6 +1306,8 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             "tools.web_search=false",
             "features.remote_plugin=false",
             "features.skill_mcp_dependency_install=false",
+            "skills.bundled.enabled=false",
+            "skills.include_instructions=false",
         ):
             self.assertIn(override, config_overrides)
         developer_override = next(
@@ -960,6 +1321,49 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertIn("only supplied evidence", developer_instructions)
         self.assertIn("requested schema", developer_instructions)
         self.assertIn("oracle", developer_instructions)
+
+    def test_judge_fails_when_codex_populates_the_skill_catalog(self) -> None:
+        class BundledSkillRuntime(FakeSandboxRuntime):
+            def execute(self, worker, case, argv, **kwargs):
+                result = super().execute(worker, case, argv, **kwargs)
+                if argv[:2] == ("codex", "exec"):
+                    case.skills.chmod(0o755)
+                    bundled = case.skills / ".system" / "bundled-skill"
+                    bundled.mkdir(parents=True)
+                    (bundled / "SKILL.md").write_text(
+                        "Bundled judge instructions.\n",
+                        encoding="utf-8",
+                    )
+                    case.skills.chmod(0o555)
+                return result
+
+        response_schema = {
+            "type": "object",
+            "properties": {"passed": {"type": "boolean"}},
+            "required": ["passed"],
+            "additionalProperties": False,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = BundledSkillRuntime(
+                Path(directory),
+                [command_result(codex_jsonl())],
+            )
+            execution = CodexHarnessAdapter(runtime).execute(
+                bound_harness_request(
+                    role="judge",
+                    run_variant="bundled-skill-check",
+                    prompt="Grade the supplied evidence.",
+                    timeout_seconds=30,
+                    response_schema=response_schema,
+                ),
+                runtime.results_root / "bundled-skill-check",
+            )
+
+        self.assertIn(
+            "judge skill catalog must contain only an empty .system directory",
+            execution.failure or "",
+        )
+        self.assertEqual(runtime.invalidated_workers, [runtime.worker])
 
     def test_judge_requires_a_valid_closed_response_schema_before_worker_setup(self) -> None:
         invalid_schemas = (
@@ -975,7 +1379,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
                 with self.assertRaisesRegex(CodexOutputError, "judge response schema"):
                     adapter.execute(
-                        HarnessRequest(
+                        bound_harness_request(
                             role="judge",
                             run_variant="semantic-grade",
                             prompt="Grade the supplied evidence.",
@@ -997,26 +1401,15 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             root = Path(directory)
             runtime = FakeSandboxRuntime(root)
 
-            with mock.patch.object(
-                codex_harness.json,
-                "JSONEncoder",
-                side_effect=AssertionError(
-                    "oversized scalar must be rejected before encoder construction"
-                ),
-            ) as encoder:
-                with self.assertRaisesRegex(CodexOutputError, "256 KiB byte limit"):
-                    CodexHarnessAdapter(runtime).execute(
-                        HarnessRequest(
-                            role="judge",
-                            run_variant="oversized-schema",
-                            prompt="Grade the supplied evidence.",
-                            timeout_seconds=30,
-                            response_schema=response_schema,
-                        ),
-                        runtime.results_root / "oversized-schema",
-                    )
+            with self.assertRaisesRegex(ValueError, "256 KiB byte limit"):
+                bound_harness_request(
+                    role="judge",
+                    run_variant="oversized-schema",
+                    prompt="Grade the supplied evidence.",
+                    timeout_seconds=30,
+                    response_schema=response_schema,
+                )
 
-            encoder.assert_not_called()
             self.assertEqual(runtime.case_sequence, 0)
             self.assertEqual(runtime.calls, [])
 
@@ -1025,15 +1418,9 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         failures = (
             (
                 codex_harness,
-                "_materialize_bounded_judge_schema",
+                "strict_bounded_json_loads",
                 MemoryError(),
             ),
-            (
-                codex_harness,
-                "_materialize_bounded_judge_schema",
-                SystemError("schema walker failed"),
-            ),
-            (codex_harness.json.JSONEncoder, "iterencode", MemoryError()),
             (
                 codex_harness,
                 "build_safe_json_schema_validator",
@@ -1044,16 +1431,17 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             with self.subTest(resource_error=type(resource_error).__name__), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 runtime = FakeSandboxRuntime(root)
+                request = bound_harness_request(
+                    role="judge",
+                    run_variant="resource-failure",
+                    prompt="Grade the supplied evidence.",
+                    timeout_seconds=30,
+                    response_schema=response_schema,
+                )
                 with mock.patch.object(owner, attribute, side_effect=resource_error):
                     with self.assertRaises(CodexOutputError) as raised:
                         CodexHarnessAdapter(runtime).execute(
-                            HarnessRequest(
-                                role="judge",
-                                run_variant="resource-failure",
-                                prompt="Grade the supplied evidence.",
-                                timeout_seconds=30,
-                                response_schema=response_schema,
-                            ),
+                            request,
                             runtime.results_root / "resource-failure",
                         )
 
@@ -1098,10 +1486,12 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             runtime.execute = execute_with_outputs
             artifact_dir = runtime.results_root / "with-skill"
-            artifact_dir.mkdir()
+            artifact_binding = prepare_bound_artifact_directory(
+                artifact_dir
+            )
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="candidate",
                     prompt="Perform the scenario.",
@@ -1114,6 +1504,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                     ),
                     fixture_root=fixture_root,
                     capture_outputs=True,
+                    artifact_binding=artifact_binding,
                 ),
                 artifact_dir,
             )
@@ -1148,15 +1539,18 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
                 runtime.execute = execute_with_unsafe_output
                 artifact_dir = runtime.results_root / output_kind
-                (artifact_dir / "outputs").mkdir(parents=True)
+                artifact_binding = prepare_bound_artifact_directory(
+                    artifact_dir
+                )
 
                 execution = adapter.execute(
-                    HarnessRequest(
+                    bound_harness_request(
                         role="actor",
                         run_variant=output_kind,
                         prompt="Perform the scenario.",
                         timeout_seconds=60,
                         capture_outputs=True,
+                        artifact_binding=artifact_binding,
                     ),
                     artifact_dir,
                 )
@@ -1181,14 +1575,16 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             runtime.execute = execute_with_secret_output
             artifact_dir = runtime.results_root / "secret-output"
+            artifact_binding = prepare_bound_artifact_directory(artifact_dir)
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="secret-output",
                     prompt="Perform the scenario.",
                     timeout_seconds=60,
                     capture_outputs=True,
+                    artifact_binding=artifact_binding,
                 ),
                 artifact_dir,
             )
@@ -1238,10 +1634,12 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 ),
             )
             adapter = CodexHarnessAdapter(runtime, allowed_skill_root=root / "skills")
+            artifact_dir = runtime.results_root / "candidate"
+            artifact_binding = prepare_bound_artifact_directory(artifact_dir)
 
             with self.assertRaisesRegex(CodexOutputError, "byte limit"):
                 adapter.execute(
-                    HarnessRequest(
+                    bound_harness_request(
                         role="actor",
                         run_variant="candidate",
                         prompt="Perform the scenario.",
@@ -1251,8 +1649,9 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                         ),
                         fixture_root=fixture_root,
                         capture_outputs=True,
+                        artifact_binding=artifact_binding,
                     ),
-                    runtime.results_root / "candidate",
+                    artifact_dir,
                 )
 
             self.assertEqual(runtime.calls, [])
@@ -1307,7 +1706,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             runtime.remove_case_on_lease_release = True
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="candidate",
                     prompt="Perform the scenario.",
@@ -1318,7 +1717,10 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 runtime.results_root / "with-skill",
             )
 
-        self.assertEqual(execution.successful_skill_reads, (expected_path,))
+        self.assertEqual(
+            execution.successful_skill_reads,
+            (Path("/case/codex-home/skills/example/SKILL.md"),),
+        )
 
     def test_expected_projection_integrity_is_verified_even_without_a_skill_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1349,7 +1751,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             runtime.quiesce_case = remove_projection
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="candidate",
                     prompt="Perform the scenario.",
@@ -1392,7 +1794,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             runtime.execute = execute_and_remove_projection
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="candidate",
                     prompt="Perform the scenario.",
@@ -1435,7 +1837,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             runtime.invalidate_worker = invalidate_and_remove_projection
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="candidate",
                     prompt="Perform the scenario.",
@@ -1457,7 +1859,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             root = Path(directory)
             runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
             adapter = CodexHarnessAdapter(runtime)
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="fixture",
                 prompt="Call the fixture API.",
@@ -1495,7 +1897,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skills_root)
 
             adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="fixture-input",
                     prompt="Use request.md.",
@@ -1538,7 +1940,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skills_root)
 
             adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="fixture-command",
                     prompt="Use the available gh command.",
@@ -1589,7 +1991,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skills_root)
 
             adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="fixture-data",
                     prompt="Read bin/command-contract.txt.",
@@ -1624,7 +2026,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             with self.assertRaisesRegex(CodexOutputError, "fixture source"):
                 adapter.execute(
-                    HarnessRequest(
+                    bound_harness_request(
                         role="actor",
                         run_variant="fixture-input",
                         prompt="Use the input.",
@@ -1660,7 +2062,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             with self.assertRaisesRegex(CodexOutputError, "case fixture root"):
                 adapter.execute(
-                    HarnessRequest(
+                    bound_harness_request(
                         role="actor",
                         run_variant="selected",
                         prompt="Use the input.",
@@ -1700,7 +2102,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             with self.assertRaisesRegex(CodexOutputError, "case fixture root"):
                 adapter.execute(
-                    HarnessRequest(
+                    bound_harness_request(
                         role="actor",
                         run_variant="selected",
                         prompt="Call the fixture API.",
@@ -1724,7 +2126,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 allowed_skill_root=skills_root,
                 fixture_proxy=fixture_proxy,
             )
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="fixture",
                 prompt="Call the fixture API.",
@@ -1740,7 +2142,8 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertIs(prepared_worker, collected_worker)
         self.assertIs(prepared_case, collected_case)
         self.assertIs(runtime.quiesced_cases[0][1], prepared_case)
-        self.assertEqual(prepared_path, fixture)
+        self.assertIsInstance(prepared_path, PreparedFile)
+        self.assertEqual(prepared_path.source, fixture.resolve())
         self.assertEqual(prepared_root, fixture_root.resolve())
         self.assertTrue(any(event.get("event") == "fixture_request" for event in execution.trace))
         self.assertIn(
@@ -1764,7 +2167,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             )
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="fixture-timeout",
                     prompt="Call the fixture API.",
@@ -1804,7 +2207,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             )
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="fixture-mismatch",
                     prompt="Call the fixture API.",
@@ -1821,6 +2224,43 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         )
         self.assertIn("request sequence", execution.failure or "")
 
+    def test_post_capture_interruption_discards_fixture_state_and_recycles_worker(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skills_root, fixture_root, fixture = create_case_fixture(root)
+            runtime = FakeSandboxRuntime(root, [command_result(codex_jsonl())])
+            fixture_proxy = FakeFixtureProxy()
+            fixture_proxy.collect_error = KeyboardInterrupt()
+            adapter = CodexHarnessAdapter(
+                runtime,
+                allowed_skill_root=skills_root,
+                fixture_proxy=fixture_proxy,
+            )
+
+            with self.assertRaises(KeyboardInterrupt):
+                artifact_dir = runtime.results_root / "fixture-interruption"
+                artifact_binding = prepare_bound_artifact_directory(
+                    artifact_dir
+                )
+                adapter.execute(
+                    bound_harness_request(
+                        role="actor",
+                        run_variant="fixture-interruption",
+                        prompt="Call the fixture API.",
+                        timeout_seconds=60,
+                        fixture_root=fixture_root,
+                        fixture_initialization=fixture,
+                        capture_outputs=True,
+                        artifact_binding=artifact_binding,
+                    ),
+                    artifact_dir,
+                )
+
+        self.assertIn(runtime.worker, fixture_proxy.discarded)
+        self.assertIn(runtime.worker, runtime.invalidated_workers)
+
     def test_preserves_native_evidence_when_post_execution_cleanup_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1829,7 +2269,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             adapter = CodexHarnessAdapter(runtime)
 
             execution = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="cleanup-failure",
                     prompt="Perform the scenario.",
@@ -1853,7 +2293,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             with self.assertRaisesRegex(CodexOutputError, "fixture proxy"):
                 adapter.execute(
-                    HarnessRequest(
+                    bound_harness_request(
                         role="actor",
                         run_variant="fixture",
                         prompt="Call the fixture API.",
@@ -1901,7 +2341,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}},
             ]
             runtime.execution_results.append(command_result("\n".join(json.dumps(event) for event in events)))
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate",
                 prompt="Perform the scenario.",
@@ -1915,6 +2355,303 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             execution = adapter.execute(request, artifact_dir)
 
         self.assertEqual(execution.successful_skill_reads, ())
+
+    def test_skill_read_requires_trusted_reader_and_exact_skill_bytes(self) -> None:
+        cases = (
+            (
+                "untrusted reader",
+                lambda output: output.replace("/usr/bin/sed", "sed"),
+            ),
+            (
+                "forged output",
+                lambda output: output.replace(
+                    json.dumps(EXAMPLE_SKILL_CONTENT)[1:-1],
+                    json.dumps("forged skill output\n")[1:-1],
+                ),
+            ),
+        )
+        for label, mutate in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                skill = root / "source" / "example"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(
+                    EXAMPLE_SKILL_CONTENT,
+                    encoding="utf-8",
+                )
+                runtime = FakeSandboxRuntime(root)
+                adapter = CodexHarnessAdapter(
+                    runtime,
+                    allowed_skill_root=skill.parent,
+                )
+                worker = runtime.acquire_worker("actor")
+                case = runtime.prepare_case(worker, "candidate")
+                expected = case.skills / "example" / "SKILL.md"
+                runtime.execution_results.append(
+                    command_result(mutate(codex_jsonl(expected)))
+                )
+
+                execution = adapter.execute(
+                    bound_harness_request(
+                        role="actor",
+                        run_variant="candidate",
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        skill_sources=(skill,),
+                        expected_skill="example",
+                    ),
+                    runtime.results_root / label.replace(" ", "-"),
+                )
+
+            self.assertEqual(execution.successful_skill_reads, ())
+
+    def test_skill_read_requires_matching_started_and_completed_commands(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "source" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                EXAMPLE_SKILL_CONTENT,
+                encoding="utf-8",
+            )
+            runtime = FakeSandboxRuntime(root)
+            adapter = CodexHarnessAdapter(
+                runtime,
+                allowed_skill_root=skill.parent,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "candidate")
+            expected = case.skills / "example" / "SKILL.md"
+            events = [
+                json.loads(line)
+                for line in codex_jsonl(expected).splitlines()
+            ]
+            for event in events:
+                if event.get("type") == "item.started":
+                    event["item"]["command"] = (
+                        '/bin/bash -c "/bin/echo unrelated"'
+                    )
+            runtime.execution_results.append(
+                command_result(
+                    "\n".join(json.dumps(event) for event in events)
+                )
+            )
+
+            execution = adapter.execute(
+                bound_harness_request(
+                    role="actor",
+                    run_variant="candidate",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                    skill_sources=(skill,),
+                    expected_skill="example",
+                ),
+                runtime.results_root / "command-mismatch",
+            )
+
+        self.assertEqual(execution.successful_skill_reads, ())
+        self.assertIsNotNone(execution.failure)
+
+    def test_skill_read_requires_an_exact_integer_zero_exit_code(self) -> None:
+        for invalid_exit_code in (False, 0.0):
+            with (
+                self.subTest(exit_code=invalid_exit_code),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                skill = root / "source" / "example"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(
+                    EXAMPLE_SKILL_CONTENT,
+                    encoding="utf-8",
+                )
+                runtime = FakeSandboxRuntime(root)
+                adapter = CodexHarnessAdapter(
+                    runtime,
+                    allowed_skill_root=skill.parent,
+                )
+                worker = runtime.acquire_worker("actor")
+                case = runtime.prepare_case(worker, "candidate")
+                expected = case.skills / "example" / "SKILL.md"
+                events = [
+                    json.loads(line)
+                    for line in codex_jsonl(expected).splitlines()
+                ]
+                for event in events:
+                    if event.get("type") == "item.completed" and (
+                        event.get("item", {}).get("type")
+                        == "command_execution"
+                    ):
+                        event["item"]["exit_code"] = invalid_exit_code
+                runtime.execution_results.append(
+                    command_result(
+                        "\n".join(json.dumps(event) for event in events)
+                    )
+                )
+
+                execution = adapter.execute(
+                    bound_harness_request(
+                        role="actor",
+                        run_variant="candidate",
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        skill_sources=(skill,),
+                        expected_skill="example",
+                    ),
+                    runtime.results_root / "invalid-exit-code",
+                )
+
+            self.assertEqual(execution.successful_skill_reads, ())
+            self.assertIsNotNone(execution.failure)
+
+    def test_skill_read_completion_requires_a_consistent_terminal_status(
+        self,
+    ) -> None:
+        for label, status_update in (
+            ("missing", None),
+            ("failed-with-zero-exit", "failed"),
+        ):
+            with self.subTest(status=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                skill = root / "source" / "example"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(
+                    EXAMPLE_SKILL_CONTENT,
+                    encoding="utf-8",
+                )
+                runtime = FakeSandboxRuntime(root)
+                adapter = CodexHarnessAdapter(
+                    runtime,
+                    allowed_skill_root=skill.parent,
+                )
+                worker = runtime.acquire_worker("actor")
+                case = runtime.prepare_case(worker, "candidate")
+                expected = case.skills / "example" / "SKILL.md"
+                events = [
+                    json.loads(line)
+                    for line in codex_jsonl(expected).splitlines()
+                ]
+                for event in events:
+                    item = event.get("item", {})
+                    if (
+                        event.get("type") == "item.completed"
+                        and item.get("type") == "command_execution"
+                    ):
+                        if status_update is None:
+                            item.pop("status", None)
+                        else:
+                            item["status"] = status_update
+                runtime.execution_results.append(
+                    command_result(
+                        "\n".join(json.dumps(event) for event in events)
+                    )
+                )
+
+                execution = adapter.execute(
+                    bound_harness_request(
+                        role="actor",
+                        run_variant="candidate",
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        skill_sources=(skill,),
+                        expected_skill="example",
+                    ),
+                    runtime.results_root / label,
+                )
+
+            self.assertEqual(execution.successful_skill_reads, ())
+            self.assertIsNotNone(execution.failure)
+
+    def test_skill_read_rejects_noncanonical_path_operands(self) -> None:
+        alias_builders = (
+            ("parent-segment", lambda expected: f"{expected.parent}/redirect/../SKILL.md"),
+            ("current-segment", lambda expected: f"{expected.parent}/./SKILL.md"),
+            (
+                "duplicate-separator",
+                lambda expected: str(expected).replace("/skills/", "/skills//"),
+            ),
+        )
+        for index, (label, build_alias) in enumerate(alias_builders):
+            with self.subTest(alias=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                skill = root / "source" / "example"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(
+                    EXAMPLE_SKILL_CONTENT,
+                    encoding="utf-8",
+                )
+                runtime = FakeSandboxRuntime(root)
+                adapter = CodexHarnessAdapter(
+                    runtime,
+                    allowed_skill_root=skill.parent,
+                )
+                worker = runtime.acquire_worker("actor")
+                case = runtime.prepare_case(worker, "candidate")
+                expected = case.skills / "example" / "SKILL.md"
+                alias = build_alias(expected)
+                runtime.execution_results.append(
+                    command_result(
+                        codex_jsonl(expected).replace(
+                            str(expected),
+                            alias,
+                        )
+                    )
+                )
+
+                execution = adapter.execute(
+                    bound_harness_request(
+                        role="actor",
+                        run_variant=f"candidate-{index}",
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        skill_sources=(skill,),
+                        expected_skill="example",
+                    ),
+                    runtime.results_root / f"noncanonical-{index}",
+                )
+
+                self.assertEqual(
+                    execution.successful_skill_reads,
+                    (),
+                )
+
+    def test_skill_read_rejects_untrusted_or_login_shell_wrappers(self) -> None:
+        wrappers = ("bash -c", "/tmp/bash -c", "/bin/bash -lc")
+        for wrapper in wrappers:
+            with self.subTest(wrapper=wrapper), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                skill = root / "source" / "example"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(
+                    EXAMPLE_SKILL_CONTENT,
+                    encoding="utf-8",
+                )
+                runtime = FakeSandboxRuntime(root)
+                adapter = CodexHarnessAdapter(
+                    runtime,
+                    allowed_skill_root=skill.parent,
+                )
+                worker = runtime.acquire_worker("actor")
+                case = runtime.prepare_case(worker, "candidate")
+                expected = case.skills / "example" / "SKILL.md"
+                output = codex_jsonl(expected).replace("/bin/bash -c", wrapper)
+                runtime.execution_results.append(command_result(output))
+
+                execution = adapter.execute(
+                    bound_harness_request(
+                        role="actor",
+                        run_variant="candidate",
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        skill_sources=(skill,),
+                        expected_skill="example",
+                    ),
+                    runtime.results_root / wrapper.replace("/", "-").replace(" ", "-"),
+                )
+
+            self.assertEqual(execution.successful_skill_reads, ())
 
     def test_rejects_ambiguous_or_partial_skill_read_commands(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1951,7 +2688,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 ]
             )
             runtime.execution_results.append(command_result("\n".join(json.dumps(event) for event in events)))
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate",
                 prompt="Perform the scenario.",
@@ -1987,7 +2724,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                     ),
                 ]
             )
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate-one",
                 prompt="Perform the scenario.",
@@ -1996,7 +2733,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
             truncated = adapter.execute(request, runtime.results_root / "truncated")
             incomplete = adapter.execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="candidate-two",
                     prompt="Perform the scenario.",
@@ -2013,7 +2750,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             root = Path(directory)
             runtime = FakeSandboxRuntime(root)
             adapter = CodexHarnessAdapter(runtime)
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate",
                 prompt="Perform the scenario.",
@@ -2031,7 +2768,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             root = Path(directory)
             runtime = FakeSandboxRuntime(root)
             adapter = CodexHarnessAdapter(runtime)
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate",
                 prompt="Perform the scenario.",
@@ -2060,7 +2797,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 ],
             )
             adapter = CodexHarnessAdapter(runtime)
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate",
                 prompt="Perform the scenario.",
@@ -2090,7 +2827,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 ],
             )
             adapter = CodexHarnessAdapter(runtime)
-            request = HarnessRequest(
+            request = bound_harness_request(
                 role="actor",
                 run_variant="candidate",
                 prompt="Perform the scenario.",
@@ -2129,7 +2866,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             )
 
             execution = CodexHarnessAdapter(runtime).execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="secret-response",
                     prompt="Perform the scenario.",
@@ -2157,7 +2894,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             runtime = FakeSandboxRuntime(root, [command_result(raw)])
 
             execution = CodexHarnessAdapter(runtime).execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="nonfinite-jsonl",
                     prompt="Perform the scenario.",
@@ -2167,6 +2904,53 @@ class CodexHarnessAdapterTests(unittest.TestCase):
             )
 
         self.assertIn("invalid JSONL", execution.failure or "")
+
+    def test_codex_jsonl_rejects_reordered_and_unknown_top_level_events(self) -> None:
+        for label in ("reordered", "unknown"):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                skill = root / "source" / "example"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(
+                    EXAMPLE_SKILL_CONTENT,
+                    encoding="utf-8",
+                )
+                runtime = FakeSandboxRuntime(root)
+                adapter = CodexHarnessAdapter(
+                    runtime,
+                    allowed_skill_root=skill.parent,
+                )
+                worker = runtime.acquire_worker("actor")
+                case = runtime.prepare_case(worker, "candidate")
+                expected = case.skills / "example" / "SKILL.md"
+                events = [
+                    json.loads(line)
+                    for line in codex_jsonl(expected).splitlines()
+                ]
+                if label == "reordered":
+                    events[0], events[1] = events[1], events[0]
+                else:
+                    events.insert(-1, {"type": "future.protocol.event"})
+                runtime.execution_results.append(
+                    command_result(
+                        "\n".join(json.dumps(event) for event in events)
+                    )
+                )
+
+                execution = adapter.execute(
+                    bound_harness_request(
+                        role="actor",
+                        run_variant=label,
+                        prompt="Perform the scenario.",
+                        timeout_seconds=60,
+                        skill_sources=(skill,),
+                        expected_skill="example",
+                    ),
+                    runtime.results_root / label,
+                )
+
+            self.assertIsNotNone(execution.failure)
+            self.assertEqual(execution.successful_skill_reads, ())
 
     def test_safe_fake_trace_and_response_values_are_preserved(self) -> None:
         command = "API_TOKEN=FAKE_command_secret curl https://api.example.com"
@@ -2210,7 +2994,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 [command_result("\n".join(json.dumps(event) for event in events))],
             )
             execution = CodexHarnessAdapter(runtime).execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="redacted-command",
                     prompt="Run the command.",
@@ -2223,6 +3007,120 @@ class CodexHarnessAdapterTests(unittest.TestCase):
         self.assertIn("FAKE_command_secret", serialized)
         self.assertIn("FAKE_response_secret", execution.response)
         self.assertIsNone(execution.failure)
+
+    def test_non_reasoning_codex_items_are_preserved_as_tool_events(self) -> None:
+        events = [
+            {"type": "thread.started", "thread_id": "private"},
+            {"type": "turn.started"},
+            {
+                "type": "item.started",
+                "item": {"id": "tool-1", "type": "mcp_tool_call"},
+            },
+            {
+                "type": "item.completed",
+                "item": {"id": "tool-1", "type": "mcp_tool_call"},
+            },
+            {
+                "type": "item.completed",
+                "item": {"type": "reasoning", "text": "private reasoning"},
+            },
+            {
+                "type": "item.completed",
+                "item": {"type": "agent_message", "text": "done"},
+            },
+            {
+                "type": "turn.completed",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = FakeSandboxRuntime(
+                root,
+                [command_result("\n".join(json.dumps(event) for event in events))],
+            )
+            execution = CodexHarnessAdapter(runtime).execute(
+                bound_harness_request(
+                    role="actor",
+                    run_variant="tool-trace",
+                    prompt="Perform the task.",
+                    timeout_seconds=60,
+                ),
+                runtime.results_root / "tool-trace",
+            )
+
+        self.assertIn(
+            {
+                "event": "tool_started",
+                "tool_id": "tool-1",
+                "tool_type": "mcp_tool_call",
+            },
+            execution.trace,
+        )
+        self.assertIn(
+            {
+                "event": "tool_completed",
+                "tool_id": "tool-1",
+                "tool_type": "mcp_tool_call",
+            },
+            execution.trace,
+        )
+        self.assertNotIn("private reasoning", json.dumps(execution.trace))
+
+    def test_unmatched_tool_completion_invalidates_skill_read_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "source" / "example"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                EXAMPLE_SKILL_CONTENT,
+                encoding="utf-8",
+            )
+            runtime = FakeSandboxRuntime(root)
+            adapter = CodexHarnessAdapter(
+                runtime,
+                allowed_skill_root=skill.parent,
+            )
+            worker = runtime.acquire_worker("actor")
+            case = runtime.prepare_case(worker, "candidate")
+            expected = case.skills / "example" / "SKILL.md"
+            events = [
+                json.loads(line)
+                for line in codex_jsonl(expected).splitlines()
+            ]
+            events.insert(
+                2,
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "id": "unmatched-tool",
+                        "type": "mcp_tool_call",
+                    },
+                },
+            )
+            runtime.execution_results.append(
+                command_result(
+                    "\n".join(json.dumps(event) for event in events)
+                )
+            )
+
+            execution = adapter.execute(
+                bound_harness_request(
+                    role="actor",
+                    run_variant="candidate",
+                    prompt="Perform the scenario.",
+                    timeout_seconds=60,
+                    skill_sources=(skill,),
+                    expected_skill="example",
+                ),
+                runtime.results_root / "unmatched-tool",
+            )
+
+        self.assertEqual(execution.successful_skill_reads, ())
+        self.assertIn(
+            "tool completion has no matching start event",
+            execution.failure or "",
+        )
 
     def test_transformed_command_trace_marks_the_execution_untrustworthy(self) -> None:
         credential = "opaque-command-credential"
@@ -2264,7 +3162,7 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                 [command_result("\n".join(json.dumps(event) for event in events))],
             )
             execution = CodexHarnessAdapter(runtime).execute(
-                HarnessRequest(
+                bound_harness_request(
                     role="actor",
                     run_variant="sensitive-command",
                     prompt="Run the command.",

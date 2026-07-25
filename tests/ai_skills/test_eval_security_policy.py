@@ -43,6 +43,8 @@ class TemporaryPolicySkill:
             path=self.skill_path,
             root=self.root,
             frontmatter={"name": "alpha"},
+            source_text="Safe runtime instructions.\n",
+            source_signature=(),
         )
 
     def cleanup(self) -> None:
@@ -338,6 +340,36 @@ class EvalDefinitionSecurityTests(unittest.TestCase):
         self.assertTrue(contains_local_eval_runtime_reference(forbidden.encode()))
         self.assertTrue(contains_local_eval_runtime_reference(local_uri))
         self.assertTrue(contains_local_eval_runtime_reference(local_uri.encode()))
+
+    def test_installable_json_cannot_hide_eval_oracle_references_with_escapes(self) -> None:
+        asset = self.skill.root / "assets" / "oracle.JSON"
+        asset.parent.mkdir()
+        asset.write_text(
+            r'{"path":"\u0065vals/oracle.json"}',
+            encoding="utf-8",
+        )
+
+        self.assertTrue(
+            any(
+                "installable content must not reference evals/" in message
+                for message in self.skill.messages()
+            )
+        )
+
+    def test_absolute_path_suffix_does_not_exercise_bundled_runtime_material(self) -> None:
+        script = self.skill.root / "scripts" / "tool.py"
+        script.parent.mkdir()
+        script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+        messages = self.skill.messages(
+            "Run C:/checkout/scripts/tool.py to perform the task."
+        )
+
+        self.assertIn(
+            "evals/evals.json must exercise bundled runtime material by naming "
+            "a real scripts/, references/, or assets/ path",
+            messages,
+        )
 
 
 class SafeJsonSchemaPolicyTests(unittest.TestCase):
