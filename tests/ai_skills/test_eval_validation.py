@@ -59,6 +59,7 @@ class RecordingBehaviorHarness:
         actor_trace_factory: Callable[
             [], tuple[Mapping[str, object], ...]
         ] | None = None,
+        actor_exception: Exception | None = None,
         captured_report_text: str = '{"status": "ok"}\n',
         judge_response: str | None = None,
         judge_timed_out: bool = False,
@@ -72,6 +73,7 @@ class RecordingBehaviorHarness:
         self.actor_failure_variant = actor_failure_variant
         self.actor_response = actor_response
         self.actor_trace_factory = actor_trace_factory
+        self.actor_exception = actor_exception
         self.captured_report_text = captured_report_text
         self.judge_response = judge_response
         self.judge_timed_out = judge_timed_out
@@ -103,6 +105,8 @@ class RecordingBehaviorHarness:
     def execute(self, request: HarnessRequest, artifact_dir: Path) -> HarnessExecution:
         self.requests.append((request, artifact_dir))
         if request.role == "actor":
+            if self.actor_exception is not None:
+                raise self.actor_exception
             outputs = artifact_dir / "outputs"
             outputs.mkdir(exist_ok=True)
             (outputs / "report.json").write_text(
@@ -2082,6 +2086,23 @@ class BehaviorRunnerTests(unittest.TestCase):
             self.assertFalse((failed.artifact_dir / "grading.json").exists())
             self.assertTrue(workspace.invocation_manifest.is_file())
 
+    def test_actor_adapter_exception_preserves_its_bounded_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = RecordingBehaviorHarness(
+                actor_exception=RuntimeError("actor adapter failed before execution")
+            )
+
+            _, workspace, result = self._execute(Path(directory), adapter)
+
+            self.assertEqual(result.exit_code, 2)
+            for attempt in workspace.attempts.iterdir():
+                trace = (attempt / "execution_trace.jsonl").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("actor adapter failed before execution", trace)
+                self.assertNotIn("execution_binding_mismatch", trace)
+                self.assertFalse((attempt / "grading.json").exists())
+
     def test_run_identifiers_cannot_collide_across_skill_and_case_boundaries(self) -> None:
         first = eval_validation._injective_run_id("a", "b-c", "with-skill")
         second = eval_validation._injective_run_id("a-b", "c", "with-skill")
@@ -2544,7 +2565,7 @@ class BehaviorRunnerTests(unittest.TestCase):
                 "oversized trace scalar must be rejected before encoder construction"
             ),
         ) as encoder:
-            frozen = actor_evidence.freeze_scanned_actor_trace(trace)
+            frozen = actor_evidence.freeze_scanned_execution_trace(trace)
 
         self.assertIsNone(frozen)
         encoder.assert_not_called()
@@ -2576,7 +2597,7 @@ class BehaviorRunnerTests(unittest.TestCase):
                     "structurally invalid trace must be rejected before encoding"
                 ),
             ) as encoder:
-                frozen = actor_evidence.freeze_scanned_actor_trace(trace)
+                frozen = actor_evidence.freeze_scanned_execution_trace(trace)
 
             self.assertIsNone(frozen)
             encoder.assert_not_called()

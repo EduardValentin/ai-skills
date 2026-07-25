@@ -34,6 +34,7 @@ from scripts.ai_skills_lib.eval_core import (
     ResultArtifactError,
     ResultWorkspace,
     StructuredSkillPathKind,
+    TerminalDecision,
     aggregate_results,
     capabilities_from_preflight_receipt,
     canonical_document_sha256,
@@ -49,6 +50,7 @@ from scripts.ai_skills_lib.eval_core import (
     preflight_bound_invocations,
     prepare_exact_judge_evidence,
     record_harness_timing,
+    resolve_terminal_decision,
     write_eval_run_artifacts,
     write_incomplete_attempt_artifacts,
     write_result_summary,
@@ -123,6 +125,15 @@ class BehaviorSuiteResult:
         return 0
 
 
+@dataclass(frozen=True)
+class BehaviorFinalization:
+    """One behavior sub-run's durable terminal outcome."""
+
+    terminal: TerminalDecision
+    benchmark: dict[str, object] | None
+    failures: tuple[str, ...] = ()
+
+
 class BehaviorHarnessError(RuntimeError):
     """Raised when a selected harness cannot produce trustworthy behavior evidence."""
 
@@ -162,6 +173,89 @@ class PreparedBehaviorPlan:
     @property
     def manifests(self) -> tuple[AttemptManifest, ...]:
         return tuple(attempt.manifest for attempt in self.attempts)
+
+
+def finalize_behavior_result(
+    root: Path,
+    workspace: ResultWorkspace,
+    result: BehaviorSuiteResult | None,
+    *,
+    execution_failure: str | None = None,
+) -> BehaviorFinalization:
+    """Persist one behavior terminal state without duplicating runner policy."""
+    if execution_failure is not None or result is None:
+        failure = execution_failure or "behavior evaluation did not complete"
+        terminal = resolve_terminal_decision(
+            execution_error=True,
+            pending_review=False,
+            expectation_failure=False,
+        )
+        summary_failure = _persist_terminal_behavior_summary(
+            workspace,
+            decision=terminal.durable_label,
+            result=result,
+            failure=failure,
+        )
+        failures = [failure]
+        if summary_failure is not None:
+            failures.append(f"result summary failed: {summary_failure}")
+        return BehaviorFinalization(
+            terminal=terminal,
+            benchmark=None,
+            failures=tuple(failures),
+        )
+
+    terminal = resolve_terminal_decision(
+        execution_error=result.exit_code == 2,
+        pending_review=False,
+        expectation_failure=result.exit_code == 1,
+    )
+    if terminal.key == "execution_error":
+        summary_failure = _persist_terminal_behavior_summary(
+            workspace,
+            decision=terminal.durable_label,
+            result=result,
+        )
+        failures = (
+            (f"result summary failed: {summary_failure}",)
+            if summary_failure is not None
+            else ()
+        )
+        return BehaviorFinalization(
+            terminal=terminal,
+            benchmark=None,
+            failures=failures,
+        )
+
+    try:
+        benchmark = aggregate_results(
+            workspace.root,
+            "judge",
+            repository_root=root,
+            terminal_decision=terminal.durable_label,
+        )
+    except Exception as error:
+        failure = f"aggregation failed: {str(error) or type(error).__name__}"
+        execution_terminal = resolve_terminal_decision(
+            execution_error=True,
+            pending_review=False,
+            expectation_failure=result.exit_code == 1,
+        )
+        summary_failure = _persist_terminal_behavior_summary(
+            workspace,
+            decision=execution_terminal.durable_label,
+            result=result,
+            failure=failure,
+        )
+        failures = [failure]
+        if summary_failure is not None:
+            failures.append(f"result summary failed: {summary_failure}")
+        return BehaviorFinalization(
+            terminal=execution_terminal,
+            benchmark=None,
+            failures=tuple(failures),
+        )
+    return BehaviorFinalization(terminal=terminal, benchmark=benchmark)
 
 
 def run_behavior_eval_harness(
@@ -284,63 +378,26 @@ def run_behavior_eval_harness(
             except Exception as error:
                 failure = "\n".join(part for part in (failure, str(error)) if part)
 
-    if failure is not None or result is None:
-        failure = failure or "behavior evaluation did not complete"
-        summary_failure = _persist_terminal_behavior_summary(
-            workspace,
-            decision="execution error",
-            result=result,
-            failure=failure,
-        )
-        if summary_failure is not None:
-            failure = f"{failure}\nresult summary failed: {summary_failure}"
-        print(f"validate evals: FAILED: {failure}")
-        _print_results_path(workspace)
-        return 2
-    if result.exit_code == 2:
-        summary_failure = _persist_terminal_behavior_summary(
-            workspace,
-            decision="execution error",
-            result=result,
-        )
-        if summary_failure is not None:
-            print(f"validate evals: FAILED: result summary failed: {summary_failure}")
-        else:
-            print(format_behavior_summary(result))
-            print("validate evals: EXECUTION ERROR")
-        _print_results_path(workspace)
-        return 2
-    try:
-        benchmark = aggregate_results(
-            workspace.root,
-            "judge",
-            repository_root=root,
-            terminal_decision=(
-                "pass" if result.exit_code == 0 else "expectations failed"
-            ),
-        )
-    except ResultArtifactError as error:
-        failure = f"aggregation failed: {error}"
-        summary_failure = _persist_terminal_behavior_summary(
-            workspace,
-            decision="execution error",
-            result=result,
-            failure=failure,
-        )
-        if summary_failure is not None:
-            failure = f"{failure}\nresult summary failed: {summary_failure}"
-        print(f"validate evals: FAILED: {failure}")
-        _print_results_path(workspace)
-        return 2
-
-    print(format_behavior_summary(result))
-    print(format_benchmark_summary(benchmark))
+    finalization = finalize_behavior_result(
+        root,
+        workspace,
+        result,
+        execution_failure=failure,
+    )
+    if result is not None:
+        print(format_behavior_summary(result))
+    if finalization.benchmark is not None:
+        print(format_benchmark_summary(finalization.benchmark))
+    if finalization.failures:
+        print(f"validate evals: FAILED: {'\n'.join(finalization.failures)}")
     _print_results_path(workspace)
-    if result.exit_code == 0:
+    if finalization.terminal.key == "pass":
         print("validate evals: OK")
-    else:
+    elif finalization.terminal.key == "expectations_failed":
         print("validate evals: ASSERTIONS FAILED")
-    return result.exit_code
+    elif not finalization.failures:
+        print("validate evals: EXECUTION ERROR")
+    return finalization.terminal.exit_code
 
 
 def execute_behavior_evals(
@@ -669,7 +726,11 @@ def _execute_behavior_attempt(
     try:
         execution = adapter.execute(actor_request, paths.root)
     except Exception as error:
-        execution = _failed_execution(error, started_at)
+        execution = actor_evidence.failed_actor_execution(
+            error,
+            actor_request,
+            started_at,
+        )
     execution = enforce_execution_binding(execution, actor_request)
     execution = enforce_execution_configuration(
         execution,
@@ -1558,27 +1619,6 @@ def _validate_execution_options(
         raise ValueError("maximum behavior concurrency must be between 1 and 4")
     if actor_timeout_seconds <= 0 or judge_timeout_seconds <= 0:
         raise ValueError("behavior actor and judge timeouts must be positive")
-
-
-def _failed_execution(error: Exception, started_at: datetime) -> HarnessExecution:
-    ended_at = datetime.now(timezone.utc)
-    diagnostic = _bounded_runtime_text(str(error), 4096)
-    return HarnessExecution(
-        response="",
-        trace=({"event": "harness_error", "message": diagnostic},),
-        duration_ms=max(0, round((ended_at - started_at).total_seconds() * 1000)),
-        total_tokens=None,
-        input_tokens=None,
-        output_tokens=None,
-        cached_tokens=None,
-        token_source="unavailable",
-        successful_skill_reads=(),
-        exit_code=None,
-        failure=diagnostic or type(error).__name__,
-        model=None,
-        reasoning_effort=None,
-        timed_out=False,
-    )
 
 
 def _without_skill_contamination(

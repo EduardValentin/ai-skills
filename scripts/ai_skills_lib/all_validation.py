@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 from scripts.ai_skills_lib.eval_core import (
     ResultWorkspace,
-    aggregate_results,
+    TerminalDecision,
     create_result_workspace,
     format_benchmark_summary,
     preflight_bound_invocations,
+    resolve_terminal_decision,
     write_result_summary,
 )
 from scripts.ai_skills_lib.eval_definitions import (
@@ -19,11 +19,13 @@ from scripts.ai_skills_lib.eval_definitions import (
     load_behavior_evals,
 )
 from scripts.ai_skills_lib.eval_validation import (
+    BehaviorFinalization,
     BehaviorHarnessError,
     BehaviorSuiteResult,
     _persist_terminal_behavior_summary,
     declare_behavior_plan,
     execute_prepared_behavior_plan,
+    finalize_behavior_result,
     format_behavior_summary,
     prepare_behavior_plan,
 )
@@ -37,7 +39,6 @@ from scripts.ai_skills_lib.trigger_definitions import (
     load_trigger_queries,
 )
 from scripts.ai_skills_lib.trigger_validation import (
-    TerminalDecision,
     TriggerFinalization,
     TriggerHarnessError,
     TriggerSuiteResult,
@@ -47,17 +48,7 @@ from scripts.ai_skills_lib.trigger_validation import (
     finalize_trigger_result,
     format_trigger_summary,
     prepare_trigger_plan,
-    resolve_terminal_decision,
 )
-
-
-@dataclass(frozen=True)
-class _BehaviorFinalization:
-    """One behavior sub-run's durable terminal outcome."""
-
-    terminal: TerminalDecision
-    benchmark: dict[str, object] | None
-    failures: tuple[str, ...] = ()
 
 
 def run_all_evaluation_harness(
@@ -400,88 +391,6 @@ def _write_all_summary(
     return None
 
 
-def _finalize_behavior_subrun(
-    root: Path,
-    workspace: ResultWorkspace,
-    result: BehaviorSuiteResult | None,
-    *,
-    execution_failure: str | None = None,
-) -> _BehaviorFinalization:
-    if execution_failure is not None or result is None:
-        failure = execution_failure or "behavior evaluation did not complete"
-        terminal = resolve_terminal_decision(
-            execution_error=True,
-            pending_review=False,
-            expectation_failure=False,
-        )
-        summary_failure = _persist_behavior_summary_safely(
-            workspace,
-            decision=terminal.durable_label,
-            result=result,
-            failure=failure,
-        )
-        failures = [failure]
-        if summary_failure is not None:
-            failures.append(f"result summary failed: {summary_failure}")
-        return _BehaviorFinalization(
-            terminal=terminal,
-            benchmark=None,
-            failures=tuple(failures),
-        )
-
-    terminal = resolve_terminal_decision(
-        execution_error=result.exit_code == 2,
-        pending_review=False,
-        expectation_failure=result.exit_code == 1,
-    )
-    if terminal.key == "execution_error":
-        summary_failure = _persist_behavior_summary_safely(
-            workspace,
-            decision=terminal.durable_label,
-            result=result,
-        )
-        failures = (
-            (f"result summary failed: {summary_failure}",)
-            if summary_failure is not None
-            else ()
-        )
-        return _BehaviorFinalization(
-            terminal=terminal,
-            benchmark=None,
-            failures=failures,
-        )
-
-    try:
-        benchmark = aggregate_results(
-            workspace.root,
-            "judge",
-            repository_root=root,
-            terminal_decision=terminal.durable_label,
-        )
-    except Exception as error:
-        failure = f"aggregation failed: {error}"
-        execution_terminal = resolve_terminal_decision(
-            execution_error=True,
-            pending_review=False,
-            expectation_failure=result.exit_code == 1,
-        )
-        summary_failure = _persist_behavior_summary_safely(
-            workspace,
-            decision=execution_terminal.durable_label,
-            result=result,
-            failure=failure,
-        )
-        failures = [failure]
-        if summary_failure is not None:
-            failures.append(f"result summary failed: {summary_failure}")
-        return _BehaviorFinalization(
-            terminal=execution_terminal,
-            benchmark=None,
-            failures=tuple(failures),
-        )
-    return _BehaviorFinalization(terminal=terminal, benchmark=benchmark)
-
-
 def _finalize_trigger_subrun_safely(
     root: Path,
     workspace: ResultWorkspace,
@@ -527,9 +436,9 @@ def _finalize_behavior_subrun_safely(
     result: BehaviorSuiteResult | None,
     *,
     execution_failure: str | None,
-) -> _BehaviorFinalization:
+) -> BehaviorFinalization:
     try:
-        return _finalize_behavior_subrun(
+        return finalize_behavior_result(
             root,
             workspace,
             result,
@@ -551,7 +460,7 @@ def _finalize_behavior_subrun_safely(
         failures = [failure]
         if summary_failure is not None:
             failures.append(f"result summary failed: {summary_failure}")
-        return _BehaviorFinalization(
+        return BehaviorFinalization(
             terminal=terminal,
             benchmark=None,
             failures=tuple(failures),

@@ -24,6 +24,7 @@ from scripts.ai_skills_lib.eval_core import (
     aggregate_results,
     create_result_workspace,
     digest_evidence_bundle,
+    resolve_terminal_decision,
 )
 from scripts.ai_skills_lib.harness import (
     bind_harness_request,
@@ -723,7 +724,7 @@ class TriggerClassificationTests(unittest.TestCase):
                 pending_review=pending_review,
                 expectation_failure=expectation_failure,
             ):
-                decision = trigger_validation.resolve_terminal_decision(
+                decision = resolve_terminal_decision(
                     execution_error=execution_error,
                     pending_review=pending_review,
                     expectation_failure=expectation_failure,

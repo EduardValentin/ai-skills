@@ -711,7 +711,7 @@ class CompleteValidationTests(unittest.TestCase):
                     side_effect=ResultArtifactError("trigger aggregate failed"),
                 ),
                 patch.object(
-                    all_validation,
+                    eval_validation,
                     "aggregate_results",
                     side_effect=ResultArtifactError("behavior aggregate failed"),
                 ),
@@ -806,7 +806,7 @@ class CompleteValidationTests(unittest.TestCase):
             behavior_aggregation = (
                 {"side_effect": ResultArtifactError("behavior aggregate failed")}
                 if failing_subrun == "evals"
-                else {"wraps": all_validation.aggregate_results}
+                else {"wraps": eval_validation.aggregate_results}
             )
 
             with (
@@ -821,7 +821,7 @@ class CompleteValidationTests(unittest.TestCase):
                     **trigger_aggregation,
                 ),
                 patch.object(
-                    all_validation,
+                    eval_validation,
                     "aggregate_results",
                     **behavior_aggregation,
                 ),

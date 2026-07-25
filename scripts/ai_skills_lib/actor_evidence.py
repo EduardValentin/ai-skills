@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 import json
 import math
 import os
@@ -21,7 +22,7 @@ from scripts.ai_skills_lib.authored_content import (
     prepare_durable_sensitive_text,
     strict_bounded_json_loads,
 )
-from scripts.ai_skills_lib.harness import HarnessExecution
+from scripts.ai_skills_lib.harness import HarnessExecution, HarnessRequest
 from scripts.ai_skills_lib.eval_core import (
     MAX_CAPTURED_OUTPUT_ENTRIES_PER_ATTEMPT,
     ResultArtifactError,
@@ -70,6 +71,33 @@ class ImmutableJsonObject(dict[str, object]):
     setdefault = _reject_mutation
     update = _reject_mutation
     __ior__ = _reject_mutation
+
+
+def failed_actor_execution(
+    error: Exception,
+    request: HarnessRequest,
+    started_at: datetime,
+) -> HarnessExecution:
+    """Preserve one bounded adapter failure with its exact request binding."""
+    ended_at = datetime.now(timezone.utc)
+    diagnostic = _bounded_runtime_text(str(error), 4096)
+    return HarnessExecution(
+        response="",
+        trace=({"event": "harness_error", "message": diagnostic},),
+        duration_ms=max(0, round((ended_at - started_at).total_seconds() * 1000)),
+        total_tokens=None,
+        input_tokens=None,
+        output_tokens=None,
+        cached_tokens=None,
+        token_source="unavailable",
+        successful_skill_reads=(),
+        exit_code=None,
+        failure=diagnostic or type(error).__name__,
+        model=None,
+        reasoning_effort=None,
+        timed_out=False,
+        execution_binding=request.execution_binding,
+    )
 
 
 def prepare_durable_actor_execution(
@@ -888,13 +916,6 @@ def freeze_scanned_execution_trace(
         SystemError,
     ):
         return None
-
-
-def freeze_scanned_actor_trace(
-    trace: Sequence[Mapping[str, object]],
-) -> tuple[Mapping[str, object], ...] | None:
-    """Backward-compatible actor-specific name for the shared trace boundary."""
-    return freeze_scanned_execution_trace(trace)
 
 
 def _canonical_bounded_actor_trace_bytes(

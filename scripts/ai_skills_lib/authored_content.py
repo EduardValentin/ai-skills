@@ -1158,31 +1158,6 @@ def _directory_chain_signatures(
     return tuple(signatures)
 
 
-def read_text_fixture(
-    source: AuthoredFile,
-    *,
-    maximum_bytes: int = 4 * 1024 * 1024,
-    allowed_root: Path | None = None,
-    budget: AuthoredRepositoryBudget | None = None,
-) -> str | None:
-    """Read one authored UTF-8 text fixture, returning None for binary data."""
-    try:
-        content = read_bounded_authored_bytes(
-            source,
-            maximum_bytes=maximum_bytes,
-            allowed_root=allowed_root or source.resolved_path.parent,
-            budget=budget,
-        )
-    except AuthoredContentReadError:
-        return None
-    if b"\x00" in content:
-        return None
-    try:
-        return content.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-
-
 def extract_bundled_paths(
     text: str,
     *,

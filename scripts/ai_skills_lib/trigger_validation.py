@@ -24,6 +24,7 @@ from scripts.ai_skills_lib.eval_core import (
     ResultArtifactError,
     ResultWorkspace,
     StructuredSkillPathKind,
+    TerminalDecision as _TerminalDecision,
     aggregate_results,
     capabilities_from_preflight_receipt,
     canonical_document_sha256,
@@ -35,6 +36,7 @@ from scripts.ai_skills_lib.eval_core import (
     enforce_execution_configuration,
     preflight_bound_invocations,
     record_harness_timing,
+    resolve_terminal_decision as _resolve_terminal_decision,
     write_eval_run_artifacts,
     write_incomplete_attempt_artifacts,
     write_result_summary,
@@ -126,73 +128,12 @@ class TriggerSuiteResult:
 
 
 @dataclass(frozen=True)
-class TerminalDecision:
-    """One precedence-resolved terminal state and its public representations."""
-
-    key: Literal[
-        "pass",
-        "expectations_failed",
-        "pending_review",
-        "execution_error",
-    ]
-    exit_code: int
-    durable_label: str
-    console_label: str
-
-
-def resolve_terminal_decision(
-    *,
-    execution_error: bool,
-    pending_review: bool,
-    expectation_failure: bool,
-) -> TerminalDecision:
-    """Resolve terminal state using the repository's single precedence policy."""
-    if execution_error:
-        return TerminalDecision(
-            key="execution_error",
-            exit_code=2,
-            durable_label="execution error",
-            console_label="EXECUTION ERROR",
-        )
-    if pending_review:
-        return TerminalDecision(
-            key="pending_review",
-            exit_code=1,
-            durable_label="pending review",
-            console_label="PENDING REVIEW",
-        )
-    if expectation_failure:
-        return TerminalDecision(
-            key="expectations_failed",
-            exit_code=1,
-            durable_label="expectations failed",
-            console_label="EXPECTATIONS FAILED",
-        )
-    return TerminalDecision(
-        key="pass",
-        exit_code=0,
-        durable_label="pass",
-        console_label="OK",
-    )
-
-
-@dataclass(frozen=True)
 class TriggerFinalization:
     """Durable terminal state shared by standalone and combined trigger runners."""
 
-    terminal: TerminalDecision
+    terminal: _TerminalDecision
     benchmark: dict[str, object] | None
     failures: tuple[str, ...] = ()
-
-    @property
-    def decision(self) -> Literal[
-        "pass",
-        "expectations_failed",
-        "pending_review",
-        "execution_error",
-    ]:
-        """Retain the concise machine decision for existing callers."""
-        return self.terminal.key
 
 
 class TriggerHarnessError(RuntimeError):
@@ -494,7 +435,7 @@ def finalize_trigger_result(
     """Persist one trigger terminal state without escaping finalization failures."""
     if execution_failure is not None or result is None:
         failure = execution_failure or "trigger execution did not complete"
-        terminal = resolve_terminal_decision(
+        terminal = _resolve_terminal_decision(
             execution_error=True,
             pending_review=False,
             expectation_failure=False,
@@ -514,7 +455,7 @@ def finalize_trigger_result(
             failures=tuple(failures),
         )
 
-    terminal = resolve_terminal_decision(
+    terminal = _resolve_terminal_decision(
         execution_error=result.exit_code == 2,
         pending_review=result.requires_review,
         expectation_failure=result.has_failed_expectations,
@@ -529,7 +470,7 @@ def finalize_trigger_result(
             return TriggerFinalization(terminal=terminal, benchmark=None)
         failure = f"result summary failed: {summary_failure}"
         return TriggerFinalization(
-            terminal=resolve_terminal_decision(
+            terminal=_resolve_terminal_decision(
                 execution_error=True,
                 pending_review=result.requires_review,
                 expectation_failure=result.has_failed_expectations,
@@ -557,7 +498,7 @@ def finalize_trigger_result(
         if summary_failure is not None:
             failures.append(f"result summary failed: {summary_failure}")
         return TriggerFinalization(
-            terminal=resolve_terminal_decision(
+            terminal=_resolve_terminal_decision(
                 execution_error=True,
                 pending_review=False,
                 expectation_failure=result.has_failed_expectations,
@@ -888,24 +829,10 @@ def _execute_trigger_attempt(
     try:
         execution = adapter.execute(request, paths.root)
     except Exception as error:
-        diagnostic = bounded_redacted_runtime_text(str(error), 4096)
-        ended_at = datetime.now(timezone.utc)
-        execution = HarnessExecution(
-            response="",
-            trace=({"type": "harness_error", "message": diagnostic},),
-            duration_ms=max(0, round((ended_at - started_at).total_seconds() * 1000)),
-            total_tokens=None,
-            input_tokens=None,
-            output_tokens=None,
-            cached_tokens=None,
-            token_source="unavailable",
-            successful_skill_reads=(),
-            exit_code=None,
-            failure=diagnostic or type(error).__name__,
-            model=None,
-            reasoning_effort=None,
-            timed_out=False,
-            execution_binding=request.execution_binding,
+        execution = actor_evidence.failed_actor_execution(
+            error,
+            request,
+            started_at,
         )
     execution = enforce_execution_binding(execution, request)
     execution = enforce_execution_configuration(

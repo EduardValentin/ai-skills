@@ -562,7 +562,6 @@ class CodexHarnessAdapter:
                     projection_trace = (
                         {"event": "projection_integrity_failure"},
                     )
-                model, reasoning = self._configured_model(request)
                 failure = "\n".join(
                     item
                     for item in (
@@ -589,8 +588,8 @@ class CodexHarnessAdapter:
                     successful_skill_reads=successful_skill_reads,
                     exit_code=result.returncode,
                     failure=failure,
-                    model=model,
-                    reasoning_effort=reasoning,
+                    model=request.model,
+                    reasoning_effort=request.reasoning_effort,
                     timed_out=result.timed_out,
                     expected_skill_path=logical_expected_path,
                     captured_output_paths=captured_output_paths,
@@ -658,13 +657,6 @@ class CodexHarnessAdapter:
             command.extend(("-c", f'model_reasoning_effort="{request.reasoning_effort}"'))
         command.extend(("-C", str(workspace), "--", request.prompt))
         return tuple(command)
-
-    @staticmethod
-    def _configured_model(
-        request: HarnessRequest,
-    ) -> tuple[str | None, str | None]:
-        return request.model, request.reasoning_effort
-
 
 def _require_empty_judge_skill_catalog(skills_root: Path) -> None:
     root_descriptor: int | None = None

@@ -19,6 +19,7 @@ import stat
 import tempfile
 import threading
 import time
+from typing import Literal
 import uuid
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -202,6 +203,57 @@ class ResultArtifactError(RuntimeError):
     """Raised when preserved evaluation evidence cannot be trusted."""
 
     exit_code = 2
+
+
+@dataclass(frozen=True)
+class TerminalDecision:
+    """One precedence-resolved terminal state and its public representations."""
+
+    key: Literal[
+        "pass",
+        "expectations_failed",
+        "pending_review",
+        "execution_error",
+    ]
+    exit_code: int
+    durable_label: str
+    console_label: str
+
+
+def resolve_terminal_decision(
+    *,
+    execution_error: bool,
+    pending_review: bool,
+    expectation_failure: bool,
+) -> TerminalDecision:
+    """Resolve terminal state using the repository's single precedence policy."""
+    if execution_error:
+        return TerminalDecision(
+            key="execution_error",
+            exit_code=2,
+            durable_label="execution error",
+            console_label="EXECUTION ERROR",
+        )
+    if pending_review:
+        return TerminalDecision(
+            key="pending_review",
+            exit_code=1,
+            durable_label="pending review",
+            console_label="PENDING REVIEW",
+        )
+    if expectation_failure:
+        return TerminalDecision(
+            key="expectations_failed",
+            exit_code=1,
+            durable_label="expectations failed",
+            console_label="EXPECTATIONS FAILED",
+        )
+    return TerminalDecision(
+        key="pass",
+        exit_code=0,
+        durable_label="pass",
+        console_label="OK",
+    )
 
 
 class StructuredSkillPathKind(Enum):
@@ -3595,40 +3647,6 @@ def _result_json_scalar_limit(schema_name: str) -> int:
     return _MAX_RESULT_JSON_SCALAR_BYTES
 
 
-def _read_result_document(
-    path: Path, schema_name: str, root: Path
-) -> dict[str, object]:
-    _ensure_safe_artifact_path(root, path)
-    content = _read_stable_path_file(
-        path,
-        maximum_bytes=_MAX_RESULT_JSON_FILE_BYTES,
-        label=f"cannot read trustworthy result {path}",
-        limit_name="JSON byte limit",
-    ).content
-    return _parse_result_document(content, path, schema_name)
-
-
-def _read_declared_attempts(root: Path) -> dict[str, dict[str, object]]:
-    """Read the mandatory immutable declaration for one result workspace."""
-    invocation_path = root / "invocation.json"
-    try:
-        invocation_metadata = os.stat(invocation_path, follow_symlinks=False)
-    except (OSError, MemoryError, OverflowError, RuntimeError) as error:
-        raise ResultArtifactError(
-            f"results directory must contain one regular invocation.json: {root}"
-        ) from error
-    if not stat.S_ISREG(invocation_metadata.st_mode):
-        raise ResultArtifactError(
-            f"results directory must contain one regular invocation.json: {root}"
-        )
-    invocation = _read_result_document(
-        invocation_path,
-        "invocation.schema.json",
-        root,
-    )
-    return _declared_attempts(invocation)
-
-
 def _declared_attempts(
     invocation: Mapping[str, object],
 ) -> dict[str, dict[str, object]]:
@@ -6681,21 +6699,6 @@ def _summarize_assertions(results: Sequence[AssertionResult]) -> GradingSummary:
         failed=total - passed,
         total=total,
         pass_rate=passed / total if total else 0.0,
-    )
-
-
-def _write_json_once(
-    path: Path,
-    value: Mapping[str, object],
-    root: Path,
-    *,
-    expected_root_identity: tuple[int, int, int] | None = None,
-) -> _StableContentIdentity:
-    return _write_text_once(
-        path,
-        _serialize_json_document(value),
-        root,
-        expected_root_identity=expected_root_identity,
     )
 
 
