@@ -43,6 +43,13 @@ class SkillRecord:
     source_signature: tuple[int, ...]
 
 
+def skill_requires_eval_directory(skill: SkillRecord) -> bool:
+    """Return whether repository policy requires authored eval coverage."""
+    metadata = skill.frontmatter.get("metadata")
+    status = metadata.get("status") if isinstance(metadata, dict) else None
+    return status != "experimental"
+
+
 @dataclass(frozen=True)
 class SkillLayoutInspection:
     skill_roots: tuple[Path, ...]

@@ -14,7 +14,7 @@ compatibility: >-
   requires approved authentication and instance/version-specific API
   documentation or an approved local integration.
 metadata:
-  status: config-required
+  status: experimental
   allows_tool_references: "true"
 ---
 

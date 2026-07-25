@@ -18,9 +18,9 @@ npx skills add EduardValentin/ai-skills --list
 ```
 
 Review each selected skill's status and `compatibility` requirements. This
-repository includes experimental, configuration-dependent, and local-tooling
-skills. Install all skills globally for Codex, or select individual skills when
-prompted:
+repository currently publishes every skill as experimental and does not ship
+authored model-backed evaluation cases. Install all skills globally for Codex,
+or select individual skills when prompted:
 
 ```bash
 npx skills add EduardValentin/ai-skills -g -a codex

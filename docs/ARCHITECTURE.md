@@ -57,8 +57,9 @@ flowchart TD
 ```
 
 - Discovery finds every skill from the canonical layout.
-- Definition loaders validate and convert `evals.json` and `triggers.json` into
-  typed runner inputs.
+- Definition loaders validate and convert authored `evals.json` and
+  `triggers.json` files into typed runner inputs. Experimental skills without
+  an `evals/` directory are not selected.
 - Deterministic validators are filesystem- and schema-oriented. They do not
   invoke models. One shared entry-and-byte budget bounds all authored-tree
   discovery, validation, and stable file reads in a validation run.

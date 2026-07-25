@@ -4,7 +4,7 @@ description: Use when drafting or updating a PR description from an accessible d
 compatibility: >-
   Requires an accessible branch or PR diff or a reliable changed-file summary. Git and hosting access are optional; when they are unavailable or a PR URL cannot be opened, ask for pasted review evidence.
 metadata:
-  status: local-required
+  status: experimental
   allows_tool_references: "true"
 ---
 

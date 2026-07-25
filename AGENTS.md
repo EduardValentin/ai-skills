@@ -24,8 +24,8 @@ never edit installed or generated copies.
 
 - Treat upstream Agent Skills requirements separately from this repository's
   stricter policy. The nested group layout, supported-root allowlist, status
-  metadata, required eval files, and validation gates are repository policy,
-  not claims about the public specification.
+  metadata, optional experimental eval files, and validation gates are
+  repository policy, not claims about the public specification.
 - Parse frontmatter with StrictYAML. Keep repository policy in the shared
   validator. Use the pinned official `skills-ref` conformance check through
   `scripts/ai-skills validate ci-all`; review the specification,
@@ -44,7 +44,9 @@ never edit installed or generated copies.
 - Document required collaborators or fallbacks in `compatibility`. Validate
   retained skill names, and when a collaborator is required, cover both its
   present and absent behavior.
-- Every retained skill requires `evals/evals.json` and
+- Repository skills are experimental unless explicitly promoted. Experimental
+  skills may omit `evals/` entirely. Any present `evals/` directory, and every
+  non-experimental skill, requires both `evals/evals.json` and
   `evals/triggers.json`.
 - Dispatch every `SKILL.md` read performed for specification alignment to a
   separate subagent, regardless of the current delegation depth. Return only
@@ -52,12 +54,12 @@ never edit installed or generated copies.
 
 ### Evaluation and test policy
 
-- Trigger requirements are uniform regardless of status. Run each query once
-  by default, or uniformly use `--runs 2` or `--runs 3`. Unanimous results are
-  stable. Two of three meets the threshold only after investigating the failed
-  run, adding complete validated manual grading for every attempt, and
-  aggregating with the manual source; judge-only aggregation must reject it.
-  Every other non-unanimous result fails. Preserve every discordant run;
+- For authored trigger coverage, run each query once by default, or uniformly
+  use `--runs 2` or `--runs 3`. Unanimous results are stable. Two of three
+  meets the threshold only after investigating the failed run, adding complete
+  validated manual grading for every attempt, and aggregating with the manual
+  source; judge-only aggregation must reject it. Every other non-unanimous
+  result fails. Preserve every discordant run;
   Codex activation requires an exact successful read of the installed
   `SKILL.md` through a trusted system reader, with returned bytes equal to the
   prepared installed skill. Derive that read from one complete actor lifecycle
@@ -65,8 +67,8 @@ never edit installed or generated copies.
   status, matched tool start/completion IDs, and no unknown, out-of-order, or
   duplicate events; enforce the same lifecycle during offline aggregation.
 - Keep trigger files runner-free: `skill_name` matches the skill, query IDs are
-  unique, every query has `query` and boolean `should_trigger`, and each skill
-  includes positive and near-miss negative coverage. Require a contained
+  unique, every query has `query` and boolean `should_trigger`, and each trigger
+  file includes positive and near-miss negative coverage. Require a contained
   non-symlink file and complete static validation before model-backed setup;
   negative pickup passes only after the expected installed path is proven.
 - Never run `validate triggers`, `validate evals`, `validate all`, or real

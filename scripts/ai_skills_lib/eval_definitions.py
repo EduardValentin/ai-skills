@@ -33,6 +33,7 @@ from scripts.ai_skills_lib.bounded_json import (
 from scripts.ai_skills_lib.core import (
     SkillRecord,
     discover_testable_skills,
+    skill_requires_eval_directory,
     snapshot_canonical_skills_tree,
 )
 from scripts.ai_skills_lib.eval_core import AssertionDefinition
@@ -226,7 +227,14 @@ def _inspect_behavior_eval_files(
                     ),
                 )
             )
-        path = skill.root / "evals" / "evals.json"
+        evals_root = skill.root / "evals"
+        path = evals_root / "evals.json"
+        if (
+            not evals_root.exists()
+            and not evals_root.is_symlink()
+            and not skill_requires_eval_directory(skill)
+        ):
+            continue
         if _has_symlink_component(path, skill.root):
             issues.append(
                 ValidationIssue(

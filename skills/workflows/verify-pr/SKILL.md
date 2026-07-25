@@ -4,7 +4,7 @@ description: Use when checking whether a pull request is ready for review handof
 compatibility: >-
   Requires source-control read access and authoritative CI or test evidence; Jira or Linear access when a ticket gate applies; an approved write identity for an explicitly requested merge; and a durable background process or native agent for monitoring. Missing gate evidence yields NOT_READY, missing merge access blocks mutation, and missing durable monitoring yields POST_MERGE_MONITORING_BLOCKED.
 metadata:
-  status: local-required
+  status: experimental
   allows_tool_references: "true"
 ---
 

@@ -8,7 +8,7 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from scripts.ai_skills_lib.core import SkillRecord
+from scripts.ai_skills_lib.core import SkillRecord, skill_requires_eval_directory
 from scripts.ai_skills_lib.authored_content import (
     AuthoredContentReadError,
     AuthoredContentTooLarge,
@@ -286,6 +286,14 @@ def _inspect_eval_root(
             ),
         )
     if not evals_root.exists():
+        if not skill_requires_eval_directory(skill):
+            return _EvalRootInspection(
+                evals_root=None,
+                fixtures_root=None,
+                evals_source=None,
+                triggers_source=None,
+                issues=(),
+            )
         return _EvalRootInspection(
             evals_root=None,
             fixtures_root=None,

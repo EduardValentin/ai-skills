@@ -4,7 +4,7 @@ description: Drafts and revises Jira ticket fields with outcome-focused summarie
 compatibility: >-
   Drafting works without Jira access. Publishing or editing requires an approved Jira integration or API configured through JIRA_CONFIG_PATH, permission for the target project, and support for the required fields. Field IDs, ADF support, parent fields, and issue-link types vary by instance. When a required capability is unavailable, return a draft, name unapplied fields or links, and do not claim or perform a partial write.
 metadata:
-  status: config-required
+  status: experimental
   allows_tool_references: "true"
 ---
 

@@ -127,22 +127,21 @@ class TemporaryTriggerRepository:
         *,
         group: str = "workflows",
         trigger_document: dict[str, object] | None = None,
+        status: str | None = None,
     ) -> Path:
         skill_root = self.root / "skills" / group / name
         evals_root = skill_root / "evals"
         evals_root.mkdir(parents=True)
+        skill_lines = [
+            "---",
+            f"name: {name}",
+            f"description: Use when testing {name}.",
+        ]
+        if status is not None:
+            skill_lines.extend(("metadata:", f'  status: "{status}"'))
+        skill_lines.extend(("---", "", f"# {name}", ""))
         (skill_root / "SKILL.md").write_text(
-            "\n".join(
-                (
-                    "---",
-                    f"name: {name}",
-                    f"description: Use when testing {name}.",
-                    "---",
-                    "",
-                    f"# {name}",
-                    "",
-                )
-            ),
+            "\n".join(skill_lines),
             encoding="utf-8",
         )
         document = trigger_document or {
@@ -264,6 +263,13 @@ class TriggerDefinitionValidationTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.repository = TemporaryTriggerRepository(Path(self.temporary_directory.name))
+
+    def test_experimental_skill_without_eval_directory_is_not_selected(self) -> None:
+        skill = self.repository.add_skill("alpha", status="experimental")
+        shutil.rmtree(skill / "evals")
+
+        self.assertEqual(validate_trigger_query_files(self.repository.root), [])
+        self.assertEqual(load_trigger_queries(self.repository.root), ())
 
     def test_one_generic_validator_discovers_and_accepts_valid_skill_queries(self) -> None:
         self.repository.add_skill("alpha")

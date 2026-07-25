@@ -28,6 +28,7 @@ Skill metadata communicates readiness and requirements:
 
 Status does not hide a skill from installation. Inspect `compatibility` and
 prefer selecting only the capabilities configured on the target machine.
+Every skill in the current catalog is experimental.
 
 List the available skills without installing them:
 

@@ -4,7 +4,7 @@ description: Use when manually verifying acceptance criteria and user-observable
 compatibility: >-
   Requires access to the running surface, mode-appropriate interaction and probe tools, and any credentials, fixtures, seed data, feature flags, or real dependencies required by the acceptance criteria. Try available PR or ticket tooling, ask the caller for missing metadata, and only then use explicitly provisional diff scope. If runtime evidence is unavailable, return the documented blocker verdict.
 metadata:
-  status: local-required
+  status: experimental
   allows_tool_references: "true"
 ---
 

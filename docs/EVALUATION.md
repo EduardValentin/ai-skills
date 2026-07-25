@@ -1,8 +1,9 @@
 # Evaluation
 
 The repository combines deterministic validation with opt-in model-backed
-evaluation. Skill authors define cases; one generic harness discovers and runs
-them for every skill.
+evaluation. One generic harness discovers and runs any authored skill cases.
+The current catalog is experimental and intentionally has no authored behavior
+or trigger cases; the framework remains available when coverage is introduced.
 
 ## Test Layers
 
@@ -56,8 +57,8 @@ external result path.
 
 ## Behavior Evaluation
 
-Each case in `evals/evals.json` runs twice under the same prompt, tools, model,
-fixtures, and policy:
+Each authored case in `evals/evals.json` runs twice under the same prompt,
+tools, model, fixtures, and policy:
 
 1. `with_skill` receives the complete skill catalog.
 2. `without_skill` receives the same catalog with only the target removed.
@@ -122,12 +123,13 @@ not currently implemented. Codex is the supported evaluation harness.
 
 ## Trigger Evaluation
 
-Trigger cases use `evals/triggers.json`. The actor receives the full public
-catalog and a query but is not told which skill is expected. For Codex, pickup
-is proven only by a successful command event that reads the exact installed
-target `SKILL.md`; mentioning a skill name is not proof. The adapter translates
-its descriptor-verified host path to the single canonical logical evidence path
-`/case/codex-home/skills/<skill>/SKILL.md` before returning the execution.
+Authored trigger cases use `evals/triggers.json`. The actor receives the full
+public catalog and a query but is not told which skill is expected. For Codex,
+pickup is proven only by a successful command event that reads the exact
+installed target `SKILL.md`; mentioning a skill name is not proof. The adapter
+translates its descriptor-verified host path to the single canonical logical
+evidence path `/case/codex-home/skills/<skill>/SKILL.md` before returning the
+execution.
 
 Positive cases require that read. Negative cases require its absence after the
 runner has proven the expected target path existed before execution and the

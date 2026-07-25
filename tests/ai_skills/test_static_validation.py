@@ -783,7 +783,7 @@ class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
         )
         self.assert_no_issues()
 
-    def test_requires_both_eval_files(self):
+    def test_non_experimental_skills_require_both_eval_files(self):
         self.repository.add_skill("alpha", with_evals=False)
         self.assert_issue("missing evals/evals.json")
 
@@ -791,6 +791,25 @@ class RepositoryPolicyValidationTests(TemporaryRepositoryTestCase):
         self.repository = TemporaryRepository()
         self.addCleanup(self.repository.cleanup)
         self.repository.add_skill("alpha", with_triggers=False)
+        self.assert_issue("missing evals/triggers.json")
+
+    def test_experimental_skill_may_omit_eval_directory(self):
+        self.repository.add_skill(
+            "alpha",
+            status="experimental",
+            with_evals=False,
+            with_triggers=False,
+        )
+
+        self.assert_no_issues()
+
+    def test_experimental_eval_directory_must_be_complete(self):
+        self.repository.add_skill(
+            "alpha",
+            status="experimental",
+            with_triggers=False,
+        )
+
         self.assert_issue("missing evals/triggers.json")
 
     def test_trigger_schema_requires_positive_and_negative_queries(self):

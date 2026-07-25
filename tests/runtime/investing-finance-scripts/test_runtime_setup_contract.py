@@ -17,7 +17,6 @@ STOCK_RESEARCH_ROOT = (
 )
 SKILL_ROOTS = (STOCK_RESEARCH_ROOT,)
 SKILL_IDS = ("stock-research",)
-STOCK_RESEARCH_EVALS = STOCK_RESEARCH_ROOT / "evals" / "evals.json"
 FINANCE_RUNTIME_REQUIREMENTS = (
     "requests==2.34.2",
     "yfinance==0.2.40",
@@ -171,16 +170,6 @@ def test_normal_subprocess_invocations_leave_copied_install_unchanged(
 
     assert _tree_snapshot(installed_root) == before
     assert list(installed_root.rglob("__pycache__")) == []
-
-
-def test_stock_research_evals_use_external_finance_runtime_contract() -> None:
-    evals_text = STOCK_RESEARCH_EVALS.read_text(encoding="utf-8")
-
-    assert "AI_SKILLS_RUNTIME_HOME" in evals_text
-    assert "${XDG_CACHE_HOME}/ai-skills" in evals_text
-    assert "${HOME}/.cache/ai-skills" in evals_text
-    assert "skill-local" not in evals_text
-    assert "scripts/.venv" not in evals_text
 
 
 def test_finance_test_harness_does_not_globally_disable_bytecode() -> None:

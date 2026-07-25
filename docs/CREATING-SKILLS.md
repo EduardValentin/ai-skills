@@ -20,9 +20,9 @@ skills/<group>/<skill>/
 ├── scripts/                 optional executable runtime code
 ├── references/              optional on-demand instructions
 ├── assets/                  optional templates and resources
-└── evals/
-    ├── evals.json           required behavior cases
-    ├── triggers.json        required pickup cases
+└── evals/                   optional while status is experimental
+    ├── evals.json           behavior cases
+    ├── triggers.json        pickup cases
     └── fixtures/            optional case inputs
 ```
 
@@ -66,8 +66,9 @@ optional `license`, `compatibility`, `metadata`, and experimental
 | `local-required` | Requires documented local collaborators or capabilities |
 | `experimental` | Installable but still being refined |
 
-All statuses receive the same structural, trigger, and behavior coverage
-requirements. A failing experimental skill is fixed rather than exempted.
+Experimental skills may omit `evals/` while they are being refined. If an
+experimental skill has an `evals/` directory, that directory must be complete
+and valid. Every other status requires both behavior and trigger coverage.
 
 Set `metadata.allows_tool_references: "true"` when the skill names tools,
 harnesses, native agents, or other skills. In that case, `compatibility` must
@@ -117,13 +118,15 @@ independent installation. Never hardcode personal filesystem paths or real
 credentials. Authored credential-shaped test values begin with `FAKE_`.
 
 Use `assets/` for templates or resources used as inputs or outputs. Use
-`references/` for material an agent reads. A behavior case must exercise real
-bundled material whenever the skill contains scripts, references, or assets.
+`references/` for material an agent reads. When behavior coverage exists, at
+least one case must exercise real bundled material whenever the skill contains
+scripts, references, or assets.
 
 ## Define Behavior Cases
 
-Every skill has `evals/evals.json`. A case describes a realistic task, success
-in human-readable terms, and semantic assertions:
+Add `evals/evals.json` when introducing model-backed coverage or promoting a
+skill beyond experimental. A case describes a realistic task, success in
+human-readable terms, and semantic assertions:
 
 ```json
 {
@@ -166,7 +169,7 @@ The approved deterministic checks cover only hard contracts:
 
 ## Define Trigger Cases
 
-Every skill also has `evals/triggers.json`:
+An `evals/` directory also requires `evals/triggers.json`:
 
 ```json
 {
@@ -199,8 +202,8 @@ responses, or other controlled state, create only that case's material under
 for CLI shims, HTTP(S), GraphQL, WebSocket, certificate, and local-tooling
 patterns.
 
-Outside `evals/evals.json`, `evals/triggers.json`, and optional fixture files,
-do not create skill-specific test artifacts.
+Outside optional `evals/evals.json`, `evals/triggers.json`, and their fixture
+files, do not create skill-specific test artifacts.
 
 ## Machine-Enforced Reference
 
@@ -233,9 +236,10 @@ Unknown skill-root entries, broken, escaping, or cyclic directory symlinks,
 empty directories, `.gitkeep` placeholders, non-executable files under
 `scripts/`, personal paths, private-key blocks, and high-confidence credential
 literals fail validation.
-When bundled runtime material exists, at least one behavior case must name and
-exercise it. MockServer definitions have their own exact matcher, static action,
-finite repetition, and total-call rules described in [Evaluation](EVALUATION.md).
+When behavior coverage exists for bundled runtime material, at least one case
+must name and exercise it. MockServer definitions have their own exact matcher,
+static action, finite repetition, and total-call rules described in
+[Evaluation](EVALUATION.md).
 
 ## Validate The Skill
 
@@ -255,8 +259,8 @@ Before submitting a skill, confirm:
   credential values use the `FAKE_` prefix.
 - Runtime material is self-contained and its dependencies are documented.
 - Collaborators have an explicit availability and fallback contract.
-- Behavior prompts are realistic and evaluation-blind.
-- Assertions measure observable outcomes without requiring fixed prose.
-- Trigger cases cover both intended pickup and a meaningful near miss.
-- Fixtures expose only the interfaces the actor needs.
+- Any behavior prompts are realistic and evaluation-blind.
+- Any assertions measure observable outcomes without requiring fixed prose.
+- Any trigger file covers both intended pickup and a meaningful near miss.
+- Any fixtures expose only the interfaces the actor needs.
 - `validate ci-all` passes.

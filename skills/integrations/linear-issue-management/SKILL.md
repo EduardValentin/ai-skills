@@ -4,7 +4,7 @@ description: Use when managing or publishing Linear issues, epics, stories, pare
 compatibility: >-
   Live reads and writes require Linear MCP or https://api.linear.app/graphql. For GraphQL, use LINEAR_API_KEY first; otherwise LINEAR_CONFIG_PATH must name a UTF-8 plaintext file containing only the API key after surrounding ASCII whitespace is trimmed. Empty or internally whitespace-containing values are invalid. Without live access, review or format only. ticket-writing and feature-work-planning are optional; missing required collaborators block publishing.
 metadata:
-  status: config-required
+  status: experimental
   allows_tool_references: "true"
 ---
 

@@ -28,6 +28,7 @@ from scripts.ai_skills_lib.bounded_json import (
 from scripts.ai_skills_lib.core import (
     SkillRecord,
     discover_testable_skills,
+    skill_requires_eval_directory,
     snapshot_canonical_skills_tree,
 )
 from scripts.ai_skills_lib.issues import ValidationIssue
@@ -124,7 +125,14 @@ def _inspect_trigger_query_files(
                     ),
                 )
             )
-        path = skill.root / "evals" / "triggers.json"
+        evals_root = skill.root / "evals"
+        path = evals_root / "triggers.json"
+        if (
+            not evals_root.exists()
+            and not evals_root.is_symlink()
+            and not skill_requires_eval_directory(skill)
+        ):
+            continue
         if path.parent.is_symlink() or path.is_symlink():
             issues.append(
                 ValidationIssue(

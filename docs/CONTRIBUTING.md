@@ -1,7 +1,7 @@
 # Contributing
 
 Contributions should leave skills portable, independently installable, and
-covered by the repository's generic validation and evaluation framework.
+compatible with the repository's generic validation and evaluation framework.
 
 ## Set Up The Repository
 
@@ -18,7 +18,8 @@ work on the current `origin/main`.
 
 - Skill instructions and runtime files belong in
   `skills/<group>/<skill>/`.
-- Behavior and pickup definitions belong in that skill's `evals/` directory.
+- Optional behavior and pickup definitions belong in that skill's `evals/`
+  directory.
 - Generic validation and evaluation behavior belongs in
   `scripts/ai_skills_lib/`.
 - Shared behavior used by more than one runner belongs in a core or shared
@@ -30,8 +31,9 @@ work on the current `origin/main`.
 - Native-agent prompts and delivery metadata belong under `agents/`.
 
 Do not add per-harness skill sources, generated install copies, or
-skill-specific test harness modules. A skill's only test definitions are
-`evals/evals.json`, `evals/triggers.json`, and any files needed by their cases.
+skill-specific test harness modules. When present, a skill's only test
+definitions are `evals/evals.json`, `evals/triggers.json`, and files needed by
+their cases.
 
 ## Develop A Skill
 
@@ -39,7 +41,8 @@ Follow [Creating skills](CREATING-SKILLS.md). In particular:
 
 1. Keep the Agent Skills contract and repository policy distinct.
 2. Keep runtime dependencies inside the skill.
-3. Add realistic behavior and trigger coverage for every skill status.
+3. Keep new skills experimental until realistic behavior and trigger coverage
+   is ready; both files are required before promotion.
 4. Keep actor prompts evaluation-blind.
 5. Use deterministic checks only for hard artifact contracts.
 6. Add case-local fixtures only when the scenario needs them.
@@ -59,7 +62,7 @@ It runs:
   checks under one shared repository entry-and-byte budget;
 - pinned `skills-ref` conformance with Git provenance and source digest
   verification before the reviewed source is loaded;
-- eval, trigger, fixture, reference, asset, and secret validation;
+- present eval, trigger, fixture, reference, asset, and secret validation;
 - generic unit tests under `tests/ai_skills/`;
 - deterministic bundled-script suites under `tests/runtime/`.
 

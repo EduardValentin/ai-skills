@@ -236,6 +236,7 @@ class TemporaryBehaviorRepository:
         *,
         group: str = "workflows",
         document: object | None = None,
+        status: str = "public-ready",
     ) -> Path:
         skill_root = self.root / "skills" / group / name
         evals_root = skill_root / "evals"
@@ -246,7 +247,7 @@ class TemporaryBehaviorRepository:
                 f"name: {name}\n"
                 f"description: Use for {name}.\n"
                 "metadata:\n"
-                '  status: \"public-ready\"\n'
+                f'  status: "{status}"\n'
                 '  tier: \"standard\"\n'
                 '  config_mode: \"none\"\n'
                 '  allows_tool_references: \"false\"\n'
@@ -280,6 +281,13 @@ class BehaviorDefinitionValidationTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.repository = TemporaryBehaviorRepository(Path(self.temporary_directory.name))
+
+    def test_experimental_skill_without_eval_directory_is_not_selected(self) -> None:
+        skill = self.repository.add_skill("alpha", status="experimental")
+        shutil.rmtree(skill / "evals")
+
+        self.assertEqual(validate_behavior_eval_files(self.repository.root), [])
+        self.assertEqual(load_behavior_evals(self.repository.root), ())
 
     def assert_issue(self, expected: str) -> None:
         issues = validate_behavior_eval_files(self.repository.root)

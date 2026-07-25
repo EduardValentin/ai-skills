@@ -6,7 +6,7 @@ compatibility: >-
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
-  status: local-required
+  status: experimental
   allows_tool_references: "true"
 ---
 
