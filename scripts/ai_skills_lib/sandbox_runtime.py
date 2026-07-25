@@ -99,6 +99,7 @@ mount_points = (
     ("/var/tmp", "/.system-var-tmp"),
     ("/dev/shm", "/.system-dev-shm"),
     ("/run/lock", "/.system-run-lock"),
+    ("/run/secrets", "/.system-run-secrets"),
 )
 
 def decode_mount_field(value):
@@ -190,13 +191,18 @@ import sys
 expected_source = sys.argv[1]
 case_root = os.path.normpath(sys.argv[2])
 bridge_mount = os.path.normpath(sys.argv[3])
-case_mounts = tuple(os.path.normpath(path) for path in sys.argv[4:])
-case_mount_roots = ("/tmp", "/.system-var-tmp", "/.system-dev-shm", "/.system-run-lock")
+raw_case_mounts = tuple(os.path.normpath(path) for path in sys.argv[4:])
+if not raw_case_mounts or len(raw_case_mounts) % 2:
+    raise SystemExit("case filesystem cleanup received an invalid mount contract")
+case_mounts = raw_case_mounts[::2]
+case_mount_roots = raw_case_mounts[1::2]
 bridge_path = pathlib.Path(bridge_mount)
 expected_bridge_root = pathlib.Path("/run/ai-skills-evals") / expected_source
 if bridge_path != expected_bridge_root / "host":
     raise SystemExit("case host bridge is outside the runner-owned hierarchy")
-if len(case_mounts) != len(case_mount_roots):
+if len(set(case_mounts)) != len(case_mounts) or len(set(case_mount_roots)) != len(
+    case_mount_roots
+):
     raise SystemExit("case filesystem cleanup received an invalid mount contract")
 
 def decode_mount_field(value):
@@ -1851,6 +1857,7 @@ class CaseWorkspace:
     system_var_tmp: Path | None = None
     system_dev_shm: Path | None = None
     system_run_lock: Path | None = None
+    system_run_secrets: Path | None = None
     cgroup_path: Path | None = None
 
 
@@ -2235,26 +2242,37 @@ class SandboxRuntime:
 
             diagnose = self._json_command(("sbx", "diagnose", "--output", "json"), timeout)
             summary = _mapping(diagnose.get("summary"), "sbx diagnose summary")
-            if summary.get("fail") != 0 or summary.get("warn") != 0:
+            if summary.get("fail") != 0 or summary.get("skip") != 0:
                 raise SandboxRuntimeError("Docker Sandboxes diagnostics did not pass cleanly")
             checks = diagnose.get("checks")
             if not isinstance(checks, list) or not checks:
                 raise SandboxRuntimeError("Docker Sandboxes named diagnostics are unavailable")
             names: set[str] = set()
+            statuses: list[str] = []
             for check in checks:
                 if (
                     not isinstance(check, Mapping)
                     or not isinstance(check.get("name"), str)
                     or not check["name"]
                     or check["name"] in names
-                    or check.get("status") != "pass"
+                ):
+                    raise SandboxRuntimeError(
+                        "Docker Sandboxes named diagnostic did not pass"
+                    )
+                status = check.get("status")
+                if status != "pass" and not _is_pinned_binary_update_notice(
+                    check,
+                    expected_version,
                 ):
                     raise SandboxRuntimeError(
                         "Docker Sandboxes named diagnostic did not pass"
                     )
                 names.add(check["name"])
-            if summary.get("pass") != len(checks) or any(
-                summary.get(name) != 0 for name in ("warn", "fail", "skip")
+                statuses.append(status)
+            if (
+                summary.get("pass") != statuses.count("pass")
+                or summary.get("warn") != statuses.count("warn")
+                or len(statuses) != len(checks)
             ):
                 raise SandboxRuntimeError(
                     "Docker Sandboxes diagnostic summary does not match named checks"
@@ -2468,11 +2486,13 @@ class SandboxRuntime:
             system_var_tmp = case_root / ".system-var-tmp"
             system_dev_shm = case_root / ".system-dev-shm"
             system_run_lock = case_root / ".system-run-lock"
+            system_run_secrets = case_root / ".system-run-secrets"
             for directory in (
                 *directories.values(),
                 system_var_tmp,
                 system_dev_shm,
                 system_run_lock,
+                system_run_secrets,
             ):
                 directory.mkdir()
             skills = directories["codex_home"] / "skills"
@@ -2508,6 +2528,7 @@ class SandboxRuntime:
                 system_var_tmp=system_var_tmp,
                 system_dev_shm=system_dev_shm,
                 system_run_lock=system_run_lock,
+                system_run_secrets=system_run_secrets,
                 cgroup_path=Path("/sys/fs/cgroup/ai-skills-evals")
                 / filesystem_source,
                 **directories,
@@ -2869,7 +2890,7 @@ class SandboxRuntime:
             self._apply_sealed_skill_catalog(worker, case)
         self._admin_checked(worker, ("chown", "root:root", str(case.root)))
         self._admin_checked(worker, ("chmod", "0555", str(case.root)))
-        self._admin_checked(worker, ("mkdir", "--parents", "/run/lock"))
+        self._admin_checked(worker, ("mkdir", "--parents", "/run/lock", "/run/secrets"))
         for source, target in system_mounts:
             self._admin_checked(worker, ("mount", "--bind", str(source), target))
         self._verify_case_filesystem(worker, case)
@@ -2934,12 +2955,18 @@ class SandboxRuntime:
         system_skills = case.skills / ".system"
         self._admin_checked(worker, ("chown", "-R", "root:root", str(case.skills)))
         self._admin_checked(worker, ("chmod", "-R", "u=rwX,go=rX", str(case.skills)))
-        self._admin_checked(worker, ("chmod", "1777", str(case.skills)))
-        self._admin_checked(
-            worker,
-            ("chown", "-R", f"{case.uid}:{case.uid}", str(system_skills)),
-        )
-        self._admin_checked(worker, ("chmod", "0700", str(system_skills)))
+        if worker.role == "judge":
+            self._admin_checked(
+                worker,
+                ("chmod", "0555", str(case.skills), str(system_skills)),
+            )
+        else:
+            self._admin_checked(worker, ("chmod", "1777", str(case.skills)))
+            self._admin_checked(
+                worker,
+                ("chown", "-R", f"{case.uid}:{case.uid}", str(system_skills)),
+            )
+            self._admin_checked(worker, ("chmod", "0700", str(system_skills)))
         self._admin_checked(worker, ("chown", "root:root", str(case.codex_home)))
         self._admin_checked(worker, ("chmod", "1777", str(case.codex_home)))
 
@@ -2973,22 +3000,37 @@ class SandboxRuntime:
                 "/var/tmp",
                 "/dev/shm",
                 "/run/lock",
+                "/run/secrets",
             ),
             "root filesystem exposes writable state outside the case tmpfs",
         )
         if case.filesystem_source not in self._sealed_skill_catalogs:
             return
-        self._case_user_checked(
-            worker,
-            case,
-            (
-                "python3",
-                "-c",
-                PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
-                str(case.skills),
-            ),
-            "public skill catalog permissions do not isolate Codex system skills",
-        )
+        if worker.role == "judge":
+            for parent in (case.skills, case.skills / ".system"):
+                self._case_user_checked(
+                    worker,
+                    case,
+                    (
+                        "python3",
+                        "-c",
+                        DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
+                        str(parent / ".judge-write-probe"),
+                    ),
+                    "judge skill catalog is writable",
+                )
+        else:
+            self._case_user_checked(
+                worker,
+                case,
+                (
+                    "python3",
+                    "-c",
+                    PUBLIC_SKILL_CATALOG_PROBE_SCRIPT,
+                    str(case.skills),
+                ),
+                "public skill catalog permissions do not isolate Codex system skills",
+            )
         for source, target, failure in (
             (
                 case.skills,
@@ -3035,6 +3077,7 @@ class SandboxRuntime:
             case.system_var_tmp,
             case.system_dev_shm,
             case.system_run_lock,
+            case.system_run_secrets,
         )
         if any(path is None for path in covered_paths):
             raise SandboxRuntimeError("case filesystem paths are incomplete")
@@ -3110,6 +3153,14 @@ class SandboxRuntime:
             None,
             case,
         )
+        cleanup_mount_contract = tuple(
+            item
+            for source, target in system_mounts
+            for item in (
+                target,
+                f"/{source.relative_to(case.root).as_posix()}",
+            )
+        )
         result = self._worker_command_by_name(
             sandbox_name,
             worker_id,
@@ -3120,7 +3171,7 @@ class SandboxRuntime:
                 filesystem_source,
                 str(case.root),
                 str(bridge_mount),
-                *(target for _, target in system_mounts),
+                *cleanup_mount_contract,
             ),
             user="root",
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
@@ -3196,6 +3247,7 @@ class SandboxRuntime:
             (case.system_var_tmp, "/var/tmp"),
             (case.system_dev_shm, "/dev/shm"),
             (case.system_run_lock, "/run/lock"),
+            (case.system_run_secrets, "/run/secrets"),
         )
         if (
             case.host_staging_root != case.root
@@ -3713,6 +3765,22 @@ class SandboxRuntime:
             raise SandboxRuntimeError("sandbox identity no longer matches")
 
     def _prepare_case_identity(self, worker: SandboxWorker, case: CaseWorkspace) -> None:
+        self._admin_checked(
+            worker,
+            ("chown", "root:root", "/var/lib/pebble/default"),
+        )
+        self._admin_checked(
+            worker,
+            ("chmod", "0755", "/var/lib/pebble/default"),
+        )
+        self._admin_checked(
+            worker,
+            ("chown", "root:root", "/opt/containerd", "/run/containerd"),
+        )
+        self._admin_checked(
+            worker,
+            ("chmod", "0700", "/opt/containerd", "/run/containerd"),
+        )
         self._admin_checked(worker, ("chmod", "0700", "/home/agent"))
         self._admin_checked(worker, ("chmod", "0700", "/home/agent/.codex"))
         self._admin_checked(
@@ -3752,6 +3820,7 @@ class SandboxRuntime:
             case.system_var_tmp,
             case.system_dev_shm,
             case.system_run_lock,
+            case.system_run_secrets,
         )
         if any(path is None for path in scratch_paths):
             raise SandboxRuntimeError("case scratch paths are incomplete")
@@ -3825,8 +3894,8 @@ class SandboxRuntime:
             self._deactivate_case_filesystem(worker, case, export_to_host=False)
         self._admin_checked(worker, ("userdel", case.user_name), accepted=(0, 6))
         self._admin_checked(worker, ("groupdel", case.user_name), accepted=(0, 6))
-        self._admin_checked(worker, ("mkdir", "--parents", "/run/lock"))
-        for directory in ("/tmp", "/var/tmp", "/dev/shm", "/run/lock"):
+        self._admin_checked(worker, ("mkdir", "--parents", "/run/lock", "/run/secrets"))
+        for directory in ("/tmp", "/var/tmp", "/dev/shm", "/run/lock", "/run/secrets"):
             self._admin_checked(
                 worker,
                 ("find", directory, "-xdev", "-uid", str(case.uid), "-delete"),
@@ -3840,7 +3909,7 @@ class SandboxRuntime:
             )
             if identity_check.returncode != 2 or identity_check.stdout.strip():
                 raise SandboxRuntimeError("previous case identity could not be cleared")
-        for directory in ("/tmp", "/var/tmp", "/dev/shm", "/run/lock"):
+        for directory in ("/tmp", "/var/tmp", "/dev/shm", "/run/lock", "/run/secrets"):
             residue = self._worker_command(
                 worker,
                 ("find", directory, "-xdev", "-uid", str(case.uid), "-print", "-quit"),
@@ -4062,7 +4131,12 @@ class SandboxRuntime:
             timeout_seconds=self.manifest.limits.preflight_timeout_seconds,
         )
         if result.timed_out or result.returncode != 0:
-            raise SandboxRuntimeError(failure)
+            diagnostic = _safe_diagnostic(
+                result.stderr.strip()
+                or result.stdout.strip()
+                or ("command timed out" if result.timed_out else "no diagnostic")
+            )
+            raise SandboxRuntimeError(f"{failure}: {diagnostic}")
 
     def _worker_command(
         self,
@@ -4259,6 +4333,23 @@ def network_policy_sha256(payload: Mapping[str, object]) -> str:
         separators=(",", ":"),
     )
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _is_pinned_binary_update_notice(
+    check: Mapping[str, object],
+    expected_version: str,
+) -> bool:
+    message = check.get("message")
+    return (
+        check.get("name") == "Binary version"
+        and check.get("status") == "warn"
+        and isinstance(message, str)
+        and re.fullmatch(
+            rf"update available: v\d+\.\d+\.\d+ \(running {re.escape(expected_version)}\)",
+            message,
+        )
+        is not None
+    )
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:

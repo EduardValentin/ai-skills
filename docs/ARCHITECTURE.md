@@ -110,17 +110,22 @@ for execution, and returns it to read-write only after cleanup. This prevents an
 actor from bypassing the tmpfs quota through Docker's host mount.
 
 Before every actor or judge command, the runner inspects the worker mount table
-as the case user. The five case-owned tmpfs mounts are the only ordinary
-writable filesystems permitted. Kernel-owned `/proc`, `/sys`, and `/dev`
+as the case user. Six mounted views of the case-owned tmpfs are the only
+ordinary writable filesystems permitted: the case root, `/tmp`, `/var/tmp`,
+`/dev/shm`, `/run/lock`, and `/run/secrets`. Kernel-owned `/proc`, `/sys`, and `/dev`
 pseudo-filesystems use a narrow filesystem-type allowlist; every other mounted
 filesystem is recursively checked instead of being skipped at a device
 boundary. A writable secondary mount, an unexpected mount below the case tmpfs,
 or an uninspectable actor-traversable mount recycles the worker before execution.
+Docker-internal Pebble and containerd paths are root-owned before case
+execution so they cannot become writable or opaque actor state.
 
 The runner seals public skill entries only after importing them into the case
 tmpfs. Each public entry is root-owned and verified as immutable. The catalog
 root is a root-owned sticky directory: Codex can replace its actor-owned
-`.system` entry, but cannot rename, delete, or edit a public skill.
+`.system` entry, but cannot rename, delete, or edit a public skill. Judge
+catalogs instead keep both the catalog root and their empty `.system` directory
+root-owned and read-only.
 
 ```mermaid
 flowchart LR
@@ -144,7 +149,7 @@ Case quiescence proves the cgroup empty before export and removes it after the
 case filesystem is deactivated. Later case retirement cleans only persistent
 identity and staging state, so reuse does not depend on kernel state surviving
 a Docker Sandbox stop and restart. Volatile scratch targets such as `/run/lock`
-are recreated empty before residual-UID checks.
+and `/run/secrets` are recreated empty before residual-UID checks.
 The fixed cgroup scripts communicate success through exit code `0` and empty
 stdout. Non-fatal host warnings emitted by the `sbx` wrapper on stderr do not
 override that proof; timeouts, nonzero exits, truncation, or unexpected script
@@ -285,7 +290,9 @@ thread-start, turn-start, turn-complete sequence, or the runner's single
 test-adapter completion event. Missing, reordered, additional, or structured
 events fail both live grading and offline aggregation. Codex bundled skills and
 skill instructions are disabled for judges, and the runner verifies their skill
-catalog is empty immediately before and after execution. The actor trace retains
+catalog is empty immediately before and after execution. The empty judge
+catalog is also filesystem-sealed read-only so Codex cannot populate bundled
+entries during the run. The actor trace retains
 its own per-artifact limit; the small judge lifecycle suffix has a separate
 bound.
 

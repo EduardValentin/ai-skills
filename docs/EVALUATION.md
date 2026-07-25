@@ -241,9 +241,13 @@ without permitting changes to root-owned public skills. After the actor stops,
 the actor projection remains read-only while the runner collects evidence.
 Only the later verified reset may return the worker projection to read-write.
 Before execution, a case-user mount-table probe permits only the case-owned
-tmpfs mounts plus a narrow set of kernel pseudo-filesystems. It recursively
+tmpfs mounted at the case root, `/tmp`, `/var/tmp`, `/dev/shm`, `/run/lock`,
+and `/run/secrets`, plus a narrow set of kernel pseudo-filesystems. It recursively
 checks every other mounted filesystem, including secondary devices, and
 recycles the worker if any actor-writable persistent path is exposed.
+Docker's Pebble state is made root-owned and non-writable to the case user;
+containerd control paths are root-only so no opaque actor-traversable runtime
+directory remains.
 
 Before the first approved model-backed run, follow Docker's
 [Sandboxes setup guide](https://docs.docker.com/ai/sandboxes/get-started/) and
@@ -253,6 +257,11 @@ configure host-proxied Codex authentication:
 sbx login
 sbx secret set -g openai --oauth
 ```
+
+Preflight requires the pinned `sbx` version and revision, named diagnostics,
+host-proxied OAuth, template digest, and network policy. A diagnostic warning is
+accepted only when it is the exact newer-version notice for the already verified
+pinned binary; other warnings, skips, and failures remain blocking.
 
 The actor retains the pinned normal sandbox network policy so it can perform a
 realistic task. The isolation goal is reproducible case state and protection of
@@ -407,7 +416,10 @@ additional event. Any observed skill read, command, tool use, actor-output
 capture, or actor workspace access invalidates the judge run. Codex bundled
 skills and skill-instruction injection are disabled explicitly, and the runner
 verifies before and after execution that the judge catalog contains only
-Codex's required empty `.system` directory. The runner preserves the exact safe
+Codex's required empty `.system` directory. The judge catalog and `.system`
+directory are root-owned and read-only during execution, preventing Codex from
+materializing bundled skills even if configuration alone would permit it. The
+runner preserves the exact safe
 judge response, deterministic definitions and schemas, and deterministic check
 results in `grading_basis.json`. It also preserves the judge control, admitted
 artifact set, and digest of the exact prompt sent to the judge. Offline

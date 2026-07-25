@@ -1156,6 +1156,74 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertFalse(report.available)
         self.assertIn("diagnostic", report.failure or "")
 
+    def test_preflight_accepts_an_update_notice_for_the_pinned_binary(self) -> None:
+        results = valid_preflight_results()
+        results[1] = completed(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "checks": [
+                        {"name": "CLI binary", "status": "pass"},
+                        {
+                            "name": "Binary version",
+                            "status": "warn",
+                            "message": "update available: v0.37.0 (running v0.35.0)",
+                        },
+                    ],
+                    "summary": {"pass": 1, "warn": 1, "fail": 0, "skip": 0},
+                }
+            )
+        )
+        process = FakeProcessRunner(results)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=2,
+            )
+
+            report = runtime.preflight()
+
+        self.assertTrue(report.available, report.failure)
+
+    def test_preflight_rejects_an_unrecognized_diagnostic_warning(self) -> None:
+        results = valid_preflight_results()
+        results[1] = completed(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "checks": [
+                        {
+                            "name": "Authentication",
+                            "status": "warn",
+                            "message": "authentication may be unavailable",
+                        }
+                    ],
+                    "summary": {"pass": 0, "warn": 1, "fail": 0, "skip": 0},
+                }
+            )
+        )
+        process = FakeProcessRunner(results)
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=2,
+            )
+
+            report = runtime.preflight()
+
+        self.assertFalse(report.available)
+        self.assertIn("diagnostic", report.failure or "")
+
     def test_preflight_rejects_an_unwritable_result_root(self) -> None:
         process = FakeProcessRunner(valid_preflight_results())
         with tempfile.TemporaryDirectory() as state:
@@ -2770,6 +2838,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                     ".system-var-tmp",
                     ".system-dev-shm",
                     ".system-run-lock",
+                    ".system-run-secrets",
                 },
             )
             self.assertEqual(second.skills.parent, second.codex_home)
@@ -2853,6 +2922,33 @@ class SandboxRuntimeTests(unittest.TestCase):
         self.assertIn(("test", "!", "-r", "/var/run/docker.sock"), case_commands)
         self.assertIn(("test", "!", "-w", "/var/run/docker.sock"), case_commands)
         self.assertIn(("test", "!", "-r", "/home/agent/.codex/auth.json"), case_commands)
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "chmod",
+                "0755",
+                "/var/lib/pebble/default",
+            ),
+            commands,
+        )
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-actor-1",
+                "chmod",
+                "0700",
+                "/opt/containerd",
+                "/run/containerd",
+            ),
+            commands,
+        )
 
     def test_missing_cgroup_v2_controls_discards_worker_before_case_execution(self) -> None:
         def reject_cgroup_setup(argv: tuple[str, ...]) -> CommandResult | None:
@@ -3090,6 +3186,7 @@ class SandboxRuntimeTests(unittest.TestCase):
                 "/var/tmp",
                 "/dev/shm",
                 "/run/lock",
+                "/run/secrets",
             ),
         )
 
@@ -3098,6 +3195,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             (str(case.system_var_tmp), "/var/tmp"),
             (str(case.system_dev_shm), "/dev/shm"),
             (str(case.system_run_lock), "/run/lock"),
+            (str(case.system_run_secrets), "/run/secrets"),
         }
         actual_binds = {
             (argv[-2], argv[-1])
@@ -3267,6 +3365,21 @@ class SandboxRuntimeTests(unittest.TestCase):
             for index, argv in enumerate(commands)
             if len(argv) > 7 and argv[7] == CASE_FILESYSTEM_CLEANUP_SCRIPT
         )
+        self.assertEqual(
+            commands[cleanup_index][-10:],
+            (
+                "/tmp",
+                "/tmp",
+                "/var/tmp",
+                "/.system-var-tmp",
+                "/dev/shm",
+                "/.system-dev-shm",
+                "/run/lock",
+                "/.system-run-lock",
+                "/run/secrets",
+                "/.system-run-secrets",
+            ),
+        )
         worker_mount_restore = next(
             argv for argv in commands if WORKER_MOUNT_RESTORE_SCRIPT in argv
         )
@@ -3425,7 +3538,7 @@ class SandboxRuntimeTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 SandboxRuntimeError,
-                "root filesystem exposes writable state",
+                r"root filesystem exposes writable state.*writable root filesystem path: /unexpected",
             ):
                 runtime.execute(
                     worker,
@@ -4005,6 +4118,7 @@ class SandboxRuntimeTests(unittest.TestCase):
             "mkdir",
             "--parents",
             "/run/lock",
+            "/run/secrets",
         )
         self.assertIn(run_lock_setup, commands)
 
@@ -4906,6 +5020,93 @@ class SandboxRuntimeTests(unittest.TestCase):
                     str(worker.host_root / ".case-rename-probe"),
                 ),
             },
+        )
+
+    def test_seals_the_judge_skill_catalog_empty_and_read_only(self) -> None:
+        process = FakeProcessRunner(
+            [
+                completed(),
+                completed(
+                    json.dumps(
+                        {
+                            "sandboxes": [
+                                {
+                                    "id": "judge-id",
+                                    "name": "ai-skills-unit-test-judge-1",
+                                }
+                            ]
+                        }
+                    )
+                ),
+                completed("result"),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as state:
+            runtime = SandboxRuntime(
+                manifest=self.manifest,
+                process=process,
+                repository_root=REPOSITORY_ROOT,
+                results_root=Path(state) / "results",
+                staging_root=Path(state) / "workers",
+                invocation_id="unit-test",
+                max_concurrency=1,
+            )
+            worker = runtime.acquire_worker("judge")
+            case = runtime.prepare_case(worker, "case-one")
+
+            runtime.seal_skill_catalog(worker, case)
+            runtime.execute(worker, case, ("true",), timeout_seconds=30)
+
+        commands = [argv for argv, _ in process.calls]
+        wrapped_commands = [
+            wrapped
+            for argv in commands
+            if (wrapped := cgroup_wrapped_case_command(argv)) is not None
+        ]
+        self.assertIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-judge-1",
+                "chmod",
+                "0555",
+                str(case.skills),
+                str(case.skills / ".system"),
+            ),
+            commands,
+        )
+        self.assertNotIn(
+            (
+                "sbx",
+                "exec",
+                "--user",
+                "root",
+                "ai-skills-unit-test-judge-1",
+                "chmod",
+                "1777",
+                str(case.skills),
+            ),
+            commands,
+        )
+        self.assertIn(
+            (
+                "python3",
+                "-c",
+                DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
+                str(case.skills / ".judge-write-probe"),
+            ),
+            wrapped_commands,
+        )
+        self.assertIn(
+            (
+                "python3",
+                "-c",
+                DIRECTORY_WRITE_DENIAL_PROBE_SCRIPT,
+                str(case.skills / ".system" / ".judge-write-probe"),
+            ),
+            wrapped_commands,
         )
 
     def test_case_reset_failure_quarantines_the_worker_before_cleanup(self) -> None:
