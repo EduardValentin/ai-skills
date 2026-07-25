@@ -10,19 +10,20 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shlex
-import shutil
 import stat
 import tempfile
 import time
 import uuid
 
 from scripts.ai_skills_lib.authored_content import (
-    BoundedJsonError,
     SecretScanBudget,
     SecretScanLimitError,
     SENSITIVE_TEXT_QUARANTINE,
     contains_local_eval_runtime_reference,
     prepare_durable_sensitive_text,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
     strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.eval_definitions import MAX_EVAL_FIXTURE_FILE_BYTES
@@ -295,33 +296,23 @@ class CodexHarnessAdapter:
             raise CodexOutputError(
                 "Codex execution requires an exact runner-created execution binding"
             )
-        _require_prepared_request_material(request)
         if request.fixture_initialization is not None and self.fixture_proxy is None:
             raise CodexOutputError("fixture request requires a configured fixture proxy")
         if request.capture_outputs and request.artifact_binding is None:
             raise CodexOutputError(
                 "actor output capture requires pinned runner artifact identities"
             )
-        fixture_material_is_prepared = _fixture_material_is_prepared(request)
         case_fixture_root = _resolve_case_fixture_root(
             request.fixture_root,
             self.allowed_skill_root,
-            require_existing=not fixture_material_is_prepared,
         )
         if request.fixture_initialization is not None:
             assert case_fixture_root is not None
-            if isinstance(request.fixture_initialization, PreparedFile):
-                if request.fixture_initialization.source != (
-                    case_fixture_root / "mockserverInitialization.json"
-                ):
-                    raise CodexOutputError(
-                        "prepared fixture initialization does not belong to the exact case root"
-                    )
-            else:
-                _require_case_fixture_file(
-                    request.fixture_initialization,
-                    case_fixture_root,
-                    expected_name="mockserverInitialization.json",
+            if request.fixture_initialization.source != (
+                case_fixture_root / "mockserverInitialization.json"
+            ):
+                raise CodexOutputError(
+                    "prepared fixture initialization does not belong to the exact case root"
                 )
         durable_dir = artifact_dir.resolve()
         results_root = self.runtime.results_root.resolve()
@@ -375,27 +366,15 @@ class CodexHarnessAdapter:
                 if request.skill_sources and self.allowed_skill_root is None:
                     raise CodexOutputError("skill projection requires an explicit allowed repository skill root")
                 for source in request.skill_sources:
-                    if isinstance(source, PreparedSkillSource):
-                        if (
-                            self.allowed_skill_root is None
-                            or not source.source_root.is_relative_to(self.allowed_skill_root)
-                        ):
-                            raise CodexOutputError(
-                                "prepared skill source is outside the allowed repository skill root"
-                            )
-                        _validate_skill_name(source.name)
-                        project_prepared_actor_skill(source, case.skills / source.name)
-                    else:
-                        resolved = source.resolve()
-                        if (
-                            self.allowed_skill_root is None
-                            or not resolved.is_relative_to(self.allowed_skill_root)
-                        ):
-                            raise CodexOutputError(
-                                "skill source is outside the allowed repository skill root"
-                            )
-                        _validate_skill_name(resolved.name)
-                        project_actor_skill(resolved, case.skills / resolved.name)
+                    if (
+                        self.allowed_skill_root is None
+                        or not source.source_root.is_relative_to(self.allowed_skill_root)
+                    ):
+                        raise CodexOutputError(
+                            "prepared skill source is outside the allowed repository skill root"
+                        )
+                    _validate_skill_name(source.name)
+                    project_prepared_actor_skill(source, case.skills / source.name)
 
                 self.runtime.seal_skill_catalog(worker, case)
                 if request.role == "judge":
@@ -704,32 +683,6 @@ def _require_empty_judge_skill_catalog(skills_root: Path) -> None:
             os.close(root_descriptor)
 
 
-def _require_prepared_request_material(request: HarnessRequest) -> None:
-    """Reject live repository paths after the runner binds an invocation."""
-    if any(not isinstance(source, PreparedSkillSource) for source in request.skill_sources):
-        raise CodexOutputError(
-            "Codex execution requires prepared skill bytes before preflight"
-        )
-    if any(actor_input.prepared is None for actor_input in request.actor_inputs):
-        raise CodexOutputError(
-            "Codex execution requires prepared actor input bytes before preflight"
-        )
-    if request.fixture_initialization is not None and not isinstance(
-        request.fixture_initialization,
-        PreparedFile,
-    ):
-        raise CodexOutputError(
-            "Codex execution requires prepared fixture bytes before preflight"
-        )
-    if request.role == "judge" and not isinstance(
-        request.response_schema,
-        PreparedResponseSchema,
-    ):
-        raise CodexOutputError(
-            "Codex execution requires prepared response schema bytes"
-        )
-
-
 def prepare_actor_skill_source(source: Path) -> PreparedSkillSource:
     """Freeze one actor-visible skill tree with descriptor-stable reads."""
     try:
@@ -899,11 +852,6 @@ def project_prepared_actor_skill(
         raise CodexOutputError("prepared skill could not be projected safely") from error
 
 
-def project_actor_skill(source: Path, destination: Path) -> None:
-    """Freeze and copy one skill while preserving the eval oracle boundary."""
-    project_prepared_actor_skill(prepare_actor_skill_source(source), destination)
-
-
 def prepare_actor_input(
     source: Path,
     destination: PurePosixPath,
@@ -913,9 +861,8 @@ def prepare_actor_input(
     input_root = case_fixture_root / "inputs"
     prepared = _prepare_case_fixture_file(source, input_root)
     return ActorInput(
-        source=prepared.source,
-        destination=destination,
         prepared=prepared,
+        destination=destination,
     )
 
 
@@ -972,28 +919,21 @@ def _stage_actor_inputs(
 ) -> None:
     input_root = case_fixture_root / "inputs"
     for declaration in declarations:
-        if declaration.prepared is not None:
-            source = declaration.prepared.source
-            if source != declaration.source or not source.is_relative_to(input_root):
-                raise CodexOutputError(
-                    "prepared actor input is outside the exact case input tree"
-                )
-        else:
-            source = _require_case_fixture_file(declaration.source, input_root)
+        source = declaration.prepared.source
+        if not source.is_relative_to(input_root):
+            raise CodexOutputError(
+                "prepared actor input is outside the exact case input tree"
+            )
         destination = workspace.joinpath(*declaration.destination.parts)
         if destination.exists() or destination.is_symlink():
             raise CodexOutputError("actor input destination already exists")
         destination.parent.mkdir(parents=True, exist_ok=True)
-        if declaration.prepared is not None:
-            _write_prepared_file(
-                destination,
-                declaration.prepared.content,
-                executable=declaration.prepared.executable,
-                writable=True,
-            )
-        else:
-            shutil.copy2(source, destination)
-            destination.chmod(0o755 if source.stat().st_mode & 0o111 else 0o644)
+        _write_prepared_file(
+            destination,
+            declaration.prepared.content,
+            executable=declaration.prepared.executable,
+            writable=True,
+        )
 
 
 def _actor_input_environment(
@@ -1005,12 +945,7 @@ def _actor_input_environment(
     for actor_input in request.actor_inputs:
         if actor_input.destination.parent != PurePosixPath("bin"):
             continue
-        executable = (
-            actor_input.prepared.executable
-            if actor_input.prepared is not None
-            else bool(actor_input.source.stat().st_mode & 0o111)
-        )
-        if executable:
+        if actor_input.prepared.executable:
             return (("PATH", f"{workspace / 'bin'}:{ACTOR_BASE_PATH}"),)
     return ()
 
@@ -2087,8 +2022,6 @@ def _write_captured_workspace_file(
 def _resolve_case_fixture_root(
     declared_root: Path | None,
     allowed_skill_root: Path | None,
-    *,
-    require_existing: bool = True,
 ) -> Path | None:
     if declared_root is None:
         return None
@@ -2096,42 +2029,17 @@ def _resolve_case_fixture_root(
         raise CodexOutputError(
             "case fixture root requires an explicit allowed repository skill root"
         )
-    if require_existing:
-        root = _require_contained_path(
-            declared_root,
-            allowed_skill_root,
-            require_directory=True,
+    root = declared_root.resolve(strict=False)
+    if not root.is_relative_to(allowed_skill_root):
+        raise CodexOutputError(
+            "prepared case fixture root is outside the allowed repository skill root"
         )
-    else:
-        root = declared_root.resolve(strict=False)
-        if not root.is_relative_to(allowed_skill_root):
-            raise CodexOutputError(
-                "prepared case fixture root is outside the allowed repository skill root"
-            )
     relative = root.relative_to(allowed_skill_root)
     if len(relative.parts) != 5 or relative.parts[2:4] != ("evals", "fixtures"):
         raise CodexOutputError(
             "case fixture root must be skills/<group>/<skill>/evals/fixtures/<case>"
         )
     return root
-
-
-def _fixture_material_is_prepared(request: HarnessRequest) -> bool:
-    materials: tuple[bool, ...] = (
-        *(item.prepared is not None for item in request.actor_inputs),
-        *(
-            (isinstance(request.fixture_initialization, PreparedFile),)
-            if request.fixture_initialization is not None
-            else ()
-        ),
-    )
-    if not materials:
-        return False
-    if any(materials) and not all(materials):
-        raise CodexOutputError(
-            "actor fixture material cannot mix prepared bytes with live paths"
-        )
-    return all(materials)
 
 
 def _require_case_fixture_file(

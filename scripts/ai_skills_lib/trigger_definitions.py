@@ -16,11 +16,13 @@ from scripts.ai_skills_lib.authored_content import (
     AuthoredContentTooLarge,
     AuthoredRepositoryBudget,
     AuthoredRepositoryBudgetExceeded,
-    BoundedJsonError,
     authored_file,
     find_additional_decoded_json_secret_issues,
     find_static_secret_issues,
     read_bounded_authored_bytes,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
     strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.core import (

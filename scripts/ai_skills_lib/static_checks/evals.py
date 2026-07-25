@@ -13,12 +13,14 @@ from scripts.ai_skills_lib.authored_content import (
     AuthoredContentReadError,
     AuthoredContentTooLarge,
     AuthoredTreeEntry,
-    BoundedJsonError,
     find_additional_decoded_json_secret_issues,
     find_static_secret_issues_in_bytes,
     read_bounded_authored_bytes,
     snapshot_authored_tree,
     sorted_authored_entries,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
     strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.eval_definitions import (

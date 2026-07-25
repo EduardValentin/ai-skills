@@ -20,6 +20,7 @@ from scripts.ai_skills_lib.fixture_proxy import (
     FixtureProxyError,
     load_fixture_definition,
 )
+from scripts.ai_skills_lib.harness import PreparedFile
 from scripts.ai_skills_lib.sandbox_runtime import (
     CaseWorkspace,
     CommandResult,
@@ -30,6 +31,13 @@ from scripts.ai_skills_lib.sandbox_runtime import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = EvalRuntimeManifest.load(REPOSITORY_ROOT / "config" / "eval-runtime.json")
+
+
+def prepared_fixture(path: Path) -> PreparedFile:
+    return PreparedFile(
+        source=path.resolve(),
+        content=path.read_bytes(),
+    )
 
 
 def valid_expectations() -> list[dict[str, object]]:
@@ -891,7 +899,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 allowed_fixture_root=fixture.parent,
             )
 
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
 
             control_dir = worker.host_root / "fixture-control"
             jwks = json.loads((control_dir / "jwks.json").read_text(encoding="utf-8"))
@@ -950,7 +960,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 allowed_fixture_root=fixture.parent,
             )
 
-            proxy.prepare_case(worker, case, fixture, fixture.parent)
+            proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
 
         probes = [
             argv
@@ -985,7 +997,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             )
 
             with self.assertRaises(FixtureProxyError):
-                proxy.prepare_case(worker, case, fixture, fixture.parent)
+                proxy.prepare_case(
+                    worker, case, prepared_fixture(fixture), fixture.parent
+                )
 
         self.assertEqual(runtime.invalidated, [worker.id])
         self.assertNotIn(worker.id, proxy._states)
@@ -1006,7 +1020,7 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             session = proxy.prepare_case(
                 worker,
                 case,
-                fixture,
+                prepared_fixture(fixture),
                 fixture.parent,
             )
             runtime.requests[worker.id] = [
@@ -1024,7 +1038,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 FixtureProxyError,
                 "retired certificate authority",
             ):
-                proxy.prepare_case(worker, case, fixture, fixture.parent)
+                proxy.prepare_case(
+                    worker, case, prepared_fixture(fixture), fixture.parent
+                )
 
         self.assertEqual(runtime.invalidated, [worker.id])
         self.assertNotIn(worker.id, proxy._states)
@@ -1054,7 +1070,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 allowed_fixture_root=fixture.parent,
             )
 
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             uploaded = json.loads(
                 (worker.host_root / "fixture-control" / "case-expectations.json").read_text(
                     encoding="utf-8"
@@ -1100,7 +1118,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 mock.patch.object(proxy, "_curl", side_effect=interrupt_after_upload),
                 self.assertRaises(KeyboardInterrupt),
             ):
-                proxy.prepare_case(worker, case, fixture, fixture.parent)
+                proxy.prepare_case(
+                    worker, case, prepared_fixture(fixture), fixture.parent
+                )
 
         self.assertIn(worker.id, runtime.invalidated)
         self.assertNotIn(worker.id, proxy._states)
@@ -1117,7 +1137,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             runtime.requests[worker.id] = [
                 {
                     "method": "GET",
@@ -1168,7 +1190,7 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             first_session = proxy.prepare_case(
                 worker,
                 first_case,
-                fixture,
+                prepared_fixture(fixture),
                 fixture.parent,
             )
             first_ca = (first_case.bootstrap / "mockserver-ca.pem").read_bytes()
@@ -1217,7 +1239,12 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 json.dumps(second_definition),
                 encoding="utf-8",
             )
-            proxy.prepare_case(worker, second_case, fixture, fixture.parent)
+            proxy.prepare_case(
+                worker,
+                second_case,
+                prepared_fixture(fixture),
+                fixture.parent,
+            )
             second_ca = (second_case.bootstrap / "mockserver-ca.pem").read_bytes()
 
         docker_runs = [argv for _, argv, _ in runtime.calls if argv[:2] == ("docker", "run")]
@@ -1265,7 +1292,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 sleeper=sleeps.append,
             )
 
-            proxy.prepare_case(worker, case, fixture, fixture.parent)
+            proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
 
         status_calls = [
             argv
@@ -1290,10 +1319,20 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
-            proxy.prepare_case(first_worker, first_case, fixture, fixture.parent)
+            proxy.prepare_case(
+                first_worker,
+                first_case,
+                prepared_fixture(fixture),
+                fixture.parent,
+            )
 
             with self.assertRaisesRegex(FixtureProxyError, "shared"):
-                proxy.prepare_case(second_worker, second_case, fixture, fixture.parent)
+                proxy.prepare_case(
+                    second_worker,
+                    second_case,
+                    prepared_fixture(fixture),
+                    fixture.parent,
+                )
 
         self.assertIn(second_worker.id, runtime.invalidated)
 
@@ -1321,7 +1360,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(FixtureProxyError, "bundled default CA"):
-                proxy.prepare_case(worker, case, fixture, fixture.parent)
+                proxy.prepare_case(
+                    worker, case, prepared_fixture(fixture), fixture.parent
+                )
 
         self.assertIn(worker.id, runtime.invalidated)
 
@@ -1364,7 +1405,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             runtime.requests[worker.id] = [
                 {
                     "method": "POST",
@@ -1430,7 +1473,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             runtime.requests[worker.id] = [
                 {
                     "method": "POST",
@@ -1481,7 +1526,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                     repository_root=REPOSITORY_ROOT,
                     allowed_fixture_root=fixture.parent,
                 )
-                session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+                session = proxy.prepare_case(
+                    worker, case, prepared_fixture(fixture), fixture.parent
+                )
                 runtime.requests[worker.id] = requests
 
                 with self.assertRaisesRegex(FixtureProxyError, "request sequence") as caught:
@@ -1508,7 +1555,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             runtime.requests[worker.id] = [
                 {
                     "method": "GET",
@@ -1534,7 +1583,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             runtime.requests[worker.id] = [
                 {
                     "method": "GET",
@@ -1584,7 +1635,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 repository_root=REPOSITORY_ROOT,
                 allowed_fixture_root=fixture.parent,
             )
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             runtime.requests[worker.id] = [
                 {
                     "method": "GET",
@@ -1646,7 +1699,9 @@ class FixtureProxyLifecycleTests(unittest.TestCase):
                 allowed_fixture_root=fixture.parent,
                 clock=lambda: now[0],
             )
-            session = proxy.prepare_case(worker, case, fixture, fixture.parent)
+            session = proxy.prepare_case(
+                worker, case, prepared_fixture(fixture), fixture.parent
+            )
             first_token = (
                 (worker.host_root / "fixture-control" / "curl.conf")
                 .read_text(encoding="utf-8")

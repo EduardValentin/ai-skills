@@ -42,7 +42,7 @@ if __name__ == "__main__":
         raise SystemExit(2)
     _bind_repository_scripts_package()
 
-from scripts.ai_skills_lib.config import build_parser, command_label
+from scripts.ai_skills_lib.config import build_parser
 from scripts.ai_skills_lib.authored_content import render_safe_diagnostic_text
 from scripts.ai_skills_lib.issues import print_grouped_issues
 
@@ -339,8 +339,7 @@ def main(argv: list[str] | None = None) -> int:
             REPOSITORY_ROOT,
             harness=args.harness,
         )
-    print(f"{command_label(args)}: not implemented")
-    return 2
+    raise AssertionError("argparse accepted an undispatched command")
 
 
 if __name__ == "__main__":

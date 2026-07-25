@@ -14,12 +14,14 @@ import stat
 import tempfile
 
 from scripts.ai_skills_lib.authored_content import (
-    BoundedJsonError,
-    DEFAULT_MAXIMUM_JSON_DEPTH,
-    DEFAULT_MAXIMUM_JSON_NODES,
     SecretScanBudget,
     SecretScanLimitError,
     prepare_durable_sensitive_text,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
+    DEFAULT_MAXIMUM_JSON_DEPTH,
+    DEFAULT_MAXIMUM_JSON_NODES,
     strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.harness import HarnessExecution, HarnessRequest

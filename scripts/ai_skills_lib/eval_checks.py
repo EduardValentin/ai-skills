@@ -11,10 +11,12 @@ import stat
 from jsonschema import Draft202012Validator
 
 from scripts.ai_skills_lib.authored_content import (
-    BoundedJsonError,
     DEFAULT_MAXIMUM_SECRET_SCAN_BYTES,
     SecretScanBudget,
     SecretScanLimitError,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
     strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.eval_core import (

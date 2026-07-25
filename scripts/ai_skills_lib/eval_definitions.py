@@ -17,7 +17,6 @@ from scripts.ai_skills_lib.authored_content import (
     AuthoredContentTooLarge,
     AuthoredRepositoryBudget,
     AuthoredRepositoryBudgetExceeded,
-    BoundedJsonError,
     authored_file,
     contains_local_eval_runtime_reference,
     extract_bundled_paths,
@@ -25,8 +24,11 @@ from scripts.ai_skills_lib.authored_content import (
     find_static_secret_issues,
     read_bounded_authored_bytes,
     render_bounded_decoded_json,
-    strict_bounded_json_loads,
     walk_authored_files,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
+    strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.core import (
     SkillRecord,

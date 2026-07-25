@@ -22,7 +22,7 @@ from jsonschema import Draft7Validator
 import jwt
 from jwt.algorithms import RSAAlgorithm
 
-from scripts.ai_skills_lib.authored_content import (
+from scripts.ai_skills_lib.bounded_json import (
     BoundedJsonError,
     strict_bounded_json_loads,
 )
@@ -356,37 +356,25 @@ class FixtureProxy:
         self,
         worker: SandboxWorker,
         case: CaseWorkspace,
-        initialization_path: Path | PreparedFile,
+        initialization: PreparedFile,
         case_fixture_root: Path,
     ) -> FixtureSession:
         """Reset, load, and expose one fixture through actor-only shell settings."""
-        specific_root = (
-            case_fixture_root.absolute()
-            if isinstance(initialization_path, PreparedFile)
-            else case_fixture_root.resolve()
-        )
+        specific_root = case_fixture_root.resolve(strict=False)
         if not specific_root.is_relative_to(self.allowed_fixture_root):
             raise FixtureProxyError("case fixture root is outside the configured fixture root")
-        if isinstance(initialization_path, PreparedFile):
-            if initialization_path.source != (
-                specific_root / "mockserverInitialization.json"
-            ):
-                raise FixtureProxyError(
-                    "prepared fixture does not belong to the selected case root"
-                )
-            definition = load_fixture_definition_bytes(
-                initialization_path.content,
-                source=initialization_path.source,
-                manifest=self.runtime.manifest,
-                repository_root=self.repository_root,
+        if initialization.source != (
+            specific_root / "mockserverInitialization.json"
+        ):
+            raise FixtureProxyError(
+                "prepared fixture does not belong to the selected case root"
             )
-        else:
-            definition = load_fixture_definition(
-                initialization_path,
-                manifest=self.runtime.manifest,
-                repository_root=self.repository_root,
-                allowed_fixture_root=specific_root,
-            )
+        definition = load_fixture_definition_bytes(
+            initialization.content,
+            source=initialization.source,
+            manifest=self.runtime.manifest,
+            repository_root=self.repository_root,
+        )
         self._require_case(worker, case)
         try:
             state = self._ensure_worker_state(worker)

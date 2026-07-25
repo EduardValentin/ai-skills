@@ -45,12 +45,3 @@ def _add_model_backed_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--skill")
     parser.add_argument("--results-dir", type=Path)
     parser.add_argument("--max-concurrency", type=int, choices=(1, 2, 3, 4), default=2)
-
-
-def command_label(args: argparse.Namespace) -> str:
-    """Return a readable command label for stubbed handlers."""
-    if args.command == "validate":
-        return f"validate {args.target}"
-    if args.command == "evals":
-        return f"evals {args.evals_command}"
-    return args.command

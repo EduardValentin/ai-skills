@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from enum import Enum
 import hashlib
 import json
-import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -26,10 +25,13 @@ from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import ValidationError
 
 from scripts.ai_skills_lib.authored_content import (
-    JsonPreflightError,
     SecretScanBudget,
     prepare_durable_sensitive_text,
-    preflight_bounded_json_structure,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
+    strict_bounded_json_loads,
+    validate_bounded_json_value,
 )
 from scripts.ai_skills_lib.harness import (
     bind_harness_request,
@@ -387,10 +389,6 @@ class JudgeExecutionError(ResultArtifactError):
     def __init__(self, message: str, execution: HarnessExecution):
         super().__init__(message)
         self.execution = execution
-
-
-class _JsonBoundaryError(ValueError):
-    """Internal marker for sanitized strict-JSON boundary failures."""
 
 
 @dataclass(frozen=True)
@@ -2042,7 +2040,7 @@ def validate_result_document(document: Mapping[str, object], schema_name: str) -
         )
         if not isinstance(schema, dict):
             raise ResultArtifactError("offline result schema must contain a JSON object")
-        _validate_bounded_json_structure(
+        _validate_result_json_value(
             document,
             label=f"{schema_name} result",
             maximum_scalar_bytes=_result_json_scalar_limit(schema_name),
@@ -3446,95 +3444,20 @@ def _parse_bounded_json(
         maximum_scalar_bytes,
     ) < 1:
         raise ResultArtifactError(f"{label} has invalid JSON boundary limits")
-    if not isinstance(value, (str, bytes)):
-        raise ResultArtifactError(f"{label} is not bounded JSON text")
     try:
-        if isinstance(value, bytes):
-            encoded_size = len(value)
-            text = value.decode("utf-8")
-        else:
-            encoded_size = len(value.encode("utf-8"))
-            text = value
-    except (MemoryError, UnicodeError) as error:
-        raise ResultArtifactError(f"{label} is not bounded UTF-8 JSON") from error
-    if encoded_size > maximum_bytes:
-        raise ResultArtifactError(f"{label} exceeds the JSON byte limit")
-    try:
-        preflight_bounded_json_structure(
-            text,
+        return strict_bounded_json_loads(
+            value,
+            maximum_bytes=maximum_bytes,
             maximum_nodes=maximum_nodes,
             maximum_depth=maximum_depth,
             maximum_scalar_bytes=maximum_scalar_bytes,
             maximum_number_characters=_MAX_RESULT_JSON_NUMBER_CHARS,
         )
-    except JsonPreflightError as error:
-        if error.kind == "depth":
-            raise ResultArtifactError(f"{label} exceeds the JSON depth limit") from error
-        if error.kind == "nodes":
-            raise ResultArtifactError(f"{label} exceeds the JSON node limit") from error
-        if error.kind == "scalar":
-            raise ResultArtifactError(f"{label} exceeds the JSON scalar limit") from error
-        if error.kind == "nonfinite":
-            raise ResultArtifactError(
-                f"{label} contains a non-finite JSON number"
-            ) from error
-        raise ResultArtifactError(f"{label} is invalid bounded JSON") from error
-
-    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-        document: dict[str, object] = {}
-        for key, item in pairs:
-            if key in document:
-                raise _JsonBoundaryError("contains a duplicate JSON key")
-            document[key] = item
-        return document
-
-    def bounded_integer(token: str) -> int:
-        if len(token) > _MAX_RESULT_JSON_NUMBER_CHARS:
-            raise _JsonBoundaryError("exceeds the JSON scalar limit")
-        return int(token)
-
-    def bounded_float(token: str) -> float:
-        if len(token) > _MAX_RESULT_JSON_NUMBER_CHARS:
-            raise _JsonBoundaryError("exceeds the JSON scalar limit")
-        result = float(token)
-        if not math.isfinite(result):
-            raise _JsonBoundaryError("contains a non-finite JSON number")
-        return result
-
-    def reject_constant(_: str) -> object:
-        raise _JsonBoundaryError("contains a non-finite JSON number")
-
-    try:
-        document = json.loads(
-            text,
-            object_pairs_hook=unique_object,
-            parse_int=bounded_integer,
-            parse_float=bounded_float,
-            parse_constant=reject_constant,
-        )
-    except _JsonBoundaryError as error:
-        raise ResultArtifactError(f"{label} {error}") from error
-    except (
-        json.JSONDecodeError,
-        MemoryError,
-        OverflowError,
-        RecursionError,
-        UnicodeError,
-        ValueError,
-        SystemError,
-    ) as error:
-        raise ResultArtifactError(f"{label} is invalid bounded JSON") from error
-    _validate_bounded_json_structure(
-        document,
-        label=label,
-        maximum_nodes=maximum_nodes,
-        maximum_depth=maximum_depth,
-        maximum_scalar_bytes=maximum_scalar_bytes,
-    )
-    return document
+    except BoundedJsonError as error:
+        _raise_result_json_boundary(label, error)
 
 
-def _validate_bounded_json_structure(
+def _validate_result_json_value(
     document: object,
     *,
     label: str,
@@ -3549,76 +3472,35 @@ def _validate_bounded_json_structure(
         if maximum_scalar_bytes is None
         else maximum_scalar_bytes
     )
-    pending: list[tuple[object, int]] = [(document, 1)]
-    nodes = 0
     try:
-        while pending:
-            item, depth = pending.pop()
-            if depth > maximum_depth:
-                raise ResultArtifactError(f"{label} exceeds the JSON depth limit")
-            nodes += 1
-            if nodes > maximum_nodes:
-                raise ResultArtifactError(f"{label} exceeds the JSON node limit")
-            if isinstance(item, Mapping):
-                if len(item) > maximum_nodes - nodes:
-                    raise ResultArtifactError(f"{label} exceeds the JSON node limit")
-                for key, child in item.items():
-                    nodes += 1
-                    if nodes > maximum_nodes:
-                        raise ResultArtifactError(f"{label} exceeds the JSON node limit")
-                    _validate_json_scalar(
-                        key,
-                        label=label,
-                        maximum_scalar_bytes=maximum_scalar_bytes,
-                    )
-                    pending.append((child, depth + 1))
-            elif isinstance(item, list):
-                if len(item) > maximum_nodes - nodes:
-                    raise ResultArtifactError(f"{label} exceeds the JSON node limit")
-                pending.extend((child, depth + 1) for child in item)
-            else:
-                _validate_json_scalar(
-                    item,
-                    label=label,
-                    maximum_scalar_bytes=maximum_scalar_bytes,
-                )
-    except ResultArtifactError:
-        raise
-    except (
-        MemoryError,
-        OverflowError,
-        RecursionError,
-        RuntimeError,
-        SystemError,
-        UnicodeError,
-        ValueError,
-    ) as error:
-        raise ResultArtifactError(
-            f"{label} exceeds bounded JSON structure limits"
-        ) from error
+        validate_bounded_json_value(
+            document,
+            maximum_nodes=maximum_nodes,
+            maximum_depth=maximum_depth,
+            maximum_scalar_bytes=maximum_scalar_bytes,
+            maximum_number_characters=_MAX_RESULT_JSON_NUMBER_CHARS,
+        )
+    except BoundedJsonError as error:
+        _raise_result_json_boundary(label, error)
 
 
-def _validate_json_scalar(
-    value: object,
-    *,
+def _raise_result_json_boundary(
     label: str,
-    maximum_scalar_bytes: int,
+    error: BoundedJsonError,
 ) -> None:
-    if isinstance(value, str):
-        if len(value.encode("utf-8")) > maximum_scalar_bytes:
-            raise ResultArtifactError(f"{label} exceeds the JSON scalar limit")
-        return
-    if value is None or type(value) is bool:
-        return
-    if type(value) is int:
-        if value.bit_length() > _MAX_RESULT_JSON_NUMBER_CHARS * 4:
-            raise ResultArtifactError(f"{label} exceeds the JSON scalar limit")
-        return
-    if type(value) is float:
-        if not math.isfinite(value):
-            raise ResultArtifactError(f"{label} contains a non-finite JSON number")
-        return
-    raise ResultArtifactError(f"{label} contains a non-JSON scalar")
+    messages = {
+        "input": "is not bounded JSON text",
+        "encoding": "is not bounded UTF-8 JSON",
+        "bytes": "exceeds the JSON byte limit",
+        "depth": "exceeds the JSON depth limit",
+        "nodes": "exceeds the JSON node limit",
+        "scalar": "exceeds the JSON scalar limit",
+        "nonfinite": "contains a non-finite JSON number",
+        "duplicate": "contains a duplicate JSON key",
+    }
+    raise ResultArtifactError(
+        f"{label} {messages.get(error.kind, 'is invalid bounded JSON')}"
+    ) from error
 
 
 def _parse_result_document(
@@ -6702,22 +6584,6 @@ def _summarize_assertions(results: Sequence[AssertionResult]) -> GradingSummary:
     )
 
 
-def _write_json_atomic(
-    path: Path,
-    value: Mapping[str, object],
-    root: Path,
-    *,
-    expected_root_identity: tuple[int, int, int] | None = None,
-) -> None:
-    _write_text_atomic(
-        path,
-        _serialize_json_document(value),
-        root,
-        replace_existing=True,
-        expected_root_identity=expected_root_identity,
-    )
-
-
 def _serialize_json_document(value: Mapping[str, object]) -> str:
     try:
         text = f"{json.dumps(value, indent=2, sort_keys=True)}\n"
@@ -6996,18 +6862,6 @@ def _write_text_atomic(
                 os.close(descriptor)
             except OSError:
                 pass
-
-
-def _ensure_safe_artifact_path(root: Path, path: Path) -> None:
-    if path.is_symlink():
-        raise ResultArtifactError(f"artifact path must not be a symlink: {path}")
-    try:
-        resolved_root = root.resolve(strict=True)
-        resolved_parent = path.parent.resolve(strict=True)
-    except (OSError, RuntimeError) as error:
-        raise ResultArtifactError(f"cannot resolve artifact path {path}") from error
-    if not resolved_parent.is_relative_to(resolved_root):
-        raise ResultArtifactError(f"artifact path escapes result workspace: {path}")
 
 
 def _format_timestamp(value: datetime) -> str:

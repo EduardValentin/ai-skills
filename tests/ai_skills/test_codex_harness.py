@@ -17,7 +17,6 @@ from scripts.ai_skills_lib import codex_harness
 from scripts.ai_skills_lib.codex_harness import (
     CodexHarnessAdapter,
     CodexOutputError,
-    project_actor_skill,
 )
 from scripts.ai_skills_lib.harness import (
     ActorInput,
@@ -51,16 +50,6 @@ def bound_harness_request(**kwargs: object) -> HarnessRequest:
     )
     fixture_root = arguments.get("fixture_root")
     if isinstance(fixture_root, Path):
-        arguments["actor_inputs"] = tuple(
-            actor_input
-            if actor_input.prepared is not None
-            else codex_harness.prepare_actor_input(
-                actor_input.source,
-                actor_input.destination,
-                fixture_root,
-            )
-            for actor_input in arguments.get("actor_inputs", ())
-        )
         fixture_initialization = arguments.get("fixture_initialization")
         if isinstance(fixture_initialization, Path):
             arguments["fixture_initialization"] = (
@@ -74,6 +63,23 @@ def bound_harness_request(**kwargs: object) -> HarnessRequest:
         request,
         invocation_id="0" * 32,
         run_id=f"unit-{request.run_variant}",
+    )
+
+
+def project_actor_skill(source: Path, destination: Path) -> None:
+    prepared = codex_harness.prepare_actor_skill_source(source)
+    codex_harness.project_prepared_actor_skill(prepared, destination)
+
+
+def prepared_actor_input(
+    source: Path,
+    destination: PurePosixPath,
+    fixture_root: Path,
+) -> ActorInput:
+    return codex_harness.prepare_actor_input(
+        source,
+        destination,
+        fixture_root,
     )
 
 
@@ -336,7 +342,7 @@ class FakeFixtureProxy:
         self,
         worker: SandboxWorker,
         case: CaseWorkspace,
-        initialization_path: Path,
+        initialization_path: PreparedFile,
         case_fixture_root: Path,
     ) -> FixtureSession:
         self.prepared.append((worker, case, initialization_path, case_fixture_root))
@@ -946,35 +952,6 @@ class CodexHarnessAdapterTests(unittest.TestCase):
 
         self.assertEqual(runtime.case_sequence, 0)
 
-    def test_execute_rejects_live_path_material_after_binding(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            skill = root / "skills" / "example"
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text(
-                EXAMPLE_SKILL_CONTENT,
-                encoding="utf-8",
-            )
-            runtime = FakeSandboxRuntime(root)
-            adapter = CodexHarnessAdapter(runtime, allowed_skill_root=skill.parent)
-            request = bind_harness_request(
-                HarnessRequest(
-                    role="actor",
-                    run_variant="live-path",
-                    prompt="Perform the scenario.",
-                    timeout_seconds=60,
-                    skill_sources=(skill,),
-                    expected_skill="example",
-                ),
-                invocation_id="c" * 32,
-                run_id="live-path",
-            )
-
-            with self.assertRaisesRegex(CodexOutputError, "prepared skill bytes"):
-                adapter.execute(request, runtime.results_root / "live-path")
-
-        self.assertEqual(runtime.case_sequence, 0)
-
     def test_preflight_reports_pinned_codex_and_discovered_defaults(self) -> None:
         models = {
             "models": [
@@ -1499,8 +1476,16 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                     skill_sources=(skill,),
                     expected_skill="example",
                     actor_inputs=(
-                        ActorInput(unchanged, PurePosixPath("request.md")),
-                        ActorInput(changed, PurePosixPath("draft.md")),
+                        prepared_actor_input(
+                            unchanged,
+                            PurePosixPath("request.md"),
+                            fixture_root,
+                        ),
+                        prepared_actor_input(
+                            changed,
+                            PurePosixPath("draft.md"),
+                            fixture_root,
+                        ),
                     ),
                     fixture_root=fixture_root,
                     capture_outputs=True,
@@ -1645,7 +1630,11 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                         prompt="Perform the scenario.",
                         timeout_seconds=60,
                         actor_inputs=(
-                            ActorInput(source, PurePosixPath("large.bin")),
+                            prepared_actor_input(
+                                source,
+                                PurePosixPath("large.bin"),
+                                fixture_root,
+                            ),
                         ),
                         fixture_root=fixture_root,
                         capture_outputs=True,
@@ -1903,9 +1892,10 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                     prompt="Use request.md.",
                     timeout_seconds=60,
                     actor_inputs=(
-                        ActorInput(
-                            source=declared,
-                            destination=PurePosixPath("request.md"),
+                        prepared_actor_input(
+                            declared,
+                            PurePosixPath("request.md"),
+                            input_root.parent,
                         ),
                     ),
                     fixture_root=input_root.parent,
@@ -1946,14 +1936,10 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                     prompt="Use the available gh command.",
                     timeout_seconds=60,
                     actor_inputs=(
-                        ActorInput(
-                            source=command,
-                            destination=PurePosixPath("bin/gh"),
-                            prepared=PreparedFile(
-                                source=command,
-                                content=command.read_bytes(),
-                                executable=True,
-                            ),
+                        prepared_actor_input(
+                            command,
+                            PurePosixPath("bin/gh"),
+                            input_root.parent,
                         ),
                     ),
                     fixture_root=input_root.parent,
@@ -1997,9 +1983,10 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                     prompt="Read bin/command-contract.txt.",
                     timeout_seconds=60,
                     actor_inputs=(
-                        ActorInput(
-                            source=data_file,
-                            destination=PurePosixPath("bin/command-contract.txt"),
+                        prepared_actor_input(
+                            data_file,
+                            PurePosixPath("bin/command-contract.txt"),
+                            input_root.parent,
                         ),
                     ),
                     fixture_root=input_root.parent,
@@ -2032,9 +2019,10 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                         prompt="Use the input.",
                         timeout_seconds=60,
                         actor_inputs=(
-                            ActorInput(
-                                source=outside,
-                                destination=PurePosixPath("outside.md"),
+                            prepared_actor_input(
+                                outside,
+                                PurePosixPath("outside.md"),
+                                fixture_root,
                             ),
                         ),
                         fixture_root=fixture_root,
@@ -2068,9 +2056,10 @@ class CodexHarnessAdapterTests(unittest.TestCase):
                         prompt="Use the input.",
                         timeout_seconds=60,
                         actor_inputs=(
-                            ActorInput(
-                                source=sibling_input,
-                                destination=PurePosixPath("request.md"),
+                            prepared_actor_input(
+                                sibling_input,
+                                PurePosixPath("request.md"),
+                                selected_root,
                             ),
                         ),
                         fixture_root=selected_root,

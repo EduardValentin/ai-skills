@@ -153,18 +153,18 @@ class CapturedOutputPath:
 class ActorInput:
     """One explicitly declared fixture file copied into an actor workspace."""
 
-    source: Path
+    prepared: PreparedFile
     destination: PurePosixPath
-    prepared: PreparedFile | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.source, Path) or not isinstance(
-            self.destination, PurePosixPath
+        if not isinstance(self.prepared, PreparedFile) or not isinstance(
+            self.destination,
+            PurePosixPath,
         ):
-            raise ValueError("actor input requires Path source and PurePosixPath destination")
+            raise ValueError(
+                "actor input requires a prepared file and PurePosixPath destination"
+            )
         _require_contained_relative_path(self.destination, "actor input destination")
-        if self.prepared is not None and self.prepared.source != self.source:
-            raise ValueError("prepared actor input source must match its declaration")
 
 
 @dataclass(frozen=True)
@@ -253,14 +253,14 @@ class HarnessRequest:
     run_variant: str
     prompt: str
     timeout_seconds: int
-    skill_sources: tuple[Path | PreparedSkillSource, ...] = field(default_factory=tuple)
+    skill_sources: tuple[PreparedSkillSource, ...] = field(default_factory=tuple)
     expected_skill: str | None = None
     model: str | None = None
     reasoning_effort: str | None = None
     shell_environment: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     actor_inputs: tuple[ActorInput, ...] = field(default_factory=tuple)
     fixture_root: Path | None = None
-    fixture_initialization: Path | PreparedFile | None = None
+    fixture_initialization: PreparedFile | None = None
     capture_outputs: bool = False
     artifact_binding: HarnessArtifactBinding | None = field(
         default=None,
@@ -311,10 +311,19 @@ class HarnessRequest:
         ):
             raise ValueError("response_schema must be a mapping")
         if not all(
-            isinstance(source, (Path, PreparedSkillSource))
+            isinstance(source, PreparedSkillSource)
             for source in self.skill_sources
         ):
-            raise ValueError("skill sources must be paths or prepared skill material")
+            raise ValueError("skill sources must contain only prepared skill material")
+        if not all(isinstance(actor_input, ActorInput) for actor_input in self.actor_inputs):
+            raise ValueError("actor inputs must contain only prepared actor input material")
+        if (
+            self.fixture_initialization is not None
+            and not isinstance(self.fixture_initialization, PreparedFile)
+        ):
+            raise ValueError(
+                "fixture initialization must contain prepared fixture material"
+            )
         names: set[str] = set()
         for item in self.shell_environment:
             if (
@@ -763,30 +772,12 @@ def _execution_binding_sha256(
 
 
 def _canonical_harness_request_bytes(request: HarnessRequest) -> bytes:
-    def skill_source_document(
-        source: Path | PreparedSkillSource,
-    ) -> dict[str, object]:
-        if isinstance(source, PreparedSkillSource):
-            return {
-                "kind": "prepared",
-                "name": source.name,
-                "sha256": source.sha256,
-                "source_root": str(source.source_root),
-            }
-        return {"kind": "path", "path": str(source)}
-
     fixture_initialization: dict[str, object] | None
-    if isinstance(request.fixture_initialization, PreparedFile):
+    if request.fixture_initialization is not None:
         fixture_initialization = {
-            "kind": "prepared",
             "source": str(request.fixture_initialization.source),
             "sha256": request.fixture_initialization.sha256,
             "executable": request.fixture_initialization.executable,
-        }
-    elif isinstance(request.fixture_initialization, Path):
-        fixture_initialization = {
-            "kind": "path",
-            "path": str(request.fixture_initialization),
         }
     else:
         fixture_initialization = None
@@ -807,7 +798,12 @@ def _canonical_harness_request_bytes(request: HarnessRequest) -> bytes:
         "prompt": request.prompt,
         "timeout_seconds": request.timeout_seconds,
         "skill_sources": [
-            skill_source_document(source) for source in request.skill_sources
+            {
+                "name": source.name,
+                "sha256": source.sha256,
+                "source_root": str(source.source_root),
+            }
+            for source in request.skill_sources
         ],
         "expected_skill": request.expected_skill,
         "model": request.model,
@@ -815,18 +811,10 @@ def _canonical_harness_request_bytes(request: HarnessRequest) -> bytes:
         "shell_environment": [list(item) for item in request.shell_environment],
         "actor_inputs": [
             {
-                "source": str(actor_input.source),
+                "source": str(actor_input.prepared.source),
                 "destination": actor_input.destination.as_posix(),
-                "prepared_sha256": (
-                    actor_input.prepared.sha256
-                    if actor_input.prepared is not None
-                    else None
-                ),
-                "prepared_executable": (
-                    actor_input.prepared.executable
-                    if actor_input.prepared is not None
-                    else None
-                ),
+                "sha256": actor_input.prepared.sha256,
+                "executable": actor_input.prepared.executable,
             }
             for actor_input in request.actor_inputs
         ],

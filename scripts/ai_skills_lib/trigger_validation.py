@@ -201,72 +201,6 @@ def classify_trigger_attempts(
     )
 
 
-def execute_trigger_queries(
-    root: Path,
-    adapter: HarnessAdapter,
-    workspace: ResultWorkspace,
-    *,
-    runs: int,
-    max_concurrency: int,
-    actor_timeout_seconds: int = 900,
-    skill_filter: str | None = None,
-    query_filter: str | None = None,
-    preflight_receipt: BoundPreflightReceipt | None = None,
-) -> TriggerSuiteResult:
-    """Load the validated catalog and run selected trigger cases."""
-    _validate_trigger_execution_options(runs, max_concurrency, actor_timeout_seconds)
-    definitions = load_trigger_queries(root)
-    return _execute_trigger_queries(
-        root,
-        adapter,
-        workspace,
-        definitions=definitions,
-        runs=runs,
-        max_concurrency=max_concurrency,
-        actor_timeout_seconds=actor_timeout_seconds,
-        skill_filter=skill_filter,
-        query_filter=query_filter,
-        preflight_receipt=preflight_receipt,
-    )
-
-
-def _execute_trigger_queries(
-    root: Path,
-    adapter: HarnessAdapter,
-    workspace: ResultWorkspace,
-    *,
-    definitions: tuple[SkillTriggerQueries, ...],
-    runs: int,
-    max_concurrency: int,
-    actor_timeout_seconds: int,
-    skill_filter: str | None,
-    query_filter: str | None,
-    preflight_receipt: BoundPreflightReceipt | None = None,
-    prepared_plan: PreparedTriggerPlan | None = None,
-    invocation_declared: bool = False,
-) -> TriggerSuiteResult:
-    """Run selected trigger cases from one already validated full catalog."""
-    _validate_trigger_execution_options(runs, max_concurrency, actor_timeout_seconds)
-    plan = prepared_plan or prepare_trigger_plan(
-        definitions,
-        runs=runs,
-        skill_filter=skill_filter,
-        query_filter=query_filter,
-    )
-    if plan.runs != runs:
-        raise TriggerHarnessError("prepared trigger plan run count does not match execution")
-    if not invocation_declared:
-        declare_trigger_plan(workspace, plan)
-    return execute_prepared_trigger_plan(
-        adapter,
-        workspace,
-        plan,
-        max_concurrency=max_concurrency,
-        actor_timeout_seconds=actor_timeout_seconds,
-        preflight_receipt=preflight_receipt,
-    )
-
-
 def prepare_trigger_plan(
     definitions: Sequence[SkillTriggerQueries],
     *,
@@ -618,18 +552,12 @@ def run_trigger_query_harness(
             invocation_label="triggers",
             max_concurrency=max_concurrency,
         )
-        result = _execute_trigger_queries(
-            root,
+        result = execute_prepared_trigger_plan(
             session.adapter,
             workspace,
-            definitions=definitions,
-            runs=runs,
+            plan,
             max_concurrency=max_concurrency,
             actor_timeout_seconds=session.manifest.limits.actor_timeout_seconds,
-            skill_filter=skill_filter,
-            query_filter=query_filter,
-            prepared_plan=plan,
-            invocation_declared=True,
         )
     except Exception as error:
         failure = str(error)

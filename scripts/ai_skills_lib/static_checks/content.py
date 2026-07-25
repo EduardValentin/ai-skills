@@ -13,7 +13,6 @@ from scripts.ai_skills_lib.authored_content import (
     AuthoredContentReadError,
     AuthoredContentTooLarge,
     AuthoredFile,
-    BoundedJsonError,
     authored_file,
     extract_bundled_paths,
     find_additional_decoded_json_secret_issues,
@@ -21,8 +20,11 @@ from scripts.ai_skills_lib.authored_content import (
     find_static_secret_issues_in_bytes,
     read_bounded_authored_bytes,
     resolve_strict,
-    strict_bounded_json_loads,
     walk_authored_files,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
+    strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.core import SkillRecord
 from scripts.ai_skills_lib.issues import ValidationIssue

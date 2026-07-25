@@ -12,11 +12,32 @@ from scripts.ai_skills_lib.harness import (
     HarnessCapabilities,
     HarnessExecution,
     HarnessRequest,
+    PreparedFile,
     PreparedResponseSchema,
+    PreparedSkillFile,
+    PreparedSkillSource,
     bind_harness_request,
     harness_request_matches_execution_binding,
     validated_actor_skill_read_lifecycle,
 )
+
+
+def prepared_file(source: str = "request.md", content: bytes = b"content\n") -> PreparedFile:
+    return PreparedFile(source=Path(source), content=content)
+
+
+def prepared_skill(name: str = "example") -> PreparedSkillSource:
+    return PreparedSkillSource(
+        source_root=Path("skills/workflows") / name,
+        name=name,
+        files=(
+            PreparedSkillFile(
+                relative_path=PurePosixPath("SKILL.md"),
+                content=f"---\nname: {name}\n---\n".encode(),
+                executable=False,
+            ),
+        ),
+    )
 
 
 class RecordingHarness:
@@ -58,6 +79,33 @@ class RecordingHarness:
 
 
 class HarnessContractTests(unittest.TestCase):
+    def test_request_rejects_live_filesystem_material(self):
+        cases = (
+            {
+                "skill_sources": (Path("skills/workflows/example"),),
+            },
+            {
+                "fixture_root": Path(
+                    "skills/workflows/example/evals/fixtures/case"
+                ),
+                "fixture_initialization": Path(
+                    "skills/workflows/example/evals/fixtures/case/"
+                    "mockserverInitialization.json"
+                ),
+            },
+        )
+
+        for fields in cases:
+            with self.subTest(fields=fields):
+                with self.assertRaisesRegex(ValueError, "prepared"):
+                    HarnessRequest(
+                        role="actor",
+                        run_variant="candidate",
+                        prompt="Perform the case.",
+                        timeout_seconds=60,
+                        **fields,
+                    )
+
     def test_skill_read_requires_one_complete_bound_command_lifecycle(self):
         skill_path = "/case/codex-home/skills/example/SKILL.md"
         lifecycle = (
@@ -201,7 +249,7 @@ class HarnessContractTests(unittest.TestCase):
             role="actor",
             run_variant="candidate",
             prompt="Perform the case.",
-            skill_sources=(Path("skills/workflows/example"),),
+            skill_sources=(prepared_skill(),),
             expected_skill="example",
             model=None,
             reasoning_effort=None,
@@ -233,7 +281,7 @@ class HarnessContractTests(unittest.TestCase):
 
     def test_judge_request_rejects_actor_skill_provisioning(self):
         for restricted in (
-            {"skill_sources": (Path("skills/workflows/example"),)},
+            {"skill_sources": (prepared_skill(),)},
             {"expected_skill": "example"},
         ):
             with self.subTest(restricted=restricted):
@@ -263,7 +311,7 @@ class HarnessContractTests(unittest.TestCase):
     def test_judge_request_rejects_actor_fixture_provisioning(self):
         for restricted in (
             {
-                "fixture_initialization": Path(
+                "fixture_initialization": prepared_file(
                     "evals/fixtures/example/mockserverInitialization.json"
                 )
             },
@@ -309,7 +357,9 @@ class HarnessContractTests(unittest.TestCase):
 
     def test_actor_input_contract_rejects_judges_and_unsafe_destinations(self):
         actor_input = ActorInput(
-            source=Path("evals/fixtures/example/inputs/request.md"),
+            prepared=prepared_file(
+                "evals/fixtures/example/inputs/request.md"
+            ),
             destination=PurePosixPath("request.md"),
         )
         with self.assertRaisesRegex(ValueError, "judge.*input"):
@@ -327,7 +377,10 @@ class HarnessContractTests(unittest.TestCase):
         ):
             with self.subTest(destination=destination):
                 with self.assertRaisesRegex(ValueError, "actor input"):
-                    ActorInput(source=Path("request.md"), destination=destination)
+                    ActorInput(
+                        prepared=prepared_file(),
+                        destination=destination,
+                    )
 
         with self.assertRaisesRegex(ValueError, "actor input destinations"):
             HarnessRequest(
@@ -340,13 +393,15 @@ class HarnessContractTests(unittest.TestCase):
 
     def test_actor_fixture_material_requires_an_exact_case_fixture_root(self):
         actor_input = ActorInput(
-            source=Path("evals/fixtures/example/inputs/request.md"),
+            prepared=prepared_file(
+                "evals/fixtures/example/inputs/request.md"
+            ),
             destination=PurePosixPath("request.md"),
         )
         for fixture_fields in (
             {"actor_inputs": (actor_input,)},
             {
-                "fixture_initialization": Path(
+                "fixture_initialization": prepared_file(
                     "evals/fixtures/example/mockserverInitialization.json"
                 )
             },

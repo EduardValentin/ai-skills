@@ -39,7 +39,6 @@ from scripts.ai_skills_lib.trigger_validation import (
     TriggerDefinitionError,
     TriggerHarnessError,
     classify_trigger_attempts,
-    execute_trigger_queries,
     format_trigger_summary,
     load_trigger_queries,
     validate_trigger_query_files,
@@ -47,6 +46,41 @@ from scripts.ai_skills_lib.trigger_validation import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def execute_trigger_queries(
+    root: Path,
+    adapter,
+    workspace,
+    *,
+    runs: int,
+    max_concurrency: int,
+    actor_timeout_seconds: int = 900,
+    skill_filter: str | None = None,
+    query_filter: str | None = None,
+    preflight_receipt=None,
+):
+    """Prepare, declare, and execute one trigger plan for unit tests."""
+    trigger_validation._validate_trigger_execution_options(
+        runs,
+        max_concurrency,
+        actor_timeout_seconds,
+    )
+    plan = trigger_validation.prepare_trigger_plan(
+        trigger_validation.load_trigger_queries(root),
+        runs=runs,
+        skill_filter=skill_filter,
+        query_filter=query_filter,
+    )
+    trigger_validation.declare_trigger_plan(workspace, plan)
+    return trigger_validation.execute_prepared_trigger_plan(
+        adapter,
+        workspace,
+        plan,
+        max_concurrency=max_concurrency,
+        actor_timeout_seconds=actor_timeout_seconds,
+        preflight_receipt=preflight_receipt,
+    )
 
 
 def rebind_attempt_evidence(attempt: Path) -> None:
@@ -2417,7 +2451,7 @@ class TriggerCliTests(unittest.TestCase):
                 patch("scripts.ai_skills_lib.codex_harness.CodexHarnessAdapter"),
                 patch.object(
                     trigger_validation,
-                    "_execute_trigger_queries",
+                    "execute_prepared_trigger_plan",
                     side_effect=TriggerHarnessError("preflight unavailable"),
                 ),
                 redirect_stdout(StringIO()),
@@ -2464,7 +2498,7 @@ class TriggerCliTests(unittest.TestCase):
                 ),
                 patch.object(
                     trigger_validation,
-                    "_execute_trigger_queries",
+                    "execute_prepared_trigger_plan",
                     side_effect=RuntimeError("trigger execution raised"),
                 ),
                 redirect_stdout(output),
@@ -2539,7 +2573,7 @@ class TriggerCliTests(unittest.TestCase):
             )
 
             def errored_suite(*args, **kwargs):
-                workspace = args[2]
+                workspace = args[1]
                 artifact_dir = workspace.attempts / "alpha-positive-run-1"
                 artifact_dir.mkdir()
                 return trigger_validation.TriggerSuiteResult(
@@ -2580,7 +2614,7 @@ class TriggerCliTests(unittest.TestCase):
                 patch("scripts.ai_skills_lib.codex_harness.CodexHarnessAdapter"),
                 patch.object(
                     trigger_validation,
-                    "_execute_trigger_queries",
+                    "execute_prepared_trigger_plan",
                     side_effect=errored_suite,
                 ),
                 redirect_stdout(StringIO()),
@@ -2652,7 +2686,7 @@ class TriggerCliTests(unittest.TestCase):
                 patch("scripts.ai_skills_lib.codex_harness.CodexHarnessAdapter"),
                 patch.object(
                     trigger_validation,
-                    "_execute_trigger_queries",
+                    "execute_prepared_trigger_plan",
                     return_value=suite,
                 ),
                 patch.object(

@@ -17,9 +17,11 @@ import scripts.ai_skills as cli
 import scripts.ai_skills_lib.actor_evidence as actor_evidence
 import scripts.ai_skills_lib.eval_definitions as eval_definitions
 from scripts.ai_skills_lib.authored_content import (
-    BoundedJsonError,
     SENSITIVE_TEXT_QUARANTINE,
     find_static_secret_issues,
+)
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
     strict_bounded_json_loads,
 )
 import scripts.ai_skills_lib.eval_validation as eval_validation
@@ -39,7 +41,6 @@ from scripts.ai_skills_lib.eval_definitions import (
     load_behavior_evals,
     validate_behavior_eval_files,
 )
-from scripts.ai_skills_lib.eval_validation import execute_behavior_evals
 from scripts.ai_skills_lib.harness import (
     CapturedOutputPath,
     bind_harness_request,
@@ -47,6 +48,41 @@ from scripts.ai_skills_lib.harness import (
     HarnessExecution,
     HarnessRequest,
 )
+
+
+def execute_behavior_evals(
+    root: Path,
+    adapter,
+    workspace,
+    *,
+    skill_filter: str | None,
+    case_filter: str | None,
+    max_concurrency: int,
+    actor_timeout_seconds: int,
+    judge_timeout_seconds: int,
+    preflight_receipt=None,
+):
+    """Prepare, declare, and execute one behavior plan for unit tests."""
+    eval_validation._validate_execution_options(
+        max_concurrency,
+        actor_timeout_seconds,
+        judge_timeout_seconds,
+    )
+    plan = eval_validation.prepare_behavior_plan(
+        eval_validation.load_behavior_evals(root),
+        skill_filter=skill_filter,
+        case_filter=case_filter,
+    )
+    eval_validation.declare_behavior_plan(workspace, plan)
+    return eval_validation.execute_prepared_behavior_plan(
+        adapter,
+        workspace,
+        plan,
+        max_concurrency=max_concurrency,
+        actor_timeout_seconds=actor_timeout_seconds,
+        judge_timeout_seconds=judge_timeout_seconds,
+        preflight_receipt=preflight_receipt,
+    )
 
 
 class RecordingBehaviorHarness:
@@ -1181,7 +1217,7 @@ class DeterministicBehaviorCheckTests(unittest.TestCase):
             MemoryError(),
         ):
             with self.subTest(parser_error=type(parser_error).__name__), patch(
-                "scripts.ai_skills_lib.authored_content.json.loads",
+                "scripts.ai_skills_lib.bounded_json.json.loads",
                 side_effect=parser_error,
             ):
                 with self.assertRaises(BoundedJsonError) as raised:
@@ -1194,7 +1230,7 @@ class DeterministicBehaviorCheckTests(unittest.TestCase):
         )
         for value, limits, expected_error in hostile_structures:
             with self.subTest(expected_error=expected_error), patch(
-                "scripts.ai_skills_lib.authored_content.json.loads",
+                "scripts.ai_skills_lib.bounded_json.json.loads",
                 side_effect=AssertionError(
                     "structurally hostile JSON reached json.loads"
                 ),

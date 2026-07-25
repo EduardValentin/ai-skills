@@ -6,6 +6,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+
+import scripts.sync_native_agents as sync_native_agents
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +35,108 @@ def run_sync(
 class NativeAgentSyncTests(unittest.TestCase):
     def assert_file_contains(self, path: Path, expected: str) -> None:
         self.assertIn(expected, path.read_text(encoding="utf-8"))
+
+    def test_manifest_parser_accepts_standard_toml_comments_and_multiline_strings(
+        self,
+    ) -> None:
+        manifest = sync_native_agents.parse_manifest(
+            '''
+version = 1
+
+[[agent]]
+id = "demo-mapper"
+source = "mapper.md"
+description = """Read-only mapper
+for implementation scoping."""
+groups = ["ticket-workflow"] # Standard TOML inline comment.
+'''.lstrip()
+        )
+
+        self.assertEqual(manifest["version"], 1)
+        self.assertEqual(
+            manifest["agent"][0]["description"],
+            "Read-only mapper\nfor implementation scoping.",
+        )
+        self.assertEqual(
+            manifest["agent"][0]["groups"],
+            ["ticket-workflow"],
+        )
+
+    def test_manifest_parser_rejects_duplicate_keys_without_echoing_values(
+        self,
+    ) -> None:
+        private_value = "FAKE_PRIVATE_MANIFEST_VALUE"
+        with self.assertRaises(ValueError) as raised:
+            sync_native_agents.parse_manifest(
+                "\n".join(
+                    (
+                        "version = 1",
+                        f'version = "{private_value}"',
+                    )
+                )
+            )
+
+        self.assertEqual(
+            str(raised.exception),
+            "invalid native agent manifest TOML",
+        )
+        self.assertNotIn(private_value, str(raised.exception))
+
+    def test_manifest_loader_rejects_non_table_agent_configuration_safely(
+        self,
+    ) -> None:
+        private_value = "FAKE_PRIVATE_MANIFEST_VALUE"
+        cases = (
+            (
+                f'version = 1\nagent = [1, "{private_value}"]\n',
+                "agents/manifest.toml agent entries must be tables",
+            ),
+            (
+                "\n".join(
+                    (
+                        "version = 1",
+                        "[[agent]]",
+                        'id = "demo-mapper"',
+                        'source = "mapper.md"',
+                        'description = "Map code."',
+                        f'codex = "{private_value}"',
+                    )
+                ),
+                "demo-mapper.codex must be a table",
+            ),
+            (
+                "\n".join(
+                    (
+                        "version = 1",
+                        "[[agent]]",
+                        'id = "demo-mapper"',
+                        'source = "mapper.md"',
+                        'description = "Map code."',
+                        f'claude = "{private_value}"',
+                    )
+                ),
+                "demo-mapper.claude must be a table",
+            ),
+        )
+
+        for manifest, expected in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
+                repo = Path(directory)
+                agents = repo / "agents"
+                agents.mkdir()
+                (agents / "manifest.toml").write_text(
+                    manifest,
+                    encoding="utf-8",
+                )
+                with patch.dict(
+                    os.environ,
+                    {"AI_SKILLS_REPO": str(repo)},
+                ):
+                    with self.assertRaises(ValueError) as raised:
+                        sync_native_agents.load_agents()
+
+                self.assertEqual(str(raised.exception), expected)
+                self.assertNotIn(private_value, str(raised.exception))
 
     def test_push_check_and_drift_detection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -106,6 +107,8 @@ def load_agents() -> list[NativeAgent]:
     entries = data.get("agent", [])
     if not isinstance(entries, list) or not entries:
         raise ValueError("agents/manifest.toml must define at least one [[agent]]")
+    if not all(isinstance(entry, dict) for entry in entries):
+        raise ValueError("agents/manifest.toml agent entries must be tables")
 
     agents: list[NativeAgent] = []
     seen: set[str] = set()
@@ -119,8 +122,14 @@ def load_agents() -> list[NativeAgent]:
         description = required_string(entry, "description")
         groups = string_tuple(entry.get("groups", []), f"{agent_id}.groups")
         preload_skills = string_tuple(entry.get("preload_skills", []), f"{agent_id}.preload_skills")
-        codex = dict(entry.get("codex", {}))
-        claude = dict(entry.get("claude", {}))
+        codex_value = entry.get("codex", {})
+        claude_value = entry.get("claude", {})
+        if not isinstance(codex_value, dict):
+            raise ValueError(f"{agent_id}.codex must be a table")
+        if not isinstance(claude_value, dict):
+            raise ValueError(f"{agent_id}.claude must be a table")
+        codex = dict(codex_value)
+        claude = dict(claude_value)
         unknown_codex = sorted(set(codex) - CODEX_KEYS - {"preload_skills"})
         unknown_claude = sorted(set(claude) - CLAUDE_KEYS)
         if unknown_codex:
@@ -162,56 +171,10 @@ def string_tuple(value: Any, context: str) -> tuple[str, ...]:
 
 
 def parse_manifest(text: str) -> dict[str, Any]:
-    """Parse the small TOML subset used by agents/manifest.toml.
-
-    Python 3.11's tomllib is not available on the default macOS Python here,
-    and the repo standard is stdlib-only automation. This parser intentionally
-    supports only the manifest constructs we use: top-level scalar keys,
-    repeated [[agent]] tables, and [agent.codex] / [agent.claude] subtables.
-    """
-
-    data: dict[str, Any] = {"agent": []}
-    current: dict[str, Any] = data
-    current_agent: Optional[dict[str, Any]] = None
-
-    for line_number, raw_line in enumerate(text.splitlines(), start=1):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line == "[[agent]]":
-            current_agent = {}
-            data["agent"].append(current_agent)
-            current = current_agent
-            continue
-        if line in ("[agent.codex]", "[agent.claude]"):
-            if current_agent is None:
-                raise ValueError(f"{line_number}: subtable declared before [[agent]]")
-            key = line.removeprefix("[agent.").removesuffix("]")
-            current_agent.setdefault(key, {})
-            current = current_agent[key]
-            continue
-        if line.startswith("["):
-            raise ValueError(f"{line_number}: unsupported table declaration: {line}")
-        if "=" not in line:
-            raise ValueError(f"{line_number}: expected key = value")
-
-        key, raw_value = line.split("=", 1)
-        current[key.strip()] = parse_manifest_value(raw_value.strip(), line_number)
-    return data
-
-
-def parse_manifest_value(raw_value: str, line_number: int) -> Any:
-    if raw_value.startswith('"') or raw_value.startswith("["):
-        try:
-            return json.loads(raw_value)
-        except json.JSONDecodeError as error:
-            raise ValueError(f"{line_number}: invalid string/list value: {raw_value}") from error
-    if raw_value in ("true", "false"):
-        return raw_value == "true"
     try:
-        return int(raw_value)
-    except ValueError as error:
-        raise ValueError(f"{line_number}: unsupported value: {raw_value}") from error
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise ValueError("invalid native agent manifest TOML") from error
 
 
 def select_agents(agents: list[NativeAgent], group: Optional[str], ids: list[str]) -> list[NativeAgent]:

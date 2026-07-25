@@ -348,17 +348,13 @@ def run_behavior_eval_harness(
             invocation_label="evals",
             max_concurrency=max_concurrency,
         )
-        result = _execute_behavior_evals(
+        result = execute_prepared_behavior_plan(
             session.adapter,
             workspace,
-            definitions=definitions,
-            skill_filter=skill_filter,
-            case_filter=case_filter,
+            plan,
             max_concurrency=max_concurrency,
             actor_timeout_seconds=session.manifest.limits.actor_timeout_seconds,
             judge_timeout_seconds=session.manifest.limits.judge_timeout_seconds,
-            prepared_plan=plan,
-            invocation_declared=True,
         )
     except (
         BehaviorDefinitionError,
@@ -398,70 +394,6 @@ def run_behavior_eval_harness(
     elif not finalization.failures:
         print("validate evals: EXECUTION ERROR")
     return finalization.terminal.exit_code
-
-
-def execute_behavior_evals(
-    root: Path,
-    adapter: HarnessAdapter,
-    workspace: ResultWorkspace,
-    *,
-    skill_filter: str | None,
-    case_filter: str | None,
-    max_concurrency: int,
-    actor_timeout_seconds: int,
-    judge_timeout_seconds: int,
-    preflight_receipt: BoundPreflightReceipt | None = None,
-) -> BehaviorSuiteResult:
-    """Validate definitions and execute selected paired behavior cases."""
-    definitions = load_behavior_evals(root)
-    return _execute_behavior_evals(
-        adapter,
-        workspace,
-        definitions=definitions,
-        skill_filter=skill_filter,
-        case_filter=case_filter,
-        max_concurrency=max_concurrency,
-        actor_timeout_seconds=actor_timeout_seconds,
-        judge_timeout_seconds=judge_timeout_seconds,
-        preflight_receipt=preflight_receipt,
-    )
-
-
-def _execute_behavior_evals(
-    adapter: HarnessAdapter,
-    workspace: ResultWorkspace,
-    *,
-    definitions: tuple[SkillBehaviorEvals, ...],
-    skill_filter: str | None,
-    case_filter: str | None,
-    max_concurrency: int,
-    actor_timeout_seconds: int,
-    judge_timeout_seconds: int,
-    preflight_receipt: BoundPreflightReceipt | None = None,
-    prepared_plan: PreparedBehaviorPlan | None = None,
-    invocation_declared: bool = False,
-) -> BehaviorSuiteResult:
-    _validate_execution_options(
-        max_concurrency,
-        actor_timeout_seconds,
-        judge_timeout_seconds,
-    )
-    plan = prepared_plan or prepare_behavior_plan(
-        definitions,
-        skill_filter=skill_filter,
-        case_filter=case_filter,
-    )
-    if not invocation_declared:
-        declare_behavior_plan(workspace, plan)
-    return execute_prepared_behavior_plan(
-        adapter,
-        workspace,
-        plan,
-        max_concurrency=max_concurrency,
-        actor_timeout_seconds=actor_timeout_seconds,
-        judge_timeout_seconds=judge_timeout_seconds,
-        preflight_receipt=preflight_receipt,
-    )
 
 
 def prepare_behavior_plan(

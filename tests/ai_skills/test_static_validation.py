@@ -16,6 +16,7 @@ from unittest.mock import ANY, patch
 
 import scripts.ai_skills as cli
 import scripts.ai_skills_lib.authored_content as authored_content
+import scripts.ai_skills_lib.bounded_json as bounded_json
 import scripts.ai_skills_lib.core as core
 import scripts.ai_skills_lib.eval_definitions as eval_definitions
 import scripts.ai_skills_lib.static_checks.conformance as conformance
@@ -1639,8 +1640,8 @@ class EvalValidationTests(TemporaryRepositoryTestCase):
             + '":2}'
         )
 
-        with self.assertRaises(authored_content.BoundedJsonError) as raised:
-            authored_content.strict_bounded_json_loads(document)
+        with self.assertRaises(bounded_json.BoundedJsonError) as raised:
+            bounded_json.strict_bounded_json_loads(document)
 
         self.assertIn("duplicate object key", str(raised.exception))
         self.assertNotIn(secret_key, str(raised.exception))

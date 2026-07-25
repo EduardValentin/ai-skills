@@ -16,9 +16,9 @@ import stat
 from typing import Callable, Iterable, Iterator, Mapping
 from urllib.parse import urlparse
 
-from scripts.ai_skills_lib.authored_content import (
-    JsonPreflightError,
-    preflight_bounded_json_structure,
+from scripts.ai_skills_lib.bounded_json import (
+    BoundedJsonError,
+    strict_bounded_json_loads,
 )
 from scripts.ai_skills_lib.core import MAXIMUM_SKILL_DOCUMENT_BYTES
 from scripts.ai_skills_lib.frontmatter import parse_skill_frontmatter
@@ -1902,15 +1902,14 @@ def _repository_lock_names(
             label="skill lock",
             inspection_hook=inspection_hook,
         )
-        text = raw.decode("utf-8")
-        preflight_bounded_json_structure(
-            text,
+        document = strict_bounded_json_loads(
+            raw,
+            maximum_bytes=_MAX_LOCK_BYTES,
             maximum_nodes=_MAX_LOCK_NODES,
             maximum_depth=_MAX_LOCK_DEPTH,
             maximum_scalar_bytes=_MAX_LOCK_SCALAR_BYTES,
             maximum_number_characters=_MAX_LOCK_NUMBER_CHARACTERS,
         )
-        document = json.loads(text, object_pairs_hook=_unique_object)
         if not isinstance(document, dict) or not isinstance(document.get("skills"), dict):
             raise _InspectionError("skill lock must contain a skills object")
         version = document.get("version")
@@ -1923,8 +1922,7 @@ def _repository_lock_names(
     except (
         OSError,
         UnicodeError,
-        json.JSONDecodeError,
-        JsonPreflightError,
+        BoundedJsonError,
         MemoryError,
         OverflowError,
         RecursionError,
@@ -2010,15 +2008,6 @@ def _read_absolute_regular_file(
 
 def _safe_entry_name(name: str) -> bool:
     return bool(name) and name not in (".", "..") and "/" not in name and "\x00" not in name
-
-
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise _InspectionError(f"duplicate JSON key: {key}")
-        result[key] = value
-    return result
 
 
 def _normalize_git_remote_source(source: str, repository_root: Path) -> str:
