@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-skills/triggers.schema.json",
+  "title": "AI Skills trigger query definitions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["skill_name", "queries"],
+  "properties": {
+    "skill_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "queries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "query", "should_trigger"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "pattern": "\\S"
+          },
+          "should_trigger": {"type": "boolean"}
+        }
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["should_trigger"],
+            "properties": {"should_trigger": {"const": true}}
+          },
+          "minContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["should_trigger"],
+            "properties": {"should_trigger": {"const": false}}
+          },
+          "minContains": 1
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Implementation Workflow"
-  short_description: "Manual workflow for approved code work."
-  default_prompt: "Use $implementation-workflow for an approved implementation plan or approved code slice; keep review, manual QA, UI verification when relevant, fixes/reruns, and reporting inside this workflow."

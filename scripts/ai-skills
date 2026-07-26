@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(
+  CDPATH= cd -- "$(dirname -- "$0")" >/dev/null 2>&1
+  pwd -P
+)
+
+unset PYTHONHOME PYTHONINSPECT PYTHONPATH PYTHONSTARTUP PYTHONUSERBASE
+exec python3 -I "$script_directory/ai_skills.py" "$@"

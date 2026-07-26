@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-skills/benchmark.schema.json",
+  "title": "AI Skills generic benchmark aggregation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "invocation_id",
+    "generated_at",
+    "grade_source",
+    "source_summaries"
+  ],
+  "properties": {
+    "schema_version": {"const": "ai-skills.eval.benchmark.v1"},
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "grade_source": {"enum": ["judge", "manual", "both"]},
+    "source_summaries": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "judge": {"$ref": "#/$defs/source_summary"},
+        "manual": {"$ref": "#/$defs/source_summary"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"grade_source": {"const": "judge"}}},
+      "then": {
+        "properties": {
+          "source_summaries": {
+            "required": ["judge"],
+            "maxProperties": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"grade_source": {"const": "manual"}}},
+      "then": {
+        "properties": {
+          "source_summaries": {
+            "required": ["manual"],
+            "maxProperties": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"grade_source": {"const": "both"}}},
+      "then": {
+        "properties": {
+          "source_summaries": {
+            "required": ["judge", "manual"],
+            "minProperties": 2,
+            "maxProperties": 2
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "outcome_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_cases", "passed_cases", "failed_cases", "pass_rate"],
+      "properties": {
+        "total_cases": {"type": "integer", "minimum": 0},
+        "passed_cases": {"type": "integer", "minimum": 0},
+        "failed_cases": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "variant_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runs",
+        "passed",
+        "failed",
+        "pass_rate",
+        "duration_ms_total",
+        "total_tokens"
+      ],
+      "properties": {
+        "runs": {"type": "integer", "minimum": 1},
+        "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "duration_ms_total": {"type": "integer", "minimum": 0},
+        "total_tokens": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant",
+        "baseline_variant",
+        "pass_rate_delta",
+        "investigation_required"
+      ],
+      "properties": {
+        "variant": {"type": "string", "minLength": 1},
+        "baseline_variant": {"type": "string", "minLength": 1},
+        "pass_rate_delta": {"type": "number", "minimum": -1, "maximum": 1},
+        "investigation_required": {"type": "boolean"}
+      }
+    },
+    "group_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group_id", "skill_name", "case_id", "variants", "comparisons"],
+      "properties": {
+        "group_id": {"type": "string", "minLength": 1},
+        "skill_name": {"type": "string", "minLength": 1},
+        "case_id": {"type": "string", "minLength": 1},
+        "variants": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/variant_summary"}
+        },
+        "comparisons": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/comparison"}
+        }
+      }
+    },
+    "source_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "groups", "skill_summaries"],
+      "properties": {
+        "summary": {"$ref": "#/$defs/outcome_summary"},
+        "groups": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/group_summary"}
+        },
+        "skill_summaries": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/skill_summary"}
+        }
+      }
+    },
+    "measurement_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "total", "mean"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 1},
+        "total": {"type": "number"},
+        "mean": {"type": "number"}
+      }
+    },
+    "skill_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skill_name",
+        "total_outcomes",
+        "passed_outcomes",
+        "failed_outcomes",
+        "pass_rate",
+        "measurements"
+      ],
+      "properties": {
+        "skill_name": {"type": "string", "minLength": 1},
+        "total_outcomes": {"type": "integer", "minimum": 0},
+        "passed_outcomes": {"type": "integer", "minimum": 0},
+        "failed_outcomes": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "measurements": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+          "additionalProperties": {"$ref": "#/$defs/measurement_summary"}
+        }
+      }
+    }
+  }
+}

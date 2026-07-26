@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-skills/grading.schema.json",
+  "title": "AI Skills generated or manual grading record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "invocation_id",
+    "run_id",
+    "skill_name",
+    "case_id",
+    "run_kind",
+    "grade_source",
+    "grader",
+    "graded_at",
+    "assertion_results",
+    "summary",
+    "aggregation"
+  ],
+  "properties": {
+    "schema_version": {"const": "ai-skills.eval.grading.v1"},
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {"type": "string", "minLength": 1},
+    "skill_name": {"type": "string", "minLength": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "run_kind": {"type": "string", "minLength": 1},
+    "grade_source": {"enum": ["judge", "manual"]},
+    "grader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "model", "reasoning_effort", "prompt_version"],
+      "properties": {
+        "type": {"enum": ["llm", "human", "deterministic"]},
+        "model": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "Exact configured judge model for generated grades; null for human or deterministic grades."
+        },
+        "reasoning_effort": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "Exact configured judge reasoning effort for generated grades; null for human or deterministic grades."
+        },
+        "prompt_version": {"type": "string", "minLength": 1},
+        "reviewer_identity": {"type": "string", "minLength": 1},
+        "reviewer_label": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "llm"}}},
+          "then": {
+            "properties": {
+              "model": {"type": "string", "minLength": 1},
+              "reasoning_effort": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "human"}}},
+          "then": {
+            "properties": {
+              "model": {"type": "null"},
+              "reasoning_effort": {"type": "null"}
+            },
+            "anyOf": [
+              {"required": ["reviewer_identity"]},
+              {"required": ["reviewer_label"]}
+            ]
+          }
+        }
+      ]
+    },
+    "graded_at": {"type": "string", "format": "date-time"},
+    "evidence_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "assertion_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/assertion_result"}
+    },
+    "summary": {"$ref": "#/$defs/grading_summary"},
+    "aggregation": {"$ref": "#/$defs/aggregation_metadata"},
+    "measurements": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+      "additionalProperties": {"type": "number"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"grade_source": {"const": "manual"}}},
+      "then": {"properties": {"grader": {"properties": {"type": {"const": "human"}}}}}
+    },
+    {
+      "if": {"properties": {"grade_source": {"const": "judge"}}},
+      "then": {
+        "properties": {
+          "grader": {"properties": {"type": {"enum": ["llm", "deterministic"]}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "assertion_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "text",
+        "passed",
+        "checked_by",
+        "evidence",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1},
+        "passed": {"type": "boolean"},
+        "checked_by": {"type": "string", "minLength": 1},
+        "evidence": {"type": "string", "minLength": 1},
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact", "locator"],
+            "properties": {
+              "artifact": {"type": "string", "minLength": 1},
+              "locator": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "grading_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "total", "pass_rate"],
+      "properties": {
+        "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "aggregation_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group_id",
+        "variant",
+        "contributes_to_outcome",
+        "required_variants"
+      ],
+      "properties": {
+        "group_id": {"type": "string", "minLength": 1},
+        "variant": {"type": "string", "minLength": 1},
+        "contributes_to_outcome": {"type": "boolean"},
+        "required_variants": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "compare_to": {"type": "string", "minLength": 1},
+        "minimum_pass_rate": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "configured_runs": {"type": "integer", "minimum": 1},
+        "run_number": {"type": "integer", "minimum": 1}
+      },
+      "dependentRequired": {
+        "minimum_pass_rate": ["configured_runs", "run_number"],
+        "configured_runs": ["minimum_pass_rate", "run_number"],
+        "run_number": ["minimum_pass_rate", "configured_runs"]
+      }
+    }
+  }
+}

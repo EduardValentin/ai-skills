@@ -1,4 +1,0 @@
-interface:
-  display_name: "Frontend Interface Design"
-  short_description: "Build polished accessible GUI interfaces"
-  default_prompt: "Build a polished accessible interface"

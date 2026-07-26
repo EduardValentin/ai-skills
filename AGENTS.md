@@ -1,363 +1,192 @@
 # Agent Instructions
 
-This repository is the tracked source for personal AI skills and reusable specialized agents used across multiple agents (Claude Code, Codex, and any future agent). It is **not** a place to maintain parallel per-agent copies of the same skill or agent.
+This repository is the tracked source for personal AI skills and reusable
+specialized agents. Keep a single canonical source for every skill and agent;
+never edit installed or generated copies.
 
-## Repository rules
+## Repository Rules
 
-### Git baseline
+### Baseline and source layout
 
-Before creating a branch or worktree from `main`, always fetch the remote first and base the new branch/worktree on the freshly fetched `origin/main`. Do not branch from a stale local `main` ref.
+- Before creating a branch or worktree from `main`, fetch the remote and base
+  it on the current `origin/main`.
+- Skills use the strict source layout
+  `skills/<group>/<skill>/SKILL.md`. Runtime dependencies needed by a skill
+  belong inside that skill folder.
+- A skill is self-contained. Bundled executable code belongs in its skill;
+  duplicated bundled financial runtime code is allowed only for this approved
+  self-contained-skill exception.
+- Do not directly edit installed skills, generated artifacts, or caches.
+- When skill layout, validation, installation, or testing behavior changes,
+  update the relevant files under `docs/` and keep `docs/INDEX.md` accurate.
 
-### 1. One canonical copy per skill
+### Skill contract and validation
 
-Maintain a **single canonical version** of each skill in this repo. Do not fork a skill into per-agent folders (`claude/skills/foo/` *and* `codex/skills/foo/`). Forked copies drift, fixes don't propagate, and the same bug ends up debugged twice.
+- Treat upstream Agent Skills requirements separately from this repository's
+  stricter policy. The nested group layout, supported-root allowlist, status
+  metadata, optional experimental eval files, and validation gates are
+  repository policy, not claims about the public specification.
+- Parse frontmatter with StrictYAML. Keep repository policy in the shared
+  validator. Use the pinned official `skills-ref` conformance check through
+  `scripts/ai-skills validate ci-all`; review the specification,
+  documentation, tests, and verified source manifest before updating that pin.
+- Keep the isolated CLI bound to the exact repository `scripts/` package.
+  Never expose the repository root as a general dependency import path before
+  static validation.
+- Each skill root may contain only supported entries. Validate those entries
+  statically by directory; reject unknown root directories, broken or escaping
+  symlinks, directory symlink cycles, public-installer discovery or copy
+  exclusions, empty directories, and `.gitkeep` placeholders without scanning
+  arbitrary nested prose.
+- Require the repository frontmatter and metadata fields. Set
+  `metadata.allows_tool_references: "true"` when a skill references tools,
+  harnesses, native agents, or other skills.
+- Document required collaborators or fallbacks in `compatibility`. Validate
+  retained skill names, and when a collaborator is required, cover both its
+  present and absent behavior.
+- Repository skills are experimental unless explicitly promoted. Experimental
+  skills may omit `evals/` entirely. Any present `evals/` directory, and every
+  non-experimental skill, requires both `evals/evals.json` and
+  `evals/triggers.json`.
+- Dispatch every `SKILL.md` read performed for specification alignment to a
+  separate subagent, regardless of the current delegation depth. Return only
+  the findings needed by the coordinating agent.
 
-If you encounter an existing duplicated skill (the same skill present under both `claude/skills/` and `codex/skills/`), prefer to **consolidate** it into one canonical location before making further edits, and call this out to the user.
+### Evaluation and test policy
 
-Use this canonical layout:
+- For authored trigger coverage, run each query once by default, or uniformly
+  use `--runs 2` or `--runs 3`. Unanimous results are stable. Two of three
+  meets the threshold only after investigating the failed run, adding complete
+  validated manual grading for every attempt, and aggregating with the manual
+  source; judge-only aggregation must reject it. Every other non-unanimous
+  result fails. Preserve every discordant run;
+  Codex activation requires an exact successful read of the installed
+  `SKILL.md` through a trusted system reader, with returned bytes equal to the
+  prepared installed skill. Derive that read from one complete actor lifecycle
+  with matched command ID, trusted reader, zero exit status, successful command
+  status, matched tool start/completion IDs, and no unknown, out-of-order, or
+  duplicate events; enforce the same lifecycle during offline aggregation.
+- Keep trigger files runner-free: `skill_name` matches the skill, query IDs are
+  unique, every query has `query` and boolean `should_trigger`, and each trigger
+  file includes positive and near-miss negative coverage. Require a contained
+  non-symlink file and complete static validation before model-backed setup;
+  negative pickup passes only after the expected installed path is proven.
+- Never run `validate triggers`, `validate evals`, `validate all`, or real
+  Docker Sandboxes/Codex integration smoke tests unless the user explicitly
+  requests them. A skill change, review, implementation workflow, or PR request
+  is not approval.
+- Before requested model-backed runs, print run counts, preflight calls,
+  concurrency, and the durable result path. Default concurrency is `2`;
+  supported values are `1` through `4`. Hidden retries are forbidden; preserve
+  every attempted run outside the repository. Declare the exact immutable
+  invocation attempt set before preflight so aggregation can reject missing or
+  injected runs. Keep generated result JSON within the shared writer/reader
+  ceiling before preflight; deterministic schemas total at most 512 KiB per
+  behavior case. Derive the captured-output entry allowance from the complete
+  per-attempt artifact contract, and reserve final benchmark and summary
+  capacity before accepting a completed attempt. Give each invocation a fresh
+  random identity, carry it
+  through every structured attempt artifact, and bind `attempt.json` into
+  grading evidence. Bind every attempt to a variant-independent scenario
+  digest; require all behavior arms or repeated trigger runs in one group to
+  share that digest and their immutable contracts. Bind preflight capabilities
+  to that exact invocation through the runner-owned receipt and exact adapter;
+  do not add an unbound capabilities bypass. Pass the preflight-selected actor
+  and judge model configurations explicitly into every request and reject
+  configured metadata drift across the complete invocation. Treat persisted
+  model fields as exact bound-request configuration, not independent
+  backend-routing attestation.
+- Create skill-local fixtures only when a case needs them, preferably at
+  `evals/fixtures/<eval-id>/`, and reference them from `evals/evals.json`.
+  For production-shaped private-integration HTTP(S), use
+  `mockserverInitialization.json` with the shared fail-closed proxy. Otherwise
+  use fake data, shims, transcripts, or specialized local fixtures instead of
+  real credentials or private sessions. MockServer fixtures may use only
+  static response/error actions; never add forwards, callbacks, executable
+  templates, delays, relaxed matching, generated responses, file-backed
+  response bodies, or unbounded repetition. Require exact non-empty method,
+  path, and `Host` matchers; keep the total declared calls at or below the
+  manifest limit. Every declared call is verified. Bind actor inputs and HTTP
+  initialization to the exact current case fixture root. Keep MockServer
+  sidecars case-scoped: prove every declared TLS subject with a real handshake,
+  then destroy the sidecar and generated certificate state before worker reuse.
+- Keep behavior definitions generic and runner-owned: actor prompts must not
+  contain expected results, grading guidance, or unnecessary disclosure of
+  evaluation, sandbox, fixture, mock, or shim mechanics. Describe available
+  commands and data as ordinary task capabilities. Use semantic assertions for
+  meaning and only the approved deterministic checks for hard artifact
+  contracts. Declared inputs stay below the exact case `inputs/` directory;
+  executable `inputs/bin/` collaborators are runner-added to the actor `PATH`;
+  runner-only schemas and proxy expectations stay outside `inputs/`.
+- Keep behavior variant identity runner-only. Never include `with_skill` or
+  `without_skill` labels in judge controls or evidence, and require every
+  behavior attempt in an aggregation group to share one judge-control digest.
+- Model-backed runs use reusable Docker Sandboxes worker pools. Give every case
+  a fresh actor projection, workspace, `CODEX_HOME`, and ephemeral harness
+  session; keep actor and judge workers separate, keep real credentials in the
+  host proxy, keep all case-writable state on the pinned aggregate tmpfs, and
+  recycle a worker when reset verification fails. Judges remain skill-free,
+  read-only, shell-free, web-free, and response-schema-bound; treat all actor
+  evidence as untrusted. Do not weaken resource limits, mount isolation,
+  network policy, oracle isolation, MockServer no-passthrough behavior, or
+  cleanup without updating `docs/ARCHITECTURE.md`, `docs/EVALUATION.md`, and
+  the harness tests.
+- Runtime pins are immutable: no floating sandbox/template/image tags, package
+  ranges, or runtime-schema downloads. Changes to `config/eval-runtime.json`,
+  Docker Sandboxes or Codex pins, or the vendored MockServer schema require
+  `docs/ARCHITECTURE.md` and `docs/EVALUATION.md` updates plus a report of the
+  recommended integration verification; the agent-backed suite still requires
+  explicit user approval.
+- `validate ci-all` is deterministic, offline, and model-free. It includes
+  `tests/ai_skills/` plus deterministic runtime tests. Real Docker
+  Sandboxes/Codex/MockServer smoke tests belong under
+  `tests/integration/eval_runtime/` and run only through model-backed preflight
+  or an explicit integration command.
+- Unit and runtime tests are reviewed repository code executed on the host.
+  Their isolated environment, snapshots, output limits, and process groups are
+  deterministic hygiene, not an adversarial sandbox. Keep untrusted or
+  model-driven execution inside Docker Sandboxes.
+- Non-trivial bundled executable code may have deterministic tests under
+  `tests/runtime/`. Keep tests and test-only dependencies outside installable
+  skill folders. Use one named directory per suite with at least one
+  `test_*.py`; do not add root-level files, symlinks, hidden entries, or empty
+  suites. Give each suite a fresh materialized repository snapshot while
+  preserving the aggregate deadline. `validate runtime` is included by
+  `validate ci-all`.
+- Secret scanning distinguishes values from names: allow documented
+  environment-variable identifiers, lookups, references, and recognized
+  placeholders; reject private-key blocks and high-confidence credential
+  literals. Authored fake credential values must start with `FAKE_`; never
+  print matched values. Preserve safe actor evidence exactly; quarantine and
+  fail an attempt when its evidence would require redaction instead of grading
+  transformed content. Eval prompts always reject explicit actual, live,
+  personal, private, production, real, or logged-in resource requests. Ordinary
+  owner phrasing is allowed only when valid case-local inputs or HTTP
+  initialization establish the non-production boundary, without requiring
+  fixed disclosure prose in the actor prompt. Leave broader semantic
+  private-state concerns to judge and human review.
+- Hard absence evidence is allowed for structural, security, artifact, and
+  negative-trigger contracts. Do not use brittle absence assertions against
+  model prose.
+- Manual grading may override judge-scored semantic assertions, but it must
+  preserve deterministic assertion outcomes and evidence exactly.
+- Config-required skills document environment variables or config-file path
+  variables in `compatibility`, avoid personal hardcoded paths, and keep each
+  config-reading helper inside its skill folder.
 
-```
-skills/
-└── <skill-name>/
-    ├── SKILL.md
-    ├── scripts/
-    ├── references/
-    └── adapters/        # only if truly needed; see rule 5 below
+### Native agents and PR checks
 
-plugins/
-└── <plugin-name>/
-    ├── skills/
-    │   └── <skill-name>/
-    │       ├── SKILL.md
-    │       ├── scripts/
-    │       ├── references/
-    │       ├── tests/
-    │       └── agents/   # optional thin harness metadata only
-    ├── .codex-plugin/
-    └── .claude-plugin/
-```
+- Native agents are local and internal. Keep canonical prompts under `agents/`
+  and delivery metadata in `agents/manifest.toml`; do not create per-harness
+  source copies. Update them with:
 
-Do not author new skills under per-agent source trees such as `claude/skills/` or `codex/skills/`. Consolidate duplicated per-agent copies into the canonical location before making substantive edits.
-
-### 2. Sync standalone skills to both install directories
-
-Every change to a standalone canonical skill under `skills/` must be propagated to **both** agent install directories in the same flow:
-
-- `~/.codex/skills/<skill-name>/`
-- `~/.claude/skills/<skill-name>/`
-
-Use the repo-level sync script; do not add per-skill `_sync.sh` wrappers:
-
-```bash
-python3 scripts/sync_skill.py push <skill-name>
-python3 scripts/sync_skill.py pull <skill-name> claude|codex
-```
-
-Treat the sync as part of the edit — not a follow-up. If a change lands in the repo but only one install dir gets updated, the agents are now running different versions of the skill, which is exactly the situation the single-canonical-copy rule exists to prevent.
-
-If an existing skill still lives under `claude/skills/` or `codex/skills/`, the same applies: the edit in the repo and the corresponding update under `~/.claude/skills/` or `~/.codex/skills/` must happen together.
-
-Do not mirror plugin-packaged skills into direct install directories. A plugin skill should be available through its plugin install only; direct copies under `~/.codex/skills/<skill-name>/` or `~/.claude/skills/<skill-name>/` create duplicate skill triggers and must be removed.
-
-### 3. Plugin packaging and harness-specific plumbing
-
-Plugin-packaged skills follow the same one-canonical-copy rule. The portable skill content lives under `plugins/<plugin-name>/skills/<skill-name>/`; do not duplicate those `SKILL.md` files into per-agent source folders.
-
-Treat these paths as generic, portable plugin content:
-
-- `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`
-- `plugins/<plugin-name>/skills/<skill-name>/scripts/`
-- `plugins/<plugin-name>/skills/<skill-name>/references/`
-- `plugins/<plugin-name>/skills/<skill-name>/tests/`
-- plugin-level docs or evaluations under `plugins/<plugin-name>/`
-
-Treat these paths as harness-specific distribution metadata:
-
-- `plugins/<plugin-name>/.codex-plugin/plugin.json` for Codex plugin discovery.
-- `.agents/plugins/marketplace.json` for the repo-local Codex marketplace registry. Add or update entries here when a plugin should be available from this repo.
-- `plugins/<plugin-name>/skills/<skill-name>/agents/openai.yaml` for optional OpenAI/Codex skill interface metadata. Keep this declarative and thin.
-- `plugins/<plugin-name>/.claude-plugin/plugin.json` for Claude Code plugin metadata.
-- `plugins/<plugin-name>/.claude-plugin/marketplace.json` for the Claude Code local plugin marketplace entry.
-
-Harness metadata is not the skill's domain knowledge. Keep it minimal, declarative, and synchronized with the actual plugin name, version, description, and skill list. If metadata begins to contain process guidance, move that guidance back into the canonical skill.
-
-Do not edit installed plugin caches as source of truth. Paths such as `~/.codex/plugins/cache/...` and `~/.claude/plugins/cache/...` are derived install artifacts; refresh them from the repo or local plugin source instead.
-
-### 3a. One canonical copy per specialized agent
-
-Reusable specialized agents live under the repo-level `agents/` directory, not inside a skill folder. A skill may name an agent it wants the harness to spawn, but the agent remains globally reusable and must not be treated as owned by that skill.
-
-The canonical native-agent layout is:
-
-```
-agents/
-├── manifest.toml          # one manifest for all reusable specialized agents
-├── code-mapper.md         # portable role prompt / domain contract
-├── code-reviewer.md
-└── ...
-```
-
-Do not hand-maintain separate Codex and Claude Code agent definitions. Update the canonical Markdown prompt and `agents/manifest.toml`, then run:
-
-```bash
-python3 scripts/sync_native_agents.py push
-python3 scripts/sync_native_agents.py check
-```
-
-`sync_native_agents.py` renders harness-native files into:
-
-- `~/.codex/agents/<agent-id>.toml`
-- `~/.claude/agents/<agent-id>.md`
-
-`agents/manifest.toml` owns harness-specific delivery metadata such as model, reasoning effort, sandbox/permission mode, tool restrictions, display color, and optional preloaded skills. Keep role prompts portable and put harness-specific fields in the manifest.
-
-When a skill change relies on a subset of specialized agents, tag those manifest entries with that skill's group name. `scripts/sync_skill.py push <skill-name>` pushes the skill and then syncs native agents in the matching group.
-
-### 4. Installing or refreshing plugins across harnesses
-
-When adding or updating a plugin, handle all three layers in the same change:
-
-1. Update the canonical repo source under `plugins/<plugin-name>/`.
-2. Update harness metadata for every supported harness in the repo.
-3. Refresh the local installs that agents actually read.
-
-For Codex availability:
-
-- Keep `plugins/<plugin-name>/.codex-plugin/plugin.json` in the plugin root.
-- Keep `.agents/plugins/marketplace.json` pointing at the repo plugin source, usually `./plugins/<plugin-name>`.
-- For repo-local testing, the Codex marketplace root is the repo root because `.agents/plugins/marketplace.json` lives there.
-- For user-wide local installation, copy the plugin to `~/plugins/<plugin-name>/`, keep `~/.agents/plugins/marketplace.json` pointing at `./plugins/<plugin-name>`, then add or upgrade the `~` marketplace root.
-- Do not refresh plugin skills into `~/.codex/skills/`; use the plugin install as the only runtime source.
-
-For Claude Code availability:
-
-- Keep `plugins/<plugin-name>/.claude-plugin/plugin.json` and `plugins/<plugin-name>/.claude-plugin/marketplace.json` in the plugin root.
-- Validate the plugin before claiming it is installable.
-- Refresh the durable local plugin copy, usually `~/plugins/<plugin-name>/`.
-- Add or update the Claude marketplace source that contains `.claude-plugin/marketplace.json`, then install or update the plugin from that marketplace.
-- Do not refresh plugin skills into `~/.claude/skills/`; use the plugin install as the only runtime source.
-
-For standalone direct skill install directories, copy the canonical skill folder exactly, including scripts, references, tests, and thin `agents/` metadata if present. Do not hand-edit the installed copy and then forget to pull it back into the repo.
-
-Useful local refresh commands for the current plugin convention:
-
-```bash
-rsync -a --delete plugins/<plugin-name>/ "$HOME/plugins/<plugin-name>/"
-
-codex plugin marketplace add "$HOME"
-codex plugin marketplace upgrade local
-
-claude plugin validate "$HOME/plugins/<plugin-name>"
-claude plugin marketplace add "$HOME/plugins/<plugin-name>"
-claude plugin install <plugin-name>@<marketplace-name> --scope user
-claude plugin update <plugin-name> --scope user
-```
-
-Use the install command for a new Claude plugin and the update command for an already installed one. If a command reports the marketplace or plugin already exists, run the corresponding update/upgrade command instead of creating a duplicate entry.
-
-### 5. Prefer Python for repo automation
-
-Use Python stdlib for repo-level automation with branching logic, validation, or filesystem mutation. Reserve shell scripts for tiny command wrappers.
-
-### 6. Authoring rules
-
-All skills authored or modified in this repository must follow the [Rules for Writing Cross-Agent Skills](#rules-for-writing-cross-agent-skills) below.
-
-### 6a. Procedural and ability skills
-
-Classify each skill as one of two categories:
-
-- **Procedural skills** are manually invoked workflows. They define a workflow the agent should closely follow after explicit invocation. They may directly name other skills or native agents when the workflow intentionally delegates, spawns, or hands off work. Mark them in `SKILL.md` frontmatter with `disable-model-invocation: true` and:
-
-  ```yaml
-  metadata:
-    ai-skills-category: procedural
-    ai-skills-invocation: manual
+  ```bash
+  python3 scripts/sync_native_agents.py push
+  python3 scripts/sync_native_agents.py check
   ```
 
-- **Ability skills** are small, generic capabilities meant to be picked up automatically when context demands them. Their descriptions should be trigger-oriented, and they must not directly name other skills or native agents to invoke or delegate to. They should describe the needed capability and let the active harness choose the concrete mechanism.
-
-Procedural skills must keep descriptions short and non-triggering so they do not compete with ability skills. Ability skills remain responsible for automatic discovery and trigger coverage.
-
-### 7. Trigger scenarios for ability skill changes
-
-Every new ability skill and every update to an existing ability skill must add or update trigger coverage in `tests/skill-trigger/scenarios.toml`. The scenario should capture the real user phrasing, repository context, provider/tool context, or failure mode that should make the skill get picked up.
-
-Do not treat trigger testing as optional documentation for ability skills. If an ability skill's `description`, scope, or invocation behavior changes, update the trigger scenario registry in the same change.
-
-Procedural skills do not have trigger scenarios. Prove their behavior with loaded-skill behavioral tests instead.
-
-### 8. Run trigger tests before PR creation for ability skills
-
-Before creating a PR for any ability skill addition or ability skill update, run the deterministic trigger contract and the behavioral trigger pressure suite:
-
-```bash
-python3 tests/skill-trigger/static_contract.py
-SKILL_TRIGGER_AGENT_COMMAND='<command reading stdin>' \
-  python3 tests/skill-trigger/trigger_harness.py
-```
-
-The behavioral command should use the target agent/runtime whose skill selection matters for the PR. If the behavioral suite cannot be run, do not silently proceed; report the exact blocker and get explicit user approval before creating the PR.
-
-For procedural-only changes, still run the deterministic trigger contract to confirm procedural skills are excluded from trigger coverage, then run the relevant loaded-skill behavioral and contract suites.
-
-### 9. Keep agent-driven test prompts neutral
-
-Behavioral tests and any other agent-driven tests must not nudge the tested agent toward the expected answer. Actor-facing prompts may set test boundaries, such as no external tool calls, no file edits, no PR creation, response format, and the scenario facts. They must not include checklists of expected workflow steps, required conclusions, required agent names, or rubric items.
-
-Treat actor-facing `prompt_instructions` like mocks or stubs in classic unit tests: they constrain unavailable side effects and injected facts, while assertions and judge criteria verify the behavior.
-
-Put expected behavior in `[[scenario.criteria]]`, `judge_context`, deterministic assertions, or the test harness, not in actor-facing `prompt_instructions` or user prompts unless the user prompt is intentionally modeling real user wording. If a behavioral prompt tells the actor what it "must explain", "must mention", or "must state" about the behavior under test, treat that test as invalid and rewrite it before trusting the result.
-
-### 10. Test positive behavior, not absence
-
-Do not add or preserve tests whose assertion is that something is absent. This includes absent files, absent folders, absent generated artifacts, forbidden phrases, forbidden wording, or forbidden response text. Replace absence checks with positive assertions about expected behavior, structure, outcomes, state transitions, evidence, or lifecycle gates. When touching existing tests, remove absence checks from that test surface instead of carrying them forward.
-
----
-
-# Rules for Writing Cross-Agent Skills
-
-These rules apply when authoring a skill (instructions, recipes, or workflows) intended to run on more than one agent — Claude Code, Codex, Cursor, or any future agent. The goal is one source of truth, written at the right level of abstraction. **Maintain a single canonical skill; don't fork it per agent.**
-
-## Core principle
-
-The agent figures out the tools. The skill teaches the craft.
-
-Keep the skill's center of gravity on the part that's actually hard — domain expertise, gotchas, output quality — and push agent-specific glue out to the thinnest possible edge.
-
-Procedural skills are the exception for explicit workflow orchestration: they may name the exact skills or native agents they expect to invoke, delegate to, or spawn. Ability skills must stay portable and capability-oriented.
-
-## Rules
-
-### 1. Separate domain knowledge from the delivery layer
-
-Every skill contains two kinds of content:
-
-- **Domain knowledge** — how to produce a good X. What library to use, what the output should look like, what pitfalls to avoid, what good looks like. This is portable across every agent.
-- **Delivery layer** — how to invoke the agent's tools. Tool names, file paths, prompt syntax. This is the fragile part.
-
-Spend your effort on domain knowledge. Keep the delivery layer minimal and replaceable.
-
-### 2. Write at the level of intent, not tool names
-
-For ability skills, describe what to do, not which tool to call.
-
-- ❌ "Use the `Read` tool to open the file."
-- ✅ "Open and inspect the file."
-- ❌ "Call `ask_user_input_v0` to get their preferences."
-- ✅ "Ask the user about their preferences before proceeding."
-- ❌ "Use `str_replace` to update the import statement."
-- ✅ "Update the import statement in place."
-
-Any reasonable agent maps intent to its native capability. This also future-proofs against tool renames within a single agent.
-
-For procedural skills, direct skill or native-agent names are allowed when they are part of the workflow contract. Keep those references intentional and limited to orchestration points.
-
-### 3. Default to the shell/filesystem substrate
-
-Almost every agent can execute shell commands and read/write files. When work is non-trivial, put it in a script the agent invokes:
-
-```
-my-skill/
-├── SKILL.md
-├── scripts/
-│   ├── validate.py
-│   └── render.sh
-└── references/
-    └── examples.md
-```
-
-The agent's role becomes "decide when to invoke this script and how to interpret the output" — a capability every agent has. The skill body stays short and the heavy lifting lives in code, which is genuinely portable.
-
-### 4. For divergent capabilities, write fallback chains
-
-Some capabilities (screenshots, browser automation, image generation, MCP integrations) exist on some agents and not others. Phrase these as a degradation ladder, never as an assumption:
-
-> Prefer a native screenshot capability if one exists. Otherwise, render the HTML to disk and capture it via Playwright through the shell. If neither is available, save the file and ask the user to confirm visually.
-
-This pattern works on the agent you're using today and on the one you haven't tested yet.
-
-### 5. Use adapter files only as a last resort
-
-If a skill truly needs per-agent overrides, keep one canonical `SKILL.md` plus thin adapter files referenced from the main body:
-
-```
-my-skill/
-├── SKILL.md
-└── adapters/
-    ├── claude-code.md
-    ├── cursor.md
-    └── codex.md
-```
-
-Fight to keep adapters tiny. They are platform-specific code and they will rot. If an adapter is growing past ~30 lines, the abstraction in the main `SKILL.md` is probably wrong — fix that instead.
-
-### 6. Do not fork the SKILL.md per agent
-
-Maintaining three full copies of a skill is the trap this whole document exists to prevent. Forked copies diverge silently, fixes don't propagate, and the same bug gets debugged three times. The abstraction tax of writing things in agent-neutral language pays for itself the first time you fix a typo and have it stick everywhere.
-
-### 7. Name capabilities, not products
-
-In ability skills, name the category, not the specific product or tool:
-
-- ❌ "Open Chrome DevTools and inspect the network tab."
-- ✅ "Inspect the page's network requests."
-- ❌ "Run `pytest` to verify the changes."
-- ✅ "Run the project's test suite to verify the changes." (then check `package.json`, `pyproject.toml`, etc.)
-
-In procedural skills, product, skill, or agent names may appear when the workflow intentionally requires that named handoff or integration.
-
-### 8. Encode assumptions as preconditions, not silent expectations
-
-If the skill genuinely requires a capability the agent might not have, say so at the top so the agent can fail fast or pick a different approach:
-
-> Requires: ability to execute shell commands; a Node.js runtime on PATH; write access to the working directory.
-
-Anything not in this list should have a fallback.
-
-### 9. Keep examples agent-neutral
-
-When showing the agent how to do something, use generic phrasing in the example:
-
-- ❌ "After running `Read('/path/to/file')`, the file appears in context. Then call `Edit(...)`."
-- ✅ "After reading the file, modify the relevant section in place."
-
-If you must show concrete syntax, show it as shell or as language-level code (`python script.py`), not as agent-specific tool calls.
-
-### 10. Test in every target environment before claiming portability
-
-A skill is not portable until it has actually run in each environment you care about. "Written abstractly" is necessary but not sufficient — capability gaps and prompt-format quirks only show up when you run it. Keep a short list of test prompts in `tests/` and run them when you change the skill.
-
-## Decision heuristics
-
-When in doubt, ask:
-
-- "Could this same sentence work on an agent I've never seen?" If no, abstract it.
-- "Is this teaching the craft or wiring up a tool?" If the latter, push it out to a script or remove it.
-- "Am I describing a goal or a mechanism?" Goals are portable; mechanisms are not.
-- "What happens if this capability isn't available?" If the answer is "the skill breaks," write a fallback.
-
-## Self-review checklist
-
-Before committing a skill, walk through this list:
-
-- [ ] No specific tool names from any agent appear in ability-skill prose (`Read`, `Write`, `Edit`, `str_replace`, `ask_user_input_v0`, etc.); procedural skills only name skills or native agents at intentional workflow orchestration points.
-- [ ] Non-trivial logic lives in scripts under the skill folder, not in the prose.
-- [ ] Every capability that might not exist (screenshots, browser, network, MCP) has a fallback chain.
-- [ ] Required capabilities are declared at the top.
-- [ ] The skill has been run end-to-end on at least one target agent.
-- [ ] Ability skill trigger scenarios were added or updated in `tests/skill-trigger/scenarios.toml`; procedural skills have no trigger scenarios.
-- [ ] The static trigger contract passed.
-- [ ] For ability skills, the behavioral trigger pressure suite passed for the target agent/runtime, or the user explicitly approved the documented blocker before PR creation.
-- [ ] No copy of this skill exists for a different agent. (If it does, merge them.)
-- [ ] Adapter files, if any, are under ~30 lines each.
-- [ ] Standalone skill changes have been synced to both direct skill install dirs; plugin-packaged skill changes have been refreshed through the plugin install only, with no duplicate direct skill copies.
-
-## Anti-patterns to refuse
-
-If asked to do any of the following while authoring a skill, push back:
-
-- "Just make a Claude Code version and a Cursor version." → Propose one skill with thin adapters or fallback chains.
-- "Hardcode the tool name, it's faster." → Cheaper today, more expensive next month. Use intent language.
-- "Skip the fallback, this agent always has X." → Capabilities get removed, renamed, or rate-limited. Always provide a fallback for non-core capabilities.
-- "Put the logic in the prose so the agent reasons through it each time." → Move deterministic logic to a script. The model is not where reliability lives.
+- `scripts/ai-skills validate ci-all` is the sole routine PR gate.
+- Only after the user explicitly approves PR creation, run the read-only
+  `scripts/ai-skills check-local-installs --harness codex`
+  diagnostic. Report duplicate, missing, or stale repository skills and never
+  repair local state automatically.
