@@ -1,6 +1,6 @@
 ---
 name: stock-research
-description: "Use for long-horizon fundamentals research on a US-listed company: either an initial end-to-end deep dive that builds a durable investment thesis, or a concise update to an existing saved thesis after a new quarter or material event. Triggers on \"research AAPL\", \"deep dive on Microsoft\", \"should I buy NVDA\", \"analyze TSLA's fundamentals\", \"update my existing thesis after the latest quarter\", or \"compare this event with my saved thesis\". Do not use, or select as a closest fit, for technical analysis, chart patterns, options strategy, or day-trading entry levels."
+description: "Use this skill for researching or providing updates about US-listed stock market companies."
 compatibility: >-
   Requires SR_REPO_PATH pointing to a local US-equity research repo with AGENTS.md; SR_SEC_USER_AGENT; an external Python 3.10+ finance runtime under AI_SKILLS_RUNTIME_HOME, falling back to XDG_CACHE_HOME/HOME; SEC and market-data access; and Git. Worker and structured-input capabilities are optional: run bounded work sequentially and present numbered choices when they are unavailable. Existing-thesis recap mode also requires a complete canonical saved baseline in that repo.
 metadata:

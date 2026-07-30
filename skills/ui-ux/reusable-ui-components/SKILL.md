@@ -1,6 +1,6 @@
 ---
 name: reusable-ui-components
-description: Use when creating, refactoring, or reviewing frontend UI patterns that repeat or may repeat, when deciding between extending an existing component and creating a new one, or when component APIs, variants, slots, composition, duplication, page-specific logic, or design-system consistency are at stake.
+description: "Use when working on frontend applications using a component based UI framework or native components. Examples: React, HTML based MVC apps."
 metadata:
   status: experimental
   allows_tool_references: "false"
