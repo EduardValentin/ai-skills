@@ -2,7 +2,12 @@
 name: implementation-workflow
 description: Use when an approved implementation plan or plan slice is ready for code changes and the work must continue through independent review, manual QA, remediation, reruns, and reporting.
 compatibility: >-
-  Requires fresh-context agent dispatch. Prefer the native code-reviewer and qa-verifier; if either is unavailable, use separate generic agents: an independent read-only reviewer with repository and diff access, and a QA agent able to exercise the runtime surface. Block if either role cannot produce evidence.
+  Requires the public `dispatch-reviewers-workflow` skill and fresh-context
+  agent dispatch for independent review, plus `qa-verifier` or a separate
+  generic QA agent with the public `qa-verification` skill preloaded and able
+  to exercise the runtime surface. If
+  `dispatch-reviewers-workflow` is unavailable, return `IMPLEMENTATION
+  BLOCKED`; block if no QA role can produce evidence.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -74,13 +79,13 @@ Before broad searches or large reads, consider fresh, read-only subagents for in
 
 ## Independent Review
 
-Use a fresh-context `code-reviewer` when available. Otherwise use a generic reviewer that is independent from implementation, read-only, able to inspect the repository and complete diff, and capable of evaluating correctness, regressions, security, maintainability, and test coverage.
-
-Provide the approved goal, acceptance criteria or outcome, approved plan, non-goals, repository instructions, relevant codebase context, known risks, check evidence, and the implementation diff or changed files. Wait for a completed review. Evaluate findings against the approved scope, retain all relevant findings, and record why any finding is rejected as irrelevant or incorrect.
+Use the public `dispatch-reviewers-workflow` skill. If it is unavailable or
+returns `REVIEW BLOCKED`, return `IMPLEMENTATION BLOCKED`; do not substitute a
+generic reviewer.
 
 ## Manual QA
 
-Use `qa-verifier` when available. Otherwise use a separate generic QA agent that can exercise the actual runtime surface and capture user-observable or system-observable evidence. It must not substitute source inspection, mocks, or automated tests for manual execution.
+Use `qa-verifier` when available. Otherwise use a separate generic QA agent with the `qa-verification` skill preloaded that can exercise the actual runtime surface and capture user-observable or system-observable evidence. It must not substitute source inspection, mocks, or automated tests for manual execution.
 
 Provide the criteria or approved outcome, implemented surface and entry points, setup and runtime details, affected files or surfaces, changed behavior, known risks, check evidence, and review or fix context. Require evidence for every criterion. Wait for the QA result; passing automated checks alone never satisfies this gate.
 
