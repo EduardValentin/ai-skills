@@ -79,9 +79,8 @@ Before broad searches or large reads, consider fresh, read-only subagents for in
 
 ## Independent Review
 
-Use the public `dispatch-reviewers-workflow` skill. If it is unavailable or
-returns `REVIEW BLOCKED`, return `IMPLEMENTATION BLOCKED`; do not substitute a
-generic reviewer.
+
+WIP
 
 ## Manual QA
 

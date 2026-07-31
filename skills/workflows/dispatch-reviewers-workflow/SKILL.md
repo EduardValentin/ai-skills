@@ -1,11 +1,11 @@
 ---
 name: dispatch-reviewers-workflow
 description: >-
-  Use when completed work needs coordinated independent review by both Codex
+  Use when the user requests coordinated independent review by both Codex
   and Claude agents before final approval.
 compatibility: >-
-  Requires fresh-context agent dispatch for Codex 5.6 Sol at Extra High effort
-  and Claude Fable 5 at xHigh effort, with access to the complete review target
+  Requires fresh-context agent dispatch for Codex 5.6 Sol at High effort
+  and Claude Fable 5 at High effort, with access to the complete review target
   and approved requirements. If either exact reviewer, configuration, or
   required evidence is unavailable, block; do not substitute.
 metadata:
@@ -18,31 +18,19 @@ metadata:
 Coordinate independent review. Reviewers report findings; the coordinator
 evaluates and addresses them.
 
+## When to use
+
+Only use this skill if the user explicitly asks for independent Claude and Codex reviewers.
+
 ## Required Reviewers
 
 Each round, dispatch two new, independent, read-only reviewers:
 
-- A Codex reviewer using Codex 5.6 Sol at Extra High effort.
-- A Claude reviewer using Fable 5 at xHigh effort.
+- A Codex reviewer using Codex 5.6 Sol at High effort.
+- A Claude reviewer using Fable 5 at high effort.
 
 Never reuse or substitute reviewers. If either cannot return evidence, report
 `REVIEW BLOCKED`.
-
-## Review Context
-
-Give both reviewers the same neutral packet:
-
-- the work under review and its repository context;
-- the goal, requirements, acceptance criteria, and non-goals;
-- the ticket or user-story link or, if unavailable, its description;
-- approved specifications, designs, plans, or handoffs;
-- relevant decisions from the conversation history;
-- any scope expansion approved outside the original requirements;
-- applicable repository instructions, risks, and verification evidence.
-
-Do not reveal any same-round or prior-round reviewer findings or verdicts,
-expected conclusions, suspected defects, or the coordinator's preferred
-outcome. Missing material context blocks the round.
 
 ## Workflow
 
@@ -56,35 +44,15 @@ outcome. Missing material context blocks the round.
    and record the reason.
 5. Address every accepted finding and run the relevant verification. If a
    valid fix requires unapproved scope expansion, stop and request approval.
-6. If same-target dual approval is absent, dispatch two new independent
-   reviewers against the current complete work. Any change invalidates both
-   prior approvals.
-7. Stop with `REVIEW APPROVED` only when both reviewers approve the same exact
-   target in the same round.
+6. After the accepted findings have been addressed, notify both reviewers to
+   re-review the latest changes and determine whether their findings have been
+   properly addressed.
+7. Addressing any findings invalidates any approval received previously.
+8. A reviewer who previously gave approval that was invalidated due to
+   addressing the findings of the other reviewer needs to re-review the latest
+   state of the work and determine whether to keep the initial approval or
+   return new findings.
+9. Stop with `REVIEW APPROVED` only when both reviewers approve the final state of the work.
 
-Do not exceed ten rounds. If round ten does not produce both approvals, stop
+Do not exceed 5 rounds. If round five does not produce both approvals, stop
 with `REVIEW BLOCKED` and report the remaining findings or capability blockers.
-
-## Scope and Code Quality
-
-Reviewers pursue the minimal implementation that satisfies the approved goal.
-The most important constraint is staying within approved scope; findings must
-not expand it.
-
-When the work contains code, both reviewers must check for:
-
-- efficient, maintainable, readable code;
-- clean and simple architecture without overengineering;
-- no dead code;
-- compliance with the approved requirements and scope;
-- simplifications that preserve correctness, scalability, performance, and
-  maintainability.
-
-## Report
-
-Return a small, concise report with:
-
-- rounds completed and each final reviewer verdict;
-- a high-level overview of changes caused by valid findings;
-- material rejected findings or resolved conflicts;
-- unresolved findings or blockers when approval was not achieved.
