@@ -27,7 +27,7 @@ Only use this skill if the user explicitly asks for independent Claude and Codex
 Each round, dispatch two new, independent, read-only reviewers:
 
 - A Codex reviewer using Codex 5.6 Sol at High effort.
-- A Claude reviewer using Fable 5 at high effort.
+- A Claude reviewer using Opus 5 at High effort.
 
 Never reuse or substitute reviewers. If either cannot return evidence, report
 `REVIEW BLOCKED`.

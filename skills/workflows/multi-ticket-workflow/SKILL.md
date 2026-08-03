@@ -1,6 +1,6 @@
 ---
 name: multi-ticket-workflow
-description: Use when coordinating two or more related tickets or Epic children that share dependencies, implementation sequencing, or PR handoffs.
+description: Use when coordinating the implementation and delivery of two or more related tickets or Epic children that share dependencies, implementation sequencing, or PR handoffs. Do not use for exploratory work only.
 compatibility: >-
   Intended operation uses native code-mapper and implementation-coordinator agents. If either is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
 metadata:
