@@ -153,6 +153,36 @@ def build_json_body(kind: str) -> None:
     write_text(json.dumps(body, ensure_ascii=False, separators=(",", ":")))
 
 
+def build_inline_comment_body(path: str, line: str) -> None:
+    """Build a comment body anchored to one line of the pull request diff.
+
+    The comment text arrives on stdin; `path` and `line` are structural
+    anchors, never content. `to` targets the line in the destination
+    (post-merge) version of the file, which is what a reviewer reads.
+    """
+    value = read_stdin_text()
+    if not value:
+        raise HelperError("Comment text is required")
+    if not path:
+        raise HelperError("Inline comment path is required")
+    if path.startswith("/"):
+        raise HelperError("Inline comment path must be repository-relative")
+    if any(
+        ord(character) < 0x20 or 0x7F <= ord(character) <= 0x9F
+        for character in path
+    ):
+        raise HelperError("Inline comment path must not contain control characters")
+    if POSITIVE_INTEGER_PATTERN.fullmatch(line) is None:
+        raise HelperError(
+            "Invalid inline comment line; expected a positive decimal integer"
+        )
+    body = {
+        "content": {"raw": value},
+        "inline": {"path": path, "to": int(line)},
+    }
+    write_text(json.dumps(body, ensure_ascii=False, separators=(",", ":")))
+
+
 def validate_percent_escapes(value: str, component: str) -> None:
     index = 0
     while index < len(value):
@@ -354,6 +384,8 @@ def main() -> None:
         build_pull_request_query()
     elif command == "json-body" and len(arguments) == 1:
         build_json_body(arguments[0])
+    elif command == "inline-comment-body" and len(arguments) == 2:
+        build_inline_comment_body(arguments[0], arguments[1])
     elif command == "validate-url" and len(arguments) == 2:
         validate_api_url(arguments[0], arguments[1])
     elif command == "request" and len(arguments) == 3:

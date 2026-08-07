@@ -1,5 +1,0 @@
-requests==2.34.2
-yfinance==0.2.40
-beautifulsoup4==4.12.0
-lxml==6.1.1
-PyYAML==6.0.3

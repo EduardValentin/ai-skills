@@ -67,6 +67,8 @@ For any write, `pr-details` is the next step before mutation; verify the exact P
 
 Pass `post-comment` and `update-description` payload text only on stdin. Never place comment or description content in the helper's positional arguments. `--dry-run` proves the helper's method, route, and JSON body only. It does not authenticate, read current PR state, or perform a mutation.
 
+`post-comment` accepts an optional trailing `<file_path> <line>` pair that anchors the comment inline on that line of the diff; omitting the pair posts a pull-request-level comment. These two values are structural anchors rather than payload text, so they are the one exception to the positional-argument rule above. The path must be repository-relative and the line must be a positive integer addressing the destination (post-merge) side of the diff, which is what `inline.to` targets. A line that is not part of the diff is accepted by the API but renders detached from the code, so confirm the line against the PR diff before posting.
+
 ## Formatting Rules
 
 Do not nest fenced code blocks inside numbered or bulleted lists. Keep every opening and closing code fence at column 1. When a verification step needs a command block, write the step text as a normal paragraph, not as a numbered or bulleted list item, then start the fenced block on the next line with no indentation.

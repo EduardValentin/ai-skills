@@ -12,7 +12,11 @@ Usage:
   bitbucket-cloud-pr.sh [--dry-run] pr-details <workspace> <repo_slug> <pull_request_id>
   bitbucket-cloud-pr.sh [--dry-run] find-prs-for-branch <workspace> <repo_slug> <branch_name> [state]
   bitbucket-cloud-pr.sh [--dry-run] read-comments <workspace> <repo_slug> <pull_request_id>
-  bitbucket-cloud-pr.sh [--dry-run] post-comment <workspace> <repo_slug> <pull_request_id>  # text from stdin
+  bitbucket-cloud-pr.sh [--dry-run] post-comment <workspace> <repo_slug> <pull_request_id> [<file_path> <line>]  # text from stdin
+      # Supplying <file_path> and <line> anchors the comment inline on that
+      # line of the diff; omitting them posts a pull-request-level comment.
+  bitbucket-cloud-pr.sh [--dry-run] update-comment <workspace> <repo_slug> <pull_request_id> <comment_id>  # text from stdin
+      # Replaces the comment body; any existing inline anchor is preserved.
   bitbucket-cloud-pr.sh [--dry-run] update-description <workspace> <repo_slug> <pull_request_id>  # text from stdin
   bitbucket-cloud-pr.sh [--dry-run] merge <workspace> <repo_slug> <pull_request_id>
   bitbucket-cloud-pr.sh [--dry-run] merge-status <workspace> <repo_slug> <pull_request_id> <task_id>
@@ -161,13 +165,27 @@ case "$command" in
     fi
     ;;
   post-comment)
-    require_exact_args 3 "$#"
+    [[ "$#" -eq 3 || "$#" -eq 5 ]] || {
+      usage >&2
+      exit 2
+    }
     workspace=$1
     repo_slug=$2
     pull_request_id=$3
     path="$(pull_request_path "$workspace" "$repo_slug" "$pull_request_id")/comments"
-    body=$(python_helper json-body comment)
+    if [[ "$#" -eq 5 ]]; then
+      body=$(python_helper inline-comment-body "$4" "$5")
+    else
+      body=$(python_helper json-body comment)
+    fi
     request POST "$API_ORIGIN$path" "$path" "$body"
+    ;;
+  update-comment)
+    require_exact_args 4 "$#"
+    comment_id=$(printf '%s' "$4" | python_helper positive-integer "comment ID")
+    path="$(pull_request_path "$1" "$2" "$3")/comments/$comment_id"
+    body=$(python_helper json-body comment)
+    request PUT "$API_ORIGIN$path" "$path" "$body"
     ;;
   update-description)
     require_exact_args 3 "$#"

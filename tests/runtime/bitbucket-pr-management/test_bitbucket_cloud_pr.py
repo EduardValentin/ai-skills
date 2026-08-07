@@ -395,8 +395,9 @@ def test_help_describes_commands_and_authentication() -> None:
     assert "Usage:" in completed.stdout
     assert "bitbucket-cloud-pr.sh [--dry-run] pr-details" in completed.stdout
     assert "find-prs-for-branch" in completed.stdout
+    assert "update-comment" in completed.stdout
     assert "update-description" in completed.stdout
-    assert completed.stdout.count("# text from stdin") == 2
+    assert completed.stdout.count("# text from stdin") == 3
     assert "BITBUCKET_TOKEN" in completed.stdout
     assert "OAuth 2 access token" in completed.stdout
     assert "Atlassian account email" in completed.stdout
@@ -497,6 +498,116 @@ def test_dry_run_reports_request_without_calling_bitbucket(
         assert expected in completed.stdout
 
 
+def test_dry_run_posts_inline_comment_with_repository_relative_anchor() -> None:
+    completed = run_script(
+        "--dry-run",
+        "post-comment",
+        "acme",
+        "widget",
+        "42",
+        "src/widget.py",
+        "17",
+        input_text="Please handle the empty state",
+    )
+
+    assert completed.returncode == 0
+    assert "METHOD=POST" in completed.stdout
+    assert (
+        "URL=https://api.bitbucket.org/2.0/repositories/acme/widget/"
+        "pullrequests/42/comments"
+    ) in completed.stdout
+    _, separator, raw_body = completed.stdout.partition("BODY=")
+    assert separator == "BODY="
+    assert json.loads(raw_body) == {
+        "content": {"raw": "Please handle the empty state"},
+        "inline": {"path": "src/widget.py", "to": 17},
+    }
+
+
+def test_dry_run_updates_existing_comment_body() -> None:
+    completed = run_script(
+        "--dry-run",
+        "update-comment",
+        "acme",
+        "widget",
+        "42",
+        "101",
+        input_text="Updated review comment",
+    )
+
+    assert completed.returncode == 0
+    assert "METHOD=PUT" in completed.stdout
+    assert (
+        "URL=https://api.bitbucket.org/2.0/repositories/acme/widget/"
+        "pullrequests/42/comments/101"
+    ) in completed.stdout
+    _, separator, raw_body = completed.stdout.partition("BODY=")
+    assert separator == "BODY="
+    assert json.loads(raw_body) == {
+        "content": {"raw": "Updated review comment"}
+    }
+
+
+@pytest.mark.parametrize(
+    ("file_path", "line", "expected_error"),
+    [
+        pytest.param(
+            "/src/widget.py",
+            "17",
+            "repository-relative",
+            id="absolute-path",
+        ),
+        pytest.param(
+            "src/widget.py\nother.py",
+            "17",
+            "control characters",
+            id="path-control",
+        ),
+        pytest.param(
+            "src/widget.py",
+            "0",
+            "positive decimal integer",
+            id="zero-line",
+        ),
+    ],
+)
+def test_inline_comment_rejects_invalid_anchor(
+    file_path: str,
+    line: str,
+    expected_error: str,
+) -> None:
+    completed = run_script(
+        "--dry-run",
+        "post-comment",
+        "acme",
+        "widget",
+        "42",
+        file_path,
+        line,
+        input_text="Review comment",
+    )
+
+    assert completed.returncode != 0
+    assert expected_error in completed.stderr
+    assert "BODY=" not in completed.stdout
+
+
+def test_update_comment_rejects_invalid_comment_id() -> None:
+    completed = run_script(
+        "--dry-run",
+        "update-comment",
+        "acme",
+        "widget",
+        "42",
+        "0",
+        input_text="Updated review comment",
+    )
+
+    assert completed.returncode != 0
+    assert "positive decimal integer" in completed.stderr
+    assert "BODY=" not in completed.stdout
+
+
 def test_dry_run_does_not_expose_token_values() -> None:
     env = os.environ.copy()
     env["BITBUCKET_TOKEN"] = "FAKE_BITBUCKET_TOKEN"
@@ -537,6 +648,64 @@ def test_authenticated_request_honors_runner_https_proxy(tmp_path: Path) -> None
 
     assert completed.returncode == 0
     assert read_http_requests(request_log)[0]["proxy"] == env["HTTPS_PROXY"]
+
+
+def test_authenticated_inline_comment_posts_anchor_and_stdin_body(
+    tmp_path: Path,
+) -> None:
+    url = (
+        "https://api.bitbucket.org/2.0/repositories/acme/widget/"
+        "pullrequests/42/comments"
+    )
+    env, request_log, _ = fake_http_environment(tmp_path, {url: {"id": 101}})
+
+    completed = run_script(
+        "post-comment",
+        "acme",
+        "widget",
+        "42",
+        "src/widget.py",
+        "17",
+        env=env,
+        input_text="Please handle the empty state",
+    )
+
+    assert completed.returncode == 0
+    request = read_http_requests(request_log)[0]
+    assert request["method"] == "POST"
+    assert request["target"].endswith("/pullrequests/42/comments")
+    assert json.loads(str(request["body"])) == {
+        "content": {"raw": "Please handle the empty state"},
+        "inline": {"path": "src/widget.py", "to": 17},
+    }
+
+
+def test_authenticated_comment_update_targets_comment_and_uses_stdin_body(
+    tmp_path: Path,
+) -> None:
+    url = (
+        "https://api.bitbucket.org/2.0/repositories/acme/widget/"
+        "pullrequests/42/comments/101"
+    )
+    env, request_log, _ = fake_http_environment(tmp_path, {url: {"id": 101}})
+
+    completed = run_script(
+        "update-comment",
+        "acme",
+        "widget",
+        "42",
+        "101",
+        env=env,
+        input_text="Updated review comment",
+    )
+
+    assert completed.returncode == 0
+    request = read_http_requests(request_log)[0]
+    assert request["method"] == "PUT"
+    assert request["target"].endswith("/pullrequests/42/comments/101")
+    assert json.loads(str(request["body"])) == {
+        "content": {"raw": "Updated review comment"}
+    }
 
 
 @pytest.mark.parametrize(
