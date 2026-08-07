@@ -4,8 +4,8 @@ description: >-
   Use when the user requests coordinated independent review by both Codex
   and Claude agents before final approval.
 compatibility: >-
-  Requires fresh-context agent dispatch for Codex 5.6 Sol at High effort
-  and Claude Fable 5 at High effort, with access to the complete review target
+  Requires fresh-context agent dispatch for Codex and Claude Code agents, with
+  access to the complete review target
   and approved requirements. If either exact reviewer, configuration, or
   required evidence is unavailable, block; do not substitute.
 metadata:
