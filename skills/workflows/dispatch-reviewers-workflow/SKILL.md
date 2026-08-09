@@ -24,20 +24,28 @@ Only use this skill if the user explicitly asks for independent Claude and Codex
 
 ## Required Reviewers
 
+Depending on the review mode:
+
+- Single reviewer : ask the user if it's Claude or Codex.
+- Dual reviewers: One Claude Code reviewer and one Codex reviewer.
+
 Each round, dispatch two new, independent, read-only reviewers:
-
-- A Codex reviewer using Codex 5.6 Sol at High effort.
-- A Claude reviewer using Opus 5 at High effort.
-
+You determine the appropriate model and effort level based on the complexity of 
+the work being reviewed.
 Never reuse or substitute reviewers. If either cannot return evidence, report
+
+Either Claude or Codex reviewers are dispatched via the installed CLI:
+- Claude is dispatched via Claude Code CLI.
+- Codex is dispatched via Codex CLI.
 `REVIEW BLOCKED`.
 
 ## Workflow
 
-1. Freeze the exact review target and dispatch both reviewers independently.
-2. Collect both complete reviews, including findings and an explicit
+0. Ask the user what review mode we should use: single or dual reviewers. If single review is chosen, ask which agent we should use Codex or Claude Code.
+1. Freeze the exact review target and dispatch reviewers based on the review mode independently.
+2. Collect complete reviews, including findings and an explicit
    `APPROVED` or `CHANGES REQUESTED` verdict.
-3. Deduplicate findings and resolve conflicts against the work, evidence,
+3. If more than one reviewer is used, deduplicate findings and resolve conflicts against the work, evidence,
    approved requirements, and conversation decisions.
 4. Accept only technically valid, evidence-supported findings within approved
    scope. Reject invalid, unsupported, duplicate, or scope-expanding findings
