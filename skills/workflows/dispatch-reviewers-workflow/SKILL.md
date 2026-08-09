@@ -29,19 +29,24 @@ Depending on the review mode:
 - Single reviewer : ask the user if it's Claude or Codex.
 - Dual reviewers: One Claude Code reviewer and one Codex reviewer.
 
-Each round, dispatch two new, independent, read-only reviewers:
+Each round, dispatch two new, independent, read-only reviewers.
 You determine the appropriate model and effort level based on the complexity of 
 the work being reviewed.
-Never reuse or substitute reviewers. If either cannot return evidence, report
 
-Either Claude or Codex reviewers are dispatched via the installed CLI:
-- Claude is dispatched via Claude Code CLI.
-- Codex is dispatched via Codex CLI.
+Never reuse or substitute reviewers. If either cannot return evidence, report
 `REVIEW BLOCKED`.
+
+Either Claude or Codex reviewers are dispatched via the installed CLI from the other harness:
+- Claude is dispatched via Claude Code CLI from the Codex harness.
+- Codex is dispatched via Codex CLI from the Claude Code harness.
+- Claude Code dispatching Claude reviewers will use native subagent dispatches.
+- Codex dispatching Codex reviewers will use native subagent dispatches.
+
 
 ## Workflow
 
-0. Ask the user what review mode we should use: single or dual reviewers. If single review is chosen, ask which agent we should use Codex or Claude Code.
+0. Ask the user what review mode we should use: single or dual reviewers. 
+If single review is chosen, ask which agent we should use Codex or Claude Code.
 1. Freeze the exact review target and dispatch reviewers based on the review mode independently.
 2. Collect complete reviews, including findings and an explicit
    `APPROVED` or `CHANGES REQUESTED` verdict.
