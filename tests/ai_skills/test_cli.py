@@ -470,6 +470,41 @@ class RuntimeValidationCliTests(unittest.TestCase):
         self.assertEqual(result, 1)
         check.assert_called_once_with(cli.REPOSITORY_ROOT, harness="codex")
 
+    def test_validate_conformance_dispatches_only_to_pinned_reference_check(self) -> None:
+        model_backed_error = AssertionError("model-backed handler must not run")
+
+        with (
+            patch.object(
+                cli, "run_reference_conformance", return_value=[], create=True
+            ) as run_conformance,
+            patch.object(cli, "run_static_validation", side_effect=AssertionError),
+            patch.object(cli, "run_unit_tests", side_effect=AssertionError),
+            patch.object(cli, "run_runtime_validation", side_effect=AssertionError),
+            patch.object(cli, "run_trigger_query_harness", side_effect=model_backed_error),
+        ):
+            result = cli.main(["validate", "conformance"])
+
+        self.assertEqual(result, 0)
+        run_conformance.assert_called_once_with(cli.REPOSITORY_ROOT)
+
+    def test_validate_conformance_reports_missing_pinned_reference_package(self) -> None:
+        output = StringIO()
+
+        with (
+            patch.object(
+                cli,
+                "run_reference_conformance",
+                side_effect=RuntimeError("python3 -m pip install -r requirements-test.txt"),
+                create=True,
+            ),
+            redirect_stdout(output),
+        ):
+            result = cli.main(["validate", "conformance"])
+
+        self.assertEqual(result, 1)
+        self.assertIn("validate conformance: FAILED", output.getvalue())
+        self.assertIn("requirements-test.txt", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -94,6 +94,10 @@ paths, names, labels, and grouped issues.
 It does not start Docker Sandboxes, call a model, inspect local skill installs,
 or use personal credentials.
 
+While iterating, `scripts/ai-skills validate conformance` runs only the pinned
+`skills-ref` conformance phase, and `scripts/ai-skills validate static` runs
+only repository policy. Neither replaces the `validate ci-all` gate.
+
 Unit and bundled-script tests run from descriptor-copied temporary repository
 snapshots. Every runtime suite receives a fresh snapshot, while all suites
 still share one aggregate deadline. Runtime suites likewise execute their exact
