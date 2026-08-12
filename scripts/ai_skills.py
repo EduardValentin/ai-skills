@@ -77,6 +77,12 @@ def run_ci_validation(*args, **kwargs):
     return run(*args, **kwargs)
 
 
+def run_reference_conformance(*args, **kwargs):
+    from scripts.ai_skills_lib.static_validation import run_reference_conformance as run
+
+    return run(*args, **kwargs)
+
+
 def run_static_validation(*args, **kwargs):
     from scripts.ai_skills_lib.static_validation import run_static_validation as run
 
@@ -267,6 +273,13 @@ def main(argv: list[str] | None = None) -> int:
         return exit_code
     if args.command == "validate" and args.target == "static":
         return _report_validation("validate static", run_static_validation(REPOSITORY_ROOT))
+    if args.command == "validate" and args.target == "conformance":
+        try:
+            issues = run_reference_conformance(REPOSITORY_ROOT)
+        except RuntimeError as error:
+            print(f"validate conformance: FAILED: {error}")
+            return 1
+        return _report_validation("validate conformance", issues)
     if args.command == "validate" and args.target == "runtime":
         return run_runtime_validation(REPOSITORY_ROOT)
     if args.command == "validate" and args.target == "ci-all":

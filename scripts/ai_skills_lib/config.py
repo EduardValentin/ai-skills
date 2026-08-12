@@ -12,7 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = commands.add_parser("validate")
     validation_targets = validate.add_subparsers(dest="target", required=True)
-    for target in ("static", "runtime", "ci-all"):
+    for target in ("static", "conformance", "runtime", "ci-all"):
         validation_targets.add_parser(target)
 
     triggers = validation_targets.add_parser("triggers")

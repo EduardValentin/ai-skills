@@ -9,7 +9,8 @@ or trigger cases; the framework remains available when coverage is introduced.
 
 | Layer | Purpose | Model use |
 | --- | --- | --- |
-| `validate static` | Skill layout, frontmatter, references, JSON definitions, fixtures, secrets, and Agent Skills conformance | None |
+| `validate static` | Skill layout, frontmatter, references, JSON definitions, fixtures, and secrets under repository policy | None |
+| `validate conformance` | Pinned official `skills-ref` Agent Skills conformance on its own | None |
 | `validate runtime` | Deterministic tests for non-trivial bundled scripts | None |
 | `validate ci-all` | Complete routine pull-request gate | None |
 | `validate triggers` | Whether the harness selects the skill for realistic and near-miss requests | Actor only |
@@ -21,6 +22,19 @@ or trigger cases; the framework remains available when coverage is introduced.
 ```bash
 scripts/ai-skills validate ci-all
 ```
+
+`validate static` applies repository policy only. Run the pinned official
+conformance check on its own when you want the specification verdict without
+the unit and bundled-script suites:
+
+```bash
+scripts/ai-skills validate conformance
+```
+
+It performs the same Git provenance and source digest verification as
+`validate ci-all`, so it fails closed with
+`FAILED: python3 -m pip install -r requirements-test.txt` when the pinned
+`skills-ref` package is absent.
 
 Its unit and bundled-script subprocesses receive only an allowlisted
 environment plus fresh home and temporary directories. The runner drains raw
