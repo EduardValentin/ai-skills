@@ -97,7 +97,9 @@ and say exactly when to read each file. Keep references shallow and use paths
 relative to the skill root, such as `references/api-errors.md`. Local links and
 symlinks must remain inside the skill. Contained directory aliases are allowed
 only when their directory graph is acyclic. Do not prefix bundled paths with a
-checkout, home, drive, or other absolute location.
+checkout, home, drive, or other absolute location. A bare `path:line` token is
+a local reference too, including inside backticks; describe a citation format in
+words instead of writing an example one.
 
 The upstream guides provide useful additional advice:
 
