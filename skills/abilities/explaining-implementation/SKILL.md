@@ -34,6 +34,10 @@ prose someone else will read.
 3. **Grounded.** Every concept traces to something actually read. State gaps
    instead of smoothing over them.
 4. **Simplifications declared.** Say so whenever an example has been simplified.
+5. **Every named file is a link.** Whenever a turn names a file, cite it as a
+   markdown link whose target is the path relative to the repository root, and
+   append a line number when the concept sits at one exact place. The reader
+   opens the code under discussion instead of searching for it.
 
 ## The Ladder
 
@@ -42,7 +46,7 @@ prose someone else will read.
 | L1   | Architecture, system boundaries, the kernel idea     | High-level pseudocode mirroring the real shape      |
 | L2   | Components and files, and the contracts between them | Signatures and interfaces, no bodies                |
 | L3   | Data structures, state, control flow                 | Small simplified snippets                           |
-| L4   | Function implementations                             | Real code from the subject, quoted with its path and line number |
+| L4   | Function implementations                             | Real code from the subject, quoted with a link to its exact location |
 
 L4 is the floor. Never go below function implementations.
 
@@ -107,3 +111,4 @@ reader explicitly asks for one; a direct instruction outranks this procedure.
 | "This concept makes no sense without its internals"    | That is the signal it is a parent. Explain the shape; the internals are the next rung. |
 | "I'll summarize what's coming"                         | Pre-summarizing is dumping, spread out.                                                |
 | "They asked a question, I'll re-explain from the top"  | Answer it and resume in place.                                                         |
+| "Naming the file is enough, they can find it"          | An unlinked file name hands the reader a search. Link it.                              |
