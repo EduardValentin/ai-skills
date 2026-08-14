@@ -34,10 +34,12 @@ prose someone else will read.
 3. **Grounded.** Every concept traces to something actually read. State gaps
    instead of smoothing over them.
 4. **Simplifications declared.** Say so whenever an example has been simplified.
-5. **Every named file is a link.** Whenever a turn names a file, cite it as a
-   markdown link whose target is the path relative to the repository root, and
-   append a line number when the concept sits at one exact place. The reader
-   opens the code under discussion instead of searching for it.
+5. **Every named file is a link the reader can open locally.** Whenever a turn
+   names a file, cite it as a markdown link whose target is a path in the
+   reader's own checkout, relative to the repository root, and append a line
+   number when the concept sits at one exact place. Never substitute a hosted or
+   remote view of the code. When the subject is not present in a local checkout,
+   say so plainly instead of linking somewhere the reader cannot inspect.
 
 ## The Ladder
 
@@ -112,3 +114,4 @@ reader explicitly asks for one; a direct instruction outranks this procedure.
 | "I'll summarize what's coming"                         | Pre-summarizing is dumping, spread out.                                                |
 | "They asked a question, I'll re-explain from the top"  | Answer it and resume in place.                                                         |
 | "Naming the file is enough, they can find it"          | An unlinked file name hands the reader a search. Link it.                              |
+| "A hosted link shows the same code and renders nicely" | It is not the reader's checkout. Link the local path.                                  |
