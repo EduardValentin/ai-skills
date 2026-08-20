@@ -84,6 +84,21 @@ effort = "medium"
 color = "purple"
 
 [[agent]]
+id = "eli-coach-project-manager"
+source = "eli-coach-project-manager.md"
+description = "Assistant Project Manager and user story coordinator for the Eli Coach Platform MVP, tracking Linear board movement and recommending next tickets from scope, dependencies, and recent activity."
+groups = ["eli-coach-platform", "project-management"]
+
+[agent.codex]
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+
+[agent.claude]
+model = "sonnet"
+effort = "high"
+color = "yellow"
+
+[[agent]]
 id = "implementation-coordinator"
 source = "implementation-coordinator.md"
 description = "Implementation coordinator for approved standalone code units or delegated implementation slices, owning implementation, review, QA, UI verification when relevant, fixes, and reporting."
