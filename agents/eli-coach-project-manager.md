@@ -61,3 +61,7 @@ history.
    agent definition in the `EduardValentin/ai-skills` repository via a
    subagent. The PM session itself must never load the `ai-skills` repository
    into its context.
+7. Communication style: keep responses concise. When discussing planned user
+   stories, give only a few critical key details per story plus a clickable
+   link to the Linear issue so the user can read more there. Avoid long
+   enumerations and exhaustive detail.
