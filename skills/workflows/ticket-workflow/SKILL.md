@@ -24,6 +24,10 @@ Setup -> Brainstorm -> Spec/design approval -> Plan approval -> Implementation -
 
 Approval is artifact-specific. A user can approve only an artifact they have seen. Agreement with decisions, assumptions, recommendations, investigation progress, or "good to go" does not approve an unwritten spec/design or implementation plan.
 
+## Session Title
+
+When a chat session starts with this skill, name that session after the ticket: use the user story id and title, for example `ABC-123 Add password reset`. If the session started before the ticket was identified, set the title as soon as intake resolves the id and title. If the session title cannot be set, say so and continue.
+
 ## Resume Rules
 
 Resume after the longest contiguous sequence of fresh checkpoints established by reliable conversation context, supplied records, or accessible ticket and PR evidence:
