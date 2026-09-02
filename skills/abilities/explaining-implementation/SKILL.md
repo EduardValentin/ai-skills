@@ -17,8 +17,8 @@ metadata:
 ## Overview
 
 Explain existing work as a paced walk through a bounded hierarchy, one concept
-per turn, one root at a time from its top rung down to its floor, moving only
-when the reader says so.
+per turn, one root at a time from its top rung down to its floor, each turn
+picking up the thread of the last, moving only when the reader says so.
 
 **Core principle:** the reader sets the pace and the depth. A complete report
 delivered up front is the failure, however well organized it is.
@@ -105,6 +105,11 @@ Root 2 of 2
 - Header carrying position and name: `Root 1 → Component 2 of 2 — <name>`. One
   segment per rung walked, named `Root`, `Component`, `Mechanism`, and
   `Function` for L1 to L4; only the last segment carries its count.
+- Thread, before the body: one or two sentences placing the concept in the walk
+  so far. Say what the concept above needed that this one supplies; for a root,
+  the concept above is the subject itself. After a sibling, say what this one
+  adds or does differently. After a climb, close the branch just left in a
+  clause before placing the new concept. Continuity looks back, never ahead.
 - 150 to 250 words
 - At most one code or pseudocode block, calibrated to the rung
 - Footer: `[Root 1 → Component 2/2] · continue · more · skip`, without `skip`
@@ -138,5 +143,6 @@ one; a direct instruction outranks this procedure.
 | "I'll cover this rung for every root before going deeper" | Each root visited between a concept and its children is a context switch. Finish the branch first. |
 | "This branch is routine, I'll move on to the next root" | Depth is the reader's call. `skip` is theirs, not yours.                             |
 | "This child is small, I'll fold it into the parent's turn" | A turn holds one rung. A child too small for its own turn is not a child; it is part of the parent's shape. |
+| "The header already shows where we are"               | The header is a coordinate, not a connection. Open with the thread.                   |
 | "I'll summarize what's coming"                         | Pre-summarizing is dumping, spread out.                                                |
 | "They asked a question, I'll re-explain from the top"  | Answer it and resume in place.                                                         |
