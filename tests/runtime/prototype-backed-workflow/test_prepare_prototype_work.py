@@ -15,8 +15,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = (
     REPO_ROOT
     / "skills"
-    / "ui-ux"
-    / "prototype-work"
+    / "workflows"
+    / "prototype-backed-workflow"
     / "scripts"
     / "prepare-prototype-work.sh"
 )

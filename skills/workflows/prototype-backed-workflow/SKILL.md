@@ -1,5 +1,5 @@
 ---
-name: prototype-work
+name: prototype-backed-workflow
 description: Use when working on a project that maintains a React based reference prototype app alongside the production app.
 compatibility: >-
   Requires writable worktree, Bash/Git, React app, active Node runtime, and app-selected package manager. Use Browser tool for screenshots if available; otherwise return a manual plan/blocker.
