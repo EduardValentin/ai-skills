@@ -97,7 +97,7 @@ When the multi-ticket spec/design, per-ticket implementation plans, and coordina
 For approved scopes, respond in this order:
 
 1. Orchestration state: inventory, approvals, dependencies, assignments, PR or handoff state, blockers, packet lifecycle, and intended human review order.
-2. One execution packet per unit: delegate `implementation-coordinator`, ticket/parent context, approved spec/design slice, approved ticket plan, approved coordination-plan slice, dependency constraints, affected surfaces or explicit gap, PR/handoff expectations, and completion evidence.
+2. One execution packet per unit: delegate `implementation-coordinator`, ticket/parent context, approved spec/design slice, approved ticket plan, approved coordination-plan slice, expected-demand profile for the unit, dependency constraints, affected surfaces or explicit gap, PR/handoff expectations, and completion evidence.
 3. Dispatch or handoff action.
 
 Each packet should include:
@@ -106,6 +106,7 @@ Each packet should include:
 - approved spec/design slice
 - approved ticket implementation plan
 - approved coordination-plan slice
+- expected-demand profile for the unit
 - prototype-backed decision, and when true, the instruction to load `prototype-backed-workflow` and return the parity ledger as completion evidence
 - dependency constraints and upstream/downstream notes
 - known affected files or surfaces, including mapping evidence or unresolved mapping gaps

@@ -35,7 +35,7 @@ Repository instructions override these rules, including any different parameter 
 - **CC1** | severity: <blocker / major / minor> | `path:line` or `path:start-end` | <rule: single-responsibility / parameter-count / boolean-parameter / nesting / naming> | <description> | suggested fix with the proposed name or signature
 
 ## Out-of-scope flags
-- **O1** | `path:line` | <suspected architecture / security / performance / acceptance / behavior / visual issue> | flagged for: <architecture-reviewer / security-reviewer / performance-reviewer / acceptance-criteria-reviewer / qa-verifier / visual-verifier>
+- **O1** | `path:line` | <suspected architecture / security / performance / acceptance / behavior / visual issue> | flagged for: <architecture-reviewer / security-reviewer / performance-reviewer / acceptance-criteria-reviewer / design-system-reviewer / qa-verifier / visual-verifier>
 
 ## Patterns to codify next time
 - <one-line declarative rule candidate> | rationale: <one sentence>

@@ -20,13 +20,14 @@ Use the `visual-validation` skill when it is preloaded or otherwise available. I
 
 ```markdown
 Visual validation:
+- Verdict: <CLEAN | FINDINGS | BLOCKED>
 - Evidence: <browser, automation, measurements, screenshots, or other rendered artifacts used>
 - Viewports checked: <list or None>
 - States checked: <list or None>
 - Planned or unverified viewports: <list or None>
 - Planned or unverified states: <list or None; justify not-applicable states when useful>
 - Findings: <None, or findings with viewport, state, evidence and severity blocker / major / minor>
-- Accessibility findings: <None, or findings with WCAG criterion and evidence>
+- Accessibility findings: <None, or findings with severity blocker / major / minor, WCAG criterion and evidence>
 - Residual risk: <None, or anything not observable>
 ```
 

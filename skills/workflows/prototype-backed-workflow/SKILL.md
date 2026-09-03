@@ -123,10 +123,15 @@ Runs once the inner implementation workflow has returned
    the production side, or the prototype side when the design change was
    made there and production is the source of the row's basis. A fix to a
    shared primitive, token or global style widens the recheck to every row.
-5. Re-dispatch `parity-verifier` for the affected rows with the same
+5. A confirmed accessibility failure the prototype shares is a design defect:
+   fix it in the prototype first, mirror it in production, record a
+   design-change row, and re-verify. Only the user may waive it; a waiver is
+   recorded in the ledger's design-changes table and named in the PR, and it
+   is the sole case where a FINDINGS report may proceed.
+6. Re-dispatch `parity-verifier` for the affected rows with the same
    conditions. Repeat until every row reads `MATCH` and the report verdict is
    `CLEAN`.
-6. Hand the ledger path and the final parity report to PR readiness as the
+7. Hand the ledger path and the final parity report to PR readiness as the
    parity evidence.
 
 If `parity-verifier` is unavailable, run `visual-parity-verification` from a
@@ -149,3 +154,5 @@ verification belongs to the inner implementation workflow.
   design documentation.
 - Rebuilding the ledger from memory at the end instead of maintaining it
   during the work.
+- Landing any fix after the parity step without re-running it; a later fix
+  invalidates the ledger.

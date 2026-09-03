@@ -105,6 +105,8 @@ and obtain separate explicit approval. Do not edit product code or tests.
 After plan approval, return:
 
 - ticket and parent context;
+- the prototype-backed decision: whether the repository contains a reference
+  prototype app and the ticket implies a user-visible UI change;
 - Brainstorm completion record;
 - written spec/design and its explicit approval evidence;
 - written implementation plan and its separate approval evidence;

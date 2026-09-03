@@ -1,6 +1,6 @@
 ---
 name: visual-validation
-description: Use when validating frontend UI changes by rendered evidence, including screenshots, responsive layouts, breakpoint behavior, visual regressions, overflow, clipping, hidden or non-wrapping text, contrast, focus states, motion, canvas or 3D output, and broad visual quality of a browser-rendered page without a comparison basis.
+description: Use when validating frontend UI changes by rendered evidence, including screenshots, responsive layouts, breakpoint behavior, visual regressions, overflow, clipping, hidden or non-wrapping text, contrast, focus states, accessibility states, motion, canvas or 3D output, and broad visual quality of a browser-rendered page without a comparison basis.
 compatibility: >-
   Rendered validation requires native browser or screenshot tooling, project browser automation, an approved temporary capture script, or user screenshots; otherwise report a blocker and residual risk instead of claiming visual confidence. Comparison against a reference belongs to the separate `visual-parity-verification` skill.
 metadata:
@@ -100,6 +100,16 @@ Name the relevant visual smell families instead of summarizing them as
 - New surfaces fit nearby product surfaces: density, alignment rhythm, type
   scale, color roles and component proportions.
 
+## Accessibility
+
+Check heading and semantic structure, names and roles, keyboard reachability
+and order, visible focus, traps, image alternatives, icon-only control names,
+relevant ARIA state and WCAG AA contrast: 4.5:1 for normal text, 3:1 for large
+text and UI components. For a non-solid rendered background use a browser
+contrast analyzer; never estimate contrast visually. Record confirmed
+failures as findings with a WCAG criterion; record inconclusive or
+unavailable checks as unverified, not as failures.
+
 ## Fixes and Rechecks
 
 This skill may fix findings and recheck them when implementation changes are
@@ -117,6 +127,7 @@ Visual validation:
 - Planned or unverified viewports: <list or none>
 - Planned or unverified states: <list or none; include justified not-applicable states>
 - Findings: <none or bullets with screenshot/viewport/state>
+- Accessibility findings: <none or bullets with severity, WCAG criterion and evidence>
 - Fixes and rechecks: <summary or none>
 - Residual risk: <anything not observable>
 ```

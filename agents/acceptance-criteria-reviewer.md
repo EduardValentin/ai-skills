@@ -41,7 +41,7 @@ Repository instructions override these rules.
 - **AC1** | severity: <blocker / major / minor> | criterion: <id> | `path:line` or `path:start-end` | <what is missing, narrowed or beyond scope> | suggested fix
 
 ## Out-of-scope flags
-- **O1** | `path:line` | <suspected architecture / cleanliness / security / performance / behavior / visual issue> | flagged for: <architecture-reviewer / code-cleanliness-reviewer / security-reviewer / performance-reviewer / qa-verifier / visual-verifier>
+- **O1** | `path:line` | <suspected architecture / cleanliness / security / performance / behavior / visual issue> | flagged for: <architecture-reviewer / code-cleanliness-reviewer / security-reviewer / performance-reviewer / design-system-reviewer / qa-verifier / visual-verifier>
 
 ## Patterns to codify next time
 - <one-line declarative rule candidate> | rationale: <one sentence>

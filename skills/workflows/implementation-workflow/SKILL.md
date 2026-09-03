@@ -111,6 +111,11 @@ code path with the main agent.
 - Prefer names that expose purpose, side effects, and domain invariants.
 - Trace every change to the approved goal, criteria, or required supporting
   behavior.
+- Avoid duplicated logic, hidden side effects, and abstractions that do not
+  remove real complexity.
+- Assess security implications where relevant, especially authentication,
+  authorization, user input, data exposure, persistence, redirects, files,
+  external requests, privileged actions, dependencies, and sensitive logging.
 
 ## Review Gate
 
@@ -127,18 +132,20 @@ return findings; the main agent decides and fixes.
    primitives in any design-system source the repository keeps.
 3. Aggregate all findings. Deduplicate findings that name the same location
    and defect, keeping the highest severity and every reviewer's suggested
-   fix. Resolve conflicting suggestions against the approved plan, repository
-   instructions, and the demand profile; resolve architecture findings first,
-   because their fixes move code and can void other findings. Record every
-   rejected finding with its reason; a finding is rejected only when it is
-   technically wrong, outside the approved scope, or overridden by repository
-   instructions.
-4. Address every accepted finding. Add or update a meaningful failing test
-   first when the issue is automatable. Rerun focused and affected regression
-   checks.
+   fix. Security severities map as critical and high to blocker, medium to
+   major, low to minor. Resolve conflicting suggestions against the approved
+   plan, repository instructions, and the demand profile; resolve architecture
+   findings first, because their fixes move code and can void other findings.
+   Record every rejected finding with its reason; a finding is rejected only
+   when it is technically wrong, outside the approved scope, or overridden by
+   repository instructions.
+4. Address every accepted blocker and major finding.
 5. Any fix invalidates every prior approval. Re-dispatch all reviewers from
    step 2 on the revised frozen diff.
-6. The gate passes when every reviewer returns `CLEAN` in the same round.
+6. The gate passes when every reviewer returns `CLEAN` in the same round. A
+   unanimous CLEAN round ends the gate; minor findings from that round are
+   recorded with dispositions in the implementation report and do not trigger
+   another round.
 7. Budget: three rounds. If round three ends without unanimous `CLEAN`,
    return `IMPLEMENTATION BLOCKED` with the remaining findings and their
    dispositions.
@@ -159,9 +166,10 @@ Run after the review gate passes.
   same fan-out with the running app, affected routes and states, configured
   breakpoints, and the diff. Every changed rendered surface is in scope; there
   is no exception for surfaces some other process might also check.
-- Wait for every dispatched verifier. A QA `BUGS FOUND`, a visual finding of
-  severity `blocker` or `major`, or a cannot-proceed verdict from either sends
-  the work to the remediation loop.
+- Wait for every dispatched verifier. A QA `BUGS FOUND`, a visual or
+  accessibility finding of severity `blocker` or `major`, or a `BLOCKED`
+  visual verdict, or a cannot-proceed verdict from QA sends the work to the
+  remediation loop.
 
 Fallbacks: if `qa-verifier` is unavailable, use a separate fresh agent with
 the `qa-verification` skill preloaded that can exercise the runtime surface;
@@ -179,8 +187,8 @@ For each QA failure or visual finding:
    automatable, then implement the fix.
 3. Rerun the focused check and all regression checks affected by the fix.
 4. Re-run the review gate on the revised diff. The three-round budget is per
-   review gate invocation, but a total of two re-entries from remediation is
-   the limit; a third re-entry returns `IMPLEMENTATION BLOCKED`.
+   review gate invocation, but a total of two re-entries from remediation per
+   unit is the limit; a third re-entry returns `IMPLEMENTATION BLOCKED`.
 5. Rerun only the affected verifier: failed and affected criteria for QA;
    affected routes, states and viewports for visual. Every criterion and
    every changed surface must have passing evidence against the final
@@ -219,3 +227,8 @@ from this workflow.
 - Letting the implementer perform the independent review.
 - Completing while relevant findings, failed criteria, or missing evidence
   remain.
+- Claiming TDD without observing a meaningful failing test.
+- Reading only the target file when callers, contracts, or adjacent tests can
+  affect the change.
+- Returning an unstructured prose summary without changed surfaces, checks,
+  review, QA, and risks.

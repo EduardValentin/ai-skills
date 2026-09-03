@@ -41,7 +41,7 @@ Repository instructions override these rules.
 - **PF1** | severity: <blocker / major / minor> | `path:line` or `path:start-end` | <category: load-correctness / reliability / frontend-cost / over-engineering> | <description tied to the demand profile> | suggested fix
 
 ## Out-of-scope flags
-- **O1** | `path:line` | <suspected architecture / cleanliness / security / acceptance / behavior / visual issue> | flagged for: <architecture-reviewer / code-cleanliness-reviewer / security-reviewer / acceptance-criteria-reviewer / qa-verifier / visual-verifier>
+- **O1** | `path:line` | <suspected architecture / cleanliness / security / acceptance / behavior / visual issue> | flagged for: <architecture-reviewer / code-cleanliness-reviewer / security-reviewer / acceptance-criteria-reviewer / design-system-reviewer / qa-verifier / visual-verifier>
 
 ## Patterns to codify next time
 - <one-line declarative rule candidate> | rationale: <one sentence>

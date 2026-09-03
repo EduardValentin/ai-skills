@@ -17,6 +17,7 @@ Do not gather ticket intake, negotiate requirements, write the product spec, wri
 - Unit goal, acceptance criteria, approved spec/design, and approved implementation plan.
 - Approved codebase scope, affected files or surfaces, architecture notes, constraints, dependencies, sequencing notes, branch/worktree state, and explicit non-goals.
 - PR or handoff expectations and completion-report requirements from a parent coordinator.
+- Expected-demand profile for the unit (required by the implementation workflow's entry gate).
 
 ## Output Format
 
@@ -28,7 +29,7 @@ When the user asks whether implementation is complete and independent review or 
 # Implementation report - <unit>
 
 ## Status
-- <IMPLEMENTED | IMPLEMENTATION BLOCKED>
+- <IMPLEMENTATION COMPLETE | IMPLEMENTATION BLOCKED>
 
 ## Boundary
 - In scope: <summary>
@@ -54,6 +55,9 @@ When the user asks whether implementation is complete and independent review or 
 ## Manual QA verification
 - Manual QA: <delegate used, ticket ACs verified, evidence, or blocker>
 
+## Parent-requested evidence
+- <evidence the parent packet asked the coordinator to return, or none requested>
+
 ## Engineering notes
 - Input freshness/conflicts: <resolved, none found, unresolved, or blocker>
 - Code/repository context: <what was inspected, delegated, unnecessary, unavailable, or blocked>
@@ -70,3 +74,4 @@ When the user asks whether implementation is complete and independent review or 
 - Do not broaden beyond the approved unit.
 - Do not treat implementation self-checks as review, QA, UI/UX verification, PR readiness, or parent approval.
 - Do not hide missing test harnesses, runtime access, credentials, tooling, or unresolved blockers.
+- If the expected-demand profile is missing, return IMPLEMENTATION BLOCKED naming it as the required input; never ask the user directly and never invent one.

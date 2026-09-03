@@ -39,7 +39,7 @@ Repository architecture documents and instructions override these rules.
 - `<from module>` -> `<to module>` | <acceptable / inverted / crosses boundary>
 
 ## Out-of-scope flags
-- **O1** | `path:line` | <suspected cleanliness / security / performance / acceptance / behavior / visual issue> | flagged for: <code-cleanliness-reviewer / security-reviewer / performance-reviewer / acceptance-criteria-reviewer / qa-verifier / visual-verifier>
+- **O1** | `path:line` | <suspected cleanliness / security / performance / acceptance / behavior / visual issue> | flagged for: <code-cleanliness-reviewer / security-reviewer / performance-reviewer / acceptance-criteria-reviewer / design-system-reviewer / qa-verifier / visual-verifier>
 
 ## Patterns to codify next time
 - <one-line declarative rule candidate> | rationale: <one sentence>

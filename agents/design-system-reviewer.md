@@ -43,7 +43,7 @@ Repository instructions override these rules.
 - `path:line` | <value> | <why it is non-reusable layout mechanics>
 
 ## Out-of-scope flags
-- **O1** | `path:line` | <suspected behavior / rendering / accessibility issue> | flagged for: <qa-verifier / visual-verifier>
+- **O1** | `path:line` | <suspected behavior / rendering / accessibility issue> | flagged for: <acceptance-criteria-reviewer / architecture-reviewer / code-cleanliness-reviewer / security-reviewer / performance-reviewer / qa-verifier / visual-verifier>
 
 ## Patterns to codify next time
 - <one-line declarative rule candidate> | rationale: <one sentence>

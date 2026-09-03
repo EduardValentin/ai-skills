@@ -18,10 +18,10 @@ session cannot raise a PR while any row is not `MATCH`.
 
 ## Design changes
 
-One row per design decision made in this session. Under prototype-first the
-prototype changes first; when production needed the change urgently, the
-prototype is updated in the same session and both columns read yes before the
-parity step runs.
+One row per design decision made in this session. The prototype changes
+first. A production-first change is a rule violation that is remediated in
+the same session by updating the prototype; both columns must read yes before
+the parity step runs.
 
 | Id | What changed | Changed first in | Prototype updated | Production updated | Ledger rows |
 |---|---|---|---|---|---|

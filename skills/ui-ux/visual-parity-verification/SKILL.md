@@ -31,8 +31,9 @@ ordinary visual validation.
 
 ## Inputs
 
-- The ledger file to read and write. Each row names a route, a state, a
-  viewport set, a production selector and a basis selector, and carries a
+- The ledger file to read and write. It records the viewport set and theme
+  once at the top; each row names a route, a state, a production selector and
+  a basis selector (the ledger's prototype selector column), and carries a
   `Verdict` and an `Evidence` column.
 - URLs of the running implementation and the running reference, or the
   analog routes and selectors when no reference exists.
