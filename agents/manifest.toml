@@ -137,9 +137,9 @@ effort = "medium"
 color = "green"
 
 [[agent]]
-id = "uiux-verifier"
-source = "uiux-verifier.md"
-description = "Visual and accessibility verifier for frontend changes that need DOM-backed layout, style, responsive, parity, or WCAG checks."
+id = "visual-verifier"
+source = "visual-verifier.md"
+description = "Rendered-output and accessibility verifier for frontend changes that need DOM-backed layout, responsive, focus, contrast and motion checks without a comparison basis."
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "visual-validation"]
 preload_skills = ["visual-validation"]
 
@@ -150,6 +150,22 @@ sandbox_mode = "workspace-write"
 [agent.claude]
 model = "sonnet"
 effort = "medium"
+color = "purple"
+
+[[agent]]
+id = "parity-verifier"
+source = "parity-verifier.md"
+description = "Parity tester for prototype-backed applications that verifies changed production surfaces match the prototype exactly from browser computed style and geometry, writing verdicts into the session's parity ledger."
+groups = ["ticket-workflow", "multi-ticket-workflow", "prototype-backed-workflow", "visual-parity-verification"]
+preload_skills = ["visual-parity-verification"]
+
+[agent.codex]
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+
+[agent.claude]
+model = "sonnet"
+effort = "high"
 color = "purple"
 
 [[agent]]
