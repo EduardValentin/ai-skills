@@ -139,7 +139,9 @@ return findings; the main agent decides and fixes.
    Record every rejected finding with its reason; a finding is rejected only
    when it is technically wrong, outside the approved scope, or overridden by
    repository instructions.
-4. Address every accepted blocker and major finding.
+4. Address every accepted blocker and major finding. Add or update a
+   meaningful failing test first when the issue is automatable. Rerun focused
+   and affected regression checks.
 5. Any fix invalidates every prior approval. Re-dispatch all reviewers from
    step 2 on the revised frozen diff.
 6. The gate passes when every reviewer returns `CLEAN` in the same round. A
