@@ -18,9 +18,9 @@ tools = ["Read", "Glob", "Grep", "Bash"]
 color = "cyan"
 
 [[agent]]
-id = "code-reviewer"
-source = "code-reviewer.md"
-description = "Read-only implementation reviewer for finished diffs, focused on spec compliance, maintainability, scalability, performance, and code quality."
+id = "acceptance-criteria-reviewer"
+source = "acceptance-criteria-reviewer.md"
+description = "Read-only reviewer that checks an implementation covers every acceptance criterion and approved-plan item faithfully, drops nothing silently, and builds nothing beyond the approved scope."
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
@@ -33,6 +33,75 @@ effort = "high"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
 color = "blue"
+
+[[agent]]
+id = "architecture-reviewer"
+source = "architecture-reviewer.md"
+description = "Read-only reviewer of component boundaries, cohesion of things that change together, discoverable structure, and dependency direction from stable to volatile components."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+
+[agent.codex]
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "sonnet"
+effort = "high"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "cyan"
+
+[[agent]]
+id = "code-cleanliness-reviewer"
+source = "code-cleanliness-reviewer.md"
+description = "Read-only reviewer of function, class and module readability: single responsibility, at most three parameters, no boolean parameters, inverted conditionals over nesting, and domain-revealing names."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+
+[agent.codex]
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "sonnet"
+effort = "medium"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "green"
+
+[[agent]]
+id = "performance-reviewer"
+source = "performance-reviewer.md"
+description = "Read-only reviewer of performance, load behavior and long-term reliability judged against the supplied expected-demand profile, flagging both under-provisioning and over-engineering."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+
+[agent.codex]
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "sonnet"
+effort = "high"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "yellow"
+
+[[agent]]
+id = "design-system-reviewer"
+source = "design-system-reviewer.md"
+description = "Read-only reviewer of design-system growth: ad hoc styling that belongs in the system, tokens added on every design-system source, synonym tokens, and reusable primitive drift."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+preload_skills = ["semantic-design-tokens", "reusable-ui-components"]
+
+[agent.codex]
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "sonnet"
+effort = "medium"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "magenta"
 
 [[agent]]
 id = "security-reviewer"
