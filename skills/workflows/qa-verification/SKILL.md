@@ -2,7 +2,7 @@
 name: qa-verification
 description: Use when manually verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, frontend PR, or mixed executable surface. Use when the user asks for QA, browser behavior evidence, acceptance-criteria verification, PR-note verification, backend/API probes, CLI checks, persistence, auth, validation, state transitions, regression probes, and PR/ticket-linked QA.
 compatibility: >-
-  Requires access to the running surface, mode-appropriate interaction and probe tools, and any credentials, fixtures, seed data, feature flags, or real dependencies required by the acceptance criteria. Try available PR or ticket tooling, ask the caller for missing metadata, and only then use explicitly provisional diff scope. If runtime evidence is unavailable, return the documented blocker verdict.
+  Requires access to the running surface, mode-appropriate interaction and probe tools, and any credentials, fixtures, seed data, feature flags, or real dependencies required by the acceptance criteria. Try available PR or ticket tooling, ask the caller for missing metadata, and only then use explicitly provisional diff scope. If runtime evidence is unavailable, return the documented blocker verdict. Naming `visual-verifier` is a flag target only; QA never depends on it.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -38,7 +38,7 @@ When metadata is available but testing instructions are absent or vague, scope b
 
 ## Verification Modes
 
-- `ui`: start the application, use browser tooling, manually click through the implemented surface, and inspect behavior after each action: copy/data changes, navigation, validation, disabled/submitting behavior, persistence, and errors. Name the app start command or URL, browser actions, and rendered outcomes. Cover happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior when relevant.
+- `ui`: start the application, use browser tooling, manually click through the implemented surface, and inspect behavior after each action: copy/data changes, navigation, validation, disabled/submitting behavior, persistence, and errors. Name the app start command or URL, browser actions, and rendered outcomes. Cover happy path, loading, empty, success, error, validation, disabled, focus/active, navigation, rapid-click, double-submit, and adjacent-flow behavior when relevant. Disabled, focus and active coverage means reachability and behavior after the state is entered, not the appearance of the state; appearance belongs to visual validation.
 - `backend`: use programmatic probes against the running implemented surface, such as HTTP requests, CLI invocations, job triggers, database reads, logs, queues, emitted events, or cache checks. Validate outputs, state transitions, persistence, side effects, auth, validation, error handling, idempotency, retries, and third-party/state propagation when relevant. Keep state-transition checks explicit in the approach and report; do not collapse them into persistence or side effects.
 - `mixed`: prefer running the GUI and backend/service together and verifying the flow end to end. The approach and report must explicitly name browser-observed behavior and programmatic backend/API/service probes, then tie them through the integration contract and propagated state. If running them together is not possible, verify each surface separately, state the limitation, and still validate the integration contract and propagated state.
 - `other`: exercise scripts, scheduled tasks, data jobs, migrations, or integrations through their real command/trigger path. Check inputs, outputs, logs, external calls, exit codes, reruns, failure modes, cleanup, and state changes.
@@ -74,7 +74,7 @@ When provided runtime facts show QA can proceed but verification has not yet bee
 - Starting the app, scoping from the diff, or inferring testing instructions before attempting available PR/ticket tooling and asking for missing details.
 - Falling back to diff-scoped QA before the caller has had a chance to provide missing ticket/PR details, acceptance criteria, implemented surface area, and testing instructions.
 - Treating inferred diff scope as authoritative when ticket/PR details, acceptance criteria, or testing instructions are available.
-- Comparing appearance against references, analogs, computed styles, or bounding boxes instead of verifying behavior after user or system actions.
+- Comparing appearance against references, analogs, computed styles, or bounding boxes instead of verifying behavior after user or system actions; flag appearance concerns for the `visual-verifier` agent.
 - Modifying product code or changing configuration to repair a finding while acting as the QA verifier.
 - Assessing PR readiness, CI approval gates, unresolved review comments, mergeability, or tracker-state gates.
 - Omitting state-transition, persistence, side-effect, or propagation checks when the acceptance criteria depend on them.
