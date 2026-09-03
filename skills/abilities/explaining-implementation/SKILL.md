@@ -16,8 +16,9 @@ metadata:
 
 ## Overview
 
-Explain existing work as a paced walk down a bounded hierarchy, one concept per
-turn, moving only when the reader says so.
+Explain existing work as a paced walk through a bounded hierarchy, one concept
+per turn, one root at a time from its top rung down to its floor, each turn
+picking up the thread of the last, moving only when the reader says so.
 
 **Core principle:** the reader sets the pace and the depth. A complete report
 delivered up front is the failure, however well organized it is.
@@ -29,8 +30,9 @@ prose someone else will read.
 
 1. **One concept per turn, then stop.** Never two concepts in one message, never
    a teaser for the next one.
-2. **Rung discipline.** No code beyond the current rung's allowance, and no
-   descending except through an explicit descent step.
+2. **Rung discipline.** No code beyond the current rung's allowance. Descend
+   only when the reader moves, one step at a time, into a child of the concept
+   just explained.
 3. **Grounded.** Every concept traces to something actually read. State gaps
    instead of smoothing over them.
 4. **Simplifications declared.** Say so whenever an example has been simplified.
@@ -71,32 +73,65 @@ explained is a child; it belongs one rung down.
    explanation.
 3. **List the roots.** A concise numbered list of root concept titles, with
    nothing attached to them, then stop.
-4. **Walk the rung.** One concept per turn, in the shape below.
-5. **Descend.** After the last sibling, offer one level down. Group deeper rungs
-   by parent and name the parent in the header: `Root 2 → Component 1 of 3`. A
-   parent with nothing meaningful beneath it does not appear; never invent a
-   child to keep the tree symmetric.
-6. **Floor.** When a branch bottoms out at L4, or nothing meaningful remains,
-   say so and stop offering to descend.
+4. **Walk.** One concept per turn, in walk order, in the shape below. Move only
+   when the reader moves.
+5. **End.** After the last concept of the last root, say the walk is complete
+   and stop.
+
+### Walk Order
+
+Depth first. A concept is followed by its own children, rung by rung to the
+bottom of its branch, before its next sibling; a root's whole branch is finished
+before the next root begins. Each step down is one rung, or the next rung that
+holds something real. A concept with nothing meaningful beneath it is a leaf;
+never invent a child to keep the tree symmetric.
+
+Two roots, where the second component of the first root holds nothing real at
+L3:
+
+```
+Root 1 of 2
+Root 1 → Component 1 of 2
+Root 1 → Component 1 → Mechanism 1 of 1
+Root 1 → Component 1 → Mechanism 1 → Function 1 of 2
+Root 1 → Component 1 → Mechanism 1 → Function 2 of 2
+Root 1 → Component 2 of 2
+Root 1 → Component 2 → Function 1 of 1
+Root 2 of 2
+```
 
 ### One Turn
 
-- Header carrying position and name: `Root 2 of 5 — <name>`
+- Header carrying position and name: `Root 1 → Component 2 of 2 — <name>`. One
+  segment per rung walked, named `Root`, `Component`, `Mechanism`, and
+  `Function` for L1 to L4; only the last segment carries its count.
+- Thread, before the body: one or two sentences placing the concept in the walk
+  so far. Say what the concept above needed that this one supplies; for a root,
+  the concept above is the subject itself. After a sibling, say what this one
+  adds or does differently. After a climb, close the branch just left in a
+  clause before placing the new concept. Continuity looks back, never ahead.
 - 150 to 250 words
 - At most one code or pseudocode block, calibrated to the rung
-- Footer: `[Root 2/5] · continue · more`
+- Footer: `[Root 1 → Component 2/2] · continue · more · skip`, without `skip`
+  at a leaf
 - Stop. Say nothing else.
 
-`continue` moves to the next sibling. `more` elaborates the same concept at the
-same altitude — motivation, nuance, another example — and never descends.
+### Moves
+
+`continue` moves to the next concept in walk order: the first child of the
+concept just explained, or at a leaf its next sibling, climbing to the nearest
+ancestor with a next sibling when it has none. `skip` leaves the children of the
+concept just explained unvisited and moves to its next sibling, climbing the
+same way. `more` elaborates the same concept at the same altitude — motivation,
+nuance, another example — and never descends.
 
 ## Interruptions
 
 Answer an off-script question, then return to the exact position in the walk.
 Do not restart, re-list, or drift.
 
-Never offer an out-of-order descent into a single concept. Comply when the
-reader explicitly asks for one; a direct instruction outranks this procedure.
+Never offer a jump out of walk order. Comply when the reader explicitly asks for
+one; a direct instruction outranks this procedure.
 
 ## Red Flags
 
@@ -105,5 +140,9 @@ reader explicitly asks for one; a direct instruction outranks this procedure.
 | "This pull request is tiny, I'll explain it in one go" | Small subjects have fewer rungs, not bigger turns.                                     |
 | "They'll obviously want the code"                      | Code above its rung is the dump in disguise.                                           |
 | "This concept makes no sense without its internals"    | That is the signal it is a parent. Explain the shape; the internals are the next rung. |
+| "I'll cover this rung for every root before going deeper" | Each root visited between a concept and its children is a context switch. Finish the branch first. |
+| "This branch is routine, I'll move on to the next root" | Depth is the reader's call. `skip` is theirs, not yours.                             |
+| "This child is small, I'll fold it into the parent's turn" | A turn holds one rung. A child too small for its own turn is not a child; it is part of the parent's shape. |
+| "The header already shows where we are"               | The header is a coordinate, not a connection. Open with the thread.                   |
 | "I'll summarize what's coming"                         | Pre-summarizing is dumping, spread out.                                                |
 | "They asked a question, I'll re-explain from the top"  | Answer it and resume in place.                                                         |
