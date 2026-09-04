@@ -2,7 +2,7 @@
 name: multi-ticket-workflow
 description: Use when coordinating the implementation and delivery of two or more related tickets or Epic children that share dependencies, implementation sequencing, or PR handoffs. Do not use for exploratory work only.
 compatibility: >-
-  Intended operation uses native code-mapper and implementation-coordinator agents, and the `prototype-backed-workflow` skill for visual tickets in prototype-backed repositories. If an agent is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
+  Intended operation uses native code-mapper and implementation-coordinator agents, the `raising-a-pull-request` skill for every ticket PR, and the `prototype-backed-workflow` skill for visual tickets in prototype-backed repositories. If an agent is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -148,7 +148,7 @@ The main agent tracks status, resolves blockers, resequences work, updates the o
 
 ## Final Report
 
-Before reporting, re-read the durable orchestration note and reconcile ticket status, PR links, blockers, and dependency order.
+Before reporting, re-read the durable orchestration note and reconcile ticket status, PR links, blockers, and dependency order. Apply the `raising-a-pull-request` rules to every ticket's PR before it enters the handoff report; a PR with a red check, unconfirmed mergeability, or unread approval policy is listed as blocked, not ready.
 
 Return:
 

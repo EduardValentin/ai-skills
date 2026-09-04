@@ -2,7 +2,7 @@
 name: ticket-workflow
 description: Use when coordinating one standalone implementation ticket from intake or resuming at an evidenced approved-requirements, implementation-transition, or PR-readiness checkpoint.
 compatibility: >-
-  Requires repository, ticket-tracker, PR, and CI access plus the `ticket-requirements-gathering` and `implementation-workflow` skills, and `prototype-backed-workflow` for visual tickets in prototype-backed repositories. If requirements gathering is unavailable, return an explicit upstream handoff. If implementation is unavailable, implement inline only with explicit fallback authorization. Missing tracker, PR, CI, or evidence access blocks only the affected transition or readiness claim.
+  Requires repository, tracker, PR, and CI access plus the `ticket-requirements-gathering`, `implementation-workflow`, and `raising-a-pull-request` skills, and `prototype-backed-workflow` for visual tickets in prototype-backed repositories. If requirements gathering is unavailable, return an upstream handoff. If implementation is unavailable, implement inline only with explicit fallback authorization. Missing tracker, PR, CI, or evidence access blocks only the affected transition or claim.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -86,6 +86,8 @@ Check:
 - unresolved findings, blockers, assumptions, and follow-ups are explicit
 - ticket state is appropriate for the user's process
 
+Apply the `raising-a-pull-request` rules to every readiness claim, merge, and post-merge check; they are hard rules, not guidance.
+
 Manual QA evidence applies to user-observable behavior or acceptance flows. UI/UX parity evidence applies to visual changes in a prototype-backed repository and consists of the session's parity ledger with every row at MATCH plus the final parity report; a ledger with any other row state is a blocker. Review evidence applies when the repository or implementation process requires review. Blocker evidence applies whenever a required surface could not be exercised.
 
 Route CI or review fixes back through `implementation-workflow` under the approved scope and execution mode. Use the explicitly authorized inline fallback only when that skill is unavailable. If a fix changes scope, behavior, design, or acceptance criteria, invalidate the spec/design and plan approvals and return to `ticket-requirements-gathering`; if it changes only the plan, invalidate plan approval and return there. If it changes execution mode, return only to local mode approval. Refresh evidence and repeat readiness checks after each fix.
@@ -101,6 +103,7 @@ Use this readiness shape:
 - changed scope vs approved plan:
 - implementation, review, manual QA, UI/UX parity, test, and blocker evidence:
 - PR pipeline CI status and fixes:
+- provider mergeability and approval policy:
 - PR comments and review threads:
 - unresolved findings, assumptions, and follow-ups:
 - ticket state:
