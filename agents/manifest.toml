@@ -41,6 +41,7 @@ description = "Read-only reviewer of component boundaries, cohesion of things th
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
@@ -58,12 +59,13 @@ description = "Read-only reviewer of function, class and module readability: sin
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
-model_reasoning_effort = "medium"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
 [agent.claude]
-model = "sonnet"
-effort = "medium"
+model = "opus"
+effort = "high"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
 color = "green"
@@ -75,11 +77,12 @@ description = "Read-only reviewer of performance, load behavior and long-term re
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
 [agent.claude]
-model = "sonnet"
+model = "opus"
 effort = "high"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
@@ -93,11 +96,12 @@ groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 preload_skills = ["semantic-design-tokens", "reusable-ui-components"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 
 [agent.claude]
-model = "sonnet"
+model = "opus"
 effort = "medium"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
@@ -110,6 +114,7 @@ description = "Read-only security reviewer for code diffs with plausible trust-b
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
