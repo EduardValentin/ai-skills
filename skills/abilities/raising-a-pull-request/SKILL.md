@@ -2,7 +2,7 @@
 name: raising-a-pull-request
 description: Use when opening a pull request, deciding whether a pull request is ready for review or merge, executing an explicitly approved merge, or responding to a CI failure before or after merge.
 compatibility: >-
-  Requires source-control and CI read access through connectors, a CLI, or an API, and an approved write identity for an explicitly requested merge. Missing read access makes readiness unverified rather than assumed; missing write access blocks the merge.
+  Requires source-control and CI read access through connectors, a CLI, or an API, plus an approved write identity for an explicitly requested merge. When read access is unavailable, readiness is unverified rather than assumed; without write access the merge is blocked. No fallback substitutes recollection for a live read.
 metadata:
   status: experimental
   allows_tool_references: "true"
