@@ -133,6 +133,7 @@ groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow",
 preload_skills = ["qa-verification"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
@@ -149,6 +150,7 @@ groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow",
 preload_skills = ["visual-validation"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
@@ -165,6 +167,7 @@ groups = ["ticket-workflow", "multi-ticket-workflow", "prototype-backed-workflow
 preload_skills = ["visual-parity-verification"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 
