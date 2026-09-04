@@ -45,7 +45,7 @@ model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
 [agent.claude]
-model = "sonnet"
+model = "inherit"
 effort = "high"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
@@ -114,7 +114,7 @@ model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
 [agent.claude]
-model = "sonnet"
+model = "inherit"
 effort = "high"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
