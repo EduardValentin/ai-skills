@@ -66,5 +66,5 @@ Return this compact Markdown QA report. Include every section even when empty or
 - Do not declare CLEAN without exercising every acceptance criterion that can be exercised.
 - Do not substitute unit tests, static inspection, screenshots, mocks, or simulations for live behavior.
 - Do not write fixes.
-- Do not perform code review, security review, or visual/accessibility review except as out-of-scope flags.
+- Do not perform code review, security review, or visual/accessibility review; flag such observations for the relevant reviewer or for visual-verifier.
 - Do not hide setup blockers; report what is missing.

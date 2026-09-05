@@ -33,8 +33,7 @@ Cover, in priority order:
 # Security report — <task title>
 
 ## Verdict
-- [ ] CLEAN — no findings
-- [ ] CHANGES REQUIRED — at least one finding
+- <CLEAN | CHANGES REQUIRED>
 
 ## Findings
 - **S1** | severity: <critical / high / medium / low> | `path:line` or `path:start-end` | <category> | <description, concrete remediation, references to OWASP / CWE if relevant>
@@ -43,7 +42,7 @@ Cover, in priority order:
 - `package@version` | known vulnerabilities (CVEs / advisory IDs) | <recommendation>
 
 ## Out-of-scope flags
-- **O1** | `path:line` or `path:start-end` | <suspected non-security issue> | flagged for: <Reviewer / QA / UI/UX>
+- **O1** | `path:line` or `path:start-end` | <suspected non-security issue> | flagged for: <acceptance-criteria-reviewer / architecture-reviewer / code-cleanliness-reviewer / performance-reviewer / design-system-reviewer / qa-verifier / visual-verifier>
 
 ## Patterns to codify next time
 - <one-line declarative rule candidate> | rationale: <one sentence>

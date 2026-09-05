@@ -18,9 +18,9 @@ tools = ["Read", "Glob", "Grep", "Bash"]
 color = "cyan"
 
 [[agent]]
-id = "code-reviewer"
-source = "code-reviewer.md"
-description = "Read-only implementation reviewer for finished diffs, focused on spec compliance, maintainability, scalability, performance, and code quality."
+id = "acceptance-criteria-reviewer"
+source = "acceptance-criteria-reviewer.md"
+description = "Read-only reviewer that checks an implementation covers every acceptance criterion and approved-plan item faithfully, drops nothing silently, and builds nothing beyond the approved scope."
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
@@ -35,17 +35,91 @@ tools = ["Read", "Glob", "Grep", "Bash"]
 color = "blue"
 
 [[agent]]
+id = "architecture-reviewer"
+source = "architecture-reviewer.md"
+description = "Read-only reviewer of component boundaries, cohesion of things that change together, discoverable structure, and dependency direction from stable to volatile components."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+
+[agent.codex]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "inherit"
+effort = "high"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "cyan"
+
+[[agent]]
+id = "code-cleanliness-reviewer"
+source = "code-cleanliness-reviewer.md"
+description = "Read-only reviewer of function, class and module readability: single responsibility, at most three parameters, no boolean parameters, inverted conditionals over nesting, and domain-revealing names."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+
+[agent.codex]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "opus"
+effort = "high"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "green"
+
+[[agent]]
+id = "performance-reviewer"
+source = "performance-reviewer.md"
+description = "Read-only reviewer of performance, load behavior and long-term reliability judged against the supplied expected-demand profile, flagging both under-provisioning and over-engineering."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+
+[agent.codex]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "opus"
+effort = "high"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "yellow"
+
+[[agent]]
+id = "design-system-reviewer"
+source = "design-system-reviewer.md"
+description = "Read-only reviewer of design-system growth: ad hoc styling that belongs in the system, tokens added on every design-system source, synonym tokens, and reusable primitive drift."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+preload_skills = ["semantic-design-tokens", "reusable-ui-components"]
+
+[agent.codex]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "opus"
+effort = "medium"
+permissionMode = "plan"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "magenta"
+
+[[agent]]
 id = "security-reviewer"
 source = "security-reviewer.md"
 description = "Read-only security reviewer for code diffs with plausible trust-boundary, input-handling, dependency, auth, data exposure, or privilege risk."
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
 [agent.claude]
-model = "sonnet"
+model = "inherit"
 effort = "high"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
@@ -59,6 +133,7 @@ groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow",
 preload_skills = ["qa-verification"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
@@ -68,19 +143,37 @@ effort = "medium"
 color = "green"
 
 [[agent]]
-id = "uiux-verifier"
-source = "uiux-verifier.md"
-description = "Visual and accessibility verifier for frontend changes that need DOM-backed layout, style, responsive, parity, or WCAG checks."
+id = "visual-verifier"
+source = "visual-verifier.md"
+description = "Rendered-output and accessibility verifier for frontend changes that need DOM-backed layout, responsive, focus, contrast and motion checks without a comparison basis."
 groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "visual-validation"]
 preload_skills = ["visual-validation"]
 
 [agent.codex]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
 [agent.claude]
 model = "sonnet"
 effort = "medium"
+color = "purple"
+
+[[agent]]
+id = "parity-verifier"
+source = "parity-verifier.md"
+description = "Parity tester for prototype-backed applications that verifies changed production surfaces match the prototype exactly from browser computed style and geometry, writing verdicts into the session's parity ledger."
+groups = ["ticket-workflow", "multi-ticket-workflow", "prototype-backed-workflow", "visual-parity-verification"]
+preload_skills = ["visual-parity-verification"]
+
+[agent.codex]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+
+[agent.claude]
+model = "sonnet"
+effort = "high"
 color = "purple"
 
 [[agent]]

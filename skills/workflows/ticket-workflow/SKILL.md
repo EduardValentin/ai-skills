@@ -2,7 +2,7 @@
 name: ticket-workflow
 description: Use when coordinating one standalone implementation ticket from intake or resuming at an evidenced approved-requirements, implementation-transition, or PR-readiness checkpoint.
 compatibility: >-
-  Full operation requires repository, ticket-tracker, PR, and CI access plus the `ticket-requirements-gathering` and `implementation-workflow` skills. If requirements gathering is unavailable, return an explicit upstream handoff. If implementation is unavailable, implement inline only with explicit fallback authorization or return a concrete handoff. Missing tracker, PR, CI, or evidence access blocks only the affected transition or readiness claim.
+  Requires repository, tracker, PR, and CI access plus the `ticket-requirements-gathering`, `implementation-workflow`, and `raising-a-pull-request` skills, and `prototype-backed-workflow` for visual tickets in prototype-backed repositories. If requirements gathering is unavailable, return an upstream handoff. If implementation is unavailable, implement inline only with explicit fallback authorization. Missing tracker, PR, CI, or evidence access blocks only the affected transition or claim.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -16,11 +16,11 @@ metadata:
 
 Coordinate one standalone ticket through requirements intake, implementation transition, and final PR readiness. `ticket-requirements-gathering` owns Setup through Plan approval; invoke it from intake and consume its approved handoff. Detailed implementation, review, QA, UI verification, and fix-loop mechanics belong to the `implementation-workflow` skill.
 
-Do not use this workflow for a related batch of tickets. If a fresh approved requirements handoff and execution mode are already established, the ticket is already In Progress, and the request is only to execute, review, verify, and open a PR, invoke `implementation-workflow` directly.
+Do not use this workflow for a related batch of tickets. If a fresh approved requirements handoff and execution mode are already established, the ticket is already In Progress, and the request is only to execute, review, verify, and open a PR, invoke `implementation-workflow` directly. This shortcut is not available for a ticket marked prototype-backed.
 
 Mandatory lifecycle:
 
-Setup -> Brainstorm -> Spec/design approval -> Plan approval -> Implementation -> PR readiness
+Setup -> Brainstorm -> Spec/design approval -> Plan approval -> Implementation -> Parity step (prototype-backed tickets) -> PR readiness
 
 Approval is artifact-specific. A user can approve only an artifact they have seen. Agreement with decisions, assumptions, recommendations, investigation progress, or "good to go" does not approve an unwritten spec/design or implementation plan.
 
@@ -28,11 +28,24 @@ Approval is artifact-specific. A user can approve only an artifact they have see
 
 When a chat session starts with this skill, name that session after the ticket: use the user story id and title, for example `ABC-123 Add password reset`. If the session started before the ticket was identified, set the title as soon as intake resolves the id and title. If the session title cannot be set, say so and continue.
 
+## Prototype-Backed Projects
+
+Decide once, at intake, and record the decision in the requirements handoff:
+if the repository contains a reference prototype app and the ticket implies a
+user-visible UI change, load `prototype-backed-workflow` and keep it active
+for the ticket. Otherwise do not load it. No later phase re-evaluates this
+decision; a ticket whose scope changes to include UI returns to intake.
+
+When it is active, `prototype-backed-workflow` wraps implementation: its
+prototype-first rules apply before implementation dispatch, and its parity
+step runs after `implementation-workflow` returns complete and before PR
+readiness. PR readiness treats the parity ledger as the UI/UX parity evidence.
+
 ## Resume Rules
 
 Resume after the longest contiguous sequence of fresh checkpoints established by reliable conversation context, supplied records, or accessible ticket and PR evidence:
 
-- The requirements checkpoint requires one fresh, internally consistent handoff containing ticket and parent context, a Brainstorm completion record, the written spec/design and its explicit approval evidence, the written implementation plan and its explicit approval evidence, accepted assumptions and open questions, and risks and required verification surfaces.
+- The requirements checkpoint requires one fresh, internally consistent handoff containing ticket and parent context, the prototype-backed decision, a Brainstorm completion record, the written spec/design and its explicit approval evidence, the written implementation plan and its explicit approval evidence, accepted assumptions and open questions, and risks and required verification surfaces.
 - The execution-mode checkpoint separately requires that handoff and evidence of the selected or approved mode.
 - The execution-authorization checkpoint separately requires the valid handoff, selected mode, and an explicit instruction to execute the approved plan in that mode.
 - The ticket-transition checkpoint separately requires execution authorization and the completed transition result, including evidence when tracker mutation was excluded.
@@ -53,7 +66,7 @@ A change to scope, behavior, design, or acceptance criteria invalidates the spec
 1. After plan approval, recommend inline, delegated, or hybrid execution based on size, coupling, risk, separability, and implementation context.
 2. Ask the user to select or approve the execution mode before dispatch or edits.
 3. Treat an explicit instruction to execute the approved plan in the selected mode as authorization to move only the associated ticket to the process-appropriate In Progress state. Mode approval alone is not execution authorization. Announce and complete that transition before code or test edits; ask separately if the user or tracker policy excluded tracker mutation.
-4. Invoke `implementation-workflow` with the approved spec/design and approval evidence, approved plan and approval evidence, accepted assumptions and open questions, execution mode, explicit execution authorization, ticket context, Brainstorm record, refreshed repository and ticket state, ticket-transition outcome, and required verification surfaces.
+4. Invoke `implementation-workflow` with the approved spec/design and approval evidence, approved plan and approval evidence, accepted assumptions and open questions, execution mode, explicit execution authorization, ticket context, Brainstorm record, refreshed repository and ticket state, ticket-transition outcome, the expected-demand profile (stage, expected users, load and data volumes, reliability expectations), taken from repository instructions or ticket context and confirmed with the user when neither states it, and required verification surfaces.
 5. If that skill is unavailable, implement inline only when the user explicitly authorizes the fallback and execution mode. Otherwise return a concrete handoff or access blocker without inventing collaborator results.
 
 Keep implementation within the approved artifacts. A change to scope, behavior, design, or acceptance criteria invalidates the spec/design and plan approvals; a plan-only change invalidates plan approval. Return to the earliest affected checkpoint in `ticket-requirements-gathering`. An execution-mode change returns only to mode approval here.
@@ -73,7 +86,9 @@ Check:
 - unresolved findings, blockers, assumptions, and follow-ups are explicit
 - ticket state is appropriate for the user's process
 
-Manual QA evidence applies to user-observable behavior or acceptance flows. UI/UX parity evidence applies to visual changes with an approved design or prototype. Review evidence applies when the repository or implementation process requires review. Blocker evidence applies whenever a required surface could not be exercised.
+Apply the `raising-a-pull-request` rules to every readiness claim, merge, and post-merge check; they are hard rules, not guidance.
+
+Manual QA evidence applies to user-observable behavior or acceptance flows. UI/UX parity evidence applies to visual changes in a prototype-backed repository and consists of the session's parity ledger with every row at MATCH plus the final parity report; a ledger with any other row state is a blocker. Review evidence applies when the repository or implementation process requires review. Blocker evidence applies whenever a required surface could not be exercised.
 
 Route CI or review fixes back through `implementation-workflow` under the approved scope and execution mode. Use the explicitly authorized inline fallback only when that skill is unavailable. If a fix changes scope, behavior, design, or acceptance criteria, invalidate the spec/design and plan approvals and return to `ticket-requirements-gathering`; if it changes only the plan, invalidate plan approval and return there. If it changes execution mode, return only to local mode approval. Refresh evidence and repeat readiness checks after each fix.
 
@@ -88,6 +103,7 @@ Use this readiness shape:
 - changed scope vs approved plan:
 - implementation, review, manual QA, UI/UX parity, test, and blocker evidence:
 - PR pipeline CI status and fixes:
+- provider mergeability and approval policy:
 - PR comments and review threads:
 - unresolved findings, assumptions, and follow-ups:
 - ticket state:

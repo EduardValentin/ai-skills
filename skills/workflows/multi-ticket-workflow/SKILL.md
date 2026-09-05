@@ -2,7 +2,7 @@
 name: multi-ticket-workflow
 description: Use when coordinating the implementation and delivery of two or more related tickets or Epic children that share dependencies, implementation sequencing, or PR handoffs. Do not use for exploratory work only.
 compatibility: >-
-  Intended operation uses native code-mapper and implementation-coordinator agents. If either is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
+  Intended operation uses native code-mapper and implementation-coordinator agents, the `raising-a-pull-request` skill for every ticket PR, and the `prototype-backed-workflow` skill for visual tickets in prototype-backed repositories. If an agent is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -46,6 +46,7 @@ For delegation requests, prefer a native available subagent when one is defined 
 3. Understand the goal, stakeholder implications, acceptance criteria, dependencies, blockers, parent context, and ambiguity for each ticket.
 4. Mark missing details as unknowns or blockers instead of smoothing them over.
 5. Treat every named unit as an in-scope candidate. If exact identifiers or details are missing, list the candidate units, mark what is unknown, and confirm the scope before execution.
+6. For each ticket, decide once whether it is prototype-backed visual work: the repository contains a reference prototype app and the ticket implies a user-visible UI change. Record the decision in the orchestration note. Tickets marked prototype-backed carry `prototype-backed-workflow` into their execution packet; the coordinator runs its parity step after implementation completes and before the ticket's PR. No later phase re-evaluates the decision.
 
 ## Inspect current code
 
@@ -96,7 +97,7 @@ When the multi-ticket spec/design, per-ticket implementation plans, and coordina
 For approved scopes, respond in this order:
 
 1. Orchestration state: inventory, approvals, dependencies, assignments, PR or handoff state, blockers, packet lifecycle, and intended human review order.
-2. One execution packet per unit: delegate `implementation-coordinator`, ticket/parent context, approved spec/design slice, approved ticket plan, approved coordination-plan slice, dependency constraints, affected surfaces or explicit gap, PR/handoff expectations, and completion evidence.
+2. One execution packet per unit: delegate `implementation-coordinator`, ticket/parent context, approved spec/design slice, approved ticket plan, approved coordination-plan slice, expected-demand profile for the unit, dependency constraints, affected surfaces or explicit gap, PR/handoff expectations, and completion evidence.
 3. Dispatch or handoff action.
 
 Each packet should include:
@@ -105,6 +106,8 @@ Each packet should include:
 - approved spec/design slice
 - approved ticket implementation plan
 - approved coordination-plan slice
+- expected-demand profile for the unit
+- prototype-backed decision, and when true, the instruction to load `prototype-backed-workflow` and return the parity ledger as completion evidence
 - dependency constraints and upstream/downstream notes
 - known affected files or surfaces, including mapping evidence or unresolved mapping gaps
 - expected PR or handoff expectations
@@ -145,7 +148,7 @@ The main agent tracks status, resolves blockers, resequences work, updates the o
 
 ## Final Report
 
-Before reporting, re-read the durable orchestration note and reconcile ticket status, PR links, blockers, and dependency order.
+Before reporting, re-read the durable orchestration note and reconcile ticket status, PR links, blockers, and dependency order. Apply the `raising-a-pull-request` rules to every ticket's PR before it enters the handoff report; a PR with a red check, unconfirmed mergeability, or unread approval policy is listed as blocked, not ready.
 
 Return:
 
