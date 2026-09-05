@@ -121,8 +121,10 @@ Runs once the inner implementation workflow has returned
 1. Bring the ledger current: every element added or modified in the unit has
    a row per meaningful state; every design change has a row with both
    updated columns reading yes. Confirm the component map pairings.
-2. Start both apps. Record the viewport set from the project's breakpoints,
-   with one width just below and one just above each, plus 320 and 1920.
+2. Start both apps. Record the viewport set from the project's responsive
+   configuration: one width just below and one just above each breakpoint,
+   plus the narrowest and widest widths the project supports. Use the parity
+   skill's defaults only when the project defines no breakpoints.
 3. Dispatch `parity-verifier` with the ledger and map paths, both app URLs,
    the viewport set, the theme, and the diff. It writes a verdict and
    evidence into every row and returns its report.
