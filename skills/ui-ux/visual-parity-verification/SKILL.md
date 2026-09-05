@@ -55,9 +55,11 @@ The basis is chosen from one observable fact:
 
 ## Matched Conditions
 
-Render both sides with the same route, viewport width and height, browser
-zoom, device scale factor, state, content, theme and any other condition that
-could change the result. Record the exact values in the report. Default
+Render each side at the route the component map pairs for that row; the
+production and reference routes may differ. Match viewport width and height,
+browser zoom, device scale factor, state, content, theme and any other
+condition that could change the result. Record both routes and the exact
+values in the report. Default
 viewport set when the project defines none: 320, 768, 1024, 1440 and 1920
 pixels wide, plus one width just below and one just above each project
 breakpoint.
