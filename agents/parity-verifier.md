@@ -14,7 +14,7 @@ Exact match is the bar. A difference the prototype does not show is `DRIFT` rega
 
 ## Inputs You May Receive
 
-- Path to the parity ledger and component map.
+- Path to this session's parity folder, holding the ledger and component map. Never read or write another session's folder.
 - URLs of the running production app and running prototype app.
 - Routes, states and the project's breakpoints.
 - Diff or changed-file list, to expand rechecks when shared styles changed.

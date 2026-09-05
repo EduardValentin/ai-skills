@@ -45,7 +45,8 @@ Do not load this workflow for work that touches no user-visible surface.
   every prototype-backed application and is the last gate before the PR.
   Screenshots, unit tests, type checks and code inspection do not substitute.
 - Parity artifacts are session records. They live in the project's gitignored
-  parity folder and are never committed or copied into design documentation.
+  parity root, one folder per session, and are never committed or copied into
+  design documentation.
 
 ## Preparation
 
@@ -86,11 +87,17 @@ and validates the app.
 
 ## Parity Artifacts
 
-The parity folder is `.parity/` at the project root unless the project's
+The parity root is `.parity/` at the project root unless the project's
 agent instructions name another path. Confirm it is gitignored before writing
-into it; if it is not, add it to the ignore file as part of the session. It
-holds two files, created from the templates under `assets/` and rebuilt each
-session for the surfaces the session touches:
+into it; if it is not, add it to the ignore file as part of the session.
+
+Each session owns one folder under that root, named after the ticket id when
+one exists (for example `GEN-123`) or, for ad hoc work, a short kebab-case
+name the agent chooses that describes the change. Never write into another
+session's folder and never reuse one; a leftover folder from an earlier
+session is not evidence for this one. The folder holds two files, created
+from the templates under `assets/` and built for the surfaces this session
+touches:
 
 - `component-map.md`: one row per production component, section or page
   touched, paired with its prototype counterpart, routes, states and pairing
@@ -150,7 +157,9 @@ verification belongs to the inner implementation workflow.
 - Raising or preparing a PR while any ledger row is `PENDING`, `DRIFT`,
   `MISSING` or `BLOCKED`.
 - Treating screenshots or a passing test suite as parity evidence.
-- Committing anything under the parity folder or copying its state into
+- Writing into, reusing, or reading verdicts from another session's parity
+  folder.
+- Committing anything under the parity root or copying its state into
   design documentation.
 - Rebuilding the ledger from memory at the end instead of maintaining it
   during the work.
