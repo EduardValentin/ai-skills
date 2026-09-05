@@ -2,7 +2,7 @@
 name: raising-a-pull-request
 description: Use when opening a pull request, deciding whether a pull request is ready for review or merge, executing an explicitly approved merge, or responding to a CI failure before or after merge.
 compatibility: >-
-  Requires source-control and CI read access through connectors, a CLI, or an API, plus an approved write identity for an explicitly requested merge. When read access is unavailable, readiness is unverified rather than assumed; without write access the merge is blocked. No fallback substitutes recollection for a live read.
+  Requires source-control and CI read access through connectors, a CLI, or an API, an approved write identity for an explicitly requested merge, and the `pr-reviewer-summary` and `writing-in-owner-voice` skills for the description. When read access is unavailable, readiness is unverified rather than assumed; without write access the merge is blocked; without either description skill, return the description as a draft for the owner to rewrite.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -18,6 +18,9 @@ rules; this skill does not own ticket state, review, QA, or PR copy.
 
 ## Rules
 
+- Write the PR description with the `pr-reviewer-summary` skill, in the
+  owner's voice per `writing-in-owner-voice`. A description written any other
+  way is not ready for review.
 - Read PR, CI, mergeability, review, and ticket state from the provider before
   asking the user to transcribe any of it. Prefer the live read over a prior
   report or the user's recollection.
