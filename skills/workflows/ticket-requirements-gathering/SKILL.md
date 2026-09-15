@@ -2,7 +2,7 @@
 name: ticket-requirements-gathering
 description: Use when gathering, clarifying, documenting, and approving requirements and an implementation plan for one standalone implementation ticket.
 compatibility: >-
-  Full operation requires ticket-tracker and repository access. Read-only discovery agents are optional; inspect inline when unavailable. `ticket-workflow` may consume the approved handoff. Stop only when missing access could materially change scope, behavior, acceptance criteria, or the plan.
+  Full operation requires ticket-tracker and repository access, and the `architecture-coordinator` agent when the user selects architecture plan review; if that review is selected and the agent is unavailable, plan approval is blocked and the handoff names the missing collaborator. Read-only discovery agents are optional. `ticket-workflow` may consume the approved handoff. Stop only when missing access could materially change scope, behavior, acceptance criteria, or the plan.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -70,6 +70,17 @@ unavailable.
    and verification surfaces. Inspect additional areas only when their
    findings could materially change scope, behavior, acceptance criteria,
    dependencies, risks, or verification.
+6. Ask the user once which reviewers this ticket runs, covering both the plan
+   gate and the implementation review gate, and record the answer as the
+   reviewer selection. Present the list with these defaults: selected,
+   `acceptance-criteria-reviewer` and `code-cleanliness-reviewer`; selected
+   when the repository keeps a design system and the ticket touches UI,
+   `design-system-reviewer`; not selected, `security-reviewer`,
+   `performance-reviewer`, architecture plan review, and architecture change
+   review (both run by `architecture-coordinator`). The user may change any
+   default. The selection travels in the handoff and is reused for reruns and
+   remediation rounds; it is asked again only when the user asks to change
+   it.
 
 If missing access or contradictory evidence could materially change scope,
 behavior, acceptance criteria, or the plan, stop at Setup and return the
@@ -97,8 +108,27 @@ questions. Obtain explicit approval of that artifact before planning.
 ## Plan Approval
 
 Write an implementation plan grounded in the approved spec/design, ticket
-context, relevant repository evidence, and verification surfaces. Present it
-and obtain separate explicit approval. Do not edit product code or tests.
+context, relevant repository evidence, and verification surfaces. Do not edit
+product code or tests.
+
+When the reviewer selection includes architecture plan review, dispatch the
+`architecture-coordinator` agent in plan-review mode before presenting the
+plan, with the written plan, the approved spec/design, the ticket context, and
+repository instructions. It returns a verdict, findings by rule, the direction,
+and a deltas file for the implementer. A `SHOULD_CHANGE` verdict blocks
+approval: revise the plan for every blocker and major finding and re-dispatch,
+or present the finding to the user, who may explicitly accept it with a reason
+that the coordinator records. When the coordinator reports that no committed
+architecture baseline existed and it created one, the handoff states that the
+baseline must be committed with the ticket's PR. When the selection excludes
+plan review, record `architecture plan review: not selected` in the handoff
+and present the plan without it.
+
+Present the plan, together with the plan-review return when one exists, and
+obtain separate explicit approval of the plan.
+
+Architecture plan review judges structure only. Behavior, scope, and
+acceptance criteria remain the user's approval.
 
 ## Approved Handoff
 
@@ -110,6 +140,11 @@ After plan approval, return:
 - Brainstorm completion record;
 - written spec/design and its explicit approval evidence;
 - written implementation plan and its separate approval evidence;
+- the reviewer selection for both gates;
+- architecture plan-review evidence when selected: verdict, ledger path,
+  deltas path, findings the user explicitly accepted with reasons, and whether
+  a baseline was created that must be committed with the PR; otherwise
+  `architecture plan review: not selected`;
 - accepted assumptions, remaining open questions, and material risks;
 - required verification surfaces.
 

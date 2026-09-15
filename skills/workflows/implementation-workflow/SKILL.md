@@ -43,6 +43,8 @@ Require:
   worktree state
 - known dependencies, sequencing constraints, risks, and expected verification
   surfaces
+- the **reviewer selection** for the review gate, recorded at ticket intake;
+  when absent, the review gate asks the user once with its defaults
 - an **expected-demand profile**: product stage, expected users, request and
   data volumes, growth expectations, and reliability expectations. Fill it
   from repository instructions or ticket context. If neither states it, ask
@@ -123,27 +125,33 @@ One round is one fan-out against a frozen diff. Reviewers are read-only and
 return findings; the main agent decides and fixes.
 
 1. Freeze the diff or working tree to review.
-2. Dispatch in parallel, each with the task, acceptance criteria, approved
-   plan, non-goals, the frozen diff, the scope map, repository instructions,
-   and the expected-demand profile:
-   `acceptance-criteria-reviewer`, `architecture-reviewer`,
-   `code-cleanliness-reviewer`, `security-reviewer`, `performance-reviewer`.
-   Add `design-system-reviewer` when the diff touches styles, tokens or UI
-   primitives in any design-system source the repository keeps.
+2. Dispatch the reviewers named in the packet's reviewer selection in
+   parallel, each with the task, acceptance criteria, approved plan,
+   non-goals, the frozen diff, the scope map, repository instructions, and the
+   expected-demand profile. The full set is `acceptance-criteria-reviewer`,
+   `code-cleanliness-reviewer`, `security-reviewer`, `performance-reviewer`,
+   `design-system-reviewer`, and `architecture-coordinator` in change-review
+   mode over the frozen diff. When the packet carries no selection, ask the
+   user once with these defaults: `acceptance-criteria-reviewer` and
+   `code-cleanliness-reviewer` selected; `design-system-reviewer` selected
+   when the diff touches styles, tokens, or UI primitives in a design-system
+   source the repository keeps; the others not selected. Record the answer
+   and reuse it for every round of this gate.
 3. Aggregate all findings. Deduplicate findings that name the same location
    and defect, keeping the highest severity and every reviewer's suggested
    fix. Security severities map as critical and high to blocker, medium to
    major, low to minor. Resolve conflicting suggestions against the approved
-   plan, repository instructions, and the demand profile; resolve architecture
-   findings first, because their fixes move code and can void other findings.
+   plan, repository instructions, and the demand profile; when architecture
+   review ran, resolve its findings first, because their fixes move code and
+   can void other findings.
    Record every rejected finding with its reason; a finding is rejected only
    when it is technically wrong, outside the approved scope, or overridden by
    repository instructions.
 4. Address every accepted blocker and major finding. Add or update a
    meaningful failing test first when the issue is automatable. Rerun focused
    and affected regression checks.
-5. Any fix invalidates every prior approval. Re-dispatch all reviewers from
-   step 2 on the revised frozen diff.
+5. Any fix invalidates every prior approval. Re-dispatch the same selected
+   reviewers on the revised frozen diff.
 6. The gate passes when every reviewer returns `CLEAN` in the same round. A
    unanimous CLEAN round ends the gate; minor findings from that round are
    recorded with dispositions in the implementation report and do not trigger

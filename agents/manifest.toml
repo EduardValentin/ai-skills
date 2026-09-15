@@ -1,10 +1,10 @@
 version = 1
 
 [[agent]]
-id = "code-mapper"
-source = "code-mapper.md"
-description = "Read-only codebase mapper for implementation, review, or planning tasks that need precise file and symbol locators before decisions or edits."
-groups = ["ticket-workflow", "code-mapper"]
+id = "architecture-code-auditor"
+source = "architecture-code-auditor.md"
+description = "Read-only mapping specialist that returns architecture inventory rows for one slice of a codebase: units, dependency edges, ports, entry points, and change history. Dispatched by the architecture-coordinator; also usable as the read-only code mapping pass for planning."
+groups = ["ticket-workflow", "multi-ticket-workflow", "inspect-architecture-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "medium"
@@ -35,18 +35,35 @@ tools = ["Read", "Glob", "Grep", "Bash"]
 color = "blue"
 
 [[agent]]
-id = "architecture-reviewer"
-source = "architecture-reviewer.md"
-description = "Read-only reviewer of component boundaries, cohesion of things that change together, discoverable structure, and dependency direction from stable to volatile components."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+id = "architecture-coordinator"
+source = "architecture-coordinator.md"
+description = "Architect agent that runs the inspect-architecture-workflow skill: audits a codebase, reviews a diff, or reviews an implementation plan before approval by dispatching mapping and evaluation subagents, merging their rows, and writing the committed architecture record and the uncommitted refactoring ledger."
+groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "inspect-architecture-workflow"]
+preload_skills = ["inspect-architecture-workflow"]
 
 [agent.codex]
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
-sandbox_mode = "read-only"
+sandbox_mode = "workspace-write"
 
 [agent.claude]
 model = "inherit"
+effort = "high"
+tools = ["Read", "Glob", "Grep", "Bash", "Write", "Edit", "Agent"]
+color = "cyan"
+
+[[agent]]
+id = "architecture-evaluator"
+source = "architecture-evaluator.md"
+description = "Read-only specialist that runs one architecture evaluation workflow over a merged inventory and returns assessment rows with base severities. Dispatched by the architecture-coordinator, one instance per workflow."
+groups = ["inspect-architecture-workflow"]
+
+[agent.codex]
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+[agent.claude]
+model = "sonnet"
 effort = "high"
 permissionMode = "plan"
 tools = ["Read", "Glob", "Grep", "Bash"]
