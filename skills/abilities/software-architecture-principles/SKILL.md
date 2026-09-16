@@ -3,16 +3,12 @@ name: software-architecture-principles
 description: >-
   Use whenever code is written, changed, planned, or reviewed, at any size, to
   hold the structural invariants that decide how expensive the next change will
-  be. Also use when unsure whether a shortcut in module layout, dependency
-  direction, shared helpers, or a framework choice is acceptable.
+  be.
 compatibility: >-
-  Standalone. When a mapped, evidenced assessment is needed, the
-  `inspect-architecture-workflow` skill turns these invariants into an
-  inventory, findings, and a verdict; when it is not installed, apply the
-  invariants directly and say which one a decision rests on.
+  Standalone.
 metadata:
   status: experimental
-  allows_tool_references: "true"
+  allows_tool_references: "false"
 ---
 
 # Software Architecture Principles

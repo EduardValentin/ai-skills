@@ -19,7 +19,10 @@ Header: date <date>, commit <hash>, scope <scope>.
 
 ## Accepted findings
 
-| Ledger finding | Rule | Reason accepted | Accepted by | Date |
+Keyed by the target's path and symbol and the rule, never by a ledger ID; ledger IDs are
+transitory and must not appear in any committed file.
+
+| Target (path and symbol, or edge as from -> to) | Rule | Reason accepted | Accepted by | Date |
 |---|---|---|---|---|
 
 ## Open questions

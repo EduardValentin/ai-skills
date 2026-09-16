@@ -114,11 +114,15 @@ product code or tests.
 When the reviewer selection includes architecture plan review, dispatch the
 `architecture-coordinator` agent in plan-review mode before presenting the
 plan, with the written plan, the approved spec/design, the ticket context, and
-repository instructions. It returns a verdict, findings by rule, the direction,
-and a deltas file for the implementer. A `SHOULD_CHANGE` verdict blocks
-approval: revise the plan for every blocker and major finding and re-dispatch,
-or present the finding to the user, who may explicitly accept it with a reason
-that the coordinator records. When the coordinator reports that no committed
+repository instructions. The plan need not use architecture vocabulary: the
+coordinator reads it for concrete file, import, and test facts and derives the
+rest from the committed architecture record. It returns a verdict, findings by
+rule phrased in the plan's own terms, clarification requests where the plan is
+not concrete enough, and the direction. A
+`SHOULD_CHANGE` verdict or an open clarification blocks approval: answer the
+clarifications, revise the plan for every blocker and major finding, and
+re-dispatch, or present a finding to the user, who may explicitly accept it
+with a reason that the coordinator records. When the coordinator reports that no committed
 architecture baseline existed and it created one, the handoff states that the
 baseline must be committed with the ticket's PR. When the selection excludes
 plan review, record `architecture plan review: not selected` in the handoff
@@ -142,7 +146,7 @@ After plan approval, return:
 - written implementation plan and its separate approval evidence;
 - the reviewer selection for both gates;
 - architecture plan-review evidence when selected: verdict, ledger path,
-  deltas path, findings the user explicitly accepted with reasons, and whether
+  findings the user explicitly accepted with reasons, and whether
   a baseline was created that must be committed with the PR; otherwise
   `architecture plan review: not selected`;
 - accepted assumptions, remaining open questions, and material risks;

@@ -1,7 +1,7 @@
 # Mapping the architecture
 
 How a mapping slice fills inventory rows, and how the coordinator merges them into the committed
-record (`docs/architecture/`) or into `deltas.md`. Work from the code, not from documentation;
+record (`docs/architecture/`), or holds them as candidate record updates. Work from the code, not from documentation;
 documentation is recorded as the intended structure and compared with the mapped graph in W8.
 A mapping slice covers one component or top-level folder and returns rows; it never writes files.
 
@@ -128,6 +128,6 @@ workflows run without volatility evidence.
 Audit re-run: re-derive components, units, and edges for the scope; mark units and edges no longer
 present as `removed` with the commit; add new ones with new IDs; refresh metrics and change
 history; leave every other row untouched. Change review: map only units the diff touches, their
-direct dependents and dependencies, and every edge the diff adds, removes, or redirects; write the
-resulting row additions, removals, and alterations to `deltas.md` for the implementer, and mark the
-header `partial`. Plan review: the same, from proposed rows (see `plan-review.md`).
+direct dependents and dependencies, and every edge the diff adds, removes, or redirects; hold the
+resulting row additions, removals, and alterations as candidate record updates, written to the
+record only where no open finding disputes them, and mark the header `partial`. Plan review: the same, from proposed rows (see `plan-review.md`).
