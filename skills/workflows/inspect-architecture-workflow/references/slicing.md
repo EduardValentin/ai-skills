@@ -89,15 +89,20 @@ returns `checked` counts per rule so `OK` coverage is visible.
 
 1. **Units and edges.** Key units by path and symbol; key edges by from, to, and kind. Reuse the
    baseline ID when the key matches; assign the next free ID otherwise; mark baseline rows with
-   no match as `removed` (audit) or leave them and record the removal in `deltas.md` (change and
-   plan review).
+   no match as `removed` (audit) or hold the removal as a candidate record update (change
+   review) or leave the baseline untouched (plan review).
 2. **Cross-slice edges.** An edge returned with a path target is resolved to the unit ID from the
    slice that owns that path; an unresolved target becomes an open question, never a silent drop.
 3. **Components and metrics.** The coordinator decides component boundaries from the slices'
    published-surface and enforcement observations, then computes metrics from the merged edges.
 4. **Findings.** Key by target and rule. Drop duplicates, keeping the row with the fuller
-   evidence. Match to the previous ledger by key to keep IDs; a previous `SHOULD_CHANGE` with no
-   current match on a target still present becomes `RESOLVED`.
+   evidence. Match to the previous ledger by key to keep IDs. For each previous `SHOULD_CHANGE`
+   row: if this run evaluated the same target under the same rule and found it compliant, set
+   `RESOLVED` with this run's commit; if it found the violation again, keep the row and its ID,
+   updating run and evidence; if the target no longer exists in the code, set `RESOLVED` with a
+   note that the target was removed; if this run did not evaluate that target (outside the diff,
+   or its workflow was skipped), carry the row forward unchanged. Not being evaluated never
+   counts as being fixed.
 5. **Changes.** Cluster `SHOULD_CHANGE` rows whose `change` descriptions name the same move
    (same port, same split, same extraction) into one `CH-<letter>`; write the description once.
 6. **Severity.** Apply the escalation rules from the skill body after merging, so escalation sees

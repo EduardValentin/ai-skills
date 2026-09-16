@@ -83,7 +83,7 @@ When the reviewer selection includes architecture plan review, dispatch the `arc
 
 Then produce a coordination plan that decides the execution shape for each ticket or unit: inline, delegated, hybrid, parallel when independent, sequential when dependency-bound, staged when shared groundwork is needed, and consolidated when splitting would create coordination waste.
 
-Present the per-ticket implementation plans, their plan-review returns when plan review was selected, and the coordination plan as one approval package unless the user already approved the ticket plans separately. Record approval for every ticket plan and for the coordination plan; approval of the package covers both. Carry each ticket's deltas path into its execution packet so the implementer updates the committed architecture record in the same PR.
+Present the per-ticket implementation plans, their plan-review returns when plan review was selected, and the coordination plan as one approval package unless the user already approved the ticket plans separately. Record approval for every ticket plan and for the coordination plan; approval of the package covers both. When architecture change review is selected, each ticket's PR carries the record edits the coordinator makes at the review gate.
 
 Do not dispatch implementation work or edit before the multi-ticket spec/design and the plan package are approved. The read-only mapping pass above is the sole exception.
 
