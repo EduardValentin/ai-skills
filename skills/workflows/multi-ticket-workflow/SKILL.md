@@ -2,7 +2,7 @@
 name: multi-ticket-workflow
 description: Use when coordinating the implementation and delivery of two or more related tickets or Epic children that share dependencies, implementation sequencing, or PR handoffs. Do not use for exploratory work only.
 compatibility: >-
-  Intended operation uses native code-mapper and implementation-coordinator agents, the `raising-a-pull-request` skill for every ticket PR, and the `prototype-backed-workflow` skill for visual tickets in prototype-backed repositories. If an agent is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
+  Intended operation uses native architecture-code-auditor, architecture-coordinator, and implementation-coordinator agents, the `raising-a-pull-request` skill for every ticket PR, and the `prototype-backed-workflow` skill for visual tickets in prototype-backed repositories. If an agent is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -46,11 +46,12 @@ For delegation requests, prefer a native available subagent when one is defined 
 3. Understand the goal, stakeholder implications, acceptance criteria, dependencies, blockers, parent context, and ambiguity for each ticket.
 4. Mark missing details as unknowns or blockers instead of smoothing them over.
 5. Treat every named unit as an in-scope candidate. If exact identifiers or details are missing, list the candidate units, mark what is unknown, and confirm the scope before execution.
-6. For each ticket, decide once whether it is prototype-backed visual work: the repository contains a reference prototype app and the ticket implies a user-visible UI change. Record the decision in the orchestration note. Tickets marked prototype-backed carry `prototype-backed-workflow` into their execution packet; the coordinator runs its parity step after implementation completes and before the ticket's PR. No later phase re-evaluates the decision.
+6. Ask the user once, for the whole scope, which reviewers the tickets run at the plan gate and the implementation review gate, and record the reviewer selection in the orchestration note. Defaults: selected, `acceptance-criteria-reviewer` and `code-cleanliness-reviewer`; selected when the repository keeps a design system and a ticket touches UI, `design-system-reviewer`; not selected, `security-reviewer`, `performance-reviewer`, architecture plan review, and architecture change review (both run by `architecture-coordinator`). The user may change any default and may name per-ticket exceptions. Every execution packet carries the selection.
+7. For each ticket, decide once whether it is prototype-backed visual work: the repository contains a reference prototype app and the ticket implies a user-visible UI change. Record the decision in the orchestration note. Tickets marked prototype-backed carry `prototype-backed-workflow` into their execution packet; the coordinator runs its parity step after implementation completes and before the ticket's PR. No later phase re-evaluates the decision.
 
 ## Inspect current code
 
-Before brainstorming, dispatch one read-only code mapping pass per affected ticket to the native `code-mapper` agent. This mapping is a planning action and is not gated by spec/design or coordination-plan approval. It is the only pre-approval delegation permitted and does not authorize edits or implementation dispatch. Do not postpone this scoping until after brainstorming or approval.
+Before brainstorming, dispatch one read-only code mapping pass per affected ticket to the native `architecture-code-auditor` agent. This mapping is a planning action and is not gated by spec/design or coordination-plan approval. It is the only pre-approval delegation permitted and does not authorize edits or implementation dispatch. Do not postpone this scoping until after brainstorming or approval.
 
 Ask each mapper to return affected files/surfaces, entry points, shared contracts, dependencies, analogous implementations, tests, risks, and verification surfaces with locators.
 
@@ -78,13 +79,15 @@ Produce a concise multi-ticket spec/design that names each in-scope ticket and m
 
 After spec/design approval, write an implementation plan for each in-scope ticket from the approved multi-ticket spec/design, gathered context, dependency map, and full-scope brainstorming discussion.
 
+When the reviewer selection includes architecture plan review, dispatch the `architecture-coordinator` agent in plan-review mode once per ticket plan before presenting any plan, in parallel, each with that plan, the approved multi-ticket spec/design, the ticket context, and repository instructions. A `SHOULD_CHANGE` verdict on a plan blocks its approval: revise the plan for every blocker and major finding and re-dispatch, or present the finding to the user for explicit acceptance with a reason. Reviews that name the same structural groundwork across tickets (a shared port, a split, a boundary to enforce) become a staged unit in the coordination plan below. When a review reports that it created the committed architecture baseline, the first PR in sequence commits it.
+
 Then produce a coordination plan that decides the execution shape for each ticket or unit: inline, delegated, hybrid, parallel when independent, sequential when dependency-bound, staged when shared groundwork is needed, and consolidated when splitting would create coordination waste.
 
-Present the per-ticket implementation plans and coordination plan as one approval package unless the user already approved the ticket plans separately. Record approval for every ticket plan and for the coordination plan; approval of the package covers both.
+Present the per-ticket implementation plans, their plan-review returns when plan review was selected, and the coordination plan as one approval package unless the user already approved the ticket plans separately. Record approval for every ticket plan and for the coordination plan; approval of the package covers both. When architecture change review is selected, each ticket's PR carries the record edits the coordinator makes at the review gate.
 
 Do not dispatch implementation work or edit before the multi-ticket spec/design and the plan package are approved. The read-only mapping pass above is the sole exception.
 
-When the user asks to work, proceed from, or get started on an unapproved multi-ticket scope, state the gates explicitly before any implementation delegation or editing: cross-ticket brainstorming, approved multi-ticket spec/design, one approved implementation plan per in-scope ticket, and an approved coordination plan with an execution-shape decision for each ticket or unit. Every gate summary must name all four preconditions.
+When the user asks to work, proceed from, or get started on an unapproved multi-ticket scope, state the gates explicitly before any implementation delegation or editing: cross-ticket brainstorming, approved multi-ticket spec/design, one approved implementation plan per in-scope ticket (architecture-reviewed when that review is selected), and an approved coordination plan with an execution-shape decision for each ticket or unit. Every gate summary must name all four preconditions.
 
 ## Execution Packets
 
@@ -107,6 +110,7 @@ Each packet should include:
 - approved ticket implementation plan
 - approved coordination-plan slice
 - expected-demand profile for the unit
+- the reviewer selection for the implementation review gate, with any per-ticket exception
 - prototype-backed decision, and when true, the instruction to load `prototype-backed-workflow` and return the parity ledger as completion evidence
 - dependency constraints and upstream/downstream notes
 - known affected files or surfaces, including mapping evidence or unresolved mapping gaps

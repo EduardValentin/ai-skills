@@ -42,7 +42,7 @@ Cover, in priority order:
 - `package@version` | known vulnerabilities (CVEs / advisory IDs) | <recommendation>
 
 ## Out-of-scope flags
-- **O1** | `path:line` or `path:start-end` | <suspected non-security issue> | flagged for: <acceptance-criteria-reviewer / architecture-reviewer / code-cleanliness-reviewer / performance-reviewer / design-system-reviewer / qa-verifier / visual-verifier>
+- **O1** | `path:line` or `path:start-end` | <suspected non-security issue> | flagged for: <acceptance-criteria-reviewer / architecture-coordinator / code-cleanliness-reviewer / performance-reviewer / design-system-reviewer / qa-verifier / visual-verifier>
 
 ## Patterns to codify next time
 - <one-line declarative rule candidate> | rationale: <one sentence>
