@@ -157,7 +157,7 @@ Reads: Components, Edges (crosses-component), Metrics, Change history.
 Procedure:
 1. Build the component graph; detect cycles.
 2. For every component edge, compare stability (fan-in versus fan-out) at both ends.
-3. For every component, count how many components each recent change touched, and which consumers use how much of it.
+3. For every recent change and the change under review, list the touched components and look up their cohesion groups in `decisions.md`; a component may belong to several groups. Also note which consumers use how much of each component.
 4. Compute D and volatility when metrics exist; compare with the previous run.
 5. Check versioning and adoption across release units.
 
@@ -167,7 +167,9 @@ Procedure:
 | Edge from a more stable component to a less stable one | SHOULD_CHANGE | R31 | major |
 | Heavily depended-on component that is concrete and changed in the recent history | SHOULD_CHANGE | R31, R32 | major |
 | Component with abstract types that have no implementor or no consumer outside | SHOULD_CHANGE | R31, R32 | minor |
-| Recent requirement change touched three or more components | SHOULD_CHANGE | R27 | major |
+| Change touches two or more components and no cohesion groups are recorded in `decisions.md` | SHOULD_CHANGE (one row per run, asking for the groups to be recorded; propose them from change history) | R28 | minor |
+| Change touches a component that shares no recorded cohesion group with the other touched components (the change spreads across groups) | SHOULD_CHANGE | R27 | major |
+| Change touches several components that all belong to one recorded cohesion group, or touches a single component | OK | R27 |  |
 | Consumer imports a component for fewer than a quarter of its exported symbols | SHOULD_CHANGE | R27 | minor |
 | Component D more than one standard deviation from the mean, or D crossed the threshold since the previous run, and the position is harmful in words | SHOULD_CHANGE | R32 | minor |
 | Component whose cohesion position and cost are not stated and whose boundaries have not been revisited while change patterns shifted | SHOULD_CHANGE | R28 | minor |

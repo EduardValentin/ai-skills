@@ -55,7 +55,7 @@ row that an open finding disputes. Plan reviews never write it.
 | `units.md` | Units: component, kind, ring, visibility, actors |
 | `dependencies.md` | Edges, forbidden edges, ports, entry points, composition roots, shared data shapes |
 | `metrics.md` | Per component: fan-in, fan-out, instability, abstractness, distance, volatility, previous distance |
-| `decisions.md` | Deferred decisions and their ports, cohesion position and cost per component, intended exceptions, accepted findings |
+| `decisions.md` | Deferred decisions and their ports, cohesion groups, cohesion position and cost per component, intended exceptions, accepted findings |
 
 **Uncommitted ledger** at `.architecture/` in the inspected project. Confirm
 it is ignored before writing; if not, add it to the repository's local exclude

@@ -487,14 +487,18 @@ change and by co-reuse.** Draw component boundaries where the contents hide behi
 published surface (the symbols other code may import) and, where they are a release unit,
 build, test, version, and release together; two "components" that always release together and share a public surface are one
 component. Classes that change for the same reasons at the same time live in one component
-(single responsibility at component scale), so a requirement change lands in one component; a
-plan names that home component or the boundary defect that prevents it. Classes reused together
+(single responsibility at component scale), so a requirement change lands in one component,
+or in one cohesion group: a recorded set of components that a project has chosen to let change
+together for one kind of reason, such as the domain, UI, and feature packages of a vertically
+sliced repository. A plan names that home component or group, or the boundary defect that
+prevents it. A change that spreads across groups is the finding; a change inside one group,
+however many components, is not. Classes reused together
 live together, and a dependency on a component is a dependency on all of it, so consumers must
 use most of what they import; a class used alone by outsiders belongs with its co-reused
 neighbors. Code for one concept that changes for both policy and persistence reasons may share
 one enforced unit when the persistence part is unit-private; the split into two release units
 waits until change patterns demand it.
-- Check: for the planned change and the last several, how many components did each touch? Does every consumer use most of each component it imports? Can you state in one sentence what each component is for?
+- Check: for the planned change and the last several, do the touched components all belong to one recorded cohesion group in `decisions.md`? Does every consumer use most of each component it imports? Can you state in one sentence what each component is for?
 - Bad: a tax-rule change edits `core`, `api`, and `reporting`; billing imports `cms-kernel` for one string helper; a `common` package holds date helpers, a retry policy, and a `Money` type.
 - Good: tax rules live in `tax-policy`; `slugify` lives in a `text` component.
 
@@ -510,7 +514,10 @@ maintenance grouping and too many components change per requirement; neglect reu
 the component is hard to reuse or version. Early projects lean toward grouping for maintenance,
 because localizing change matters more than reuse; as reuse appears the structure drifts toward
 finer, reuse-driven splits. Revisit boundaries when change and reuse patterns shift, and record
-which cost each component currently accepts in the decisions file.
+which cost each component currently accepts in the decisions file, together with the cohesion
+groups: the sets of components expected to change together, which R27 checks against. Groups
+are proposed by an audit from change history and confirmed by a person; a change that crosses
+them may be accepted once, with its reason recorded, when it is genuinely cross-cutting.
 - Check: which of the three motives is this component neglecting, and is that cost acceptable for the project today? When were its boundaries last reconsidered against current change and reuse patterns?
 - Example: early product: "`orders` grouped broadly so one change lands in one place; we accept unneeded releases." Mature platform: "`orders-reporting` split out so reporting consumers stop receiving core releases."
 
