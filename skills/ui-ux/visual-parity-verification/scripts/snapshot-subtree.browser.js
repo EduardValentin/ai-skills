@@ -113,20 +113,23 @@
   function accessibleName(element, elementRole) {
     if (element.hasAttribute("aria-labelledby")) {
       const labelled = textOfIds(element, "aria-labelledby");
-      if (labelled) return labelled;
+      if (labelled) return { name: labelled, nameFrom: "author" };
     }
     const ariaLabel = element.getAttribute("aria-label");
-    if (ariaLabel && ariaLabel.trim()) return collapseWhitespace(ariaLabel);
+    if (ariaLabel && ariaLabel.trim()) return { name: collapseWhitespace(ariaLabel), nameFrom: "author" };
     if (["input", "select", "textarea"].includes(element.tagName.toLowerCase())) {
       const label = labelText(element);
-      if (label) return label;
+      if (label) return { name: label, nameFrom: "author" };
     }
     const alt = element.getAttribute("alt");
-    if (alt && alt.trim()) return collapseWhitespace(alt);
+    if (alt && alt.trim()) return { name: collapseWhitespace(alt), nameFrom: "author" };
     const title = element.getAttribute("title");
-    if (title && title.trim()) return collapseWhitespace(title);
-    if (NAME_FROM_CONTENT_ROLES.has(elementRole)) return collapseWhitespace(element.textContent);
-    return "";
+    if (title && title.trim()) return { name: collapseWhitespace(title), nameFrom: "author" };
+    if (NAME_FROM_CONTENT_ROLES.has(elementRole)) {
+      const content = collapseWhitespace(element.textContent);
+      return { name: content, nameFrom: content ? "content" : "" };
+    }
+    return { name: "", nameFrom: "" };
   }
 
   function isFocusable(element) {
@@ -154,16 +157,55 @@
     return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]), a: match[4] === undefined ? 1 : Number(match[4]) };
   }
 
+  let canonicalColorContext;
+  let canonicalColorContextResolved = false;
+
+  function canonicalColorCanvasContext() {
+    if (!canonicalColorContextResolved) {
+      canonicalColorContextResolved = true;
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1;
+        canvas.height = 1;
+        canonicalColorContext = canvas.getContext("2d", { willReadFrequently: true, colorSpace: "srgb" }) || null;
+      } catch (error) {
+        canonicalColorContext = null;
+      }
+    }
+    return canonicalColorContext;
+  }
+
+  function canonicalColor(text) {
+    if (!text || text === "transparent" || parseColor(text)) return text;
+    try {
+      const context = canonicalColorCanvasContext();
+      if (!context) return text;
+      context.fillStyle = "transparent";
+      context.fillStyle = text;
+      if (context.fillStyle === "rgba(0, 0, 0, 0)") return text;
+      context.clearRect(0, 0, 1, 1);
+      context.fillRect(0, 0, 1, 1);
+      const data = context.getImageData(0, 0, 1, 1).data;
+      const alpha = Math.round((data[3] / 255) * 1000) / 1000;
+      return `rgba(${data[0]}, ${data[1]}, ${data[2]}, ${alpha})`;
+    } catch (error) {
+      return text;
+    }
+  }
+
   function effectiveBackground(element) {
     let current = element;
     while (current && current.nodeType === Node.ELEMENT_NODE) {
       const style = getComputedStyle(current);
-      const color = parseColor(style.backgroundColor);
+      const raw = style.backgroundColor;
       if (style.backgroundImage && style.backgroundImage !== "none") {
-        return { color: style.backgroundColor, solid: false };
+        return { color: canonicalColor(raw), solid: false };
       }
-      if (color && color.a >= 1) return { color: style.backgroundColor, solid: true };
-      if (color && color.a > 0) return { color: style.backgroundColor, solid: false };
+      const canonical = canonicalColor(raw);
+      const color = parseColor(canonical);
+      if (color && color.a >= 1) return { color: canonical, solid: true };
+      if (color && color.a > 0) return { color: canonical, solid: false };
+      if (!color && raw && raw !== "transparent") return { color: canonical, solid: false };
       current = current.parentElement;
     }
     return { color: "rgb(255, 255, 255)", solid: true };
@@ -199,10 +241,13 @@
   function isWrapper(style, text) {
     const zero = (value) => !value || parseFloat(value) === 0;
     const none = (value) => !value || value === "none";
-    const ownBackground = parseColor(style.backgroundColor);
+    const rawBackground = style.backgroundColor;
+    const ownBackground = parseColor(canonicalColor(rawBackground));
+    const backgroundUnparseable = !ownBackground && rawBackground && rawBackground !== "transparent";
     return text === ""
       && zero(style.borderTopWidth) && zero(style.borderRightWidth) && zero(style.borderBottomWidth) && zero(style.borderLeftWidth)
       && (!ownBackground || ownBackground.a === 0)
+      && !backgroundUnparseable
       && none(style.backgroundImage)
       && none(style.boxShadow)
       && zero(style.paddingTop) && zero(style.paddingRight) && zero(style.paddingBottom) && zero(style.paddingLeft)
@@ -226,9 +271,15 @@
     return style.display === "none" || style.visibility === "hidden";
   }
 
+  const COLOR_STYLE_KEYS = new Set([
+    "color", "backgroundColor",
+    "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor",
+    "outlineColor",
+  ]);
+
   function styleBlock(style, background) {
     const block = {};
-    for (const key of STYLE_KEYS) block[key] = style[key];
+    for (const key of STYLE_KEYS) block[key] = COLOR_STYLE_KEYS.has(key) ? canonicalColor(style[key]) : style[key];
     block.effectiveBackground = background.color;
     return block;
   }
@@ -255,6 +306,7 @@
     const text = ownText(element);
     const elementRole = role(element);
     const background = effectiveBackground(element);
+    const { name, nameFrom } = accessibleName(element, elementRole);
     return {
       path,
       tag: element.tagName.toLowerCase(),
@@ -262,7 +314,8 @@
       ownText: text,
       textDigest: fnv1a(text),
       role: elementRole,
-      name: accessibleName(element, elementRole),
+      name,
+      nameFrom,
       focusable: isFocusable(element),
       tabIndex: element.tabIndex,
       state: ariaState(element),

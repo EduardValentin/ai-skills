@@ -29,6 +29,7 @@ agent saves it unchanged under the session folder as
 | `textDigest` | string | Eight hex characters, FNV-1a of `ownText` |
 | `role` | string | Explicit `role` attribute or implicit role for the tag, empty when none |
 | `name` | string | Accessible name in order: `aria-labelledby`, `aria-label`, associated label, `alt`, `title`, own text when the role allows name from content |
+| `nameFrom` | string | `"author"` when `name` came from `aria-labelledby`, `aria-label`, an associated label, `alt`, or `title`; `"content"` when it came from the node's text content; `""` when there is no name |
 | `focusable` | boolean | Focusable by tag or by non-negative `tabindex` |
 | `tabIndex` | number | `element.tabIndex` |
 | `state` | object | Present ARIA and native state: `aria-expanded`, `aria-selected`, `aria-checked`, `aria-pressed`, `aria-disabled`, `disabled`, `aria-current`, `aria-hidden` |
@@ -52,6 +53,25 @@ All values are computed-style strings.
 - `display`, `flexDirection`, `flexWrap`, `alignItems`, `justifyContent`, `alignContent`, `gridTemplateColumns`, `gridTemplateRows`, `gridAutoFlow`, `rowGap`, `columnGap`, `position`, `overflowX`, `overflowY`, `zIndex`
 - `flexGrow`, `flexShrink`, `flexBasis`, `alignSelf`, `order`, `gridColumnStart`, `gridColumnEnd`, `gridRowStart`, `gridRowEnd`
 - `textOverflow`, `whiteSpace`, `transform`
+
+## Color canonicalization
+
+`color`, `backgroundColor`, the four border colors, `outlineColor`, and
+`effectiveBackground` are canonicalized before they are stored. A value
+`parseColor` can already read (`rgb()`/`rgba()`) is kept as-is. A value it
+cannot read — `oklch()`, `lab()`, `color()`, and similar modern syntax that
+survives unchanged through a computed style read — is painted onto a cached
+1×1 canvas (`{ willReadFrequently: true, colorSpace: "srgb" }`) and read back
+with `getImageData`, producing `rgba(r, g, b, a)` with `a` rounded to three
+decimals. When the browser has no canvas 2D context (for example, jsdom), or
+the value fails a `fillStyle` validity check, the raw string is kept
+unchanged. A background that is non-empty, not `transparent`, and still
+unparseable after this step makes `effectiveBackground` return
+`{ solid: false }` for that node instead of walking past it to an ancestor,
+and makes `wrapper` false for that node's own background. Readbacks of
+semi-transparent colors carry premultiplication rounding of up to a few units
+per channel; this is acceptable because both sides of a comparison
+canonicalize the same way in the same browser.
 
 ## Inclusion rules
 

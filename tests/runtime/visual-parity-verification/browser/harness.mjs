@@ -58,6 +58,11 @@ checks.relativeGeometryFromRoot = byPath.get("section > h2:nth-of-type(1)")?.geo
 checks.wrapperFlagOnPlainDiv = byPath.get("section > div:nth-of-type(1)")?.wrapper === true;
 checks.styleHasEveryKey = Object.keys(byPath.get("section > h2:nth-of-type(1)").style).length === 68;
 
+checks.buttonNameFromContent = byPath.get("section > button:nth-of-type(1)")?.nameFrom === "content";
+checks.imgNameFromAuthor = byPath.get("section > img:nth-of-type(1)")?.nameFrom === "author";
+checks.wrapperNameFromEmpty = byPath.get("section > div:nth-of-type(1)")?.nameFrom === "";
+checks.unparseableBackgroundIsNotWrapper = byPath.get("section > div:nth-of-type(3)")?.wrapper === false;
+
 checks.rootNotFound = window.paritySnapshot("Missing").error === "root-not-found";
 checks.rootAmbiguous = window.paritySnapshot("Duplicate").error === "root-ambiguous" && window.paritySnapshot("Duplicate").count === 2;
 checks.cssSelectorAlsoWorks = window.paritySnapshot("#app > section:nth-of-type(1)").rootSelector === "#app > section:nth-of-type(1)";
