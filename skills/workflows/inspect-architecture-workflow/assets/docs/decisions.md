@@ -7,6 +7,16 @@ Header: date <date>, commit <hash>, scope <scope>.
 | Decision | Waits behind port | Current implementation | What would force it |
 |---|---|---|---|
 
+## Cohesion groups
+
+Sets of components expected to change together for one kind of reason. A change whose touched
+components all sit in one group is expected; one that spreads across groups is a finding unless
+accepted below. A component may belong to more than one group. Proposed by an audit from change
+history; confirmed by a person.
+
+| Group | Components | Kind of change it absorbs |
+|---|---|---|
+
 ## Cohesion position per component
 
 | Component | Position (grouped for maintenance / for reuse / split for releases) | Accepted cost |
