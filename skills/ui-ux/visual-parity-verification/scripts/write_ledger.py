@@ -92,15 +92,23 @@ def finding_texts(result: dict[str, Any]) -> list[str]:
     return texts
 
 
+def finding_counts(result: dict[str, Any]) -> str:
+    counts = [f"{k}={len(v)}" for k, v in result["findings"].items() if k in ("style", "geometry", "missing")]
+    accessibility = len(result["findings"].get("accessibility", []))
+    if accessibility:
+        counts.append(f"accessibility={accessibility}")
+    return " ".join(counts)
+
+
 def evidence_for(results: list[tuple[Path, dict[str, Any]]], ledger_dir: Path) -> str:
     parts: list[str] = []
     for path, result in results:
-        counts = " ".join(f"{k}={len(v)}" for k, v in result["findings"].items() if k in ("style", "geometry", "missing"))
         summary = f"{viewport_label(result)}: {result['verdict']}"
         if result["blocked"]:
             summary += f" {result['blocked']['reason']}"
-        if result["verdict"] != "MATCH":
-            summary += f" {counts}"
+        accessibility = len(result["findings"].get("accessibility", []))
+        if result["verdict"] != "MATCH" or accessibility:
+            summary += f" {finding_counts(result)}"
         listed = finding_texts(result)[:MAX_LISTED_FINDINGS]
         parts.append("; ".join([summary, *listed, os.path.relpath(path, ledger_dir)]))
     return " // ".join(escape_cell(part) for part in parts)

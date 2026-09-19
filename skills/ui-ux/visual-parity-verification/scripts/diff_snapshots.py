@@ -303,7 +303,7 @@ def is_invisible_edge_color(key: str, proto_style: dict[str, Any], real_style: d
     return parse_px(proto_style.get(width_key)) == 0 and parse_px(real_style.get(width_key)) == 0
 
 
-def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geometry: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geometry: tuple[str, ...] = (), *, skip_name: bool = False) -> list[dict[str, Any]]:
     proto, real = pair["prototype"], pair["real"]
     findings: list[dict[str, Any]] = []
 
@@ -311,6 +311,8 @@ def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geome
         findings.append({"category": category, "path": proto["path"], "realPath": real["path"], "property": key, "prototype": a, "real": b})
 
     for key in SEMANTIC_KEYS:
+        if key == "name" and skip_name:
+            continue
         if proto.get(key) != real.get(key):
             record("style", key, proto.get(key), real.get(key))
     for key in sorted(set(proto["style"]) | set(real["style"])):
@@ -334,7 +336,7 @@ INTERACTIVE_ROLES = frozenset({"button", "link", "checkbox", "radio", "switch", 
 
 
 def content_exclusions(pair: dict[str, Any], following: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
-    exclusions: dict[str, tuple[str, ...]] = {pair["prototype"]["path"]: ("width", "height")}
+    exclusions: dict[str, tuple[str, ...]] = {pair["prototype"]["path"]: ("x", "y", "width", "height")}
     for sibling in following:
         exclusions[sibling["path"]] = ("x", "y")
     return exclusions
@@ -364,7 +366,9 @@ def collect_findings(alignment: dict[str, Any], collapsed: dict[str, list[dict[s
                 exclusions[path] = tuple(sorted(set(exclusions.get(path, ())) | set(keys)))
 
     for pair in alignment["pairs"]:
-        for finding in compare_pair(pair, tolerances, exclusions.get(pair["prototype"]["path"], ())):
+        proto, real = pair["prototype"], pair["real"]
+        skip_name = proto.get("nameFrom") == "content" and real.get("nameFrom") == "content"
+        for finding in compare_pair(pair, tolerances, exclusions.get(proto["path"], ()), skip_name=skip_name):
             findings[finding["category"]].append(finding)
         if pair["matchedBy"] == "moved":
             findings["structure"].append({"kind": "moved", "prototype": pair["prototype"]["path"], "real": pair["real"]["path"]})
@@ -383,9 +387,8 @@ def collect_findings(alignment: dict[str, Any], collapsed: dict[str, list[dict[s
     return findings
 
 
-def accessibility_findings(alignment: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def accessibility_findings(alignment: dict[str, Any]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
-    unmeasurable: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     nodes_by_side = {"prototype": [], "real": []}
     for pair in alignment["pairs"]:
@@ -408,12 +411,12 @@ def accessibility_findings(alignment: dict[str, Any]) -> tuple[list[dict[str, An
             if contrast is None or not node["ownText"]:
                 continue
             if contrast["needsAnalyzer"] or contrast["ratio"] is None:
-                unmeasurable.append({"side": side, "path": node["path"]})
+                findings.append({"side": side, "path": node["path"], "check": "contrast-unmeasurable"})
                 continue
             threshold = CONTRAST_LARGE if contrast["largeText"] else CONTRAST_NORMAL
             if contrast["ratio"] < threshold:
                 findings.append({"side": side, "path": node["path"], "check": "contrast", "ratio": contrast["ratio"], "threshold": threshold})
-    return findings, unmeasurable
+    return findings
 
 
 def verdict_for(findings: dict[str, list[dict[str, Any]]]) -> str:
@@ -617,7 +620,14 @@ def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dic
     alignment = align_trees(proto_root, real_root, pairings, context)
 
     result["pairs"] = [
-        {"prototype": p["prototype"]["path"], "real": p["real"]["path"], "matchedBy": p["matchedBy"], "score": p["score"], "signals": p["signals"]}
+        {
+            "prototype": p["prototype"]["path"],
+            "real": p["real"]["path"],
+            "matchedBy": p["matchedBy"],
+            "score": p["score"],
+            "signals": p["signals"],
+            "needsReview": p["matchedBy"] == "score" and p["signals"]["roleName"] == 0 and p["signals"]["text"] == 0,
+        }
         for p in alignment["pairs"]
     ]
     result["suggestions"] = alignment["suggestions"]
@@ -625,11 +635,7 @@ def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dic
     result["lowestScore"] = min(scores) if scores else None
 
     result["findings"] = collect_findings(alignment, result["collapsed"], effective_tolerances)
-    result["findings"]["accessibility"], unmeasurable = accessibility_findings(alignment)
-    if unmeasurable:
-        result["verdict"] = "BLOCKED"
-        result["blocked"] = {"reason": "unmeasurable-contrast", "detail": unmeasurable}
-        return result
+    result["findings"]["accessibility"] = accessibility_findings(alignment)
     result["verdict"] = verdict_for(result["findings"])
     return result
 

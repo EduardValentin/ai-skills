@@ -31,6 +31,14 @@ class FindingTests(unittest.TestCase):
         self.assertEqual(result["findings"]["content"][0]["prototype"], "Total: $10")
         self.assertEqual(result["verdict"], "DRIFT")
 
+    def test_content_mismatch_excludes_own_position(self) -> None:
+        result = compare(
+            [support.node("p", hook="total", own_text="Total: $10", x=0, y=0)],
+            [support.node("p", hook="total", own_text="Total: $1,240.50", x=48, y=12)],
+        )
+        self.assertEqual(result["findings"]["geometry"], [])
+        self.assertEqual(result["verdict"], "MATCH")
+
     def test_content_mismatch_excludes_following_sibling_offsets(self) -> None:
         result = compare(
             [support.node("span", role="cell", own_text="Short", x=0, width=40), support.node("span", role="cell", own_text="Next", x=48, width=40)],
@@ -95,12 +103,49 @@ class FindingTests(unittest.TestCase):
         result = compare([support.node("h1", own_text="Big", contrast=large)], [support.node("h1", own_text="Big", contrast=large)])
         self.assertEqual(result["findings"]["accessibility"], [])
 
-    def test_unmeasurable_contrast_blocks(self) -> None:
+    def test_unmeasurable_contrast_is_an_accessibility_finding_not_blocked(self) -> None:
         unmeasurable = {"ratio": None, "needsAnalyzer": True, "largeText": False}
         result = compare([support.node("p", own_text="On gradient", contrast=unmeasurable)], [support.node("p", own_text="On gradient", contrast=GOOD_CONTRAST)])
-        self.assertEqual(result["verdict"], "BLOCKED")
-        self.assertEqual(result["blocked"]["reason"], "unmeasurable-contrast")
-        self.assertEqual(result["blocked"]["detail"][0]["path"], "section > p:nth-of-type(1)")
+        self.assertEqual(result["verdict"], "MATCH")
+        self.assertIsNone(result["blocked"])
+        accessibility = result["findings"]["accessibility"]
+        self.assertEqual(len(accessibility), 1)
+        self.assertEqual(accessibility[0]["check"], "contrast-unmeasurable")
+        self.assertEqual(accessibility[0]["path"], "section > p:nth-of-type(1)")
+
+    def test_name_from_content_is_not_compared_when_both_sides_derive_from_content(self) -> None:
+        result = compare(
+            [support.node("li", hook="item", role="listitem", name="Item one", name_from="content", own_text="Item one")],
+            [support.node("li", hook="item", role="listitem", name="Item two", name_from="content", own_text="Item two")],
+        )
+        self.assertEqual(result["findings"]["style"], [])
+        self.assertEqual(len(result["findings"]["content"]), 1)
+        self.assertEqual(result["verdict"], "MATCH")
+
+    def test_name_is_compared_when_either_side_is_authored(self) -> None:
+        result = compare(
+            [support.node("li", hook="item", role="listitem", name="Item one", name_from="content", own_text="Item one")],
+            [support.node("li", hook="item", role="listitem", name="Item two", name_from="author", own_text="Item two")],
+        )
+        self.assertEqual([f["property"] for f in result["findings"]["style"]], ["name"])
+
+    def test_needs_review_flag(self) -> None:
+        result = compare(
+            [
+                support.node("h2", role="heading", name="Orders", own_text="Orders"),
+                support.node("div", children=[support.node("span", own_text="Foo")]),
+            ],
+            [
+                support.node("h2", role="heading", name="Orders", own_text="Orders"),
+                support.node("div", children=[support.node("span", own_text="Bar")]),
+            ],
+        )
+        pairs_by_prototype = {p["prototype"]: p for p in result["pairs"]}
+        scored = pairs_by_prototype["section > div:nth-of-type(1)"]
+        self.assertEqual(scored["matchedBy"], "score")
+        self.assertTrue(scored["needsReview"])
+        anchored = pairs_by_prototype["section > h2:nth-of-type(1)"]
+        self.assertFalse(anchored["needsReview"])
 
     def test_interactive_node_without_role_or_name_is_flagged(self) -> None:
         result = compare(

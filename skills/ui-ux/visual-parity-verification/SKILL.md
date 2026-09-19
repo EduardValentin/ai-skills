@@ -130,7 +130,7 @@ scripts/write_ledger.py --ledger <session>/ledger.md --row L1 \
    unchanged under `snapshots/<row-id>/` in the session folder.
 3. Run the diff for each row and viewport into `diffs/`. Read the summary
    line.
-4. Review every pair matched by score below 0.7 and every suggestion in the
+4. Review every pair with `needsReview` true and every suggestion in the
    diff file. Confirm or reject each by writing the pair into
    `pairings.json` under the row id, since a pairing only applies between
    nodes that are children of an already matched pair, then rerun that
@@ -162,13 +162,13 @@ worst across viewports:
 - `DRIFT`: a computed property or relative geometry differs beyond
   tolerance.
 - `MISSING`: an aligned node exists on one side only.
-- `BLOCKED`: conditions differ, roots are incompatible, contrast is
-  unmeasurable, or a required input is unavailable.
+- `BLOCKED`: conditions differ, roots are incompatible, or a required input
+  is unavailable.
 
 Structure and content findings are reported and never change the verdict.
 Accessibility findings are reported even when both sides share them.
-Inconclusive or unavailable accessibility checks are `BLOCKED`, not
-failures. Leave no row `PENDING`.
+Unmeasurable contrast is an accessibility finding, not a row verdict; it
+makes the Global Verdict `BLOCKED`. Leave no row `PENDING`.
 
 ## Global Verdict
 

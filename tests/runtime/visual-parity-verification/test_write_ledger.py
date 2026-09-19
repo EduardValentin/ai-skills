@@ -31,7 +31,7 @@ Theme: light
 """
 
 
-def diff_result(verdict, style=(), missing=(), blocked=None, lowest=None):
+def diff_result(verdict, style=(), missing=(), blocked=None, lowest=None, accessibility=()):
     return {
         "verdict": verdict,
         "conditions": {"viewport": {"width": 1440, "height": 900}, "devicePixelRatio": 1, "zoom": 1, "colorScheme": "light"},
@@ -39,7 +39,7 @@ def diff_result(verdict, style=(), missing=(), blocked=None, lowest=None):
         "rootSummaries": {},
         "blocked": blocked,
         "pairs": [],
-        "findings": {"style": list(style), "geometry": [], "missing": list(missing), "structure": [], "content": [], "accessibility": []},
+        "findings": {"style": list(style), "geometry": [], "missing": list(missing), "structure": [], "content": [], "accessibility": list(accessibility)},
         "collapsed": {"prototype": [], "real": []},
         "suggestions": [],
         "lowestScore": lowest,
@@ -111,6 +111,16 @@ class WriteLedgerTests(unittest.TestCase):
         self.assertIn("| BLOCKED |", l1)
         self.assertIn("unmeasurable-contrast", l1)
         self.assertIn("missing real section > img:nth-of-type(1)", l1)
+
+    def test_accessibility_count_appears_in_evidence(self) -> None:
+        diff = self.write_diff(
+            "L1-1440x900.json",
+            diff_result("MATCH", accessibility=[{"side": "prototype", "path": "section > p:nth-of-type(1)", "check": "contrast-unmeasurable"}]),
+        )
+        completed = support.run_ledger("--ledger", str(self.ledger), "--row", "L1", "--diff", str(diff))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        l1 = self.rows()[0]
+        self.assertIn("accessibility=1", l1)
 
     def test_missing_row_refuses_without_writing(self) -> None:
         diff = self.write_diff("L9-1440x900.json", diff_result("MATCH"))
