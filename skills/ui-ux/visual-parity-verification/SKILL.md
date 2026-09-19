@@ -132,9 +132,10 @@ scripts/write_ledger.py --ledger <session>/ledger.md --row L1 \
    line.
 4. Review every pair matched by score below 0.7 and every suggestion in the
    diff file. Confirm or reject each by writing the pair into
-   `pairings.json` under the row id, then rerun that row's diffs. Add a
-   finer root pair to the component map when a subtree aligns poorly rather
-   than tuning weights.
+   `pairings.json` under the row id, since a pairing only applies between
+   nodes that are children of an already matched pair, then rerun that
+   row's diffs. Add a finer root pair to the component map when a subtree
+   aligns poorly rather than tuning weights.
 5. Write the ledger for each row from its diff files.
 6. At each real app route, look at the rendered page for a visible in-scope
    surface the map omits. Append a gap row for each with the ledger writer,

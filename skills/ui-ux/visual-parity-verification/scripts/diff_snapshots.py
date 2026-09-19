@@ -24,7 +24,6 @@ CONDITION_FIELDS = (
     ("colorScheme", lambda s: s["colorScheme"]),
 )
 ROOT_SIZE_FACTOR = 2.0
-VERDICT_ORDER = ("BLOCKED", "DRIFT", "MISSING", "MATCH")
 
 
 class InputError(Exception):
@@ -48,6 +47,8 @@ def load_optional_json(path: Path | None) -> dict[str, Any]:
         return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
     except OSError as error:
         raise InputError(f"cannot read {path}: {error.strerror}") from error
     except json.JSONDecodeError as error:
@@ -111,6 +112,10 @@ def role_name_key(node: dict[str, Any]) -> str | None:
 
 def text_key(node: dict[str, Any]) -> str | None:
     return node["ownText"] or None
+
+
+def hook_key(node: dict[str, Any]) -> str | None:
+    return node["hook"] or None
 
 
 def unique_keys(nodes: list[dict[str, Any]], key) -> dict[str, dict[str, Any]]:
@@ -279,6 +284,25 @@ def values_equal(key: str, a: Any, b: Any, tolerances: dict[str, Any], font_size
     return a == b
 
 
+EDGE_COLOR_SOURCES = {
+    "borderTopColor": ("borderTopStyle", "borderTopWidth"),
+    "borderRightColor": ("borderRightStyle", "borderRightWidth"),
+    "borderBottomColor": ("borderBottomStyle", "borderBottomWidth"),
+    "borderLeftColor": ("borderLeftStyle", "borderLeftWidth"),
+    "outlineColor": ("outlineStyle", "outlineWidth"),
+}
+
+
+def is_invisible_edge_color(key: str, proto_style: dict[str, Any], real_style: dict[str, Any]) -> bool:
+    sources = EDGE_COLOR_SOURCES.get(key)
+    if sources is None:
+        return False
+    style_key, width_key = sources
+    if proto_style.get(style_key) == "none" and real_style.get(style_key) == "none":
+        return True
+    return parse_px(proto_style.get(width_key)) == 0 and parse_px(real_style.get(width_key)) == 0
+
+
 def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geometry: tuple[str, ...] = ()) -> list[dict[str, Any]]:
     proto, real = pair["prototype"], pair["real"]
     findings: list[dict[str, Any]] = []
@@ -290,6 +314,8 @@ def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geome
         if proto.get(key) != real.get(key):
             record("style", key, proto.get(key), real.get(key))
     for key in sorted(set(proto["style"]) | set(real["style"])):
+        if is_invisible_edge_color(key, proto["style"], real["style"]):
+            continue
         a, b = proto["style"].get(key), real["style"].get(key)
         if not values_equal(key, a, b, tolerances, proto["style"].get("fontSize", ""), real["style"].get("fontSize", "")):
             record("style", key, a, b)
@@ -307,9 +333,9 @@ CONTRAST_LARGE = 3.0
 INTERACTIVE_ROLES = frozenset({"button", "link", "checkbox", "radio", "switch", "tab", "menuitem", "combobox", "textbox", "slider", "option"})
 
 
-def content_exclusions(pair: dict[str, Any], siblings_after: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
+def content_exclusions(pair: dict[str, Any], following: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
     exclusions: dict[str, tuple[str, ...]] = {pair["prototype"]["path"]: ("width", "height")}
-    for sibling in siblings_after:
+    for sibling in following:
         exclusions[sibling["path"]] = ("x", "y")
     return exclusions
 
@@ -466,7 +492,10 @@ def moved_pass(alignment: dict[str, Any]) -> None:
         alignment["pairs"].append(make_pair(proto, real, "moved"))
         alignment["missing"]["prototype"].remove(proto)
         alignment["missing"]["real"].remove(real)
-        alignment["suggestions"] = [s for s in alignment["suggestions"] if s["path"] not in (proto["path"], real["path"])]
+        alignment["suggestions"] = [
+            s for s in alignment["suggestions"]
+            if (s["side"], s["path"]) not in (("prototype", proto["path"]), ("real", real["path"]))
+        ]
 
 
 def anchor_pass(proto_children: list[dict[str, Any]], real_children: list[dict[str, Any]], pairings: dict[str, str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -485,12 +514,7 @@ def anchor_pass(proto_children: list[dict[str, Any]], real_children: list[dict[s
         if target in real_by_path and real_by_path[target] in remaining_real:
             take(proto, real_by_path[target], "pairing")
 
-    real_by_hook = {node["hook"]: node for node in remaining_real if node["hook"]}
-    for proto in list(remaining_proto):
-        if proto["hook"] and proto["hook"] in real_by_hook and real_by_hook[proto["hook"]] in remaining_real:
-            take(proto, real_by_hook[proto["hook"]], "hook")
-
-    for rule, key in (("role-name", role_name_key), ("text", text_key)):
+    for rule, key in (("hook", hook_key), ("role-name", role_name_key), ("text", text_key)):
         proto_unique = unique_keys(remaining_proto, key)
         real_unique = unique_keys(remaining_real, key)
         for value, proto in proto_unique.items():
@@ -631,6 +655,8 @@ def main(argv: list[str]) -> int:
     except InputError as error:
         print(str(error), file=sys.stderr)
         return 2
+    if arguments.pairings and not arguments.row:
+        print("--pairings is ignored without --row", file=sys.stderr)
     row_pairings = all_pairings.get(arguments.row, {}) if arguments.row else {}
     result = compare_snapshots(proto, real, row_pairings, tolerances)
     write_result(arguments.out, result)

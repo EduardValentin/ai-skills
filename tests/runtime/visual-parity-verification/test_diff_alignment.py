@@ -45,6 +45,19 @@ class AnchorAlignmentTests(unittest.TestCase):
         )
         self.assertEqual(by_rule(alignment), [("section > span:nth-of-type(1)", "section > strong:nth-of-type(1)", "hook")])
 
+    def test_duplicate_hook_is_not_an_anchor_and_falls_back_to_text(self) -> None:
+        alignment = align(
+            [support.node("span", hook="price", own_text="$10"), support.node("span", hook="price", own_text="$20")],
+            [support.node("strong", hook="price", own_text="$20"), support.node("strong", hook="price", own_text="$10")],
+        )
+        rules = by_rule(alignment)
+        self.assertFalse(any(rule == "hook" for _, _, rule in rules))
+        self.assertEqual(
+            sorted(rules),
+            [("section > span:nth-of-type(1)", "section > strong:nth-of-type(2)", "text"),
+             ("section > span:nth-of-type(2)", "section > strong:nth-of-type(1)", "text")],
+        )
+
     def test_unique_role_and_name_pairs(self) -> None:
         alignment = align(
             [support.node("h2", role="heading", name="Orders", own_text="Orders"), support.node("button", role="button", name="Save")],

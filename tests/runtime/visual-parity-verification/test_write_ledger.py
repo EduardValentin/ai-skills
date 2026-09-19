@@ -126,6 +126,14 @@ class WriteLedgerTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1)
         self.assertIn("header", completed.stderr)
 
+    def test_non_diff_json_refuses_cleanly(self) -> None:
+        diff = self.write_diff("L1-1440x900.json", {"not": "a diff"})
+        completed = support.run_ledger("--ledger", str(self.ledger), "--row", "L1", "--diff", str(diff))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(str(diff), completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), LEDGER)
+
     def test_missing_ledger_file_refuses_cleanly(self) -> None:
         missing_ledger = self.root / "does-not-exist.md"
         diff = self.write_diff("L1-1440x900.json", diff_result("MATCH"))

@@ -95,6 +95,26 @@ class CompareTests(unittest.TestCase):
         findings = diff_snapshots.compare_pair(pair_of({"x": 10}, {"x": 12}), tolerances)
         self.assertEqual(findings, [])
 
+    def test_border_color_is_skipped_when_border_style_is_none_on_both_sides(self) -> None:
+        findings = diff_snapshots.compare_pair(
+            pair_of(
+                {"style": {"borderTopStyle": "none", "borderTopColor": "rgb(17, 24, 39)"}},
+                {"style": {"borderTopStyle": "none", "borderTopColor": "rgb(0, 0, 0)"}},
+            ),
+            diff_snapshots.DEFAULT_TOLERANCES,
+        )
+        self.assertEqual(findings, [])
+
+    def test_border_color_is_reported_when_border_style_is_solid(self) -> None:
+        findings = diff_snapshots.compare_pair(
+            pair_of(
+                {"style": {"borderTopStyle": "solid", "borderTopWidth": "1px", "borderTopColor": "rgb(17, 24, 39)"}},
+                {"style": {"borderTopStyle": "solid", "borderTopWidth": "1px", "borderTopColor": "rgb(0, 0, 0)"}},
+            ),
+            diff_snapshots.DEFAULT_TOLERANCES,
+        )
+        self.assertEqual(properties(findings), ["borderTopColor"])
+
     def test_semantics_differences_are_style_findings_by_name(self) -> None:
         findings = diff_snapshots.compare_pair(
             pair_of({"role": "button", "focusable": True}, {"role": "", "focusable": False}),

@@ -76,3 +76,7 @@ path to real path:
 
 Pass it with `--pairings pairings.json --row L3`. Pairings are applied before
 any other rule and are final.
+
+Pairings apply between nodes that are children of an already matched pair, so
+two nodes at different depths cannot be paired by the file; add a finer root
+pair to the component map instead.

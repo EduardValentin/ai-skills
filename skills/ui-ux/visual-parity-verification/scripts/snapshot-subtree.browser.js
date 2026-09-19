@@ -25,7 +25,7 @@
   const SKIPPED_TAGS = new Set(["script", "style", "template", "noscript"]);
   const FOCUSABLE_TAGS = new Set(["button", "input", "select", "textarea", "summary", "iframe"]);
   const NAME_FROM_CONTENT_ROLES = new Set([
-    "button", "link", "heading", "cell", "columnheader", "rowheader", "listitem", "menuitem",
+    "button", "link", "heading", "cell", "columnheader", "rowheader", "menuitem",
     "option", "tab", "tooltip", "checkbox", "radio", "switch", "treeitem",
   ]);
   const STATE_ATTRIBUTES = ["aria-expanded", "aria-selected", "aria-checked", "aria-pressed", "aria-disabled", "aria-current", "aria-hidden"];

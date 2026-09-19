@@ -108,9 +108,12 @@ def evidence_for(results: list[tuple[Path, dict[str, Any]]], ledger_dir: Path) -
 
 def load_diff(path: Path) -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise LedgerError(f"cannot read diff {path}: {error}") from error
+    if not isinstance(data, dict) or not {"verdict", "conditions", "findings"} <= data.keys():
+        raise LedgerError(f"{path} is not a diff result: missing verdict, conditions or findings")
+    return data
 
 
 def read_ledger(ledger: Path) -> tuple[list[str], str]:

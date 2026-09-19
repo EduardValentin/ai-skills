@@ -77,3 +77,35 @@ class DiffPreconditionTests(unittest.TestCase):
             completed = support.run_diff("--prototype", f"{temp}/missing.json", "--real", f"{temp}/missing.json", "--out", f"{temp}/out.json")
             self.assertEqual(completed.returncode, 2)
             self.assertIn("missing.json", completed.stderr)
+
+    def test_missing_pairings_file_is_not_an_error(self) -> None:
+        proto = support.snapshot(simple_root())
+        real = support.snapshot(simple_root())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            proto_path = support.write_json(root / "prototype.json", proto)
+            real_path = support.write_json(root / "real.json", real)
+            out = root / "diff.json"
+            completed = support.run_diff(
+                "--prototype", str(proto_path), "--real", str(real_path), "--out", str(out),
+                "--pairings", str(root / "missing-pairings.json"), "--row", "L1",
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = support.read_json(out)
+            self.assertEqual(result["verdict"], "MATCH")
+
+    def test_pairings_without_row_is_ignored_with_a_warning(self) -> None:
+        proto = support.snapshot(simple_root())
+        real = support.snapshot(simple_root())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            proto_path = support.write_json(root / "prototype.json", proto)
+            real_path = support.write_json(root / "real.json", real)
+            out = root / "diff.json"
+            pairings_path = support.write_json(root / "pairings.json", {"L1": {}})
+            completed = support.run_diff(
+                "--prototype", str(proto_path), "--real", str(real_path), "--out", str(out),
+                "--pairings", str(pairings_path),
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("--row", completed.stderr)
