@@ -30,6 +30,14 @@ A blocked run prints `BLOCKED <reason>` before the counts.
 `score`, `moved`. Review every pair with `needsReview` true and every
 suggestion.
 
+The `text` rule, and the `text` signal used when scoring, key on a node's
+text identity rather than only its own text: a node's identity is its own
+text when non-empty, otherwise the whitespace-joined own text of its
+descendants in document order (its subtree text), otherwise empty. A
+container with no own text — a list row built from label and value spans, a
+card built from headings — anchors and scores by that subtree text once it
+is unique on both sides, the same way a node with its own text does.
+
 ## Findings
 
 | Category | Item fields | Verdict input |
@@ -62,8 +70,11 @@ Defaults, overridable with `--tolerances <file.json>`:
 Colors are normalized to `rgba(r, g, b, a)`. Font families compare as ordered
 lowercase lists without quotes. `transform: none` equals the identity matrix.
 When own text differs between a pair, that pair's `x`, `y`, `width` and
-`height` and the `x` and `y` of the prototype node's following siblings are
-excluded from the geometry comparison and the pair is listed under `content`.
+`height` and the `x` and `y` of every sibling of the prototype node —
+preceding and following — are excluded from the geometry comparison and the
+pair is listed under `content`. A sibling's own `width` and `height` stay
+compared, so a sibling that resizes because of the content change is still
+caught.
 The diff skips the `name` comparison when both sides' `nameFrom` is
 `"content"`; that difference is already covered by the `content` category.
 

@@ -110,8 +110,23 @@ def role_name_key(node: dict[str, Any]) -> str | None:
     return None
 
 
+def text_identity(node: dict[str, Any]) -> str:
+    if node["ownText"]:
+        return node["ownText"]
+    parts: list[str] = []
+
+    def visit(children: list[dict[str, Any]]) -> None:
+        for child in children:
+            if child["ownText"]:
+                parts.append(child["ownText"])
+            visit(child["children"])
+
+    visit(node["children"])
+    return " ".join(parts)
+
+
 def text_key(node: dict[str, Any]) -> str | None:
-    return node["ownText"] or None
+    return text_identity(node) or None
 
 
 def hook_key(node: dict[str, Any]) -> str | None:
@@ -141,7 +156,8 @@ def role_name_signal(a: dict[str, Any], b: dict[str, Any]) -> float:
 
 
 def text_signal(a: dict[str, Any], b: dict[str, Any]) -> float:
-    return 1.0 if a["ownText"] and a["ownText"] == b["ownText"] else 0.0
+    identity_a, identity_b = text_identity(a), text_identity(b)
+    return 1.0 if identity_a and identity_a == identity_b else 0.0
 
 
 def signature(node: dict[str, Any]) -> list[str]:
@@ -335,19 +351,17 @@ CONTRAST_LARGE = 3.0
 INTERACTIVE_ROLES = frozenset({"button", "link", "checkbox", "radio", "switch", "tab", "menuitem", "combobox", "textbox", "slider", "option"})
 
 
-def content_exclusions(pair: dict[str, Any], following: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
+def content_exclusions(pair: dict[str, Any], siblings: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
     exclusions: dict[str, tuple[str, ...]] = {pair["prototype"]["path"]: ("x", "y", "width", "height")}
-    for sibling in following:
+    for sibling in siblings:
         exclusions[sibling["path"]] = ("x", "y")
     return exclusions
 
 
-def siblings_after(parent_pair: dict[str, Any] | None, node: dict[str, Any]) -> list[dict[str, Any]]:
+def siblings_of(parent_pair: dict[str, Any] | None, node: dict[str, Any]) -> list[dict[str, Any]]:
     if parent_pair is None:
         return []
-    children = parent_pair["prototype"]["children"]
-    index = children.index(node) if node in children else -1
-    return children[index + 1:] if index >= 0 else []
+    return [child for child in parent_pair["prototype"]["children"] if child is not node]
 
 
 def collect_findings(alignment: dict[str, Any], collapsed: dict[str, list[dict[str, Any]]], tolerances: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -362,7 +376,7 @@ def collect_findings(alignment: dict[str, Any], collapsed: dict[str, list[dict[s
         proto, real = pair["prototype"], pair["real"]
         if proto["ownText"] != real["ownText"]:
             findings["content"].append({"path": proto["path"], "realPath": real["path"], "prototype": proto["ownText"], "real": real["ownText"]})
-            for path, keys in content_exclusions(pair, siblings_after(parent_of.get(proto["path"]), proto)).items():
+            for path, keys in content_exclusions(pair, siblings_of(parent_of.get(proto["path"]), proto)).items():
                 exclusions[path] = tuple(sorted(set(exclusions.get(path, ())) | set(keys)))
 
     for pair in alignment["pairs"]:

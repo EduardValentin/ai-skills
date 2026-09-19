@@ -47,6 +47,19 @@ class FindingTests(unittest.TestCase):
         self.assertEqual(result["findings"]["geometry"], [])
         self.assertEqual(result["verdict"], "MATCH")
 
+    def test_content_mismatch_excludes_preceding_sibling_position(self) -> None:
+        result = compare(
+            [support.node("span", role="cell", own_text="Label", x=0, width=40),
+             support.node("span", role="cell", own_text="Short", x=48, width=40)],
+            [support.node("span", role="cell", own_text="Label", x=20, width=60),
+             support.node("span", role="cell", own_text="Much longer text", x=68, width=120)],
+        )
+        self.assertEqual([f["property"] for f in result["findings"]["geometry"]], ["width"])
+        label_finding = result["findings"]["geometry"][0]
+        self.assertEqual(label_finding["path"], "section > span:nth-of-type(1)")
+        self.assertEqual(label_finding["prototype"], 40)
+        self.assertEqual(label_finding["real"], 60)
+
     def test_missing_node_is_missing_verdict(self) -> None:
         result = compare(
             [support.node("h2", role="heading", name="Orders", own_text="Orders"), support.node("img", role="img", name="Logo")],

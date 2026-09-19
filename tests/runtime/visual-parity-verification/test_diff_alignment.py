@@ -147,6 +147,38 @@ class AnchorAlignmentTests(unittest.TestCase):
         paths = [p["prototype"]["path"] for p in alignment["pairs"]]
         self.assertIn("section > article:nth-of-type(1) > h3:nth-of-type(1)", paths)
 
+    def test_container_without_own_text_anchors_by_subtree_text(self) -> None:
+        def li(label: str, value: str) -> dict:
+            return support.node("li", role="listitem", children=[
+                support.node("span", own_text=label),
+                support.node("span", own_text=value),
+            ])
+
+        alignment = align(
+            [li("Subtotal", "$10"), li("Shipping", "$5"), li("Tax", "$1")],
+            [li("Subtotal", "$10"), li("Tax", "$1")],
+        )
+        missing_paths = [n["path"] for n in alignment["missing"]["prototype"]]
+        self.assertEqual(missing_paths, ["section > li:nth-of-type(2)"])
+        self.assertEqual(alignment["missing"]["real"], [])
+        rules = by_rule(alignment)
+        self.assertIn(("section > li:nth-of-type(1)", "section > li:nth-of-type(1)", "text"), rules)
+        self.assertIn(("section > li:nth-of-type(3)", "section > li:nth-of-type(2)", "text"), rules)
+
+    def test_subtree_text_is_not_an_anchor_when_duplicated(self) -> None:
+        def li(label: str, value: str) -> dict:
+            return support.node("li", role="listitem", children=[
+                support.node("span", own_text=label),
+                support.node("span", own_text=value),
+            ])
+
+        alignment = align(
+            [li("Subtotal", "$10"), li("Subtotal", "$10")],
+            [li("Subtotal", "$10")],
+        )
+        top_level_rules = {rule for proto_path, _, rule in by_rule(alignment) if proto_path.count(">") == 1}
+        self.assertNotIn("text", top_level_rules)
+
     def test_unmatched_nodes_are_missing_on_their_side(self) -> None:
         alignment = align(
             [support.node("h2", role="heading", name="Orders", own_text="Orders"), support.node("img", role="img", name="Logo")],
