@@ -7,14 +7,14 @@ Theme: <theme or light>
 
 ## Elements
 
-One row per user-visible element added or modified in this session, per
-meaningful state. The implementer fills every column except `Verdict` and
-`Evidence`, which the parity verifier writes. A row starts as `PENDING`. The
-session cannot raise a PR while any row is not `MATCH`.
+One row per component map row, per meaningful state. The implementer fills
+every column except `Verdict` and `Evidence`, which the parity verifier
+writes from diff files. A row starts as `PENDING`. The session cannot raise a
+PR while any row is not `MATCH`.
 
-| Id | Map id | Route | State | Production selector | Prototype selector | Change | Verdict | Evidence |
+| Id | Map id | Route | State | Prototype root | Real app root | Change | Verdict | Evidence |
 |---|---|---|---|---|---|---|---|---|
-| L1 | C1 | <route> | <state> | <stable selector> | <stable selector> | <added / modified / design-change> | PENDING | |
+| L1 | C1 | <route> | <state> | <ComponentName> | <selector or data-parity-root value> | <added / modified / design-change / provenance gap> | PENDING | |
 
 ## Design changes
 

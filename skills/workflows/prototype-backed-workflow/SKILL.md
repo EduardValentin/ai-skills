@@ -65,7 +65,11 @@ and validates the app.
 2. Use the selected app as the working directory when installing its
    dependencies or starting its development script.
 
-3. Inspect two or three pages or flow states in the browser and capture
+3. Confirm the prototype development script serves an unminified React build.
+   The parity root finder reads React's development-only fiber references;
+   a production build blocks every parity row.
+
+4. Inspect two or three pages or flow states in the browser and capture
    screenshots. Summarize the visual direction and provide compact product,
    voice, design and app-scope reports: goal, audience, core flows, business
    rules, tone, design philosophy, accessibility priorities, routes, mock
@@ -95,19 +99,25 @@ Each session owns one folder under that root, named after the ticket id when
 one exists (for example `GEN-123`) or, for ad hoc work, a short kebab-case
 name the agent chooses that describes the change. Never write into another
 session's folder and never reuse one; a leftover folder from an earlier
-session is not evidence for this one. The folder holds two files, created
-from the templates under `assets/` and built for the surfaces this session
-touches:
+session is not evidence for this one. The folder holds two files created
+from the templates under `assets/`, plus the `snapshots/`, `diffs/` and
+`pairings.json` entries the verifier writes:
 
-- `component-map.md`: one row per production component, section or page
-  touched, paired with its prototype counterpart, routes, states and pairing
-  confidence. Derive it from the two trees; confirm every pairing that is not
-  an obvious name match.
-- `ledger.md`: one row per user-visible element added or modified, per
-  meaningful state, with stable selectors on both sides, a `Verdict` column
-  the verifier writes, and an `Evidence` column the verifier writes. A second
+- `component-map.md`: one row per root pair touched in this session. A
+  root pair is a prototype React component name and the real app element
+  that renders the same surface, given as a CSS selector or as the value of
+  a `data-parity-root` attribute. Derive it from the two apps; confirm every
+  pairing that is not an obvious name match.
+- `ledger.md`: one row per component map row, per meaningful state, with a
+  `Verdict` column and an `Evidence` column the verifier writes. A second
   table records design changes made in the session and whether both sides
   were updated.
+
+The real app may set `data-parity-root="<ComponentName>"` on a root and
+`data-parity="<short name>"` on elements inside it that the verifier has
+trouble aligning. The prototype may set the same `data-parity` hooks. Both
+attributes are optional and are the only markup the parity scripts read
+beyond native semantics.
 
 The implementer maintains both files as the work progresses: add a ledger row
 when an element is added or modified, and a design-change row when a design
@@ -126,8 +136,9 @@ Runs once the inner implementation workflow has returned
    plus the narrowest and widest widths the project supports. Use the parity
    skill's defaults only when the project defines no breakpoints.
 3. Dispatch `parity-verifier` with the ledger and map paths, both app URLs,
-   the viewport set, the theme, and the diff. It writes a verdict and
-   evidence into every row and returns its report.
+   the component names per route, the viewport set, the theme, and the
+   diff. It resolves roots, snapshots both sides, runs the bundled diff,
+   writes a verdict and evidence into every row and returns its report.
 4. Read the ledger. For every row that is not `MATCH`, the implementer fixes
    the production side, or the prototype side when the design change was
    made there and production is the source of the row's basis. A fix to a
