@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Parity fixture</title></head>
+<body>
+  <div id="app">
+    <section aria-label="Order summary" data-parity-root="OrderSummary" data-test-rect="0,0,640,300">
+      <h2 data-test-rect="16,16,300,28">Order summary</h2>
+      <div class="wrapper" data-test-rect="16,60,608,100">
+        <p data-test-rect="16,60,300,20">Subtotal <span data-parity="subtotal" data-test-rect="200,60,60,20">$10.00</span></p>
+        <p data-test-rect="16,90,300,20">Shipping</p>
+      </div>
+      <button type="button" data-test-rect="16,200,120,40">Place order</button>
+      <div hidden data-test-rect="0,0,0,0">Hidden helper</div>
+      <script>window.fixtureLoaded = true;</script>
+      <img alt="Brand" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" data-test-rect="500,16,40,40">
+      <label>Coupon <input type="text" data-test-rect="16,250,200,32"></label>
+    </section>
+    <section aria-label="Empty" data-parity-root="Duplicate" data-test-rect="0,320,640,40"></section>
+    <section aria-label="Empty two" data-parity-root="Duplicate" data-test-rect="0,380,640,40"></section>
+  </div>
+</body>
+</html>
