@@ -9,6 +9,7 @@ plus a one-line summary on stdout.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
 from pathlib import Path
@@ -78,6 +79,25 @@ def _within_factor(a: float, b: float, factor: float) -> bool:
     return max(a, b) / min(a, b) <= factor
 
 
+def collapse_wrappers(root: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    collapsed: list[dict[str, Any]] = []
+    copied = copy.deepcopy(root)
+
+    def flatten(children: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        kept: list[dict[str, Any]] = []
+        for child in children:
+            if child["wrapper"]:
+                collapsed.append({"path": child["path"], "tag": child["tag"], "childCount": len(child["children"])})
+                kept.extend(flatten(child["children"]))
+            else:
+                child["children"] = flatten(child["children"])
+                kept.append(child)
+        return kept
+
+    copied["children"] = flatten(copied["children"])
+    return copied, collapsed
+
+
 def conditions_of(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "viewport": snapshot["viewport"],
@@ -130,7 +150,10 @@ def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dic
     incompatible = root_incompatibility(proto, real)
     if incompatible:
         return blocked("roots-incompatible", incompatible, proto, real)
-    return base_result(proto, real)
+    result = base_result(proto, real)
+    proto_root, result["collapsed"]["prototype"] = collapse_wrappers(proto["root"])
+    real_root, result["collapsed"]["real"] = collapse_wrappers(real["root"])
+    return result
 
 
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
