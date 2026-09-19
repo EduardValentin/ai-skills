@@ -82,4 +82,6 @@ any other rule and are final.
 Pairings resolve anywhere in the two trees by full path, regardless of depth.
 A paired node is taken out of ordinary alignment along with its position
 among its siblings; the two nodes' children are then aligned like any other
-matched pair's.
+matched pair's. Entries are applied in prototype-path order, and an entry
+whose prototype or real node was already claimed by an earlier entry is
+skipped silently, the same as an unknown path.

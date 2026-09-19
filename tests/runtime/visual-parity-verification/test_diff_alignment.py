@@ -60,6 +60,26 @@ class AnchorAlignmentTests(unittest.TestCase):
         self.assertIn("section > nav:nth-of-type(1)", missing_prototype_paths)
         self.assertEqual(missing_real_paths, [])
 
+    def test_duplicate_real_target_in_pairings_pairs_once_and_skips_the_rest(self) -> None:
+        alignment = align(
+            [support.node("button", role="button", name="Save"), support.node("button", role="button", name="Cancel")],
+            [support.node("button", role="button", name="Save")],
+            pairings={
+                "section > button:nth-of-type(1)": "section > button:nth-of-type(1)",
+                "section > button:nth-of-type(2)": "section > button:nth-of-type(1)",
+            },
+        )
+        pairing_pairs = [p for p in alignment["pairs"] if p["matchedBy"] == "pairing"]
+        self.assertEqual(len(pairing_pairs), 1)
+        self.assertEqual(pairing_pairs[0]["prototype"]["path"], "section > button:nth-of-type(1)")
+        self.assertEqual(pairing_pairs[0]["real"]["path"], "section > button:nth-of-type(1)")
+        # The lower prototype path sorts first and claims the shared real
+        # target; the second entry's real node is already detached, so it is
+        # skipped. With no real node left, the unclaimed "Cancel" button has
+        # nothing to match by any rule and is reported missing.
+        self.assertEqual([n["name"] for n in alignment["missing"]["prototype"]], ["Cancel"])
+        self.assertEqual(alignment["missing"]["real"], [])
+
     def test_pairing_with_unknown_path_is_ignored(self) -> None:
         alignment = align(
             [support.node("button", role="button", name="Save")],

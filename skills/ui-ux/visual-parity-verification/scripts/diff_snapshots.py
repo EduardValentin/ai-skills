@@ -556,7 +556,8 @@ def apply_global_pairings(proto_root: dict[str, Any], real_root: dict[str, Any],
     proto_index = index_by_path(proto_root)
     real_index = index_by_path(real_root)
     pairs: list[dict[str, Any]] = []
-    for proto_path, real_path in pairings.items():
+    for proto_path in sorted(pairings):
+        real_path = pairings[proto_path]
         proto_entry = proto_index.get(proto_path)
         real_entry = real_index.get(real_path)
         if proto_entry is None or real_entry is None:
@@ -564,6 +565,8 @@ def apply_global_pairings(proto_root: dict[str, Any], real_root: dict[str, Any],
         proto_node, proto_parent = proto_entry
         real_node, real_parent = real_entry
         if proto_parent is None or real_parent is None:
+            continue
+        if proto_node not in proto_parent["children"] or real_node not in real_parent["children"]:
             continue
         proto_parent["children"].remove(proto_node)
         real_parent["children"].remove(real_node)
