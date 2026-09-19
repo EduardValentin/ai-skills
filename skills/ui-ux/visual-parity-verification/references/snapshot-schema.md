@@ -71,7 +71,9 @@ unparseable after this step makes `effectiveBackground` return
 and makes `wrapper` false for that node's own background. Readbacks of
 semi-transparent colors carry premultiplication rounding of up to a few units
 per channel; this is acceptable because both sides of a comparison
-canonicalize the same way in the same browser.
+canonicalize the same way in the same browser. `contrast` reads the
+canonical `color` and `effectiveBackground`, so a modern-syntax text color is
+measurable whenever the canvas readback succeeds.
 
 ## Inclusion rules
 

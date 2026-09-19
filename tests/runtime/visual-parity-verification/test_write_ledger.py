@@ -105,11 +105,11 @@ class WriteLedgerTests(unittest.TestCase):
 
     def test_blocked_and_missing_ordering(self) -> None:
         missing = self.write_diff("L1-1440x900.json", diff_result("MISSING", missing=[{"side": "real", "path": "section > img:nth-of-type(1)", "tag": "img", "role": "img", "name": "Logo", "suggestion": None}]))
-        blocked = self.write_diff("L1-375x800.json", diff_result("BLOCKED", blocked={"reason": "unmeasurable-contrast", "detail": [{"side": "real", "path": "section > p:nth-of-type(1)"}]}))
+        blocked = self.write_diff("L1-375x800.json", diff_result("BLOCKED", blocked={"reason": "condition-mismatch", "detail": [{"condition": "viewport.width", "prototype": 1440, "real": 375}]}))
         support.run_ledger("--ledger", str(self.ledger), "--row", "L1", "--diff", str(missing), "--diff", str(blocked))
         l1 = self.rows()[0]
         self.assertIn("| BLOCKED |", l1)
-        self.assertIn("unmeasurable-contrast", l1)
+        self.assertIn("condition-mismatch", l1)
         self.assertIn("missing real section > img:nth-of-type(1)", l1)
 
     def test_accessibility_count_appears_in_evidence(self) -> None:

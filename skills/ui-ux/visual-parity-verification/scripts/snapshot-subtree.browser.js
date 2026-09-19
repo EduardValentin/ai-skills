@@ -225,12 +225,12 @@
     return Math.round(((lighter + 0.05) / (darker + 0.05)) * 100) / 100;
   }
 
-  function contrastOf(style, background, text) {
+  function contrastOf(styleBlock, background, text) {
     if (!text) return null;
-    const foreground = parseColor(style.color);
+    const foreground = parseColor(styleBlock.color);
     const backgroundColor = parseColor(background.color);
-    const size = parseFloat(style.fontSize) || 0;
-    const weight = Number(style.fontWeight) || (style.fontWeight === "bold" ? 700 : 400);
+    const size = parseFloat(styleBlock.fontSize) || 0;
+    const weight = Number(styleBlock.fontWeight) || (styleBlock.fontWeight === "bold" ? 700 : 400);
     const largeText = size >= 24 || (size >= 18.66 && weight >= 700);
     if (!background.solid || !foreground || !backgroundColor || foreground.a < 1) {
       return { ratio: null, needsAnalyzer: true, largeText };
@@ -306,6 +306,7 @@
     const text = ownText(element);
     const elementRole = role(element);
     const background = effectiveBackground(element);
+    const block = styleBlock(style, background);
     const { name, nameFrom } = accessibleName(element, elementRole);
     return {
       path,
@@ -319,12 +320,12 @@
       focusable: isFocusable(element),
       tabIndex: element.tabIndex,
       state: ariaState(element),
-      style: styleBlock(style, background),
+      style: block,
       geometry: {
         relative: relativeRect(rect, rootRect),
         viewport: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
       },
-      contrast: contrastOf(style, background, text),
+      contrast: contrastOf(block, background, text),
       wrapper: isWrapper(style, text),
       children,
     };

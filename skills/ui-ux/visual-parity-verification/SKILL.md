@@ -169,7 +169,7 @@ worst across viewports:
 Structure and content findings are reported and never change the verdict.
 Accessibility findings are reported even when both sides share them.
 Unmeasurable contrast is an accessibility finding, not a row verdict; it
-makes the Global Verdict `BLOCKED`. Leave no row `PENDING`.
+counts as a blocked check in Global Verdict step 2. Leave no row `PENDING`.
 
 ## Global Verdict
 

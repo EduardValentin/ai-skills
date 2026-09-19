@@ -207,7 +207,13 @@ def geometry_signal(a: dict[str, Any], b: dict[str, Any], context: dict[str, Any
 
 
 def fingerprint_signal(a: dict[str, Any], b: dict[str, Any]) -> float:
-    equal = sum(1 for key in FINGERPRINT_KEYS if a["style"].get(key) == b["style"].get(key))
+    equal = 0
+    for key in FINGERPRINT_KEYS:
+        value_a, value_b = a["style"].get(key), b["style"].get(key)
+        if key in COLOR_KEYS:
+            equal += normalize_color(str(value_a)) == normalize_color(str(value_b))
+        else:
+            equal += value_a == value_b
     return equal / len(FINGERPRINT_KEYS)
 
 
@@ -431,6 +437,10 @@ def accessibility_findings(alignment: dict[str, Any]) -> list[dict[str, Any]]:
             if contrast["ratio"] < threshold:
                 findings.append({"side": side, "path": node["path"], "check": "contrast", "ratio": contrast["ratio"], "threshold": threshold})
     return findings
+
+
+def needs_review(pair: dict[str, Any]) -> bool:
+    return pair["matchedBy"] == "score" and pair["signals"]["roleName"] < 1 and pair["signals"]["text"] == 0
 
 
 def verdict_for(findings: dict[str, list[dict[str, Any]]]) -> str:
@@ -673,7 +683,7 @@ def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dic
             "matchedBy": p["matchedBy"],
             "score": p["score"],
             "signals": p["signals"],
-            "needsReview": p["matchedBy"] == "score" and p["signals"]["roleName"] == 0 and p["signals"]["text"] == 0,
+            "needsReview": needs_review(p),
         }
         for p in alignment["pairs"]
     ]

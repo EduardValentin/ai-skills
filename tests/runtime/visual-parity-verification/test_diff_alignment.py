@@ -75,8 +75,7 @@ class AnchorAlignmentTests(unittest.TestCase):
         self.assertEqual(pairing_pairs[0]["real"]["path"], "section > button:nth-of-type(1)")
         # The lower prototype path sorts first and claims the shared real
         # target; the second entry's real node is already detached, so it is
-        # skipped. With no real node left, the unclaimed "Cancel" button has
-        # nothing to match by any rule and is reported missing.
+        # skipped.
         self.assertEqual([n["name"] for n in alignment["missing"]["prototype"]], ["Cancel"])
         self.assertEqual(alignment["missing"]["real"], [])
 
@@ -251,6 +250,15 @@ class FillAlignmentTests(unittest.TestCase):
         self.assertEqual(signals["text"], 0.0)
         self.assertEqual(signals["signature"], 0.5)
         self.assertLess(score, diff_snapshots.THRESHOLD)
+
+    def test_fingerprint_signal_normalizes_color_syntax(self) -> None:
+        proto = support.node("div", own_text="Alpha", style={"color": "rgba(255, 255, 255, 1)"})
+        real = support.node("div", own_text="Beta", style={"color": "rgb(255, 255, 255)"})
+        _, signals = diff_snapshots.score_pair(proto, real, {
+            "prototypeRoot": {"width": 640, "height": 400},
+            "realRoot": {"width": 640, "height": 400},
+        })
+        self.assertEqual(signals["fingerprint"], 1.0)
 
     def test_rejected_leftover_carries_best_suggestion(self) -> None:
         proto_children = [support.node("p", own_text="Shipping estimate", y=0)]

@@ -27,8 +27,10 @@ A blocked run prints `BLOCKED <reason>` before the counts.
 | `lowestScore` | Lowest score among pairs matched by score, or `null` |
 
 `matchedBy` is one of `root`, `pairing`, `hook`, `role-name`, `text`,
-`score`, `moved`. Review every pair with `needsReview` true and every
-suggestion.
+`score`, `moved`. `needsReview` is true for a `score` pair whose `roleName`
+signal is below 1 and whose `text` signal is 0 — matched without a shared
+name and without shared text identity. Review every pair with `needsReview`
+true and every suggestion.
 
 The `text` rule, and the `text` signal used when scoring, key on a node's
 text identity rather than only its own text: a node's identity is its own

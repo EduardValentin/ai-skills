@@ -128,8 +128,8 @@ class FindingTests(unittest.TestCase):
 
     def test_name_from_content_is_not_compared_when_both_sides_derive_from_content(self) -> None:
         result = compare(
-            [support.node("li", hook="item", role="listitem", name="Item one", name_from="content", own_text="Item one")],
-            [support.node("li", hook="item", role="listitem", name="Item two", name_from="content", own_text="Item two")],
+            [support.node("button", hook="item", role="button", name="Item one", name_from="content", own_text="Item one")],
+            [support.node("button", hook="item", role="button", name="Item two", name_from="content", own_text="Item two")],
         )
         self.assertEqual(result["findings"]["style"], [])
         self.assertEqual(len(result["findings"]["content"]), 1)
@@ -146,19 +146,48 @@ class FindingTests(unittest.TestCase):
         result = compare(
             [
                 support.node("h2", role="heading", name="Orders", own_text="Orders"),
-                support.node("div", children=[support.node("span", own_text="Foo")]),
+                support.node("div", hook="group-review", children=[
+                    support.node("article", role="article", name="", y=0, children=[support.node("span", own_text="Foo")]),
+                ]),
+                support.node("div", hook="group-equal", children=[
+                    support.node("article", role="article", name="", children=[support.node("span", own_text="Same")]),
+                    support.node("article", role="article", name="", children=[support.node("span", own_text="Same")]),
+                ]),
             ],
             [
                 support.node("h2", role="heading", name="Orders", own_text="Orders"),
-                support.node("div", children=[support.node("span", own_text="Bar")]),
+                support.node("div", hook="group-review", children=[
+                    support.node("article", role="article", name="", y=4, children=[support.node("span", own_text="Bar")]),
+                ]),
+                support.node("div", hook="group-equal", children=[
+                    support.node("article", role="article", name="", children=[support.node("span", own_text="Same")]),
+                    support.node("article", role="article", name="", children=[support.node("span", own_text="Same")]),
+                ]),
             ],
         )
         pairs_by_prototype = {p["prototype"]: p for p in result["pairs"]}
-        scored = pairs_by_prototype["section > div:nth-of-type(1)"]
-        self.assertEqual(scored["matchedBy"], "score")
-        self.assertTrue(scored["needsReview"])
+
         anchored = pairs_by_prototype["section > h2:nth-of-type(1)"]
+        self.assertEqual(anchored["matchedBy"], "role-name")
         self.assertFalse(anchored["needsReview"])
+
+        review_pair = pairs_by_prototype["section > div:nth-of-type(1) > article:nth-of-type(1)"]
+        self.assertEqual(review_pair["matchedBy"], "score")
+        self.assertEqual(review_pair["signals"]["roleName"], 0.5)
+        self.assertEqual(review_pair["signals"]["text"], 0.0)
+        self.assertTrue(review_pair["needsReview"])
+
+        equal_text_pairs = [
+            pairs_by_prototype[path]
+            for path in (
+                "section > div:nth-of-type(2) > article:nth-of-type(1)",
+                "section > div:nth-of-type(2) > article:nth-of-type(2)",
+            )
+        ]
+        for pair in equal_text_pairs:
+            self.assertEqual(pair["matchedBy"], "score")
+            self.assertEqual(pair["signals"]["text"], 1.0)
+            self.assertFalse(pair["needsReview"])
 
     def test_interactive_node_without_role_or_name_is_flagged(self) -> None:
         result = compare(
