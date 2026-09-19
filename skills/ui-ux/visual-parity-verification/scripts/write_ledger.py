@@ -129,17 +129,53 @@ def write_verdict(ledger: Path, row_id: str, diff_paths: list[Path]) -> None:
     ledger.write_text(newline.join(lines), encoding="utf-8")
 
 
+GAP_FIELDS = ("map_id", "route", "state", "prototype_root", "real_root")
+
+
+def next_row_id(lines: list[str], header: int, end: int) -> str:
+    numbers = []
+    for index in range(header + 2, end):
+        cell = split_row(lines[index])[0]
+        if cell.startswith("L") and cell[1:].isdigit():
+            numbers.append(int(cell[1:]))
+    return f"L{max(numbers, default=0) + 1}"
+
+
+def append_gap(ledger: Path, fields: dict[str, str]) -> str:
+    text = ledger.read_text(encoding="utf-8")
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.split(newline)
+    header, end = find_elements_table(lines)
+    row_id = next_row_id(lines, header, end)
+    cells = [row_id, fields["map_id"], fields["route"], fields["state"], fields["prototype_root"], fields["real_root"], "provenance gap", "PENDING", ""]
+    lines.insert(end, join_row([escape_cell(c) for c in cells]))
+    ledger.write_text(newline.join(lines), encoding="utf-8")
+    return row_id
+
+
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ledger", required=True, type=Path)
     parser.add_argument("--row", help="ledger row id to write")
     parser.add_argument("--diff", action="append", type=Path, default=[], help="diff JSON; repeat per viewport")
+    parser.add_argument("--append-gap", action="store_true", help="append a provenance-gap row instead of writing a verdict")
+    parser.add_argument("--map-id")
+    parser.add_argument("--route")
+    parser.add_argument("--state")
+    parser.add_argument("--prototype-root")
+    parser.add_argument("--real-root")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     arguments = parse_arguments(argv)
     try:
+        if arguments.append_gap:
+            missing = [f"--{name.replace('_', '-')}" for name in GAP_FIELDS if getattr(arguments, name) is None]
+            if missing:
+                raise LedgerError("append mode needs " + ", ".join(missing))
+            print(append_gap(arguments.ledger, {name: getattr(arguments, name) for name in GAP_FIELDS}))
+            return 0
         if not arguments.row or not arguments.diff:
             raise LedgerError("write mode needs --row and at least one --diff")
         write_verdict(arguments.ledger, arguments.row, arguments.diff)

@@ -125,3 +125,41 @@ class WriteLedgerTests(unittest.TestCase):
         completed = support.run_ledger("--ledger", str(self.ledger), "--row", "L1", "--diff", str(diff))
         self.assertEqual(completed.returncode, 1)
         self.assertIn("header", completed.stderr)
+
+
+class AppendGapTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.ledger = Path(self.temp.name) / "ledger.md"
+        self.ledger.write_text(LEDGER, encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_appends_pending_row_with_next_id(self) -> None:
+        completed = support.run_ledger(
+            "--ledger", str(self.ledger), "--append-gap", "--map-id", "C1", "--route", "/orders",
+            "--state", "default", "--prototype-root", "OrderTotals", "--real-root", "#order-totals",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "L3")
+        lines = self.ledger.read_text(encoding="utf-8").splitlines()
+        row = next(line for line in lines if line.startswith("| L3 "))
+        self.assertEqual(row, "| L3 | C1 | /orders | default | OrderTotals | #order-totals | provenance gap | PENDING |  |")
+        index = lines.index(row)
+        self.assertTrue(lines[index - 1].startswith("| L2 "))
+        self.assertEqual(lines[index + 1], "")
+
+    def test_append_changes_nothing_else(self) -> None:
+        support.run_ledger(
+            "--ledger", str(self.ledger), "--append-gap", "--map-id", "C1", "--route", "/orders",
+            "--state", "default", "--prototype-root", "OrderTotals", "--real-root", "#order-totals",
+        )
+        after = self.ledger.read_text(encoding="utf-8").splitlines()
+        before = LEDGER.splitlines()
+        self.assertEqual([l for l in after if not l.startswith("| L3 ")], before)
+
+    def test_append_requires_every_field(self) -> None:
+        completed = support.run_ledger("--ledger", str(self.ledger), "--append-gap", "--map-id", "C1")
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("--route", completed.stderr)
