@@ -113,10 +113,17 @@ def load_diff(path: Path) -> dict[str, Any]:
         raise LedgerError(f"cannot read diff {path}: {error}") from error
 
 
-def write_verdict(ledger: Path, row_id: str, diff_paths: list[Path]) -> None:
-    text = ledger.read_text(encoding="utf-8")
+def read_ledger(ledger: Path) -> tuple[list[str], str]:
+    try:
+        text = ledger.read_text(encoding="utf-8")
+    except OSError as error:
+        raise LedgerError(f"cannot read ledger {ledger}: {error.strerror}") from error
     newline = "\r\n" if "\r\n" in text else "\n"
-    lines = text.split(newline)
+    return text.split(newline), newline
+
+
+def write_verdict(ledger: Path, row_id: str, diff_paths: list[Path]) -> None:
+    lines, newline = read_ledger(ledger)
     header, end = find_elements_table(lines)
     row_index = find_row(lines, header, end, row_id)
     results = [(path.resolve(), load_diff(path)) for path in diff_paths]
@@ -142,9 +149,7 @@ def next_row_id(lines: list[str], header: int, end: int) -> str:
 
 
 def append_gap(ledger: Path, fields: dict[str, str]) -> str:
-    text = ledger.read_text(encoding="utf-8")
-    newline = "\r\n" if "\r\n" in text else "\n"
-    lines = text.split(newline)
+    lines, newline = read_ledger(ledger)
     header, end = find_elements_table(lines)
     row_id = next_row_id(lines, header, end)
     cells = [row_id, fields["map_id"], fields["route"], fields["state"], fields["prototype_root"], fields["real_root"], "provenance gap", "PENDING", ""]

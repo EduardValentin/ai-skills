@@ -126,6 +126,14 @@ class WriteLedgerTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1)
         self.assertIn("header", completed.stderr)
 
+    def test_missing_ledger_file_refuses_cleanly(self) -> None:
+        missing_ledger = self.root / "does-not-exist.md"
+        diff = self.write_diff("L1-1440x900.json", diff_result("MATCH"))
+        completed = support.run_ledger("--ledger", str(missing_ledger), "--row", "L1", "--diff", str(diff))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(str(missing_ledger), completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+
 
 class AppendGapTests(unittest.TestCase):
     def setUp(self) -> None:
