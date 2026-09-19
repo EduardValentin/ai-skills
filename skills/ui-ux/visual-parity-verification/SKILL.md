@@ -132,8 +132,9 @@ scripts/write_ledger.py --ledger <session>/ledger.md --row L1 \
    line.
 4. Review every pair with `needsReview` true and every suggestion in the
    diff file. Confirm or reject each by writing the pair into
-   `pairings.json` under the row id, since a pairing only applies between
-   nodes that are children of an already matched pair, then rerun that
+   `pairings.json` under the row id — a pairing resolves anywhere in the
+   two trees by full path, and a paired node is taken out of ordinary
+   alignment along with its position among its siblings — then rerun that
    row's diffs. Add a finer root pair to the component map when a subtree
    aligns poorly rather than tuning weights.
 5. Write the ledger for each row from its diff files.

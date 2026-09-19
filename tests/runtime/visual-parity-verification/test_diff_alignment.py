@@ -38,6 +38,40 @@ class AnchorAlignmentTests(unittest.TestCase):
         self.assertEqual([n["name"] for n in alignment["missing"]["prototype"]], ["Cancel"])
         self.assertEqual([n["name"] for n in alignment["missing"]["real"]], ["Save"])
 
+    def test_pairing_across_levels_pairs_and_removes_missing(self) -> None:
+        proto_button = support.node("button", role="button", name="Export")
+        real_button = support.node("button", role="button", name="Download")
+        alignment = align(
+            [support.node("nav", children=[proto_button])],
+            [real_button],
+            pairings={"section > nav:nth-of-type(1) > button:nth-of-type(1)": "section > button:nth-of-type(1)"},
+        )
+        pairing_pairs = [p for p in alignment["pairs"] if p["matchedBy"] == "pairing"]
+        self.assertEqual(len(pairing_pairs), 1)
+        pair = pairing_pairs[0]
+        self.assertEqual(pair["prototype"]["path"], "section > nav:nth-of-type(1) > button:nth-of-type(1)")
+        self.assertEqual(pair["real"]["path"], "section > button:nth-of-type(1)")
+        missing_prototype_paths = [n["path"] for n in alignment["missing"]["prototype"]]
+        missing_real_paths = [n["path"] for n in alignment["missing"]["real"]]
+        self.assertNotIn(pair["prototype"]["path"], missing_prototype_paths)
+        self.assertNotIn(pair["real"]["path"], missing_real_paths)
+        # The prototype's nav has no counterpart on the real side once its
+        # only child is taken by the global pairing, so it is reported missing.
+        self.assertIn("section > nav:nth-of-type(1)", missing_prototype_paths)
+        self.assertEqual(missing_real_paths, [])
+
+    def test_pairing_with_unknown_path_is_ignored(self) -> None:
+        alignment = align(
+            [support.node("button", role="button", name="Save")],
+            [support.node("button", role="button", name="Save")],
+            pairings={"section > span:nth-of-type(9)": "section > span:nth-of-type(9)"},
+        )
+        self.assertNotIn("pairing", {p["matchedBy"] for p in alignment["pairs"]})
+        self.assertIn(
+            ("section > button:nth-of-type(1)", "section > button:nth-of-type(1)", "role-name"),
+            by_rule(alignment),
+        )
+
     def test_shared_hook_pairs_regardless_of_tag(self) -> None:
         alignment = align(
             [support.node("span", hook="price", own_text="$10")],

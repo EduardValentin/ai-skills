@@ -501,7 +501,7 @@ def moved_pass(alignment: dict[str, Any]) -> None:
         ]
 
 
-def anchor_pass(proto_children: list[dict[str, Any]], real_children: list[dict[str, Any]], pairings: dict[str, str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def anchor_pass(proto_children: list[dict[str, Any]], real_children: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     pairs: list[dict[str, Any]] = []
     remaining_proto = list(proto_children)
     remaining_real = list(real_children)
@@ -510,12 +510,6 @@ def anchor_pass(proto_children: list[dict[str, Any]], real_children: list[dict[s
         pairs.append(make_pair(proto, real, rule))
         remaining_proto.remove(proto)
         remaining_real.remove(real)
-
-    real_by_path = {node["path"]: node for node in remaining_real}
-    for proto in list(remaining_proto):
-        target = pairings.get(proto["path"])
-        if target in real_by_path and real_by_path[target] in remaining_real:
-            take(proto, real_by_path[target], "pairing")
 
     for rule, key in (("hook", hook_key), ("role-name", role_name_key), ("text", text_key)):
         proto_unique = unique_keys(remaining_proto, key)
@@ -527,8 +521,8 @@ def anchor_pass(proto_children: list[dict[str, Any]], real_children: list[dict[s
     return pairs, remaining_proto, remaining_real
 
 
-def align_children(proto_children: list[dict[str, Any]], real_children: list[dict[str, Any]], pairings: dict[str, str], context: dict[str, Any], alignment: dict[str, Any]) -> None:
-    anchors, remaining_proto, remaining_real = anchor_pass(proto_children, real_children, pairings)
+def align_children(proto_children: list[dict[str, Any]], real_children: list[dict[str, Any]], context: dict[str, Any], alignment: dict[str, Any]) -> None:
+    anchors, remaining_proto, remaining_real = anchor_pass(proto_children, real_children)
     scored, leftover_proto, leftover_real = fill_pass(anchors, proto_children, real_children, remaining_proto, remaining_real, context)
     pairs = anchors + scored
     alignment["pairs"].extend(pairs)
@@ -543,7 +537,40 @@ def align_children(proto_children: list[dict[str, Any]], real_children: list[dic
     alignment["missing"]["prototype"].extend(leftover_proto)
     alignment["missing"]["real"].extend(leftover_real)
     for pair in pairs:
-        align_children(pair["prototype"]["children"], pair["real"]["children"], pairings, context, alignment)
+        align_children(pair["prototype"]["children"], pair["real"]["children"], context, alignment)
+
+
+def index_by_path(root: dict[str, Any]) -> dict[str, tuple[dict[str, Any], dict[str, Any] | None]]:
+    index: dict[str, tuple[dict[str, Any], dict[str, Any] | None]] = {}
+
+    def walk(node: dict[str, Any], parent: dict[str, Any] | None) -> None:
+        index[node["path"]] = (node, parent)
+        for child in node["children"]:
+            walk(child, node)
+
+    walk(root, None)
+    return index
+
+
+def apply_global_pairings(proto_root: dict[str, Any], real_root: dict[str, Any], pairings: dict[str, str], alignment: dict[str, Any]) -> list[dict[str, Any]]:
+    proto_index = index_by_path(proto_root)
+    real_index = index_by_path(real_root)
+    pairs: list[dict[str, Any]] = []
+    for proto_path, real_path in pairings.items():
+        proto_entry = proto_index.get(proto_path)
+        real_entry = real_index.get(real_path)
+        if proto_entry is None or real_entry is None:
+            continue
+        proto_node, proto_parent = proto_entry
+        real_node, real_parent = real_entry
+        if proto_parent is None or real_parent is None:
+            continue
+        proto_parent["children"].remove(proto_node)
+        real_parent["children"].remove(real_node)
+        pair = make_pair(proto_node, real_node, "pairing")
+        alignment["pairs"].append(pair)
+        pairs.append(pair)
+    return pairs
 
 
 def align_trees(proto_root: dict[str, Any], real_root: dict[str, Any], pairings: dict[str, str], context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -552,10 +579,13 @@ def align_trees(proto_root: dict[str, Any], real_root: dict[str, Any], pairings:
         "missing": {"prototype": [], "real": []},
         "suggestions": [],
     }
-    align_children(proto_root["children"], real_root["children"], pairings, context or {}, alignment)
+    global_pairs = apply_global_pairings(proto_root, real_root, pairings, alignment)
+    align_children(proto_root["children"], real_root["children"], context or {}, alignment)
     moved_pass(alignment)
     for pair in [p for p in alignment["pairs"] if p["matchedBy"] == "moved"]:
-        align_children(pair["prototype"]["children"], pair["real"]["children"], pairings, context or {}, alignment)
+        align_children(pair["prototype"]["children"], pair["real"]["children"], context or {}, alignment)
+    for pair in global_pairs:
+        align_children(pair["prototype"]["children"], pair["real"]["children"], context or {}, alignment)
     return alignment
 
 
