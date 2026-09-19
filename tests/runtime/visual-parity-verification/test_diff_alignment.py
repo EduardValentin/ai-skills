@@ -87,3 +87,119 @@ class AnchorAlignmentTests(unittest.TestCase):
         )
         self.assertEqual([n["path"] for n in alignment["missing"]["prototype"]], ["section > img:nth-of-type(1)"])
         self.assertEqual(alignment["missing"]["real"], [])
+
+
+def align_with_roots(proto_children, real_children, pairings=None):
+    proto = support.assign_paths(support.node("section", width=640, height=400, children=proto_children))
+    real = support.assign_paths(support.node("section", width=640, height=400, children=real_children))
+    context = {
+        "prototypeRoot": {"width": 640, "height": 400},
+        "realRoot": {"width": 640, "height": 400},
+    }
+    return diff_snapshots.align_trees(proto, real, pairings or {}, context)
+
+
+class FillAlignmentTests(unittest.TestCase):
+    def test_extra_node_perturbs_only_its_gap(self) -> None:
+        proto_children = [
+            support.node("h2", role="heading", name="Orders", own_text="Orders", y=0),
+            support.node("img", role="img", name="", y=40, x=0, width=24, height=24),
+            support.node("img", role="img", name="", y=40, x=60, width=24, height=24),
+            support.node("button", role="button", name="Save", y=100),
+        ]
+        real_children = [
+            support.node("h2", role="heading", name="Orders", own_text="Orders", y=0),
+            support.node("img", role="img", name="", y=40, x=0, width=24, height=24),
+            support.node("span", own_text="New", y=40, x=30, width=24, height=24),
+            support.node("img", role="img", name="", y=40, x=60, width=24, height=24),
+            support.node("button", role="button", name="Save", y=100),
+        ]
+        alignment = align_with_roots(proto_children, real_children)
+        scored = {(p["prototype"]["path"], p["real"]["path"]) for p in alignment["pairs"] if p["matchedBy"] == "score"}
+        self.assertEqual(scored, {
+            ("section > img:nth-of-type(1)", "section > img:nth-of-type(1)"),
+            ("section > img:nth-of-type(2)", "section > img:nth-of-type(2)"),
+        })
+        self.assertEqual([n["tag"] for n in alignment["missing"]["real"]], ["span"])
+        self.assertEqual(alignment["missing"]["prototype"], [])
+
+    def test_same_role_and_name_duplicates_fall_to_scoring_by_geometry(self) -> None:
+        proto_children = [
+            support.node("button", role="button", name="Delete", y=0),
+            support.node("button", role="button", name="Delete", y=200),
+        ]
+        real_children = [
+            support.node("button", role="button", name="Delete", y=205),
+            support.node("button", role="button", name="Delete", y=3),
+        ]
+        alignment = align_with_roots(proto_children, real_children)
+        pairs = {(p["prototype"]["path"], p["real"]["path"]) for p in alignment["pairs"][1:]}
+        self.assertEqual(pairs, {
+            ("section > button:nth-of-type(1)", "section > button:nth-of-type(2)"),
+            ("section > button:nth-of-type(2)", "section > button:nth-of-type(1)"),
+        })
+        self.assertTrue(all(p["matchedBy"] == "score" for p in alignment["pairs"][1:]))
+        self.assertTrue(all(p["score"] >= diff_snapshots.THRESHOLD for p in alignment["pairs"][1:]))
+
+    def test_geometry_and_fingerprint_alone_cannot_reach_threshold(self) -> None:
+        proto = support.node("div", y=10, own_text="Alpha")
+        real = support.node("div", y=10, own_text="Beta")
+        score, signals = diff_snapshots.score_pair(proto, real, {
+            "prototypeRoot": {"width": 640, "height": 400},
+            "realRoot": {"width": 640, "height": 400},
+        })
+        self.assertEqual(signals["roleName"], 0.0)
+        self.assertEqual(signals["text"], 0.0)
+        self.assertEqual(signals["signature"], 0.5)
+        self.assertLess(score, diff_snapshots.THRESHOLD)
+
+    def test_rejected_leftover_carries_best_suggestion(self) -> None:
+        proto_children = [support.node("p", own_text="Shipping estimate", y=0)]
+        real_children = [support.node("p", own_text="Delivery estimate", y=300)]
+        alignment = align_with_roots(proto_children, real_children)
+        self.assertEqual(len(alignment["missing"]["prototype"]), 1)
+        suggestion = alignment["suggestions"][0]
+        self.assertEqual(suggestion["side"], "prototype")
+        self.assertEqual(suggestion["path"], "section > p:nth-of-type(1)")
+        self.assertEqual(suggestion["candidate"], "section > p:nth-of-type(1)")
+        self.assertLess(suggestion["score"], diff_snapshots.THRESHOLD)
+
+    def test_subtree_signature_distinguishes_cards(self) -> None:
+        card_a = support.node("article", role="article", name="", y=0, children=[
+            support.node("h3", role="heading", name="One", own_text="One"),
+            support.node("button", role="button", name="Open"),
+        ])
+        card_b = support.node("article", role="article", name="", y=200, children=[
+            support.node("img", role="img", name="Cover"),
+            support.node("p", own_text="text"),
+        ])
+        real_a = support.node("article", role="article", name="", y=200, children=[
+            support.node("h3", role="heading", name="One", own_text="One"),
+            support.node("button", role="button", name="Open"),
+        ])
+        real_b = support.node("article", role="article", name="", y=0, children=[
+            support.node("img", role="img", name="Cover"),
+            support.node("p", own_text="text"),
+        ])
+        alignment = align_with_roots([card_a, card_b], [real_a, real_b])
+        top_level = [(p["prototype"]["path"], p["real"]["path"]) for p in alignment["pairs"][1:3]]
+        self.assertIn(("section > article:nth-of-type(1)", "section > article:nth-of-type(1)"), top_level)
+
+    def test_node_moved_to_another_parent_is_paired_as_moved(self) -> None:
+        proto_children = [
+            support.node("header", role="banner", name="Toolbar", children=[
+                support.node("button", role="button", name="Export"),
+            ]),
+            support.node("h2", role="heading", name="Orders", own_text="Orders"),
+        ]
+        real_children = [
+            support.node("header", role="banner", name="Toolbar"),
+            support.node("h2", role="heading", name="Orders", own_text="Orders"),
+            support.node("button", role="button", name="Export"),
+        ]
+        alignment = align_with_roots(proto_children, real_children)
+        moved = [p for p in alignment["pairs"] if p["matchedBy"] == "moved"]
+        self.assertEqual(len(moved), 1)
+        self.assertEqual(moved[0]["prototype"]["path"], "section > header:nth-of-type(1) > button:nth-of-type(1)")
+        self.assertEqual(moved[0]["real"]["path"], "section > button:nth-of-type(1)")
+        self.assertEqual(alignment["missing"], {"prototype": [], "real": []})
