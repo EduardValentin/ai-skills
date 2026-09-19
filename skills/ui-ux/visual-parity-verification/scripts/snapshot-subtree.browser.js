@@ -31,7 +31,7 @@
   const STATE_ATTRIBUTES = ["aria-expanded", "aria-selected", "aria-checked", "aria-pressed", "aria-disabled", "aria-current", "aria-hidden"];
   const INPUT_ROLES = {
     button: "button", submit: "button", reset: "button", image: "button", checkbox: "checkbox", radio: "radio",
-    range: "slider", number: "spinbutton", search: "searchbox", email: "textbox", tel: "textbox", text: "textbox", url: "textbox", password: "textbox",
+    range: "slider", number: "spinbutton", search: "searchbox", email: "textbox", tel: "textbox", text: "textbox", url: "textbox",
   };
   const DEFAULT_OPTIONS = { hookAttribute: "data-parity", rootAttribute: "data-parity-root" };
 
