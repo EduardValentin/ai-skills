@@ -130,8 +130,10 @@ rule phrased in the plan's own terms, clarification requests where the plan is
 not concrete enough, and the direction. A
 `SHOULD_CHANGE` verdict or an open clarification blocks approval: answer the
 clarifications, revise the plan for every blocker and major finding, and
-re-dispatch, or present a finding to the user, who may explicitly accept it
-with a reason that the coordinator records. When the coordinator reports that no committed
+re-dispatch with the revised sections, the prior findings and their
+dispositions, asking the coordinator to confirm each finding is resolved and
+review only the revision; or present a finding to the user, who may
+explicitly accept it with a reason that the coordinator records. When the coordinator reports that no committed
 architecture baseline existed and it created one, the handoff states that the
 baseline must be committed with the ticket's PR. When the selection excludes
 plan review, record `architecture plan review: not selected` in the handoff

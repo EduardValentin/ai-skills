@@ -40,6 +40,9 @@ When it is active, `prototype-backed-workflow` wraps implementation: its
 prototype-first rules apply before implementation dispatch, and its parity
 step runs after `implementation-workflow` returns complete and before PR
 readiness. PR readiness treats the parity ledger as the UI/UX parity evidence.
+The parity step is budgeted to one round; a row still not `MATCH` after its
+recheck is a PR-readiness blocker for the user to decide, not a reason to
+re-run the step.
 
 ## Resume Rules
 
@@ -90,7 +93,7 @@ Apply the `raising-a-pull-request` rules to every readiness claim, merge, and po
 
 Manual QA evidence applies to user-observable behavior or acceptance flows. UI/UX parity evidence applies to visual changes in a prototype-backed repository and consists of the session's parity ledger with every row at MATCH plus the final parity report; a ledger with any other row state is a blocker. Review evidence applies when the repository or implementation process requires review. Blocker evidence applies whenever a required surface could not be exercised.
 
-Route CI or review fixes back through `implementation-workflow` under the approved scope and execution mode. Use the explicitly authorized inline fallback only when that skill is unavailable. If a fix changes scope, behavior, design, or acceptance criteria, invalidate the spec/design and plan approvals and return to `ticket-requirements-gathering`; if it changes only the plan, invalidate plan approval and return there. If it changes execution mode, return only to local mode approval. Refresh evidence and repeat readiness checks after each fix.
+Route CI or review fixes back through `implementation-workflow` under the approved scope and execution mode, handing it the fix as a delta over the last reviewed diff so its review gate re-enters at delta scope rather than as a full fan-out. Use the explicitly authorized inline fallback only when that skill is unavailable. If a fix changes scope, behavior, design, or acceptance criteria, invalidate the spec/design and plan approvals and return to `ticket-requirements-gathering`; if it changes only the plan, invalidate plan approval and return there. If it changes execution mode, return only to local mode approval. Refresh evidence and repeat readiness checks after each fix.
 
 If PR, CI, tracker, or required evidence access is unavailable, name the inaccessible surface, the exact evidence still needed, and the handoff required. Do not claim readiness from partial evidence.
 

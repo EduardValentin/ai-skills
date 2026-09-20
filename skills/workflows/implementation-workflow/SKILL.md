@@ -122,7 +122,9 @@ code path with the main agent.
 ## Review Gate
 
 One round is one fan-out against a frozen diff. Reviewers are read-only and
-return findings; the main agent decides and fixes.
+return findings; the main agent decides and fixes. Round one dispatches every
+selected reviewer against the full frozen diff; every later round is scoped
+by the delta since the previous round.
 
 1. Freeze the diff or working tree to review.
 2. Dispatch the reviewers named in the packet's reviewer selection in
@@ -156,12 +158,21 @@ return findings; the main agent decides and fixes.
 4. Address every accepted blocker and major finding. Add or update a
    meaningful failing test first when the issue is automatable. Rerun focused
    and affected regression checks.
-5. Any fix invalidates every prior approval. Re-dispatch the same selected
-   reviewers on the revised frozen diff.
-6. The gate passes when every reviewer returns `CLEAN` in the same round. A
-   unanimous CLEAN round ends the gate; minor findings from that round are
-   recorded with dispositions in the implementation report and do not trigger
-   another round.
+5. A fix invalidates only the approvals its delta can touch. Freeze the
+   revised diff and compute the delta: the diff between the previous frozen
+   diff and the revised one. Re-dispatch a selected reviewer when it raised
+   an accepted finding in the previous round, or when the delta meets its
+   predicate in the invalidation table below. Otherwise carry its prior
+   `CLEAN` forward and record `carried forward: <predicate not met>`.
+   A re-dispatched reviewer receives the delta as its review target, the
+   full revised diff for context, its own prior findings with dispositions,
+   and this instruction: confirm each accepted finding is resolved, review
+   the delta and any unchanged code whose behavior the delta changes, and do
+   not re-review hunks unchanged since the previous round's frozen diff.
+6. The gate passes when every selected reviewer is `CLEAN` in the same
+   round, re-dispatched or carried forward. A unanimous CLEAN round ends the
+   gate; minor findings from that round are recorded with dispositions in
+   the implementation report and do not trigger another round.
 7. Budget: three rounds. If round three ends without unanimous `CLEAN`,
    return `IMPLEMENTATION BLOCKED` with the remaining findings and their
    dispositions.
@@ -169,6 +180,20 @@ return findings; the main agent decides and fixes.
 If a reviewer returns a cannot-proceed or needs-more-context report, supply
 the named input and re-dispatch that reviewer within the same round; if the
 input requires a user decision, ask the user, then continue.
+
+### Invalidation Table
+
+Judge each predicate from the delta's hunks, not from the ticket's overall
+shape.
+
+| Reviewer | The delta invalidates its prior `CLEAN` when it |
+|---|---|
+| `acceptance-criteria-reviewer` | changes runtime behavior, user-visible output, or a test. Renames, formatting, comments, and file moves without behavior change do not. |
+| `code-cleanliness-reviewer` | adds or edits source code. Changes confined to non-code assets, generated files, or lockfiles do not. |
+| `security-reviewer` | touches authentication, authorization, input parsing or validation, persistence, data exposure, redirects, files, external requests, privileged actions, dependencies, logging, serialization, or raw HTML rendering. |
+| `performance-reviewer` | touches data fetching, queries, caching, loops or list rendering over collections, memoization, dependencies, background work, or a hot path the demand profile names. |
+| `design-system-reviewer` | touches styles, tokens, UI primitives, or component markup. |
+| `architecture-coordinator` change review | passes the structural precheck on the delta's files alone: they fall in two or more components, or the delta adds a package, a port, an import between components, or an external dependency. A delta confined to one component with no new cross-component import does not. |
 
 ## Verification Gate
 
@@ -202,9 +227,12 @@ For each QA failure or visual finding:
 2. Add or update a meaningful failing test first when the issue is
    automatable, then implement the fix.
 3. Rerun the focused check and all regression checks affected by the fix.
-4. Re-run the review gate on the revised diff. The three-round budget is per
-   review gate invocation, but a total of two re-entries from remediation per
-   unit is the limit; a third re-entry returns `IMPLEMENTATION BLOCKED`.
+4. Re-enter the review gate with the remediation fix as the delta over the
+   last unanimous `CLEAN` diff: apply the invalidation table and the
+   accepted-finding rule from step 5 of the gate instead of a full fan-out.
+   The three-round budget is per review gate invocation, but a total of two
+   re-entries from remediation per unit is the limit; a third re-entry
+   returns `IMPLEMENTATION BLOCKED`.
 5. Rerun only the affected verifier: failed and affected criteria for QA;
    affected routes, states and viewports for visual. Every criterion and
    every changed surface must have passing evidence against the final
@@ -220,7 +248,8 @@ The final report includes:
 - changed files or surfaces and their purpose
 - test-first evidence, focused and regression check commands, and outcomes,
   or the justified no-test exception
-- review gate: rounds used, per-reviewer verdict per round, accepted and
+- review gate: rounds used, per-reviewer outcome per round (`CLEAN`,
+  findings, or carried forward with the unmet predicate), accepted and
   rejected findings with dispositions
 - manual QA coverage, criterion-level outcomes, and final evidence
 - visual verification coverage and outcome, or `not applicable: no rendered
@@ -235,9 +264,13 @@ from this workflow.
 
 - Editing before the entry gate, demand profile and scope map are complete.
 - Broadening scope or changing the plan without approval.
-- Dispatching fewer than the five core reviewers, or skipping the
-  design-system reviewer when styles, tokens or primitives changed.
+- Dispatching fewer than the selected reviewers in round one, or skipping
+  the design-system reviewer when styles, tokens or primitives changed.
 - Accepting a round as passed while any reviewer is not `CLEAN`.
+- Re-dispatching every reviewer after a fix, or handing a re-dispatched
+  reviewer the full diff as its review target instead of the delta.
+- Carrying forward a reviewer that raised an accepted finding, or one whose
+  predicate the delta meets.
 - Treating automated checks as review, QA, or visual verification.
 - Skipping `visual-verifier` for a changed rendered surface for any reason.
 - Letting the implementer perform the independent review.

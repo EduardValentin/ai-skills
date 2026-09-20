@@ -128,6 +128,11 @@ decision is made. Do not wait for the parity step to reconstruct them.
 Runs once the inner implementation workflow has returned
 `IMPLEMENTATION COMPLETE` for the unit, and before any PR is raised.
 
+Budget: one round. A round is one full dispatch of `parity-verifier` over
+every row (step 3), the fixes for its findings (steps 4 and 5), and one
+recheck of the affected rows (step 6). The step never loops beyond that
+without the user's explicit decision.
+
 1. Bring the ledger current: every element added or modified in the unit has
    a row per meaningful state; every design change has a row with both
    updated columns reading yes. Confirm the component map pairings.
@@ -150,9 +155,13 @@ Runs once the inner implementation workflow has returned
    design-change row, and re-verify. Only the user may waive it; a waiver is
    recorded in the ledger's design-changes table and named in the PR, and it
    is the sole case where a FINDINGS report may proceed.
-6. Re-dispatch `parity-verifier` for the affected rows with the same
-   conditions. Repeat until every row reads `MATCH` and the report verdict is
-   `CLEAN`.
+6. Re-dispatch `parity-verifier` once, for the affected rows only, under
+   the same conditions and with the prior report, so it returns a delta of
+   resolved, remaining and new findings. A row that is not `MATCH` after this
+   recheck is a parity blocker: stop, report the ledger path and the
+   remaining rows to the user, and raise no PR. The user may authorize one
+   further fix-and-recheck cycle or record a waiver in the ledger's
+   design-changes table; record either decision in the parity report.
 7. Hand the ledger path and the final parity report to PR readiness as the
    parity evidence.
 
@@ -180,3 +189,5 @@ verification belongs to the inner implementation workflow.
   during the work.
 - Landing any fix after the parity step without re-running it; a later fix
   invalidates the ledger.
+- Dispatching a second full parity round, or a second recheck, without the
+  user's explicit decision.
