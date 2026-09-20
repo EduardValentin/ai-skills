@@ -2,7 +2,7 @@
 name: visual-parity-verification
 description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, or, when no runnable reference exists, consistently with credible production analogs, by snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into a caller-supplied parity ledger.
 compatibility: >-
-  Requires a running real app, a running prototype in a React development build or named production analogs, browser tooling that can inject the bundled browser scripts and evaluate a function with serialized arguments on both sides (host browser tooling, else Playwright), Python 3 for the bundled host scripts, and a caller-supplied ledger and component map. Without any of these, return BLOCKED naming the missing input.
+  Requires a running real app, a running prototype in a React development build or named production analogs, browser tooling that can inject the bundled browser scripts and evaluate a function with serialized arguments on both sides (host browser tooling, else Playwright), Python 3 for the bundled host scripts, and a caller-supplied ledger and component map. Playwright is optional and only needed to run scripts/capture-snapshots.mjs; without it, capture snapshots by driving host browser tooling directly. Without any of these, return BLOCKED naming the missing input.
 metadata:
   status: experimental
   allows_tool_references: "true"
