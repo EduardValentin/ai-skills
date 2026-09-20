@@ -55,7 +55,7 @@ color = "cyan"
 [[agent]]
 id = "architecture-evaluator"
 source = "architecture-evaluator.md"
-description = "Read-only specialist that runs one architecture evaluation workflow over a merged inventory and returns assessment rows with base severities. Dispatched by the architecture-coordinator, one instance per workflow."
+description = "Read-only specialist that runs architecture evaluation workflows over a merged inventory, judging rows without opening project files, and returns assessment rows with base severities. Dispatched by the architecture-coordinator: one instance per workflow in an audit, one for every applicable workflow in a change or plan review."
 groups = ["inspect-architecture-workflow"]
 
 [agent.codex]
