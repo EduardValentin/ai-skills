@@ -45,7 +45,8 @@ as accepted structure.
 1. Append the run to `ledger.md` and new rows to `change-history.md`; write `slices/`.
 2. Update `docs/architecture/` directly, in the diff's branch, only for candidate rows whose
    target has no open `SHOULD_CHANGE` finding in this run. Refresh the metrics rows of touched
-   components and the README header.
+   components. In every record file written, replace the header's last-update part (date,
+   commit, mode) in place and leave the last-audit part; never add a header line.
 3. Candidate rows implicated in an open finding are not written. List them in the ledger under
    "Pending record updates", keyed to the finding ID. The run that changes the verdict writes
    them: when the finding becomes `RESOLVED` (a later round or run finds the code fixed) or

@@ -67,7 +67,11 @@ file, never to a tracked ignore file.
 | `change-history.md` | Per touched unit, the reason and actor of each recent change |
 | `slices/` | Raw subagent returns of the latest run |
 
-Every artifact opens with a header: date, commit, scope, mode. The ledger is
+Every artifact opens with one header line. In the record it names the last
+full audit (date, commit, scope) and the last update (date, commit, mode); a
+write replaces that line in place, never adds one. The record carries no
+history of its own, since git and the ledger's run log do; nothing is ever
+appended to a record file outside its tables. The ledger is
 derived state: start one when none exists; only the committed record is a
 required baseline. Ledger IDs and run numbers are transitory and never appear
 in a committed file; the record refers to a finding only by the target's path

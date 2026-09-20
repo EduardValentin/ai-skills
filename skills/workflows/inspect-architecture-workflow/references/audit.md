@@ -38,7 +38,8 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 ## Record
 
 1. Write every committed file from the templates (`assets/docs/README.md` and its five
-   siblings), refreshing the README's shape paragraphs and header.
+   siblings), refreshing the README's shape paragraphs and setting both parts of every header
+   (last audit and last update) to this run.
 2. Write `ledger.md` (new run in the run log), `change-history.md`, and `slices/`.
 
 ## Return
