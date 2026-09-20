@@ -1,9 +1,10 @@
 # Mapping the architecture
 
-How a mapping slice fills inventory rows, and how the coordinator merges them into the committed
-record (`docs/architecture/`), or holds them as candidate record updates. Work from the code, not from documentation;
-documentation is recorded as the intended structure and compared with the mapped graph in W8.
-A mapping slice covers one component or top-level folder and returns rows; it never writes files.
+How a mapping slice fills inventory rows, which the coordinator merges into the committed record
+(`docs/architecture/`) or holds as candidate record updates. Work from the code, not
+from documentation; documentation is recorded as the intended structure and compared with the
+mapped graph in W8. A slice covers one component or top-level folder, returns rows, and never
+writes files.
 
 ## Identifiers
 
@@ -18,14 +19,13 @@ IDs are never reused. A removed unit keeps its row with status `removed` and the
 ## Components
 
 A component is an enforced unit behind one published surface: a package with an export map or
-index, a module system module, a separately built library, or a folder whose imports are
-restricted by a build-failing rule. When the repository has none of these, record each top-level
-source folder as a component with enforcement `none`; W8 reports the gap.
+index, a module system module, a separately built library, or a folder whose imports a
+build-failing rule restricts. With none of these, record each top-level source folder as a
+component with enforcement `none`; W8 reports the gap.
 
-Per component record: path; published surface (the exported symbols reachable from outside);
-enforcement mode (`visibility`, `exports`, `build-unit`, `import-rule`, `none`); ring (see below,
-by the majority of its units, with mixed rings noted); actors; and whether it is a release unit
-with a version.
+Per component record: path; published surface (exported symbols reachable from outside);
+enforcement mode (`visibility`, `exports`, `build-unit`, `import-rule`, `none`); ring (by the
+majority of its units, mixed rings noted); actors; whether it is a release unit with a version.
 
 ## Unit kinds
 
@@ -45,19 +45,18 @@ with a version.
 
 ## Ring and level
 
-Assign each unit a ring: `entities`, `use-cases`, `adapters`, `frameworks`, with `tests` and
-`composition` as the two outermost pseudo-rings. Classify by what the unit does, not by its folder
-name; a `services/` folder full of SQL is `adapters`.
+Rings: `entities`, `use-cases`, `adapters`, `frameworks`, with `tests` and `composition` as the
+two outermost pseudo-rings. Classify by what the unit does, not by folder name; a `services/`
+folder full of SQL is `adapters`.
 
 The ring is the unit's level for most purposes: entities highest, frameworks lowest. When W1 must
-compare two units in the same ring, or decide whether a `mixed` unit is policy or detail, use the
-finer definition of level, distance from the system's inputs and outputs, measured on the
-dependency graph:
+compare two units in one ring, or decide whether a `mixed` unit is policy or detail, use the finer
+level: distance from the system's inputs and outputs, measured on the dependency graph.
 
-1. Find the nearest entry point (route handler, command, message consumer) and count the hops from
-   the unit to it along dependency edges, ignoring arrow direction.
+1. Find the nearest entry point (route handler, command, message consumer) and count the hops to
+   it along dependency edges, ignoring arrow direction.
 2. Find the nearest device adapter (database client, mailer, screen, file system) and count the
-   hops to it the same way.
+   hops the same way.
 3. The unit farther from both is the higher level.
 
 Example: a use case imported by a route handler and importing a database client is one hop from
@@ -68,9 +67,9 @@ own side, are lowest.
 ## Actors and reasons to change
 
 For each component and each `mixed` or public unit, list the actors: the roles or teams whose
-requests would change it. Derive from: the ticket or brief when present; commit history (which
-features touched the unit and for whom); domain vocabulary in the code (finance terms, compliance
-terms, delivery terms). Two actors on one unit is the evidence W2 needs; one actor is `OK`.
+requests would change it. Derive them from the ticket or brief when present, from commit history
+(which features touched the unit and for whom), and from domain vocabulary in the code (finance,
+compliance, delivery terms). Two actors on one unit is the evidence W2 needs; one actor is `OK`.
 
 ## Edges
 
@@ -86,17 +85,16 @@ Record every source dependency:
 | shared-shape | Two components read or write the same table, document, topic, or wire format |
 
 Per edge record: from, to, kind, `crosses-component` yes or no, `crosses-ring` yes or no,
-`direction` `inward` (toward policy) or `outward` (toward detail) or `lateral` (same ring). An
-outward edge from a policy unit is the primary W1 finding. Also record, per component, the list of
-forbidden edges the design names (from documentation or agent instructions) and whether each is
-enforced.
+`direction` `inward` (toward policy), `outward` (toward detail), or `lateral` (same ring). An
+outward edge from a policy unit is the primary W1 finding. Per component, also list the forbidden
+edges the design names (in documentation or agent instructions) and whether each is enforced.
 
 ## Boundaries
 
-For each port record: owner unit and its ring; implementers and their rings; the consumers; the
-crossing data type and whether it is boundary-data; which side is humble; the enforcement mode of
-the line (what fails if a consumer imports an implementer directly). A port whose owner is on the
-detail side, or whose signature carries a detail type, is recorded as-is and flagged by W1.
+Per port record: owner unit and its ring; implementers and their rings; consumers; the crossing
+data type and whether it is boundary-data; which side is humble; the enforcement mode of the line
+(what fails if a consumer imports an implementer directly). A port owned on the detail side, or
+whose signature carries a detail type, is recorded as-is and flagged by W1.
 
 ## Entry points and composition roots
 
@@ -108,26 +106,27 @@ composition root is a W1 finding; more than one composition root per deployable 
 
 Compute only when there are more than five components. Per component: fan-in (units outside
 depending on units inside), fan-out (units inside depending on units outside), I = fan-out /
-(fan-in + fan-out), A = abstract types / total types counting types that exist only to be
+(fan-in + fan-out), A = abstract types / total types, counting types that exist only to be
 implemented, D = abs(A + I - 1). Record volatility from change history (changes in the last N
-releases). Keep the previous run's D so W6 can compare.
+releases). Keep the previous run's D for W6 to compare.
 
 ## Change history
 
-Produced by the single history slice, not by mapping slices (see `slicing.md`). It walks the
+The single history slice produces it, not mapping slices (see `slicing.md`). It walks the
 version-control log once for the whole scope, default the last ten commits touching it or the
 commits the ticket names, and returns one row per touched file per commit: the reason in one
-phrase, the actor it served, and whether that reason is a policy or a detail reason. The
-coordinator attaches rows to units by path and writes them to the ledger's `change-history.md`.
-The rows feed W2 (two reasons on one unit), W1 (a high-level unit changing for low-level reasons),
-and W6 (volatility). A scope with no history of its own yields an empty table, and the affected
-workflows run without volatility evidence.
+phrase, the actor it served, and whether the reason is policy or detail. The coordinator attaches
+rows to units by path and writes them to the ledger's `change-history.md`. The rows feed W2 (two
+reasons on one unit), W1 (a high-level unit changing for low-level reasons), and W6 (volatility).
+A scope with no history of its own yields an empty table, and those workflows run without
+volatility evidence.
 
 ## Incremental update
 
-Audit re-run: re-derive components, units, and edges for the scope; mark units and edges no longer
-present as `removed` with the commit; add new ones with new IDs; refresh metrics and change
-history; leave every other row untouched. Change review: map only units the diff touches, their
-direct dependents and dependencies, and every edge the diff adds, removes, or redirects; hold the
-resulting row additions, removals, and alterations as candidate record updates, written to the
-record only where no open finding disputes them, and mark the header `partial`. Plan review: the same, from proposed rows (see `plan-review.md`).
+Audit re-run: re-derive components, units, and edges for the scope; mark those no longer present
+`removed` with the commit; add new ones with new IDs; refresh metrics and change history; leave
+every other row untouched. Change review: map only units the diff touches, their direct dependents
+and dependencies, and every edge the diff adds, removes, or redirects; hold the resulting row
+additions, removals, and alterations as candidate record updates, written to the record only where
+no open finding disputes them, and mark the header `partial`. Plan review: the same, from proposed
+rows (see `plan-review.md`).
