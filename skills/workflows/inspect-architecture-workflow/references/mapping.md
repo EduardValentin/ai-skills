@@ -128,5 +128,5 @@ Audit re-run: re-derive components, units, and edges for the scope; mark those n
 every other row untouched. Change review: map only units the diff touches, their direct dependents
 and dependencies, and every edge the diff adds, removes, or redirects; hold the resulting row
 additions, removals, and alterations as candidate record updates, written to the record only where
-no open finding disputes them, and mark the header `partial`. Plan review: the same, from proposed
+no open finding disputes them, and set each written file's header last-update part to this run. Plan review: the same, from proposed
 rows (see `plan-review.md`).

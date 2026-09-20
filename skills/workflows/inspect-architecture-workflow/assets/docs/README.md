@@ -1,7 +1,8 @@
 # Architecture
 
-Last audit: <date> at commit <hash>, scope <scope>. Maintained by the architecture inspection
-workflow; changes ship with the PR that causes them.
+Last audit: <date> at commit <hash>, scope <scope>. Last update: <date> at commit <hash>,
+<mode>. Maintained by the architecture inspection workflow; changes ship with the PR that
+causes them.
 
 ## Shape
 

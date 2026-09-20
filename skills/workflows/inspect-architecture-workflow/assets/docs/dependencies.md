@@ -1,6 +1,6 @@
 # Dependencies
 
-Header: date <date>, commit <hash>, scope <scope>, mode <mode>.
+Header: audit <date> at commit <hash>, scope <scope>; last update <date> at commit <hash>, <mode>.
 
 ## Edges
 

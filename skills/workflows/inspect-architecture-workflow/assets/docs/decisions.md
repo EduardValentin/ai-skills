@@ -1,6 +1,6 @@
 # Decisions
 
-Header: date <date>, commit <hash>, scope <scope>.
+Header: audit <date> at commit <hash>, scope <scope>; last update <date> at commit <hash>, <mode>.
 
 ## Deferred decisions
 
