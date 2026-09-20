@@ -21,6 +21,16 @@ blocks.
 
 A blocked run prints `BLOCKED <reason>` before the counts.
 
+## Review printout
+
+With the `--print-review` flag, after the summary line the script prints one line per finding that needs review:
+
+- `review <prototypePath> <-> <realPath> score=<0.00> roleName=<0.0> text=<0.0>` for each pair with `needsReview` true
+- `suggest <side> <path> -> <candidate> score=<0.00>` for each suggestion
+- `review none` if there are no review pairs and no suggestions
+
+Each line lets the agent decide what to do with the result without opening the JSON file.
+
 ## Top level
 
 | Field | Meaning |

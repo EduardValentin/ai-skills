@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -201,3 +202,73 @@ class FindingTests(unittest.TestCase):
         result = compare([support.node("p", own_text="x", style={"color": "rgb(1, 1, 1)"})], [support.node("p", own_text="x", style={"color": "rgb(2, 2, 2)"})])
         line = diff_snapshots.summary_line(result)
         self.assertTrue(line.startswith("DRIFT style=1 geometry=0 missing=0 structure=0 content=0 accessibility=0"), line)
+
+    def test_review_lines_with_review_pair_and_suggestion(self) -> None:
+        proto_children = [
+            support.node("h2", role="heading", name="Orders", own_text="Orders"),
+            support.node("div", hook="group", children=[
+                support.node("article", role="article", name="", own_text="Foo"),
+            ]),
+            support.node("span", role="doc-subtitle", own_text="Extra Proto"),
+        ]
+        real_children = [
+            support.node("h2", role="heading", name="Orders", own_text="Orders"),
+            support.node("div", hook="group", children=[
+                support.node("article", role="article", name="", own_text="Bar"),
+            ]),
+            support.node("span", own_text="Extra Real"),
+        ]
+        result = compare(proto_children, real_children)
+
+        lines = diff_snapshots.review_lines(result)
+        review_pairs = [l for l in lines if l.startswith("review ") and "<->" in l]
+        suggestions = [l for l in lines if l.startswith("suggest ")]
+
+        self.assertEqual(len(review_pairs), 1)
+        self.assertIn("score=", review_pairs[0])
+        self.assertIn("roleName=", review_pairs[0])
+        self.assertIn("text=", review_pairs[0])
+        self.assertGreaterEqual(len(suggestions), 1)
+        for suggestion in suggestions:
+            self.assertIn("score=", suggestion)
+            self.assertIn("->", suggestion)
+
+    def test_review_lines_with_identical_snapshots(self) -> None:
+        result = compare([support.node("p", own_text="Same")], [support.node("p", own_text="Same")])
+        lines = diff_snapshots.review_lines(result)
+        self.assertEqual(lines, ["review none"])
+
+    def test_print_review_flag_outputs_review_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            proto_snap = support.write_json(tmp_path / "proto.json", support.snapshot(support.node("p", own_text="Foo")))
+            real_snap = support.write_json(tmp_path / "real.json", support.snapshot(support.node("p", own_text="Bar")))
+            out_file = tmp_path / "out.json"
+
+            result = support.run_diff(
+                "--prototype", str(proto_snap),
+                "--real", str(real_snap),
+                "--out", str(out_file),
+                "--print-review",
+            )
+
+            lines = result.stdout.strip().split("\n")
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(lines[0].startswith("MATCH") or lines[0].startswith("DRIFT"))
+            self.assertEqual(lines[1], "review none")
+
+    def test_without_print_review_flag_outputs_only_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            proto_snap = support.write_json(tmp_path / "proto.json", support.snapshot(support.node("p", own_text="Same")))
+            real_snap = support.write_json(tmp_path / "real.json", support.snapshot(support.node("p", own_text="Same")))
+            out_file = tmp_path / "out.json"
+
+            result = support.run_diff(
+                "--prototype", str(proto_snap),
+                "--real", str(real_snap),
+                "--out", str(out_file),
+            )
+
+            lines = result.stdout.strip().split("\n")
+            self.assertEqual(len(lines), 1)

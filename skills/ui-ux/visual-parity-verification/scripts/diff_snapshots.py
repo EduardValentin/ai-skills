@@ -712,6 +712,26 @@ def summary_line(result: dict[str, Any]) -> str:
     return f"{result['verdict']} {counts} lowestScore={lowest_text}"
 
 
+def review_lines(result: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for pair in result["pairs"]:
+        if pair["needsReview"]:
+            role_name = pair["signals"]["roleName"] if pair["signals"] else None
+            text = pair["signals"]["text"] if pair["signals"] else None
+            lines.append(
+                f"review {pair['prototype']} <-> {pair['real']} "
+                f"score={pair['score']:.2f} roleName={role_name} text={text}"
+            )
+    for suggestion in result["suggestions"]:
+        lines.append(
+            f"suggest {suggestion['side']} {suggestion['path']} -> {suggestion['candidate']} "
+            f"score={suggestion['score']:.2f}"
+        )
+    if not lines:
+        lines.append("review none")
+    return lines
+
+
 def write_result(path: Path, result: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2, sort_keys=False) + "\n", encoding="utf-8")
@@ -761,6 +781,7 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--pairings", type=Path, help="pairings.json with confirmed manual matches")
     parser.add_argument("--row", help="ledger row id whose pairings apply")
     parser.add_argument("--tolerances", type=Path, help="JSON overriding default tolerances")
+    parser.add_argument("--print-review", action="store_true", help="print review lines after summary")
     return parser.parse_args(argv)
 
 
@@ -780,6 +801,9 @@ def main(argv: list[str]) -> int:
     result = compare_snapshots(proto, real, row_pairings, tolerances)
     write_result(arguments.out, result)
     print(summary_line(result))
+    if arguments.print_review:
+        for line in review_lines(result):
+            print(line)
     return 0
 
 
