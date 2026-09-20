@@ -43,12 +43,12 @@ preload_skills = ["inspect-architecture-workflow"]
 
 [agent.codex]
 model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
 [agent.claude]
 model = "inherit"
-effort = "high"
+effort = "medium"
 tools = ["Read", "Glob", "Grep", "Bash", "Write", "Edit", "Agent"]
 color = "cyan"
 
@@ -66,7 +66,7 @@ sandbox_mode = "read-only"
 model = "sonnet"
 effort = "high"
 permissionMode = "plan"
-tools = ["Read", "Glob", "Grep", "Bash"]
+tools = ["Read"]
 color = "cyan"
 
 [[agent]]

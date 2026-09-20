@@ -41,7 +41,7 @@ level. It never gains a row per finding, per ticket, or per symbol.
 
 ## Severity
 
-Base severity comes from the decision-table row that matched (see `workflows.md`). Escalation,
+Base severity comes from the decision-table row that matched (see `references/workflows/preamble.md`). Escalation,
 in order; nothing lowers a severity:
 
 1. The target is a policy unit (entity, use case, port, boundary data) or the edge starts in
@@ -92,6 +92,6 @@ Direction:
 3. ...
 Clarifications: <n> UNDERSPECIFIED rows, plan review only, or none
 Record: <files under docs/architecture edited this run, or none> | Pending record updates: <n> rows waiting on open findings
-Ledger: <path> | Slices: <n> mapping, <n> history, <n> evaluation
+Ledger: <path> | Agents: <n> dispatched (<n> mapping, <n> history, <n> evaluation) | Tokens: <per-agent totals when the harness reports them, else "not reported">
 Out of scope: <one line of non-structural observations for other reviewers, or None>
 ```

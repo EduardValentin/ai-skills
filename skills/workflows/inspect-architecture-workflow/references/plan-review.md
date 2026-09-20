@@ -42,12 +42,13 @@ the evaluation packets as facts.
 
 ## Evaluate
 
-1. For each workflow W1 to W8, dispatch an
-   `architecture-evaluator` only when a `proposed` row falls in the sections it reads; carry the
-   others forward and name them in the run log.
-2. Packets carry the proposed rows, their direct neighbors, and a component-level summary; W6
-   always receives the full component graph. Evidence cites the plan's section where the code
-   does not exist yet.
+1. For each workflow W1 to W8, check whether a `proposed` row falls in the sections it reads.
+   Those workflows are applicable; carry the others forward and name them in the run log.
+2. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
+   packet from `slicing.md`: the paths of the preface and of each applicable workflow and rule
+   file, the proposed rows, their direct neighbors, and a component-level summary (the full
+   component graph when W6 is applicable). Evidence cites the plan's section where the code does
+   not exist yet.
 3. Walk the plan's smallest realistic follow-up (from the upcoming changes) through the proposed
    graph and count the units edited; record it in the R1 row.
 4. Phrase every finding in the plan's own terms: the task number, the file, and the concrete

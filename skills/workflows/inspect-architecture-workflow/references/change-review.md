@@ -31,12 +31,14 @@ as accepted structure.
 ## Evaluate
 
 1. For each workflow W1 to W8, check whether a `changed` row falls in the sections it reads.
-   Dispatch an `architecture-evaluator` only for those; carry the other workflows' previous rows
-   forward and name them in the run log.
-2. Dispatched packets carry the changed rows, their direct neighbors, and a component-level
-   summary of the graph; W6 always receives the full component graph. Evaluators judge only
-   changed targets and the edges touching them, phrasing findings as "the diff introduces" or
-   "the diff leaves in place".
+   Those workflows are applicable; carry the others' previous rows forward and name them in the
+   run log.
+2. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
+   packet from `slicing.md`: the paths of the preface and of each applicable workflow and rule
+   file, the changed rows, their direct neighbors, and a component-level summary of the graph
+   (the full component graph when W6 is applicable). It judges only changed targets and the
+   edges touching them, from the rows and never from code, phrasing findings as "the diff
+   introduces" or "the diff leaves in place".
 3. Merge, escalate, group changes, and build the improvement map per `verdicts.md`. A row the
    plan review of this ticket set to `ACCEPTED` keeps that verdict while its target and rule
    still match; it is not raised again.

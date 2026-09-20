@@ -75,9 +75,13 @@ symbol and the rule.
 
 ## Shared references
 
-- `references/rules.md`: rules R1 to R41 with a preface defining every term.
-- `references/workflows.md`: evaluation workflows W1 to W8 with decision
-  tables and base severities.
+- `references/rules/preface.md`: the catalog preface and vocabulary, read
+  before any rule file. `references/rules/cross-cutting.md` holds R1 to R3;
+  `references/rules/w1.md` through `references/rules/w8.md` hold the rules of
+  each evaluation workflow.
+- `references/workflows/preamble.md`: shared row columns and severity scale;
+  `references/workflows/w1.md` through `references/workflows/w8.md` hold each
+  workflow's inputs, procedure, and decision table.
 - `references/mapping.md`: how mapping slices fill inventory rows.
 - `references/slicing.md`: subagent packets, returns, and merge rules.
 - `references/metrics.md`: instability, abstractness, distance.
@@ -86,6 +90,21 @@ symbol and the rule.
   `assets/docs/units.md`, `assets/docs/dependencies.md`,
   `assets/docs/metrics.md`, `assets/docs/decisions.md`,
   `assets/ledger/ledger.md`, `assets/ledger/change-history.md`.
+
+## Cost
+
+A run's cost is agent sessions, not skill text. Hold to these:
+
+- Callers run the structural precheck before dispatching a review: a plan or
+  diff confined to one component of `components.md` that adds no package,
+  port, cross-component import, or external dependency is not reviewed.
+- Packets name skill files by absolute path; they never paste catalog text.
+- Audit fans out one evaluator per workflow; change and plan review dispatch
+  one evaluator for every applicable workflow.
+- Evaluators judge inventory rows and open no project file.
+- The history slice runs on the smallest model available.
+- The return contract reports agents dispatched and tokens when the harness
+  shows them.
 
 ## Discipline
 

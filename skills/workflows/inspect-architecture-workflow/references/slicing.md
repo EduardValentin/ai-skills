@@ -7,10 +7,15 @@ another slice.
 
 ## Global material in every packet
 
-1. The "Reading this catalog" preface and the vocabulary table from `rules.md`.
+Packets name files, they never paste them. The coordinator resolves the absolute path of this
+skill's directory (the folder holding its `SKILL.md`) once and writes paths into every packet;
+catalog text copied into a packet is coordinator output spent for nothing.
+
+1. The absolute path of `references/rules/preface.md` (the "Reading this catalog" preface and
+   the vocabulary), to read first.
 2. Mode, scope, commit, and the coordinator's numbered list of named upcoming changes (`UC-n`,
    each with its source: ticket or plan, the baseline's `decisions.md`, or the caller).
-3. The exact row formats from the relevant template under `assets/`.
+3. The absolute path of the template under `assets/` whose row formats the return must use.
 4. The read-only instruction: inspect, never edit; return rows, never write files.
 
 ## Mapping slice
@@ -20,8 +25,9 @@ per component; when no enforced components exist, one per top-level source folde
 exceeds roughly forty source files, split it by subfolder and say so in the packet.
 
 Packet adds: the slice's paths; the list of all other slices' paths so cross-slice edges can be
-named by path; the full text of `mapping.md`; the existing rows of the committed record for this
-slice when a baseline exists, so IDs and prior classifications can be reused.
+named by path; the absolute path of `references/mapping.md`; the paths of the committed record
+files holding this slice's existing rows when a baseline exists, so IDs and prior
+classifications can be reused.
 
 Returns, as markdown tables in the template row formats:
 
@@ -37,8 +43,9 @@ Mapping slices do not read version control; that is the history slice's job.
 
 ## History slice
 
-Agent: a general-purpose subagent. Exactly one per run, dispatched in parallel with the mapping
-slices, covering the whole scope. It walks the version-control log once instead of once per
+Agent: a general-purpose subagent on the smallest model the harness offers (in Claude Code,
+`haiku`); the work is reading a log. Exactly one per run, dispatched in parallel with the
+mapping slices, covering the whole scope. It walks the version-control log once instead of once per
 mapping slice.
 
 Packet adds: the scope paths; the window (default the last ten commits touching the scope, or the
@@ -62,22 +69,32 @@ since the plan has not changed the code.
 
 ## Evaluation slice
 
-Agent: `architecture-evaluator` (or a general-purpose agent with the same packet). One slice
-per workflow, W1 to W8, over the whole merged inventory. Cross-cutting rules R1 to R3 are not a
-slice; the coordinator applies them during severity escalation and ordering.
+Agent: `architecture-evaluator` (or a general-purpose agent with the same packet). Cross-cutting
+rules R1 to R3 are not a slice; the coordinator applies them during severity escalation and
+ordering.
 
-Packet adds: the workflow's section from `workflows.md` (inputs, procedure, decision table with
-base severities); the rule section for that workflow from `rules.md`; `metrics.md` for W6 only;
-the merged inventory sections the workflow reads; `decisions.md` from the baseline; in change or
-plan review, the changed or proposed rows marked `proposed` or `changed`, and the instruction to
-evaluate only those targets and the edges touching them.
+Evaluators judge rows. The merged inventory in the packet is the evidence; an evaluator opens
+only the skill files the packet names and never a project file. A fact the inventory lacks comes
+back as an open question, which the coordinator settles from the mapping slice's return or with
+a targeted re-map of that path, never by letting the evaluator read code.
 
-Audit sends every workflow the full inventory. Change and plan review are incremental: a workflow
-is dispatched only when a changed or proposed row falls in a section it reads (a diff touching no
-tests skips W7; one adding no component edges skips W6); skipped workflows carry their previous
-ledger rows forward and the run log names them. Dispatched workflows receive the changed rows,
-their direct neighbors (units one edge away), and a component-level summary of the whole graph
-(components, component edges, metrics) instead of every unit row. W6 always receives the full
+Packet adds: the absolute paths of `references/workflows/preamble.md` and, per workflow to run,
+its workflow file (inputs, procedure, decision table with base severities) and its rule file,
+both named after the workflow (`references/workflows/w1.md` and `references/rules/w1.md` for
+W1, and so on); `references/metrics.md` for W6 only; the merged inventory sections
+the workflows read; `decisions.md` from the baseline; in change or plan review, the changed or
+proposed rows marked `proposed` or `changed`, and the instruction to evaluate only those targets
+and the edges touching them.
+
+Fan-out follows the inventory size. An audit dispatches one evaluator per workflow, W1 to W8, in
+parallel, each over the full inventory. Change and plan review dispatch **one** evaluator that
+runs every applicable workflow in order over the small changed set; eight sessions over a
+handful of rows is the single largest avoidable cost of this skill. A workflow is applicable
+when a changed or proposed row falls in a section it reads (a diff touching no tests skips W7;
+one adding no component edges skips W6); skipped workflows carry their previous ledger rows
+forward and the run log names them. The review packet carries the changed rows, their direct
+neighbors (units one edge away), and a component-level summary of the whole graph (components,
+component edges, metrics) instead of every unit row; W6, when applicable, receives the full
 component graph, since cycles and stability are properties of the whole.
 
 Returns: assessment rows in the ledger row format with `verdict`, base `severity` from the
@@ -111,7 +128,8 @@ returns `checked` counts per rule so `OK` coverage is visible.
 
 ## Dispatch guidance
 
-Dispatch all mapping slices and the history slice in parallel, then all evaluation slices in
-parallel; evaluation waits for the merged inventory. Give slices enough time for real inspection. A slice that returns
+Dispatch all mapping slices and the history slice in parallel, then the evaluation slice or
+slices in parallel; evaluation waits for the merged inventory. Merge returns in memory and write
+them to `slices/` once; do not re-read what was just written. Give slices enough time for real inspection. A slice that returns
 prose instead of rows is re-dispatched once with the row format restated; a second failure is
 recorded as an open question with the slice's paths.
