@@ -88,4 +88,7 @@ checks.findsEveryInstance = roots.roots.LineItem.length === 2;
 checks.unmountedIsEmptyList = Array.isArray(roots.roots.Unmounted) && roots.roots.Unmounted.length === 0;
 checks.rootSummaryFromFinder = roots.roots.OrderSummary[0].summary.name === "Order summary" && roots.roots.OrderSummary[0].summary.width === 640;
 
+const encodedFallback = await window.paritySnapshot("OrderSummary", { encoding: "gzip-base64" });
+checks.encodingOptionFallsBackWithoutCompressionStream = Boolean(encodedFallback) && typeof encodedFallback === "object" && "root" in encodedFallback;
+
 console.log(JSON.stringify({ checks, details }));

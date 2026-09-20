@@ -342,6 +342,24 @@
     return { element: matches[0] };
   }
 
+  function base64FromBuffer(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+  function gzipBase64(text) {
+    const stream = new CompressionStream("gzip");
+    const writer = stream.writable.getWriter();
+    writer.write(new TextEncoder().encode(text));
+    writer.close();
+    return new Response(stream.readable).arrayBuffer().then(base64FromBuffer);
+  }
+
   function paritySnapshot(rootSelector, options) {
     if (typeof rootSelector !== "string" || rootSelector.trim() === "") {
       return { error: "root-not-found", rootSelector };
@@ -352,7 +370,7 @@
     const rootElement = resolved.element;
     const rootRect = rootElement.getBoundingClientRect();
     const root = snapshotNode(rootElement, rootRect, rootElement.tagName.toLowerCase(), settings, true);
-    return {
+    const snapshot = {
       url: location.href,
       viewport: { width: innerWidth, height: innerHeight },
       devicePixelRatio,
@@ -363,6 +381,11 @@
       rootSummary: { tag: root.tag, role: root.role, name: root.name, width: root.geometry.width, height: root.geometry.height },
       root,
     };
+    if (settings.encoding === "gzip-base64") {
+      if (typeof CompressionStream === "function") return gzipBase64(JSON.stringify(snapshot));
+      return Promise.resolve(snapshot);
+    }
+    return snapshot;
   }
 
   globalThis.paritySnapshot = paritySnapshot;

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import copy
+import gzip
 import json
 import os
 import subprocess
@@ -197,6 +199,17 @@ def delta_snapshot(snap: dict[str, Any]) -> dict[str, Any]:
 def write_json(path: Path, data: Any) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return path
+
+
+def write_compressed_snapshot(path: Path, snapshot: dict[str, Any]) -> Path:
+    """Write `snapshot` the way `{ encoding: "gzip-base64" }` returns it: a
+    JSON string containing base64 of the gzipped compact JSON."""
+    compact = json.dumps(snapshot, separators=(",", ":"))
+    compressed = gzip.compress(compact.encode("utf-8"))
+    encoded = base64.b64encode(compressed).decode("ascii")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(encoded), encoding="utf-8")
     return path
 
 

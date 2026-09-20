@@ -120,3 +120,31 @@ when none of its descendants is included.
 The function returns `{ "error": "root-not-found", "rootSelector" }` or
 `{ "error": "root-ambiguous", "count", "rootSelector" }` instead of a
 snapshot. An invalid selector is treated as a `data-parity-root` value.
+These error objects are returned synchronously regardless of `encoding`.
+
+## Encoding
+
+`paritySnapshot(rootSelector, { encoding: "gzip-base64" })` returns a Promise
+instead of the plain object. It resolves to a base64 string: the compact
+JSON of the snapshot (`JSON.stringify`, no indentation), gzipped with
+`CompressionStream("gzip")`, then base64-encoded. When `CompressionStream`
+is not a function in the page — for example jsdom — the Promise resolves to
+the plain snapshot object instead, unchanged.
+
+For an interactive capture (driving the page by hand rather than through
+the capture command), the agent evaluates `paritySnapshot` with this option,
+awaits the result, and saves whatever comes back verbatim as the entire
+contents of the snapshot file:
+
+- A string result is the file's entire contents, exactly as returned —
+  still valid JSON, since a JSON string is itself a JSON document.
+- An object result (the `CompressionStream`-unavailable fallback, or an
+  error object) is saved the normal way, as compact JSON.
+
+The diff's loader (`load_snapshot` in `diff_snapshots.py`) detects a string
+file by parsing it as JSON and checking the parsed value's type: a string
+means gzip-base64 encoding, so it base64-decodes, gunzips, and parses the
+result as JSON before continuing with the normal validation, geometry
+normalization and style inflation. A dictionary is used as-is. Malformed
+base64 or gzip data raises an error naming the file and exits 2, the same
+as any other unreadable input.

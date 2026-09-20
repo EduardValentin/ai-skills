@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -93,6 +94,32 @@ class DiffPreconditionTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             result = support.read_json(out)
             self.assertEqual(result["verdict"], "MATCH")
+
+    def test_gzip_base64_encoded_snapshots_match(self) -> None:
+        proto = support.snapshot(simple_root())
+        real = support.snapshot(simple_root())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            proto_path = support.write_compressed_snapshot(root / "prototype.json", proto)
+            real_path = support.write_compressed_snapshot(root / "real.json", real)
+            out = root / "diff.json"
+            completed = support.run_diff("--prototype", str(proto_path), "--real", str(real_path), "--out", str(out))
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = support.read_json(out)
+            self.assertEqual(result["verdict"], "MATCH")
+            self.assertTrue(completed.stdout.startswith("MATCH"))
+
+    def test_invalid_base64_encoded_snapshot_exits_two(self) -> None:
+        proto = support.snapshot(simple_root())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            proto_path = root / "prototype.json"
+            proto_path.write_text(json.dumps("not-valid-base64!!!"), encoding="utf-8")
+            real_path = support.write_json(root / "real.json", proto)
+            out = root / "diff.json"
+            completed = support.run_diff("--prototype", str(proto_path), "--real", str(real_path), "--out", str(out))
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("prototype.json", completed.stderr)
 
     def test_pairings_without_row_is_ignored_with_a_warning(self) -> None:
         proto = support.snapshot(simple_root())
