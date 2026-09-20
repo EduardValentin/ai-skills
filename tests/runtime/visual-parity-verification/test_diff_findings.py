@@ -225,9 +225,12 @@ class FindingTests(unittest.TestCase):
         suggestions = [l for l in lines if l.startswith("suggest ")]
 
         self.assertEqual(len(review_pairs), 1)
-        self.assertIn("score=", review_pairs[0])
-        self.assertIn("roleName=", review_pairs[0])
-        self.assertIn("text=", review_pairs[0])
+        self.assertEqual(
+            review_pairs[0],
+            "review section > div:nth-of-type(1) > article:nth-of-type(1) "
+            "<-> section > div:nth-of-type(1) > article:nth-of-type(1) "
+            "score=0.53 roleName=0.5 text=0.0",
+        )
         self.assertGreaterEqual(len(suggestions), 1)
         for suggestion in suggestions:
             self.assertIn("score=", suggestion)
@@ -256,6 +259,29 @@ class FindingTests(unittest.TestCase):
             self.assertEqual(len(lines), 2)
             self.assertTrue(lines[0].startswith("MATCH") or lines[0].startswith("DRIFT"))
             self.assertEqual(lines[1], "review none")
+
+    def test_print_review_flag_reports_blocked_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            proto_snap = support.write_json(
+                tmp_path / "proto.json", support.snapshot(support.node("p", own_text="Same"), width=1440)
+            )
+            real_snap = support.write_json(
+                tmp_path / "real.json", support.snapshot(support.node("p", own_text="Same"), width=1024)
+            )
+            out_file = tmp_path / "out.json"
+
+            result = support.run_diff(
+                "--prototype", str(proto_snap),
+                "--real", str(real_snap),
+                "--out", str(out_file),
+                "--print-review",
+            )
+
+            lines = result.stdout.strip().split("\n")
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(lines[0].startswith("BLOCKED"))
+            self.assertEqual(lines[1], "review blocked")
 
     def test_without_print_review_flag_outputs_only_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

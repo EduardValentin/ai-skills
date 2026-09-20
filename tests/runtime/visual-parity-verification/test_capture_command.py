@@ -76,6 +76,25 @@ class CaptureCommandTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 2)
 
+    def test_side_sub_flag_without_its_url_flag_exits_two(self) -> None:
+        if node_path() is None:
+            self.skipTest("node is not on PATH")
+        with tempfile.TemporaryDirectory() as cwd_dir, tempfile.TemporaryDirectory() as out_dir:
+            completed = run_capture(
+                [
+                    "--out", out_dir,
+                    "--viewport", "800x600",
+                    "--prototype-url", "file:///dev/null",
+                    "--prototype-root", "section",
+                    "--real-root", "x",
+                ],
+                cwd=Path(cwd_dir),
+                env=base_env(),
+            )
+            self.assertEqual(completed.returncode, 2, completed.stderr)
+            self.assertEqual(len(completed.stderr.strip().splitlines()), 1)
+            self.assertIn("--real-root", completed.stderr)
+
     def test_real_capture_writes_file_and_matches_itself(self) -> None:
         if node_path() is None:
             self.skipTest("node is not on PATH")

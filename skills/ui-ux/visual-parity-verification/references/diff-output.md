@@ -25,6 +25,7 @@ A blocked run prints `BLOCKED <reason>` before the counts.
 
 With the `--print-review` flag, after the summary line the script prints one line per finding that needs review:
 
+- `review blocked`, alone, when `verdict` is `BLOCKED` — no pairs or suggestions follow
 - `review <prototypePath> <-> <realPath> score=<0.00> roleName=<0.0> text=<0.0>` for each pair with `needsReview` true
 - `suggest <side> <path> -> <candidate> score=<0.00>` for each suggestion
 - `review none` if there are no review pairs and no suggestions

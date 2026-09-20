@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-// Drives headless Chromium through Playwright to capture parity snapshots
-// without the agent ever seeing script text or snapshot bytes.
-//
-// capture-snapshots.mjs --out <dir> --viewport WxH [--viewport WxH ...]
-//   [--prototype-url URL (--prototype-component Name | --prototype-root SELECTOR)]
-//   [--real-url URL --real-root SELECTOR-OR-ATTR-VALUE]
-//   [--color-scheme light|dark] [--wait-for SELECTOR] [--headed]
 
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -15,6 +8,10 @@ import fs from "node:fs";
 function usageError(message) {
   process.stderr.write(`usage: ${message}\n`);
   process.exit(2);
+}
+
+function firstLine(error) {
+  return String(error && error.message ? error.message : error).split("\n")[0];
 }
 
 function parseArgs(argv) {
@@ -96,6 +93,10 @@ function parseArgs(argv) {
   const hasPrototype = Boolean(options.prototypeUrl);
   const hasReal = Boolean(options.realUrl);
   if (!hasPrototype && !hasReal) usageError("at least one of --prototype-url or --real-url is required");
+  if (!hasPrototype && (options.prototypeComponent || options.prototypeRoot)) {
+    usageError("--prototype-component and --prototype-root require --prototype-url");
+  }
+  if (!hasReal && options.realRoot) usageError("--real-root requires --real-url");
   if (hasPrototype && Boolean(options.prototypeComponent) === Boolean(options.prototypeRoot)) {
     usageError("--prototype-url requires exactly one of --prototype-component or --prototype-root");
   }
@@ -104,41 +105,39 @@ function parseArgs(argv) {
   return options;
 }
 
+function tryRequire(localRequire, spec) {
+  try {
+    return localRequire(spec);
+  } catch (error) {
+    if (error.code === "MODULE_NOT_FOUND") return null;
+    throw error;
+  }
+}
+
 function resolvePlaywright() {
   const localRequire = createRequire(import.meta.url);
-  const attempts = [];
+  const attempts = ["createRequire(import.meta.url)"];
 
-  attempts.push("createRequire(import.meta.url)");
-  try {
-    return localRequire("playwright");
-  } catch {
-    // fall through to NODE_PATH entries
-  }
+  const direct = tryRequire(localRequire, "playwright");
+  if (direct) return direct;
 
   const nodePathEntries = (process.env.NODE_PATH || "").split(path.delimiter).filter(Boolean);
   for (const entry of nodePathEntries) {
     const candidate = path.join(entry, "playwright");
     attempts.push(candidate);
-    try {
-      return localRequire(candidate);
-    } catch {
-      // try the next entry
-    }
+    const resolved = tryRequire(localRequire, candidate);
+    if (resolved) return resolved;
   }
 
   const cwdCandidate = path.join(process.cwd(), "node_modules", "playwright");
   attempts.push(cwdCandidate);
-  try {
-    return localRequire(cwdCandidate);
-  } catch {
-    // exhausted
-  }
+  const resolved = tryRequire(localRequire, cwdCandidate);
+  if (resolved) return resolved;
 
   process.stderr.write(
     `playwright is not installed: looked in ${attempts.join(", ")}; install it in the project or set NODE_PATH\n`,
   );
   process.exit(2);
-  return undefined;
 }
 
 function countNodes(node) {
@@ -182,7 +181,8 @@ async function resolvePrototypeRoot(page, config, viewport, rootFinderPath) {
   return { selector: roots[0].selector };
 }
 
-async function captureOne(browser, config, viewport, options, rootFinderPath, snapshotScriptPath, outDir) {
+async function captureOne(capture) {
+  const { browser, config, viewport, options, rootFinderPath, snapshotScriptPath, outDir } = capture;
   const contextOptions = { viewport: { width: viewport.width, height: viewport.height } };
   if (options.colorScheme) contextOptions.colorScheme = options.colorScheme;
   const context = await browser.newContext(contextOptions);
@@ -231,7 +231,7 @@ async function main() {
     for (const viewport of options.viewports) {
       for (const config of sides) {
         try {
-          const result = await captureOne(browser, config, viewport, options, rootFinderPath, snapshotScriptPath, options.out);
+          const result = await captureOne({ browser, config, viewport, options, rootFinderPath, snapshotScriptPath, outDir: options.out });
           if (result.ok) {
             console.log(result.line);
           } else {
@@ -240,7 +240,7 @@ async function main() {
           }
         } catch (error) {
           hadFailure = true;
-          console.error(`${config.side} ${viewport.label}: ${error.message}`);
+          console.error(`${config.side} ${viewport.label}: ${firstLine(error)}`);
         }
       }
     }
@@ -250,4 +250,7 @@ async function main() {
   process.exit(hadFailure ? 1 : 0);
 }
 
-main();
+main().catch((error) => {
+  console.error(firstLine(error));
+  process.exit(1);
+});

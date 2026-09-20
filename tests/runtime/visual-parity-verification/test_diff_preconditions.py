@@ -138,6 +138,24 @@ class DiffPreconditionTests(unittest.TestCase):
             self.assertIn("prototype.json", completed.stderr)
             self.assertNotIn("Traceback", completed.stderr)
 
+    def test_corrupted_compressed_snapshot_exits_two(self) -> None:
+        proto = support.snapshot(simple_root())
+        real = support.snapshot(simple_root())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            proto_path = support.write_compressed_snapshot(root / "prototype.json", proto)
+            real_path = support.write_compressed_snapshot(root / "real.json", real)
+            gzip_bytes = bytearray(base64.b64decode(json.loads(proto_path.read_text(encoding="utf-8"))))
+            for index in range(12, 40):
+                gzip_bytes[index] ^= 0xFF
+            corrupted = base64.b64encode(bytes(gzip_bytes)).decode("ascii")
+            proto_path.write_text(json.dumps(corrupted), encoding="utf-8")
+            out = root / "diff.json"
+            completed = support.run_diff("--prototype", str(proto_path), "--real", str(real_path), "--out", str(out))
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("prototype.json", completed.stderr)
+            self.assertNotIn("Traceback", completed.stderr)
+
     def test_pairings_without_row_is_ignored_with_a_warning(self) -> None:
         proto = support.snapshot(simple_root())
         real = support.snapshot(simple_root())

@@ -87,8 +87,9 @@ Paths resolve from the skill root.
 - `scripts/diff_snapshots.py`: compares a prototype and a real app
   snapshot, writes a diff file, and prints a summary line, adding review
   lines with `--print-review`. `references/diff-output.md`.
-- `scripts/write_ledger.py`: writes a row's worst verdict and an evidence
-  summary, or appends a provenance-gap row with `--append-gap`.
+- `scripts/write_ledger.py`: writes a row's worst verdict and evidence with
+  `--row` and `--diff`, or `BLOCKED` and a reason with `--row --blocked
+  REASON`; appends a provenance-gap row with `--append-gap`.
 
 ## Procedure
 
@@ -96,7 +97,10 @@ Paths resolve from the skill root.
    `scripts/capture-snapshots.mjs` with that row's URLs and roots. Rows
    sharing a prototype route and state capture it once, then capture only
    `--real-url`/`--real-root` per row, pointing the diff at the shared
-   file. Read only the printed summary line.
+   file. Read only the printed summary line. A capture error line makes
+   that row `BLOCKED`; record it with `write_ledger.py --row <id> --blocked
+   "<side> <root> <route>: <error>"`. A `no-react-fibers` error blocks
+   every row at that prototype route.
 2. Interactive states. For a state the capture command cannot drive, reach
    it by hand on both sides, inject the snapshot script by file path, and
    evaluate `paritySnapshot(root, { encoding: "gzip-base64" })`, saving the

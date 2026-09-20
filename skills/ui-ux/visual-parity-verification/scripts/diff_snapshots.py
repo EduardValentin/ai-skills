@@ -16,6 +16,7 @@ import gzip
 import json
 import re
 import sys
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -69,7 +70,7 @@ def decode_gzip_base64_snapshot(path: Path, encoded: str) -> Any:
         raise InputError(f"{path} has invalid base64: {error}") from error
     try:
         decompressed = gzip.decompress(compressed)
-    except (OSError, EOFError) as error:
+    except (OSError, EOFError, zlib.error) as error:
         raise InputError(f"{path} has invalid or truncated gzip data: {error}") from error
     try:
         text = decompressed.decode("utf-8")
@@ -713,6 +714,8 @@ def summary_line(result: dict[str, Any]) -> str:
 
 
 def review_lines(result: dict[str, Any]) -> list[str]:
+    if result["blocked"]:
+        return ["review blocked"]
     lines: list[str] = []
     for pair in result["pairs"]:
         if pair["needsReview"]:

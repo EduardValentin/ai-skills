@@ -12,8 +12,12 @@ order:
 
 1. `createRequire(import.meta.url)` — an ordinary `require("playwright")`
    from the command's own file, which finds a `playwright` the host project
-   installed.
-2. Each entry of `NODE_PATH`, in order, as `<entry>/playwright`.
+   installed only when the skill itself is installed inside that project's
+   tree; a skill installed elsewhere (a global or user-level install) never
+   resolves a project's `playwright` this way.
+2. Each entry of `NODE_PATH`, in order, as `<entry>/playwright`. These
+   outrank `<cwd>/node_modules`, so a `NODE_PATH` entry is tried and can
+   succeed even when step 3 would also have resolved.
 3. `<cwd>/node_modules/playwright`.
 
 When none resolves, the command exits 2 and prints:

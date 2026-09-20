@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Write parity verdicts into a ledger row, or append a provenance-gap row.
 
-Write mode edits only the Verdict and Evidence cells of one row. Append mode
-adds one PENDING row to the elements table. Every other byte is preserved.
+Write mode edits only the Verdict and Evidence cells of one row. Blocked
+mode edits the same two cells with BLOCKED and a reason, for a row a capture
+error stopped before any diff could run. Append mode adds one PENDING row to
+the elements table. Every other byte is preserved.
 """
 
 from __future__ import annotations
@@ -133,18 +135,30 @@ def read_ledger(ledger: Path) -> tuple[list[str], str]:
     return text.split(newline), newline
 
 
-def write_verdict(ledger: Path, row_id: str, diff_paths: list[Path]) -> None:
+def write_row_cells(ledger: Path, row_id: str, verdict: str, evidence: str) -> None:
     lines, newline = read_ledger(ledger)
     header, end = find_elements_table(lines)
     row_index = find_row(lines, header, end, row_id)
-    results = [(path.resolve(), load_diff(path)) for path in diff_paths]
     cells = split_row(lines[row_index])
     if len(cells) != EVIDENCE_CELL + 1:
         raise LedgerError(f"row {row_id} does not have {EVIDENCE_CELL + 1} cells")
-    cells[VERDICT_CELL] = worst_verdict([r["verdict"] for _, r in results])
-    cells[EVIDENCE_CELL] = evidence_for(results, ledger.resolve().parent)
+    cells[VERDICT_CELL] = verdict
+    cells[EVIDENCE_CELL] = evidence
     lines[row_index] = join_row(cells)
     ledger.write_text(newline.join(lines), encoding="utf-8")
+
+
+def write_verdict(ledger: Path, row_id: str, diff_paths: list[Path]) -> None:
+    results = [(path.resolve(), load_diff(path)) for path in diff_paths]
+    write_row_cells(
+        ledger, row_id,
+        worst_verdict([r["verdict"] for _, r in results]),
+        evidence_for(results, ledger.resolve().parent),
+    )
+
+
+def write_blocked(ledger: Path, row_id: str, reason: str) -> None:
+    write_row_cells(ledger, row_id, "BLOCKED", escape_cell(reason))
 
 
 GAP_FIELDS = ("map_id", "route", "state", "prototype_root", "real_root")
@@ -175,6 +189,7 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--row", help="ledger row id to write")
     parser.add_argument("--diff", action="append", type=Path, default=[], help="diff JSON; repeat per viewport")
     parser.add_argument("--append-gap", action="store_true", help="append a provenance-gap row instead of writing a verdict")
+    parser.add_argument("--blocked", help="write BLOCKED and this reason into --row instead of a diff-backed verdict")
     parser.add_argument("--map-id")
     parser.add_argument("--route")
     parser.add_argument("--state")
@@ -186,11 +201,18 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     arguments = parse_arguments(argv)
     try:
+        if arguments.blocked is not None and (arguments.append_gap or arguments.diff):
+            raise LedgerError("--blocked cannot be combined with --diff or --append-gap")
         if arguments.append_gap:
             missing = [f"--{name.replace('_', '-')}" for name in GAP_FIELDS if getattr(arguments, name) is None]
             if missing:
                 raise LedgerError("append mode needs " + ", ".join(missing))
             print(append_gap(arguments.ledger, {name: getattr(arguments, name) for name in GAP_FIELDS}))
+            return 0
+        if arguments.blocked is not None:
+            if not arguments.row:
+                raise LedgerError("--blocked needs --row")
+            write_blocked(arguments.ledger, arguments.row, arguments.blocked)
             return 0
         if not arguments.row or not arguments.diff:
             raise LedgerError("write mode needs --row and at least one --diff")
