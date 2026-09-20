@@ -29,9 +29,9 @@ record and the ledger. The first audit creates the baseline; a later audit refre
 ## Evaluate
 
 1. Dispatch one `architecture-evaluator` per workflow W1 to W8, in parallel, each with the
-   evaluation packet: the catalog preface and vocabulary, its rule section and decision table,
-   the full inventory sections it reads, `decisions.md` when one exists, and the upcoming
-   changes.
+   evaluation packet from `slicing.md`: the paths of the preface, its workflow file, and its rule
+   file, the full inventory sections it reads, `decisions.md` when one exists, and the upcoming
+   changes. Evaluators judge the rows they are given and open no project file.
 2. Merge per `slicing.md`: drop duplicate target-and-rule pairs, match rows to existing ledger
    IDs, and settle each previous `SHOULD_CHANGE` row as resolved, still open, or removed.
 3. Apply severity escalation, group changes, and build the improvement map per `verdicts.md`.

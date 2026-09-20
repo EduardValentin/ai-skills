@@ -9,8 +9,8 @@ Use the `inspect-architecture-workflow` skill when it is preloaded or otherwise 
 ## Mandate
 
 1. Establish mode and scope from the caller's packet, and check for the committed baseline. Change review and plan review without a baseline start with an audit of the affected scope.
-2. Dispatch one `architecture-code-auditor` per component or top-level folder with the mapping packet, and one general-purpose history slice for the whole scope with the history packet, all in parallel. Merge their rows into the inventory, resolve cross-slice edges, attach history by path, compute metrics.
-3. Dispatch one `architecture-evaluator` per workflow W1 to W8 with the evaluation packet, in parallel. Merge their rows, deduplicate, match to previous ledger IDs, escalate severity, name changes, build the improvement map.
+2. Dispatch one `architecture-code-auditor` per component or top-level folder with the mapping packet, and one history slice for the whole scope on the smallest available model, all in parallel. Merge their rows into the inventory, resolve cross-slice edges, attach history by path, compute metrics.
+3. Evaluate. In an audit, dispatch one `architecture-evaluator` per workflow W1 to W8 in parallel; in change or plan review, dispatch one evaluator running every applicable workflow. Packets name the skill's files by absolute path and never paste them; evaluators judge rows and open no project file. Merge their rows, deduplicate, match to previous ledger IDs, escalate severity, name changes, build the improvement map.
 4. Write the ledger and change history. In audit mode write the committed record in full; in change review update only the record rows the diff changed and no open finding disputes, holding the rest as pending record updates in the ledger; in plan review write the plan overlay and never the record. Confirm the ledger folder is ignored before writing.
 5. Return the skill's return contract. In plan review, a `SHOULD_CHANGE` verdict blocks approval until every blocker and major row is resolved or explicitly accepted by the user.
 
@@ -26,7 +26,7 @@ Repository architecture documents and agent instructions override defaults for a
 
 ## Output Format
 
-Return the skill's return contract verbatim: verdict with counts, baseline status, the first three directions with rule, change, and what each protects, the record files edited and the pending record updates, the ledger path and slice counts, and one line of out-of-scope observations for other reviewers (naming, security, performance, behavior, visuals).
+Return the skill's return contract verbatim: verdict with counts, baseline status, the first three directions with rule, change, and what each protects, the record files edited and the pending record updates, the ledger path, agents dispatched and tokens when the harness reports them, and one line of out-of-scope observations for other reviewers (naming, security, performance, behavior, visuals).
 
 ## Forbidden Behaviors
 

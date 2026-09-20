@@ -111,7 +111,16 @@ Write an implementation plan grounded in the approved spec/design, ticket
 context, relevant repository evidence, and verification surfaces. Do not edit
 product code or tests.
 
-When the reviewer selection includes architecture plan review, dispatch the
+Before dispatching, run the structural precheck at no agent cost: list the files
+the plan creates or edits and place each in a component of the committed
+record's `docs/architecture/components.md` by path. Dispatch only when the
+files fall in two or more components, or the plan adds a package, a port, an
+import between components, or an external dependency, or no committed record
+exists. Otherwise record `architecture plan review: skipped, single-component
+plan` in the handoff and present the plan without it.
+
+When the reviewer selection includes architecture plan review and the precheck
+passes, dispatch the
 `architecture-coordinator` agent in plan-review mode before presenting the
 plan, with the written plan, the approved spec/design, the ticket context, and
 repository instructions. The plan need not use architecture vocabulary: the
@@ -148,7 +157,8 @@ After plan approval, return:
 - architecture plan-review evidence when selected: verdict, ledger path,
   findings the user explicitly accepted with reasons, and whether
   a baseline was created that must be committed with the PR; otherwise
-  `architecture plan review: not selected`;
+  `architecture plan review: not selected` or `architecture plan review:
+  skipped, single-component plan`;
 - accepted assumptions, remaining open questions, and material risks;
 - required verification surfaces.
 
