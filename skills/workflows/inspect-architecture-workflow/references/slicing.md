@@ -102,7 +102,8 @@ returns `checked` counts per rule so `OK` coverage is visible.
    updating run and evidence; if the target no longer exists in the code, set `RESOLVED` with a
    note that the target was removed; if this run did not evaluate that target (outside the diff,
    or its workflow was skipped), carry the row forward unchanged. Not being evaluated never
-   counts as being fixed.
+   counts as being fixed. A previous `ACCEPTED` row whose target and rule match again stays
+   `ACCEPTED`; one whose target now satisfies the rule becomes `RESOLVED`.
 5. **Changes.** Cluster `SHOULD_CHANGE` rows whose `change` descriptions name the same move
    (same port, same split, same extraction) into one `CH-<letter>`; write the description once.
 6. **Severity.** Apply the escalation rules from the skill body after merging, so escalation sees

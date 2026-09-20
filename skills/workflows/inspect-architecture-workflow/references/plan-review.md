@@ -67,5 +67,6 @@ Reply with the return contract from `verdicts.md`, listing `UNDERSPECIFIED` rows
 clarification requests. A `SHOULD_CHANGE` verdict, or any open `UNDERSPECIFIED` row, blocks
 approval. The agent that wrote the plan answers the clarifications, revises it for every blocker
 and major finding, and re-dispatches this review; the loop ends when the verdict is `OK` or when the user, shown the remaining rows,
-explicitly accepts each with a reason that the coordinator records in `decisions.md` as
-`ACCEPTED`, keyed by target path and rule. No implementer exists at this point and none is involved.
+explicitly accepts each with a reason, recorded per "Accepting a finding" in `verdicts.md`: a
+one-off stays in the ledger and carries into this ticket's change review; a standing rule becomes
+one generalized row in `decisions.md`. No implementer exists at this point and none is involved.
