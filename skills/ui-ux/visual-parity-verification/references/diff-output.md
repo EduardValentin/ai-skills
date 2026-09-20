@@ -3,6 +3,16 @@
 `diff_snapshots.py` writes one JSON file per row and viewport and prints one
 summary line.
 
+## Loading
+
+`load_snapshot` normalizes each input before comparison: it rewrites the old
+`geometry.relative`/`geometry.viewport` shape to the flat `geometry` box when
+present, then calls `inflate_styles` to fill every node's `style` from its
+parent's full style for keys the node didn't emit. See
+`references/snapshot-schema.md` for the delta rule this undoes. Every
+downstream step — alignment, scoring, `compare_pair` — sees full style
+blocks.
+
 ## Summary line
 
 ```

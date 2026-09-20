@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import subprocess
@@ -116,7 +117,6 @@ def node(
         "tag": tag,
         "hook": hook,
         "ownText": own_text,
-        "textDigest": f"{abs(hash(own_text)) & 0xFFFFFFFF:08x}",
         "role": role,
         "name": name,
         "nameFrom": name_from or ("author" if name else ""),
@@ -124,10 +124,7 @@ def node(
         "tabIndex": 0 if focusable else -1,
         "state": state or {},
         "style": merged_style,
-        "geometry": {
-            "relative": {"x": x, "y": y, "width": width, "height": height},
-            "viewport": {"x": x + 10, "y": y + 50, "width": width, "height": height},
-        },
+        "geometry": {"x": x, "y": y, "width": width, "height": height},
         "contrast": contrast,
         "wrapper": wrapper,
         "children": children or [],
@@ -173,11 +170,28 @@ def snapshot(
             "tag": root["tag"],
             "role": root["role"],
             "name": root["name"],
-            "width": root["geometry"]["relative"]["width"],
-            "height": root["geometry"]["relative"]["height"],
+            "width": root["geometry"]["width"],
+            "height": root["geometry"]["height"],
         },
         "root": root,
     }
+
+
+def delta_snapshot(snap: dict[str, Any]) -> dict[str, Any]:
+    """Deep copy of `snap` with each non-root node's style stripped to the
+    keys whose value differs from its parent's full style, exactly as
+    snapshot-subtree.browser.js emits them."""
+    result = copy.deepcopy(snap)
+
+    def walk(node: dict[str, Any], parent_full_style: dict[str, str] | None) -> None:
+        full_style = dict(node["style"])
+        if parent_full_style is not None:
+            node["style"] = {key: value for key, value in full_style.items() if parent_full_style.get(key) != value}
+        for child in node["children"]:
+            walk(child, full_style)
+
+    walk(result["root"], None)
+    return result
 
 
 def write_json(path: Path, data: Any) -> Path:

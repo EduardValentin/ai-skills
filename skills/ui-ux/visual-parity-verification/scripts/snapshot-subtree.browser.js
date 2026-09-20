@@ -47,15 +47,6 @@
     return collapseWhitespace(text);
   }
 
-  function fnv1a(text) {
-    let hash = 0x811c9dc5;
-    for (let index = 0; index < text.length; index += 1) {
-      hash ^= text.charCodeAt(index);
-      hash = Math.imul(hash, 0x01000193) >>> 0;
-    }
-    return hash.toString(16).padStart(8, "0");
-  }
-
   function implicitRole(element) {
     const tag = element.tagName.toLowerCase();
     switch (tag) {
@@ -284,6 +275,14 @@
     return block;
   }
 
+  function deltaStyle(block, parentBlock) {
+    const delta = {};
+    for (const key of Object.keys(block)) {
+      if (block[key] !== parentBlock[key]) delta[key] = block[key];
+    }
+    return delta;
+  }
+
   function relativeRect(rect, rootRect) {
     return {
       x: Math.round((rect.left - rootRect.left) * 100) / 100,
@@ -293,38 +292,34 @@
     };
   }
 
-  function snapshotNode(element, rootRect, path, options, isRoot) {
+  function snapshotNode(element, rootRect, path, options, isRoot, parentBlock) {
     const style = getComputedStyle(element);
     if (!isRoot && isHidden(element, style)) return null;
+    const background = effectiveBackground(element);
+    const block = styleBlock(style, background);
     const children = [];
     for (const child of element.children) {
-      const childNode = snapshotNode(child, rootRect, `${path} > ${pathSegment(child)}`, options, false);
+      const childNode = snapshotNode(child, rootRect, `${path} > ${pathSegment(child)}`, options, false, block);
       if (childNode) children.push(childNode);
     }
     const rect = element.getBoundingClientRect();
     if (!isRoot && rect.width === 0 && rect.height === 0 && children.length === 0) return null;
     const text = ownText(element);
     const elementRole = role(element);
-    const background = effectiveBackground(element);
-    const block = styleBlock(style, background);
     const { name, nameFrom } = accessibleName(element, elementRole);
     return {
       path,
       tag: element.tagName.toLowerCase(),
       hook: element.getAttribute(options.hookAttribute),
       ownText: text,
-      textDigest: fnv1a(text),
       role: elementRole,
       name,
       nameFrom,
       focusable: isFocusable(element),
       tabIndex: element.tabIndex,
       state: ariaState(element),
-      style: block,
-      geometry: {
-        relative: relativeRect(rect, rootRect),
-        viewport: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
-      },
+      style: isRoot ? block : deltaStyle(block, parentBlock),
+      geometry: relativeRect(rect, rootRect),
       contrast: contrastOf(block, background, text),
       wrapper: isWrapper(style, text),
       children,
@@ -365,7 +360,7 @@
       colorScheme: typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
       capturedAt: new Date().toISOString(),
       rootSelector,
-      rootSummary: { tag: root.tag, role: root.role, name: root.name, width: root.geometry.relative.width, height: root.geometry.relative.height },
+      rootSummary: { tag: root.tag, role: root.role, name: root.name, width: root.geometry.width, height: root.geometry.height },
       root,
     };
   }

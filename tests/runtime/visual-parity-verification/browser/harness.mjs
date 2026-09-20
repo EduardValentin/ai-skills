@@ -54,9 +54,13 @@ checks.headingRoleAndName = byPath.get("section > h2:nth-of-type(1)")?.role === 
 checks.buttonIsFocusableWithName = byPath.get("section > button:nth-of-type(1)")?.focusable === true && byPath.get("section > button:nth-of-type(1)")?.name === "Place order";
 checks.imgNameFromAlt = byPath.get("section > img:nth-of-type(1)")?.name === "Brand";
 checks.inputNameFromLabel = byPath.get("section > label:nth-of-type(1) > input:nth-of-type(1)")?.name === "Coupon";
-checks.relativeGeometryFromRoot = byPath.get("section > h2:nth-of-type(1)")?.geometry.relative.x === 16 && byPath.get("section > h2:nth-of-type(1)")?.geometry.relative.y === 16;
+checks.relativeGeometryFromRoot = byPath.get("section > h2:nth-of-type(1)")?.geometry.x === 16 && byPath.get("section > h2:nth-of-type(1)")?.geometry.y === 16;
 checks.wrapperFlagOnPlainDiv = byPath.get("section > div:nth-of-type(1)")?.wrapper === true;
-checks.styleHasEveryKey = Object.keys(byPath.get("section > h2:nth-of-type(1)").style).length === 68;
+checks.rootStyleHasEveryKey = Object.keys(snapshot.root.style).length === 68;
+checks.childStyleIsDelta = (() => {
+  const h2Style = byPath.get("section > h2:nth-of-type(1)").style;
+  return Object.keys(h2Style).length < 68 && Object.prototype.hasOwnProperty.call(h2Style, "fontSize");
+})();
 
 checks.buttonNameFromContent = byPath.get("section > button:nth-of-type(1)")?.nameFrom === "content";
 checks.imgNameFromAuthor = byPath.get("section > img:nth-of-type(1)")?.nameFrom === "author";

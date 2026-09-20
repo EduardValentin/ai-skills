@@ -1,8 +1,10 @@
 # Snapshot schema
 
 `snapshot-subtree.browser.js` returns one object per root per viewport. The
-agent saves it unchanged under the session folder as
-`snapshots/<row-id>/<side>-<width>x<height>.json`.
+agent saves it as compact JSON — `JSON.stringify(data)`, no indentation — under
+the session folder as `snapshots/<row-id>/<side>-<width>x<height>.json`. The
+diff's loader accepts indented JSON too; compact only shrinks the file the
+agent's context would otherwise see.
 
 ## Document
 
@@ -26,15 +28,14 @@ agent saves it unchanged under the session folder as
 | `tag` | string | Lowercase tag name |
 | `hook` | string or null | Value of the `data-parity` attribute |
 | `ownText` | string | Whitespace-collapsed concatenation of the node's own text children |
-| `textDigest` | string | Eight hex characters, FNV-1a of `ownText` |
 | `role` | string | Explicit `role` attribute or implicit role for the tag, empty when none |
 | `name` | string | Accessible name in order: `aria-labelledby`, `aria-label`, associated label, `alt`, `title`, own text when the role allows name from content |
 | `nameFrom` | string | `"author"` when `name` came from `aria-labelledby`, `aria-label`, an associated label, `alt`, or `title`; `"content"` when it came from the node's text content; `""` when there is no name |
 | `focusable` | boolean | Focusable by tag or by non-negative `tabindex` |
 | `tabIndex` | number | `element.tabIndex` |
 | `state` | object | Present ARIA and native state: `aria-expanded`, `aria-selected`, `aria-checked`, `aria-pressed`, `aria-disabled`, `disabled`, `aria-current`, `aria-hidden` |
-| `style` | object | Longhand computed values, see below |
-| `geometry` | `{ relative: { x, y, width, height }, viewport: { x, y, width, height } }` | Relative is measured from the root's top-left corner |
+| `style` | object | Computed values, see below; the root carries every key, every other node only the keys that differ from its parent |
+| `geometry` | `{ x, y, width, height }` | Measured from the root's top-left corner |
 | `contrast` | `{ ratio, needsAnalyzer, largeText }` or null | Only for nodes with non-empty `ownText` |
 | `wrapper` | boolean | No own text, no border, transparent own background, no shadow, zero padding, no transform, no outline |
 | `children` | node[] | Included descendants in document order |
@@ -53,6 +54,38 @@ All values are computed-style strings.
 - `display`, `flexDirection`, `flexWrap`, `alignItems`, `justifyContent`, `alignContent`, `gridTemplateColumns`, `gridTemplateRows`, `gridAutoFlow`, `rowGap`, `columnGap`, `position`, `overflowX`, `overflowY`, `zIndex`
 - `flexGrow`, `flexShrink`, `flexBasis`, `alignSelf`, `order`, `gridColumnStart`, `gridColumnEnd`, `gridRowStart`, `gridRowEnd`
 - `textOverflow`, `whiteSpace`, `transform`
+
+Together with `effectiveBackground` this is 68 keys. The root node's `style`
+holds all 68. Every other node's `style` holds only the keys whose
+canonicalized value differs from its parent's full 68-key block — the parent
+block used for the comparison, not the parent's own (possibly delta) emitted
+`style`. A node whose computed style matches its parent everywhere emits an
+empty `style` object. Internal computations (contrast, the wrapper flag,
+alignment fingerprinting) always use the full 68-key block, never the
+emitted delta.
+
+## Removed fields
+
+Two fields from the 2026-09-19 schema are gone: `textDigest` (redundant with
+`ownText`, which the diff already reads) and `geometry.viewport` (the
+diff and every reader use `geometry` directly; nothing consumed the
+viewport-relative box).
+
+## Style inflation
+
+`diff_snapshots.py` calls `inflate_styles(root)` in `load_snapshot` before
+any comparison, filling each node's `style` from its parent's already-
+inflated full block for every key the node didn't emit. A snapshot whose
+nodes already carry full styles inflates to itself. Everything downstream —
+alignment, scoring, comparison — sees full style blocks and never has to
+know about the delta encoding on disk.
+
+## Old geometry shape
+
+A snapshot from before this schema change nests each node's box under
+`geometry.relative` alongside a `geometry.viewport` sibling. `load_snapshot`
+detects that shape (`"relative"` present) and replaces `geometry` with the
+`relative` box before inflation, so older files on disk still load.
 
 ## Color canonicalization
 

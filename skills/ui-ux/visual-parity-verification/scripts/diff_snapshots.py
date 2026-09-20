@@ -30,6 +30,35 @@ class InputError(Exception):
     pass
 
 
+def normalize_geometry(root: dict[str, Any]) -> None:
+    """Rewrite the 2026-09-19 `{"relative": box, "viewport": box}` geometry
+    shape to the flat box, in place, so old snapshots still load."""
+
+    def walk(node: dict[str, Any]) -> None:
+        geometry = node.get("geometry")
+        if isinstance(geometry, dict) and "relative" in geometry:
+            node["geometry"] = geometry["relative"]
+        for child in node["children"]:
+            walk(child)
+
+    walk(root)
+
+
+def inflate_styles(root: dict[str, Any]) -> dict[str, Any]:
+    """Fill each node's `style` from its parent's already-inflated style,
+    undoing the delta encoding snapshot-subtree.browser.js emits. Identity
+    on a tree whose nodes already carry full styles."""
+
+    def walk(node: dict[str, Any], parent_style: dict[str, Any] | None) -> None:
+        if parent_style is not None:
+            node["style"] = {**parent_style, **node["style"]}
+        for child in node["children"]:
+            walk(child, node["style"])
+
+    walk(root, None)
+    return root
+
+
 def load_snapshot(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -39,6 +68,8 @@ def load_snapshot(path: Path) -> dict[str, Any]:
         raise InputError(f"{path} is not valid JSON: {error.msg}") from error
     if not isinstance(data, dict) or "root" not in data or "rootSummary" not in data:
         raise InputError(f"{path} is not a snapshot: missing root or rootSummary")
+    normalize_geometry(data["root"])
+    inflate_styles(data["root"])
     return data
 
 
@@ -188,7 +219,7 @@ def signature_signal(a: dict[str, Any], b: dict[str, Any]) -> float:
 
 
 def normalized_box(node: dict[str, Any], root: dict[str, Any]) -> tuple[float, float, float, float]:
-    box = node["geometry"]["relative"]
+    box = node["geometry"]
     width = root.get("width") or 1
     height = root.get("height") or 1
     return (
@@ -346,7 +377,7 @@ def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geome
     for key in GEOMETRY_KEYS:
         if key in exclude_geometry:
             continue
-        a, b = proto["geometry"]["relative"][key], real["geometry"]["relative"][key]
+        a, b = proto["geometry"][key], real["geometry"][key]
         if abs(float(a) - float(b)) > tolerances["lengthPx"]:
             record("geometry", key, a, b)
     return findings
