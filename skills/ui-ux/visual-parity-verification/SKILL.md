@@ -2,7 +2,7 @@
 name: visual-parity-verification
 description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, or, when no runnable reference exists, consistently with credible production analogs, by snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into a caller-supplied parity ledger.
 compatibility: >-
-  Requires a running real app, a running prototype in a React development build or named production analogs, browser tooling that can inject the bundled browser scripts and evaluate a function with serialized arguments on both sides (host browser tooling, else Playwright), Python 3 for the bundled host scripts, and a caller-supplied ledger and component map. Playwright is optional and only needed to run scripts/capture-snapshots.mjs; without it, capture snapshots by driving host browser tooling directly. Without any of these, return BLOCKED naming the missing input.
+  Requires a running real app, a running prototype in a React development build or named production analogs, browser tooling that can inject the bundled browser scripts and evaluate a function with serialized arguments on both sides, Python 3 for the bundled host scripts, and a caller-supplied ledger and component map. Playwright is optional, for scripts/capture-snapshots.mjs; without it, drive browser tooling directly. Without any of these, return BLOCKED naming the missing input.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -12,151 +12,116 @@ metadata:
 
 ## Overview
 
-Compare the rendered real app to its basis one root pair at a time. A root
-pair is a prototype React component and the real app element that renders
-the same surface. The bundled scripts resolve the prototype roots, snapshot
-the rendered subtree on both sides, align and compare the two snapshots, and
-write the verdict into the ledger. You reach states, supply nothing the
-scripts can derive, and read the diff. Screenshots are context, never proof.
-Source files, static mockups, hidden templates, Storybook-only renders and
-accessibility scans cannot complete a comparison.
+Compare the rendered real app to its basis one root pair at a time: a
+prototype React component and the real app element rendering the same
+surface. The bundled scripts capture, align and compare the two snapshots
+and write the verdict into the ledger. You reach states, supply nothing the
+scripts can derive, and read only the diff's and ledger writer's printed
+output, never the snapshot JSON. Screenshots, source files, static
+mockups, hidden templates, Storybook-only renders and accessibility scans
+are context, never proof, and cannot complete a comparison.
 
-The real app may be built with any stack. Nothing after root resolution
+The real app may be built with any stack; nothing after root resolution
 inspects how its markup was produced.
 
 ## When To Use
 
 - A changed UI surface has a prototype or other runnable reference it must
-  match exactly.
-- A changed UI surface has no runnable reference and must be judged against
-  credible production analogs of the same role.
+  match exactly, or has none and must be judged against credible
+  production analogs of the same role.
 - The caller supplies a parity ledger and component map.
 
-Do not use for broad rendered validation without a comparison basis; that is
+Do not use for broad rendered validation without a comparison basis; that's
 ordinary visual validation.
 
 ## Inputs
 
-- The ledger file to read and write. It records the viewport set and theme
-  once at the top. Each row names a route, a state, a prototype component
-  name, a real app root, and carries a `Verdict` and an `Evidence` column
-  that only you write.
-- The component map, which pairs each prototype component with a real app
-  root selector or `data-parity-root` value and a route on each side.
-- URLs of the running real app and the running prototype, or the analog
-  routes and selectors when no reference exists.
-- The project's breakpoints, or the default viewport set below.
+- The ledger to read and write, recording the viewport set and theme once
+  at the top; each row names a route, a state, a prototype component name
+  and a real app root, and carries a `Verdict` and an `Evidence` column
+  only you write.
+- The component map, pairing each prototype component with a real app root
+  selector or `data-parity-root` value and a route per side.
+- URLs of the running real app and prototype, or analog routes and
+  selectors when no reference exists, and the project's breakpoints or the
+  default viewport set below.
 
-If the ledger or the map is missing, return `BLOCKED` before any comparison
-and request it. Do not scope the inventory yourself from screenshots or
+If the ledger or map is missing, return `BLOCKED` before any comparison and
+request it; do not scope the inventory yourself from screenshots or
 impressions.
 
 ## Basis
 
-The basis is chosen from one observable fact:
+The basis follows one fact:
 
-- A runnable reference UI exists for the row: compare against it. Local
+- A runnable reference exists for the row: compare against it; local
   preference never overrides the reference.
-- No runnable reference exists for the row: compare against the closest
-  credible production analog by role and purpose, or a reusable component
-  contract or documented design constraint. Name the analog in the row's
-  evidence. If no credible analog exists, mark the row `BLOCKED`.
+- No runnable reference exists: compare against the closest credible
+  production analog by role and purpose, or a reusable component contract
+  or documented design constraint; name the analog in the row's evidence,
+  or mark the row `BLOCKED` if none exists.
 
 ## Matched Conditions
 
-Render each side at the route the component map pairs for that row. Match
-viewport width and height, browser zoom, device scale factor, state, theme
-and any other condition that could change the result. The snapshot records
-these and the diff refuses to compare snapshots taken under different
-conditions.
+Render each side at the route the component map pairs for that row,
+matching viewport width and height, browser zoom, device scale factor,
+state, theme and any other condition that could change the result. The
+snapshot records these; the diff refuses to compare snapshots taken under
+different conditions.
 
-Take the viewport set from the project's responsive configuration, such as
-Tailwind screens, CSS breakpoints or design tokens: one width just below and
-one just above each breakpoint, plus the narrowest and widest widths the
-project supports. Only when the project defines no breakpoints, use 320, 768,
-1024, 1440 and 1920 pixels wide.
+Take the viewport set from the project's responsive configuration — Tailwind
+screens, CSS breakpoints or design tokens — one width below and one above
+each breakpoint, plus the narrowest and widest widths supported. Without
+project breakpoints, use 320, 768, 1024, 1440 and 1920 pixels wide.
 
 ## Bundled Scripts
 
-Paths resolve from the skill root. Inject the browser scripts unchanged and
-pass every argument as a serialized evaluation argument. Never interpolate a
-selector or a component name into script text.
+Paths resolve from the skill root.
 
-- `scripts/find-react-roots.browser.js` exposes
-  `globalThis.parityFindReactRoots(componentNames)`. Prototype side only. It
-  returns each component's outermost rendered elements as selectors, or
-  `no-react-fibers` when the page is not a React development build.
-- `scripts/snapshot-subtree.browser.js` exposes
-  `globalThis.paritySnapshot(rootSelector, options)`. Both sides. It returns
-  the rendered subtree with semantics, computed style, geometry relative to
-  the root, contrast and a wrapper flag. The shape is in
+- `scripts/capture-snapshots.mjs`: drives headless Chromium through
+  Playwright, writing snapshot files itself. `references/capture.md`.
+- `scripts/find-react-roots.browser.js` and
+  `scripts/snapshot-subtree.browser.js`: resolve prototype roots and
+  capture a subtree when driving the browser directly.
   `references/snapshot-schema.md`.
-- `scripts/diff_snapshots.py` compares one prototype snapshot with one real
-  app snapshot and writes a diff file plus a summary line. The shape and the
-  verdict rules are in `references/diff-output.md`.
-- `scripts/write_ledger.py` writes the worst verdict across a row's diff
-  files and a compact evidence summary into that row, or appends a
-  provenance-gap row.
-
-```javascript
-const roots = await page.evaluate(
-  (names) => globalThis.parityFindReactRoots(names),
-  ["OrderSummary"],
-);
-const snapshot = await page.evaluate(
-  (selector) => globalThis.paritySnapshot(selector),
-  roots.roots.OrderSummary[0].selector,
-);
-```
-
-```bash
-scripts/diff_snapshots.py --prototype <session>/snapshots/L1/prototype-1440x900.json \
-  --real <session>/snapshots/L1/real-1440x900.json \
-  --out <session>/diffs/L1-1440x900.json --pairings <session>/pairings.json --row L1
-scripts/write_ledger.py --ledger <session>/ledger.md --row L1 \
-  --diff <session>/diffs/L1-1440x900.json --diff <session>/diffs/L1-375x800.json
-```
+- `scripts/diff_snapshots.py`: compares a prototype and a real app
+  snapshot, writes a diff file, and prints a summary line, adding review
+  lines with `--print-review`. `references/diff-output.md`.
+- `scripts/write_ledger.py`: writes a row's worst verdict and an evidence
+  summary, or appends a provenance-gap row with `--append-gap`.
 
 ## Procedure
 
-1. Resolve prototype roots. At each prototype route, inject the root finder
-   and evaluate it with every component name the map lists for that route.
-   A component with zero roots is `BLOCKED` for its rows with the component
-   and route named. `no-react-fibers` blocks every row at that route.
-2. For each row and viewport, set matched conditions on both sides, reach
-   the row's state on both sides by interacting with the page, inject the
-   snapshot script and evaluate it with the prototype root selector on the
-   prototype and the map's real app root on the real app. Save both results
-   unchanged under `snapshots/<row-id>/` in the session folder.
-3. Run the diff for each row and viewport into `diffs/`. Read the summary
-   line.
-4. Review every pair with `needsReview` true and every suggestion in the
-   diff file. Confirm or reject each by writing the pair into
-   `pairings.json` under the row id — a pairing resolves anywhere in the
-   two trees by full path, and a paired node is taken out of ordinary
-   alignment along with its position among its siblings — then rerun that
-   row's diffs. Add a finer root pair to the component map when a subtree
-   aligns poorly rather than tuning weights.
-5. Write the ledger for each row from its diff files.
-6. At each real app route, look at the rendered page for a visible in-scope
-   surface the map omits. Append a gap row for each with the ledger writer,
-   pair it in the map, then run it like any other row.
+1. Capture. For each row and viewport set, run
+   `scripts/capture-snapshots.mjs` with that row's URLs and roots. Rows
+   sharing a prototype route and state capture it once, then capture only
+   `--real-url`/`--real-root` per row, pointing the diff at the shared
+   file. Read only the printed summary line.
+2. Interactive states. For a state the capture command cannot drive, reach
+   it by hand on both sides, inject the snapshot script by file path, and
+   evaluate `paritySnapshot(root, { encoding: "gzip-base64" })`, saving the
+   returned string verbatim as the snapshot file.
+3. Diff. For each row and viewport, run `scripts/diff_snapshots.py` with
+   `--print-review` and read only its printed summary and review lines.
+4. Review. Confirm or reject each printed `review` pair and accept or
+   ignore each `suggest` line. Write confirmed pairs into `pairings.json`
+   under the row id, then rerun that row's diffs. Add a finer root pair to
+   the component map when a subtree aligns poorly rather than tuning
+   weights.
+5. Ledger. Write the ledger for each row from its diff files with
+   `scripts/write_ledger.py`.
+6. Gap check. At each real app route, look for a visible in-scope surface
+   the map omits. Append a gap row with `write_ledger.py --append-gap`,
+   pair it in the map, and run it like any other row.
 
 ## Evidence Standard
 
-The snapshot is the evidence. It covers font, color, effective background,
-box, layout, flex and grid placement, geometry relative to the root,
-transform, role, accessible name, focusability, ARIA state and contrast.
-Evidence status labels: `complete DOM evidence` when every row has diff
-files for every viewport, `partial DOM evidence` when some rows do,
-`degraded manual evidence` when a row's verdict rests on anything other than
-a diff file, `no comparison evidence` otherwise. Degraded evidence may
-support a provisional `DRIFT` for a clearly visible defect with the missing
-diff stated; it can never support `MATCH` or `CLEAN`.
+See `references/report-format.md` for evidence status labels and what the
+snapshot covers.
 
 ## Row Verdicts
 
-The diff decides the verdict per viewport and the ledger writer records the
+The diff decides each viewport's verdict; the ledger writer records the
 worst across viewports:
 
 - `MATCH`: no style, geometry or missing finding on any viewport.
@@ -166,10 +131,11 @@ worst across viewports:
 - `BLOCKED`: conditions differ, roots are incompatible, or a required input
   is unavailable.
 
-Structure and content findings are reported and never change the verdict.
-Accessibility findings are reported even when both sides share them.
-Unmeasurable contrast is an accessibility finding, not a row verdict; it
-counts as a blocked check in Global Verdict step 2. Leave no row `PENDING`.
+Structure and content findings are reported and never change the verdict;
+accessibility findings are reported even when both sides share them.
+Unmeasurable contrast is an accessibility finding, not a row verdict,
+counting as a blocked check in Global Verdict step 2. Leave no row
+`PENDING`.
 
 ## Global Verdict
 
@@ -178,66 +144,24 @@ Apply in this order:
 1. `FINDINGS` when any row is `DRIFT` or `MISSING`, or accessibility has a
    confirmed failure.
 2. `BLOCKED` when no finding is established but a required row or check is
-   blocked, only degraded evidence exists, or the status is `no comparison
-   evidence`.
+   blocked, evidence is degraded, or status is `no comparison evidence`.
 3. `CLEAN` only with complete DOM evidence, every row `MATCH`, every required
    accessibility check complete and passing, and no visible in-scope surface
    missing from the map.
 
 ## Rechecks
 
-After the implementation owner fixes rows, rerun every prior `DRIFT`,
-`MISSING` and `BLOCKED` row, every row whose implementation files changed,
-and their affected states, under the original matched conditions. When a
-shared primitive, global style, token or theme changed, rerun every row.
-Pairings persist across reruns. Return a delta that distinguishes resolved,
-remaining and new findings. A fix description is not proof.
+After fixes, rerun every prior `DRIFT`, `MISSING` and `BLOCKED` row, every
+row whose implementation files changed, and their affected states, under
+the original matched conditions; a shared primitive, global style, token or
+theme change reruns every row. Pairings persist across reruns. Return a
+delta distinguishing resolved, remaining and new findings — a fix
+description is not proof.
 
 ## Report
 
-Return the ledger path with the updated rows, then:
-
-```markdown
-# Visual parity verification — <surface>
-
-## Verdict
-- <CLEAN | FINDINGS | BLOCKED>
-
-## Evidence status
-- <complete DOM evidence | partial DOM evidence | degraded manual evidence | no comparison evidence>
-
-## Basis
-- <prototype URL and routes, or analog routes and why they are credible>
-
-## Matched conditions
-- viewport set: <widths x heights> | zoom: <percent> | device scale: <factor> | theme: <theme>
-
-## Ledger rows written
-- <count MATCH> MATCH | <count DRIFT> DRIFT | <count MISSING> MISSING | <count BLOCKED> BLOCKED
-
-## Findings
-- **P1** | severity: <blocker / major / minor> | ledger row <id> | <path property> | evidence: <prototype value vs real value> | diff: <relative diff path>
-
-## Structure and content notes
-- <moved nodes, collapsed-count differences, content mismatches, or None>
-
-## Accessibility findings
-- **A1** | severity: <blocker / major / minor> | ledger row <id> | <check> | WCAG criterion | suggested fix
-
-## Pairings confirmed
-- <row id: prototype path to real path, or None>
-
-## Ledger provenance gaps
-- <rows appended for visible in-scope surfaces the map omitted, or None>
-
-## Blockers
-- <None, or blocked row and minimum next input>
-
-## Rerun delta
-- <None, or resolved, remaining and new rows>
-```
-
-Write explicit `None` in every empty section.
+Return the ledger path with the updated rows, then the report template in
+`references/report-format.md`.
 
 ## Forbidden Behaviors
 

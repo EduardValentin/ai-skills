@@ -137,8 +137,10 @@ Runs once the inner implementation workflow has returned
    skill's defaults only when the project defines no breakpoints.
 3. Dispatch `parity-verifier` with the ledger and map paths, both app URLs,
    the component names per route, the viewport set, the theme, and the
-   diff. It resolves roots, snapshots both sides, runs the bundled diff,
-   writes a verdict and evidence into every row and returns its report.
+   diff. It captures with the bundled capture command when Playwright is
+   available, otherwise drives the browser directly, then runs the bundled
+   diff, writes a verdict and evidence into every row and returns its
+   report.
 4. Read the ledger. For every row that is not `MATCH`, the implementer fixes
    the production side, or the prototype side when the design change was
    made there and production is the source of the row's basis. A fix to a

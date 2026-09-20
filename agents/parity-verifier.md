@@ -18,6 +18,8 @@ omits and append it as a provenance-gap row. Leave no row `PENDING`.
 
 Exact match is the bar. A difference the prototype does not show is `DRIFT` regardless of whether it looks acceptable.
 
+Prefer the bundled capture command when Playwright is available; use the compressed return when driving the browser yourself.
+
 ## Inputs You May Receive
 
 - Path to this session's parity folder, holding the ledger, component map,
