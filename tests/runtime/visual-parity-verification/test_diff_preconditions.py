@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sys
 import tempfile
@@ -120,6 +121,22 @@ class DiffPreconditionTests(unittest.TestCase):
             completed = support.run_diff("--prototype", str(proto_path), "--real", str(real_path), "--out", str(out))
             self.assertEqual(completed.returncode, 2)
             self.assertIn("prototype.json", completed.stderr)
+
+    def test_truncated_compressed_snapshot_exits_two(self) -> None:
+        proto = support.snapshot(simple_root())
+        real = support.snapshot(simple_root())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            proto_path = support.write_compressed_snapshot(root / "prototype.json", proto)
+            real_path = support.write_compressed_snapshot(root / "real.json", real)
+            gzip_bytes = base64.b64decode(json.loads(proto_path.read_text(encoding="utf-8")))
+            truncated = base64.b64encode(gzip_bytes[:10]).decode("ascii")
+            proto_path.write_text(json.dumps(truncated), encoding="utf-8")
+            out = root / "diff.json"
+            completed = support.run_diff("--prototype", str(proto_path), "--real", str(real_path), "--out", str(out))
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("prototype.json", completed.stderr)
+            self.assertNotIn("Traceback", completed.stderr)
 
     def test_pairings_without_row_is_ignored_with_a_warning(self) -> None:
         proto = support.snapshot(simple_root())

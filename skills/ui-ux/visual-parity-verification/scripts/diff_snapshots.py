@@ -65,10 +65,16 @@ def inflate_styles(root: dict[str, Any]) -> dict[str, Any]:
 def decode_gzip_base64_snapshot(path: Path, encoded: str) -> Any:
     try:
         compressed = base64.b64decode(encoded, validate=True)
+    except binascii.Error as error:
+        raise InputError(f"{path} has invalid base64: {error}") from error
+    try:
         decompressed = gzip.decompress(compressed)
+    except (OSError, EOFError) as error:
+        raise InputError(f"{path} has invalid or truncated gzip data: {error}") from error
+    try:
         text = decompressed.decode("utf-8")
-    except (binascii.Error, OSError, UnicodeDecodeError) as error:
-        raise InputError(f"{path} is not a valid gzip-base64 snapshot: {error}") from error
+    except UnicodeDecodeError as error:
+        raise InputError(f"{path} has invalid utf-8: {error}") from error
     try:
         return json.loads(text)
     except json.JSONDecodeError as error:
