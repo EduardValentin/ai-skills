@@ -18,11 +18,11 @@ metadata:
 ## Purpose
 
 Turn a codebase, a diff, or an implementation plan into an evidenced
-architecture assessment. The coordinator running this skill slices the work,
-dispatches read-only subagents, merges their rows, and owns two artifact sets:
-the committed architecture record, which is the project's architecture
-documentation, and the uncommitted refactoring ledger, which is the agents'
-working memory. It never edits production code.
+architecture assessment. The coordinator slices the work, dispatches read-only
+subagents, merges their rows, and owns two artifact sets: the committed
+architecture record, the project's architecture documentation, and the
+uncommitted refactoring ledger, the agents' working memory. It never edits
+production code.
 
 ## Choose the mode, then follow its file
 
@@ -32,10 +32,10 @@ working memory. It never edits production code.
 | Change review | Reviewing a diff against the committed baseline | `references/change-review.md` |
 | Plan review | Reviewing a written implementation plan before it is approved | `references/plan-review.md` |
 
-Change review and plan review require a committed baseline for their scope.
-When none exists, run the audit procedure on the affected scope first, then
-continue; report that the record must be committed with the PR. Never review a
-diff or plan against a graph that exists only in memory.
+Change review and plan review need a committed baseline for their scope. When
+none exists, run the audit procedure on the affected scope first, then
+continue, and report that the record must be committed with the PR. Never
+review a diff or plan against a graph that exists only in memory.
 
 Every mode ends with the verdict rules and return contract in
 `references/verdicts.md`.
@@ -45,8 +45,8 @@ Every mode ends with the verdict rules and return contract in
 **Committed record** at `docs/architecture/` in the inspected project, unless
 the project's agent instructions name another path. It replaces any free-form
 architecture document and is the baseline later runs compare against. Audits
-write it in full; change reviews update the rows a diff changed, but never a
-row that an open finding disputes. Plan reviews never write it.
+write it in full; change reviews update the rows a diff changed, never a row
+an open finding disputes; plan reviews never write it.
 
 | File | Holds |
 |---|---|
@@ -67,18 +67,18 @@ file, never to a tracked ignore file.
 | `change-history.md` | Per touched unit, the reason and actor of each recent change |
 | `slices/` | Raw subagent returns of the latest run |
 
-Every artifact opens with a header: date, commit, scope, mode. The ledger is derived
-state: when none exists, start one; only the committed record is a required
-baseline. Ledger IDs and run numbers are transitory and never appear in a
-committed file; the record refers to a finding only by the target's path and
-symbol and the rule.
+Every artifact opens with a header: date, commit, scope, mode. The ledger is
+derived state: start one when none exists; only the committed record is a
+required baseline. Ledger IDs and run numbers are transitory and never appear
+in a committed file; the record refers to a finding only by the target's path
+and symbol and the rule.
 
 ## Shared references
 
 - `references/rules/preface.md`: the catalog preface and vocabulary, read
   before any rule file. `references/rules/cross-cutting.md` holds R1 to R3;
-  `references/rules/w1.md` through `references/rules/w8.md` hold the rules of
-  each evaluation workflow.
+  `references/rules/w1.md` through `references/rules/w8.md` hold each
+  evaluation workflow's rules.
 - `references/workflows/preamble.md`: shared row columns and severity scale;
   `references/workflows/w1.md` through `references/workflows/w8.md` hold each
   workflow's inputs, procedure, and decision table.
@@ -93,14 +93,14 @@ symbol and the rule.
 
 ## Cost
 
-A run's cost is agent sessions, not skill text. Hold to these:
+A run's cost is agent sessions, not skill text.
 
 - Callers run the structural precheck before dispatching a review: a plan or
   diff confined to one component of `components.md` that adds no package,
   port, cross-component import, or external dependency is not reviewed.
-- Packets name skill files by absolute path; they never paste catalog text.
-- Audit fans out one evaluator per workflow; change and plan review dispatch
-  one evaluator for every applicable workflow.
+- Packets name skill files by absolute path and never paste catalog text.
+- An audit fans out one evaluator per workflow; change and plan review
+  dispatch one evaluator for every applicable workflow.
 - Evaluators judge inventory rows and open no project file.
 - The history slice runs on the smallest model available.
 - The return contract reports agents dispatched and tokens when the harness
@@ -108,8 +108,8 @@ A run's cost is agent sessions, not skill text. Hold to these:
 
 ## Discipline
 
-- No verdict without an inventory row and a rule number behind it; evidence is
-  a path and an inventory ID.
+- No verdict without an inventory row and a rule number; evidence is a path
+  and an inventory ID.
 - Subagents never write artifacts; the coordinator merges and writes.
 - Structural findings are added to functional findings a caller also asked
   for, never substituted for them.
