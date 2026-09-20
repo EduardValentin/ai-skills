@@ -55,7 +55,7 @@ row that an open finding disputes. Plan reviews never write it.
 | `units.md` | Units: component, kind, ring, visibility, actors |
 | `dependencies.md` | Edges, forbidden edges, ports, entry points, composition roots, shared data shapes |
 | `metrics.md` | Per component: fan-in, fan-out, instability, abstractness, distance, volatility, previous distance |
-| `decisions.md` | Deferred decisions and their ports, cohesion groups, cohesion position and cost per component, intended exceptions, accepted findings |
+| `decisions.md` | Only decisions the workflows consume, at component or boundary level: deferred decisions and their ports, cohesion groups, cohesion position and cost per component, intended exceptions. Never a row per finding or per ticket |
 
 **Uncommitted ledger** at `.architecture/` in the inspected project. Confirm
 it is ignored before writing; if not, add it to the repository's local exclude
@@ -63,7 +63,7 @@ file, never to a tracked ignore file.
 
 | File | Holds |
 |---|---|
-| `ledger.md` | Run log, change definitions, findings rows, improvement map, pending record updates |
+| `ledger.md` | Run log, change definitions, findings rows, acceptances, improvement map, pending record updates |
 | `change-history.md` | Per touched unit, the reason and actor of each recent change |
 | `slices/` | Raw subagent returns of the latest run |
 
@@ -97,5 +97,5 @@ symbol and the rule.
 - Do not invent boundaries the code does not have; when it draws none, the
   record says so and W5 and W8 report it.
 - Do not propose restructuring beyond the scope unless the scope's own edges
-  create the problem; record wider observations in `decisions.md` under open
-  questions.
+  create the problem; report wider observations in the return contract's
+  out-of-scope line. Only an audit writes open questions to `decisions.md`.

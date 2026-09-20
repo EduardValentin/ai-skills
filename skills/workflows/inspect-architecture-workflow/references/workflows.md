@@ -9,6 +9,12 @@ Common columns for every assessment row: `id`, `workflow`, `target` (inventory I
 `verdict` (`OK`, `SHOULD_CHANGE`, `RESOLVED`, `ACCEPTED`), `severity`, `evidence` (paths), `change`,
 `protects` (the upcoming change), `run`.
 
+Before applying a decision table, check the intended exceptions and cohesion groups in
+`decisions.md`. A candidate finding whose edge, layer skip, or shared shape a recorded exception
+covers (same from-and-to components or rings, or the same shape) is written as `OK` naming the
+exception, never as `SHOULD_CHANGE`. Exceptions are read at component and ring level; a packet
+carrying no `decisions.md` has none.
+
 Every `SHOULD_CHANGE` row in a decision table carries a base severity. The coordinator may raise
 it by the escalation rules in the skill body (policy target, path of a named upcoming change,
 fan-in of three or more, cycle); nothing lowers it. Base severities follow one scale: `blocker`

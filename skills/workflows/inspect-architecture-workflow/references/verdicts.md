@@ -17,10 +17,27 @@ terms of the target's path and symbol and the rule number.
 ## Row verdicts
 
 `OK`, `SHOULD_CHANGE`, `RESOLVED` (a later run found the target compliant; keep the row, add
-the commit), `ACCEPTED` (the user explicitly accepted the finding; record it in `decisions.md` keyed by the
-target's path and symbol and the rule, with who and when, never by the ledger ID), or, in plan review only, `UNDERSPECIFIED` (the plan is not concrete enough to
-derive a fact the review needs; a clarification request to the planner, carrying no rule or
-severity).
+the commit), `ACCEPTED` (the user explicitly accepted the finding), or, in plan review only,
+`UNDERSPECIFIED` (the plan is not concrete enough to derive a fact the review needs; a
+clarification request to the planner, carrying no rule or severity).
+
+## Accepting a finding
+
+Acceptance lives in the ledger, never in `decisions.md` as a finding. When the user accepts a
+row, ask one question: is this a one-off for this change, or a standing rule of the
+architecture?
+
+- **One-off.** Set the row to `ACCEPTED` and add a line to the ledger's Acceptances table with
+  who, when, and why. The row stays `ACCEPTED` while the same target and rule still match, so
+  an acceptance made in plan review carries into the change review of the same ticket. On a
+  machine with no ledger the finding resurfaces once and is accepted again or promoted.
+- **Standing rule.** Write one generalized row in `decisions.md`: an intended exception stated
+  from component or ring to component or ring, a cohesion group, a deferred decision, or a
+  cohesion position. Evaluators read those tables and raise nothing they cover, so no
+  per-ticket acceptance follows. Then set the row to `ACCEPTED` in the ledger as above.
+
+`decisions.md` holds only decisions the workflows consume, each stated at component or boundary
+level. It never gains a row per finding, per ticket, or per symbol.
 
 ## Severity
 

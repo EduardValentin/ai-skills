@@ -37,7 +37,9 @@ as accepted structure.
    summary of the graph; W6 always receives the full component graph. Evaluators judge only
    changed targets and the edges touching them, phrasing findings as "the diff introduces" or
    "the diff leaves in place".
-3. Merge, escalate, group changes, and build the improvement map per `verdicts.md`.
+3. Merge, escalate, group changes, and build the improvement map per `verdicts.md`. A row the
+   plan review of this ticket set to `ACCEPTED` keeps that verdict while its target and rule
+   still match; it is not raised again.
 
 ## Record
 
@@ -47,9 +49,10 @@ as accepted structure.
    touched components and the README header.
 3. Candidate rows implicated in an open finding are not written to the record. List them in the
    ledger under "Pending record updates", keyed to the finding ID. They are written when the
-   finding becomes `RESOLVED` (a later round or run finds the code fixed) or `ACCEPTED` (the user
-   accepts it and `decisions.md` records who and why); the run that changes the verdict writes
-   the rows.
+   finding becomes `RESOLVED` (a later round or run finds the code fixed) or `ACCEPTED` (per
+   "Accepting a finding" in `verdicts.md`; a one-off acceptance is recorded in the ledger only, a
+   standing rule as one generalized row in `decisions.md`); the run that changes the verdict
+   writes the rows.
 4. Never write a row that would describe a violation as ordinary structure: a new edge from
    policy to detail, a port declared on the wrong side, a cycle. The record describes the
    architecture the project stands behind; the ledger holds what is being disputed.

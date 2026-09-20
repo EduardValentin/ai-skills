@@ -24,17 +24,15 @@ history; confirmed by a person.
 
 ## Intended exceptions
 
-| Exception (layer skip, direct edge, shared shape) | Reason | Risk accepted | Accepted by | Date |
-|---|---|---|---|---|
+Allowances the architecture stands behind, stated at component or ring level: an edge from one
+component or ring to another, a layer skip, or a shared data shape. Never a single symbol; a
+symbol-level acceptance belongs in the ledger. Evaluators raise no finding an exception covers.
 
-## Accepted findings
-
-Keyed by the target's path and symbol and the rule, never by a ledger ID; ledger IDs are
-transitory and must not appear in any committed file.
-
-| Target (path and symbol, or edge as from -> to) | Rule | Reason accepted | Accepted by | Date |
+| Exception (from component or ring -> to component or ring, or shared shape) | Reason | Risk accepted | Accepted by | Date |
 |---|---|---|---|---|
 
 ## Open questions
 
-- <question the inspection could not settle from the code>
+Written by an audit, which rewrites this section in full; review modes never append here.
+
+- <question the audit could not settle from the code>

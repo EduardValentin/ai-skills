@@ -517,7 +517,8 @@ finer, reuse-driven splits. Revisit boundaries when change and reuse patterns sh
 which cost each component currently accepts in the decisions file, together with the cohesion
 groups: the sets of components expected to change together, which R27 checks against. Groups
 are proposed by an audit from change history and confirmed by a person; a change that crosses
-them may be accepted once, with its reason recorded, when it is genuinely cross-cutting.
+them may be accepted once in the ledger when it is genuinely cross-cutting, or the groups
+revised when such changes recur.
 - Check: which of the three motives is this component neglecting, and is that cost acceptable for the project today? When were its boundaries last reconsidered against current change and reuse patterns?
 - Example: early product: "`orders` grouped broadly so one change lands in one place; we accept unneeded releases." Mature platform: "`orders-reporting` split out so reporting consumers stop receiving core releases."
 
