@@ -1,8 +1,8 @@
 ---
 name: visual-parity-verification
-description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, by snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into a caller-supplied parity ledger. Not for surfaces without a runnable prototype.
+description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, by reading the project's committed parity-map.md and parity-pairings.json, snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into the session's parity ledger. Not for surfaces without a runnable prototype.
 compatibility: >-
-  Requires a running real app, a running prototype in a React development build, browser tooling that can inject the bundled browser scripts and evaluate a function with serialized arguments on both sides, Python 3 for the bundled host scripts, and a caller-supplied ledger and component map. Playwright is optional, for scripts/capture-snapshots.mjs; without it, drive browser tooling directly. Without any of these, return BLOCKED naming the missing input; there is no fallback basis.
+  Requires a running real app, a running prototype in a React development build, browser tooling that injects the bundled browser scripts and evaluates a function with serialized arguments on both sides, Python 3 for the bundled host scripts, a caller-supplied ledger and committed parity map. Playwright is optional, for scripts/capture-snapshots.mjs; without it, drive browser tooling directly. Without any of these, return BLOCKED naming the missing input; there is no fallback basis.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -13,127 +13,132 @@ metadata:
 ## Overview
 
 Compare the rendered real app to its basis one root pair at a time: a
-prototype React component and the real app element rendering the same
-surface. The bundled scripts capture, align and compare the two snapshots
-and write the verdict into the ledger. You reach states, supply nothing the
-scripts can derive, and read only the diff's and ledger writer's printed
-output, never the snapshot JSON. Screenshots, source files, static
-mockups, hidden templates, Storybook-only renders and accessibility scans
-are context, never proof, and cannot complete a comparison.
-
-The real app may be built with any stack; nothing after root resolution
-inspects how its markup was produced.
+prototype React component and the real app element, whatever its stack,
+rendering the same surface. The prototype is the only basis; local
+preference never overrides it. The committed `parity-map.md` declares the
+pairs; the bundled scripts build the manifest, capture, align, compare and
+write the verdict into the ledger. You reach the states no recipe covers,
+supply nothing the scripts can derive, and read only the printed output of
+the diff and ledger writer, never the snapshot JSON. Screenshots, source
+files, mockups and accessibility scans are context, never proof.
 
 ## When To Use
 
 - A changed UI surface has a runnable React prototype it must match
   exactly.
-- The caller supplies a parity ledger and component map.
+- The project commits a parity map and the caller supplies a session
+  ledger.
 
-Do not use when no runnable prototype exists: there is nothing to diff
-against, and production analogs or design documents are not a basis. Do not
-use for broad rendered validation either; that's ordinary visual validation.
+Without a runnable prototype there is no basis; broad validation is
+ordinary visual validation.
 
 ## Inputs
 
-- The ledger to read and write, recording the viewport set and theme once
-  at the top; each row names a route, a state, a prototype component name
-  and a real app root, and carries a `Verdict` and an `Evidence` column
-  only you write.
-- The component map, pairing each prototype component with a real app root
-  selector or `data-parity-root` value and a route per side.
-- URLs of the running real app and prototype, and the project's
-  breakpoints or the default viewport set below.
+- The committed `parity-map.md`: one durable row per root pair the project
+  has ever verified, with routes, `States`, `Viewports` and `Ignore`
+  entries (`references/map.md`).
+- The committed `parity-pairings.json`, keyed by map id, and the optional
+  `parity-actions/` recipes.
+- The session ledger, with the viewport set and theme at the top; each
+  row's `Map id` names a map row, and you write only its `Verdict` and
+  `Evidence` cells.
+- Both app URLs and the project's breakpoints. For authentication, add
+  `prototype` or `real` objects with `storageState` and `headers` to the
+  manifest by hand (`references/capture.md`).
 
-If the ledger or map is missing, return `BLOCKED` before any comparison and
-request it; do not scope the inventory yourself from screenshots or
-impressions.
-
-## Basis
-
-The prototype is the only basis. Compare every row against it; local
-preference never overrides it. A row whose prototype root cannot be
-captured is `BLOCKED`, never judged against something else.
+Return `BLOCKED` before any comparison when the map or ledger is missing or
+`parity_map.py check` fails; never scope the inventory yourself.
 
 ## Matched Conditions
 
-Render each side at the route the component map pairs for that row,
-matching viewport width and height, browser zoom, device scale factor,
-state, theme and any other condition that could change the result. The
-snapshot records these; the diff refuses to compare snapshots taken under
-different conditions.
+Render each side at the row's mapped route, matching viewport, zoom, device
+scale factor, state and theme; the snapshot records these and the diff
+refuses mismatched conditions.
 
-Take the viewport set from the project's responsive configuration — Tailwind
-screens, CSS breakpoints or design tokens — one width below and one above
-each breakpoint, plus the narrowest and widest widths supported. Without
-project breakpoints, use 320, 768, 1024, 1440 and 1920 pixels wide.
+Take the viewport set from the project's breakpoints: one width below and
+one above each, plus the narrowest and widest supported; without them, 320,
+768, 1024, 1440 and 1920 pixels wide. Default states use the full set;
+hover, focus, pressed and similar interaction states use one width per
+breakpoint class, the smallest in each.
+
+Rows with the same prototype route, component and recipe share one
+prototype capture; a state that renders differently on the prototype needs
+a recipe or its own map row.
 
 ## Bundled Scripts
 
 Paths resolve from the skill root.
 
+- `scripts/parity_map.py`: `check` validates the map, `row` prints one row,
+  `manifest` joins ledger and map into the capture manifest with each row's
+  viewports, recipes and ignore entries. `references/map.md`.
 - `scripts/capture-snapshots.mjs`: drives headless Chromium through
-  Playwright, writing snapshot files itself. `references/capture.md`.
+  Playwright from a manifest (`--manifest`, `--only-viewports`) or per side
+  (`--viewport`, `--prototype-*`, `--real-*`), with recipe, storage-state
+  and header flags. `references/capture.md`.
 - `scripts/find-react-roots.browser.js` and
   `scripts/snapshot-subtree.browser.js`: resolve prototype roots and
   capture a subtree when driving the browser directly.
   `references/snapshot-schema.md`.
-- `scripts/diff_snapshots.py`: compares a prototype and a real app
-  snapshot, writes a diff file, and prints a summary line, adding review
-  lines with `--print-review`. `references/diff-output.md`.
-- `scripts/write_ledger.py`: writes a row's worst verdict and evidence with
-  `--row` and `--diff`, or `BLOCKED` and a reason with `--row --blocked
-  REASON`; appends a provenance-gap row with `--append-gap`.
+- `scripts/diff_snapshots.py`: compares one snapshot pair, pruning declared
+  subtrees with `--ignore-prototype` and `--ignore-real`, writes a diff
+  file and prints a summary line, plus review lines with `--print-review`.
+  `references/diff-output.md`.
+- `scripts/write_ledger.py`: writes a row's worst verdict and evidence from
+  `--row --diff`, `BLOCKED` from `--row --blocked REASON` or `EXPECTED`
+  from `--row --expected REASON`, and appends a provenance-gap row with
+  `--append-gap`.
 
 ## Procedure
 
-1. Capture. For each row and viewport set, run
-   `scripts/capture-snapshots.mjs` with that row's URLs and roots. Rows
-   sharing a prototype route and state capture it once, then capture only
-   `--real-url`/`--real-root` per row, pointing the diff at the shared
-   file. Read only the printed summary line. A capture error line makes
-   that row `BLOCKED`; record it with `write_ledger.py --row <id> --blocked
-   "<side> <root> <route>: <error>"`. A `no-react-fibers` error blocks
+1. Capture. Run `parity_map.py check`, then `parity_map.py manifest` with
+   both URLs and the viewport set (`--only-viewports` on a recheck, see
+   Rechecks). Run `capture-snapshots.mjs --manifest` once per round and
+   read the summary lines once; no narration between captures. A capture
+   error line makes its row `BLOCKED` (`write_ledger.py --row <id>
+   --blocked "<side> <root> <route>: <error>"`); `no-react-fibers` blocks
    every row at that prototype route.
-2. Interactive states. For a state the capture command cannot drive, reach
-   it by hand on both sides, inject the snapshot script by file path, and
-   evaluate `paritySnapshot(root, { encoding: "gzip-base64" })`, saving the
+2. Hand-driven states. When no recipe reaches a state, drive both sides by
+   hand, inject the snapshot script by file path, evaluate
+   `paritySnapshot(root, { encoding: "gzip-base64" })` and save the
    returned string verbatim as the snapshot file.
-3. Diff. For each row and viewport, run `scripts/diff_snapshots.py` with
-   `--print-review` and read only its printed summary and review lines.
-4. Review. Confirm or reject each printed `review` pair and accept or
-   ignore each `suggest` line. Write confirmed pairs into `pairings.json`
-   under the row id, then rerun that row's diffs. Add a finer root pair to
-   the component map when a subtree aligns poorly rather than tuning
-   weights.
-5. Ledger. Write the ledger for each row from its diff files with
-   `scripts/write_ledger.py`.
+3. Diff. Per row and viewport, run `scripts/diff_snapshots.py
+   --print-review --pairings parity-pairings.json --row <map id>` with the
+   row's manifest `ignore` entries as `--ignore-prototype` and
+   `--ignore-real`; read only the printed summary and review lines.
+4. Review. Confirm or reject each `review` pair and each `suggest` line.
+   Write confirmed pairs into `parity-pairings.json` under the map id, drop
+   or correct the entry behind each `pairing unapplied` line, then rerun
+   that row's diffs. Propose, never write, an `Ignore` entry for a
+   legitimate one-sided subtree and a finer map row for a subtree that
+   aligns poorly.
+5. Ledger. Write each row from its diff files with
+   `scripts/write_ledger.py`. For a row the implementer or the ledger's
+   design-changes table marks as an accepted difference, write
+   `--expected "<reason>"`; the reason is mandatory.
 6. Gap check. At each real app route, look for a visible in-scope surface
-   the map omits. Append a gap row with `write_ledger.py --append-gap`,
-   pair it in the map, and run it like any other row.
-
-## Evidence Standard
-
-See `references/report-format.md` for evidence status labels and what the
-snapshot covers.
+   the map omits; append a gap row with `write_ledger.py --append-gap`
+   under the next free map id, capture it per side like any other row, and
+   propose the map row (`Id`, roots, routes) in the report.
 
 ## Row Verdicts
 
-The diff decides each viewport's verdict; the ledger writer records the
-worst across viewports:
+The diff decides each viewport; the ledger writer records the worst, in
+this order:
 
-- `MATCH`: no style, geometry or missing finding on any viewport.
+- `BLOCKED`: conditions differ, roots are incompatible, or a required input
+  is unavailable.
 - `DRIFT`: a computed property or relative geometry differs beyond
   tolerance.
 - `MISSING`: an aligned node exists on one side only.
-- `BLOCKED`: conditions differ, roots are incompatible, or a required input
-  is unavailable.
+- `EXPECTED`: an accepted difference with a recorded reason; passes.
+- `MATCH`: no style, geometry or missing finding on any viewport.
 
-Structure and content findings are reported and never change the verdict;
-accessibility findings are reported even when both sides share them.
-Unmeasurable contrast is an accessibility finding, not a row verdict,
-counting as a blocked check in Global Verdict step 2. Leave no row
-`PENDING`.
+Structure, content and `ignored` findings are reported and never change the
+verdict; the root's own box and margins are context, not evidence.
+Accessibility findings are reported even when both sides share them.
+Unmeasurable contrast is an accessibility finding that counts as a blocked
+check in Global Verdict step 2.
 
 ## Global Verdict
 
@@ -143,23 +148,24 @@ Apply in this order:
    confirmed failure.
 2. `BLOCKED` when no finding is established but a required row or check is
    blocked, evidence is degraded, or status is `no comparison evidence`.
-3. `CLEAN` only with complete DOM evidence, every row `MATCH`, every required
-   accessibility check complete and passing, and no visible in-scope surface
-   missing from the map.
+3. `CLEAN` only with complete DOM evidence, every row `MATCH` or `EXPECTED`
+   (listed under `Expected` with reasons), every required accessibility
+   check complete and passing, and no visible in-scope surface missing
+   from the map.
 
 ## Rechecks
 
-After fixes, rerun every prior `DRIFT`, `MISSING` and `BLOCKED` row, every
-row whose implementation files changed, and their affected states, under
-the original matched conditions; a shared primitive, global style, token or
-theme change reruns every row. Pairings persist across reruns. Return a
-delta distinguishing resolved, remaining and new findings — a fix
-description is not proof.
+After fixes, rerun every prior `DRIFT`, `MISSING` and `BLOCKED` row and
+every row whose implementation files changed, under the original
+conditions, at only the viewports whose evidence cell was not `MATCH`; a
+shared primitive, token, global style or theme change reruns every row at
+every viewport. Pairings persist. Return a delta of resolved, remaining and
+new findings; a fix description is not proof.
 
 ## Report
 
 Return the ledger path with the updated rows, then the report template in
-`references/report-format.md`.
+`references/report-format.md`, which also defines evidence status labels.
 
 ## Forbidden Behaviors
 
@@ -168,6 +174,10 @@ Return the ledger path with the updated rows, then the report template in
 - Writing a verdict without a diff file behind it.
 - Editing snapshot or diff JSON by hand.
 - Leaving a ledger row `PENDING` or blank.
+- Writing `Ignore` entries or any other cell of `parity-map.md` yourself.
+- Narrating between captures, or running one capture per row when a
+  manifest exists.
+- Writing `EXPECTED` without a reason.
 - Interpolating selectors or component names into script text.
 - Resolving components by name on the real app side.
 - Matching nodes by class names or by attributes other than the parity

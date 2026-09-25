@@ -139,7 +139,8 @@ Defaults, overridable with `--tolerances <file.json>`:
 { "lengthPx": 0.5, "normalLineHeightFactor": 1.2 }
 ```
 
-Colors are normalized to `rgba(r, g, b, a)`. Font families compare as ordered
+Colors, whether the snapshot wrote `rgb()` or `rgba()`, are normalized to
+`rgba(r, g, b, a)`. Font families compare as ordered
 lowercase lists without quotes. `transform: none` equals the identity matrix.
 When own text differs between a pair, that pair's `x`, `y`, `width` and
 `height` and the `x` and `y` of every sibling of the prototype node —
@@ -153,15 +154,16 @@ The diff skips the `name` comparison when both sides' `nameFrom` is
 
 ## Pairings file
 
-`pairings.json` in the session folder, keyed by ledger row id, then prototype
-path to real path:
+`parity-pairings.json`, committed at the project root, keyed by map id, then
+prototype path to real path:
 
 ```json
-{ "L3": { "section > button:nth-of-type(2)": "section > a:nth-of-type(1)" } }
+{ "C3": { "section > button:nth-of-type(2)": "section > a:nth-of-type(1)" } }
 ```
 
-Pass it with `--pairings pairings.json --row L3`. Pairings are applied before
-any other rule and are final.
+Pass it with `--pairings parity-pairings.json --row C3`; `--row` names the
+key to read, which is the ledger row's `Map id`, not the ledger row id.
+Pairings are applied before any other rule and are final.
 
 Pairings resolve anywhere in the two trees by full path, regardless of depth.
 A paired node is taken out of ordinary alignment along with its position

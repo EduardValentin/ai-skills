@@ -45,13 +45,16 @@ Return the ledger path with the updated rows, then this report:
 - **A1** | severity: <blocker / major / minor> | ledger row <id> | <check> | WCAG criterion | suggested fix
 
 ## Pairings confirmed
-- <row id: prototype path to real path, or None>
+- <map id: prototype path to real path, or None>
 
 ## Expected
 - <row id — reason, one per EXPECTED row, or None>
 
 ## Ledger provenance gaps
-- <rows appended for visible in-scope surfaces the map omitted, or None>
+- <ledger row appended for a visible in-scope surface the map omitted, with the proposed map row: Id, prototype component, real app root, routes; or None>
+
+## Proposed ignore entries
+- <map id: proto: or real: entry and why the one-sided subtree is legitimate, or None>
 
 ## Blockers
 - <None, or blocked row and minimum next input>

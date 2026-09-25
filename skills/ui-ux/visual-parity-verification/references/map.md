@@ -134,3 +134,8 @@ row named in `Map id`:
 Ignore entries are the side-stripped diff grammar strings, ready for
 `--ignore-prototype` and `--ignore-real`. Rechecking only some viewports is
 the caller's business through `--only-viewports`.
+
+The capture command also reads two optional top-level objects, `prototype`
+and `real`, each `{"storageState": <file>, "headers": {<name>: <value>}}`,
+for authenticated captures. The agent adds them to the written manifest by
+hand; `manifest` never emits them. See `capture.md`, "Manifest mode".

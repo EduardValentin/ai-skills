@@ -44,9 +44,10 @@ Do not load this workflow for work that touches no user-visible surface.
 - Parity is proven, not asserted. The parity step below is mandatory for
   every prototype-backed application and is the last gate before the PR.
   Screenshots, unit tests, type checks and code inspection do not substitute.
-- Parity artifacts are session records. They live in the project's gitignored
-  parity root, one folder per session, and are never committed or copied into
-  design documentation.
+- Parity has three committed files at the project root, `parity-map.md`,
+  `parity-pairings.json` and `parity-actions/`, and per-session records under
+  the gitignored parity root that are never committed or copied into design
+  documentation.
 
 ## Preparation
 
@@ -91,6 +92,22 @@ and validates the app.
 
 ## Parity Artifacts
 
+Three files at the project root are committed with the code and shared by
+every session:
+
+- `parity-map.md`, created from `assets/parity-map.md`: one row per root
+  pair the project has ever verified. A root pair is a prototype React
+  component name and the real app element that renders the same surface,
+  given as a CSS selector or as the value of a `data-parity-root`
+  attribute. Each row carries a stable `C<n>` id, a route per side, its
+  `States` (each optionally naming a recipe), a `Viewports` subset,
+  `Ignore` entries and a `Confidence`. Ids are never reused; a new pair
+  takes the next free id.
+- `parity-pairings.json`: manual pairings the verifier confirmed, keyed by
+  map id.
+- `parity-actions/<name>.json`: optional action recipes that reach a state
+  on both sides, named from the map's `States` column.
+
 The parity root is `.parity/` at the project root unless the project's
 agent instructions name another path. Confirm it is gitignored before writing
 into it; if it is not, add it to the ignore file as part of the session.
@@ -99,19 +116,14 @@ Each session owns one folder under that root, named after the ticket id when
 one exists (for example `GEN-123`) or, for ad hoc work, a short kebab-case
 name the agent chooses that describes the change. Never write into another
 session's folder and never reuse one; a leftover folder from an earlier
-session is not evidence for this one. The folder holds two files created
-from the templates under `assets/`, plus the `snapshots/`, `diffs/` and
-`pairings.json` entries the verifier writes:
+session is not evidence for this one. The folder holds only `ledger.md`,
+created from `assets/ledger.md`, and the `snapshots/` and `diffs/` the
+verifier writes.
 
-- `component-map.md`: one row per root pair touched in this session. A
-  root pair is a prototype React component name and the real app element
-  that renders the same surface, given as a CSS selector or as the value of
-  a `data-parity-root` attribute. Derive it from the two apps; confirm every
-  pairing that is not an obvious name match.
-- `ledger.md`: one row per component map row, per meaningful state, with a
-  `Verdict` column and an `Evidence` column the verifier writes. A second
-  table records design changes made in the session and whether both sides
-  were updated.
+`ledger.md` has one row per touched map row, per meaningful state; its
+`Map id` column points at a `parity-map.md` row, and the verifier writes its
+`Verdict` and `Evidence` columns. A second table records design changes made
+in the session and whether both sides were updated.
 
 The real app may set `data-parity-root="<ComponentName>"` on a root and
 `data-parity="<short name>"` on elements inside it that the verifier has
@@ -119,9 +131,16 @@ trouble aligning. The prototype may set the same `data-parity` hooks. Both
 attributes are optional and are the only markup the parity scripts read
 beyond native semantics.
 
-The implementer maintains both files as the work progresses: add a ledger row
-when an element is added or modified, and a design-change row when a design
-decision is made. Do not wait for the parity step to reconstruct them.
+The implementer maintains the map and the ledger as the work progresses:
+add a map row for a new root pair, derived from the two apps and confirmed
+when it is not an obvious name match; edit `States`, `Viewports` or `Ignore`
+for touched rows; add a ledger row when an element is added or modified and
+a design-change row when a design decision is made; commit the map with the
+code. Run the parity skill's `parity_map.py check parity-map.md
+--project-root .` before the parity step. Do not wait for the parity step to
+reconstruct any of it. The verifier writes only `parity-pairings.json` and
+the ledger; it never edits `parity-map.md` and reports the `Ignore` entries
+it proposes for the implementer to add.
 
 ## Parity Step
 
@@ -133,23 +152,29 @@ every row (step 3), the fixes for its findings (steps 4 and 5), and one
 recheck of the affected rows (step 6). The step never loops beyond that
 without the user's explicit decision.
 
-1. Bring the ledger current: every element added or modified in the unit has
-   a row per meaningful state; every design change has a row with both
-   updated columns reading yes. Confirm the component map pairings.
+1. Bring the map and ledger current: every new root pair has a map row and
+   every touched row's `States`, `Viewports` and `Ignore` are right; every
+   element added or modified in the unit has a ledger row per meaningful
+   state naming its map id; every design change has a row with both updated
+   columns reading yes. A difference the user accepted is recorded in the
+   design-changes table with its reason and the ledger rows it covers, so
+   the verifier can write those rows as `EXPECTED`. Run `parity_map.py
+   check`.
 2. Start both apps. Record the viewport set from the project's responsive
    configuration: one width just below and one just above each breakpoint,
    plus the narrowest and widest widths the project supports. Use the parity
    skill's defaults only when the project defines no breakpoints.
-3. Dispatch `parity-verifier` with the ledger and map paths, both app URLs,
-   the component names per route, the viewport set, the theme, and the
-   diff. It captures with the bundled capture command when Playwright is
-   available, otherwise drives the browser directly, then runs the bundled
-   diff, writes a verdict and evidence into every row and returns its
-   report.
-4. Read the ledger. For every row that is not `MATCH`, the implementer fixes
-   the production side, or the prototype side when the design change was
-   made there and production is the source of the row's basis. A fix to a
-   shared primitive, token or global style widens the recheck to every row.
+3. Dispatch `parity-verifier` with the map, pairings and ledger paths, both
+   app URLs, the viewport set, the theme, and the diff. It builds the
+   capture manifest and captures with the bundled capture command when
+   Playwright is available, otherwise drives the browser directly, then
+   runs the bundled diff, writes a verdict and evidence into every row and
+   returns its report.
+4. Read the ledger. For every row that is not `MATCH` or `EXPECTED`, the
+   implementer fixes the production side, or the prototype side when the
+   design change was made there and production is the source of the row's
+   basis. A fix to a shared primitive, token or global style widens the
+   recheck to every row.
 5. A confirmed accessibility failure the prototype shares is a design defect:
    fix it in the prototype first, mirror it in production, record a
    design-change row, and re-verify. Only the user may waive it; a waiver is
@@ -157,13 +182,16 @@ without the user's explicit decision.
    is the sole case where a FINDINGS report may proceed.
 6. Re-dispatch `parity-verifier` once, for the affected rows only, under
    the same conditions and with the prior report, so it returns a delta of
-   resolved, remaining and new findings. A row that is not `MATCH` after this
-   recheck is a parity blocker: stop, report the ledger path and the
-   remaining rows to the user, and raise no PR. The user may authorize one
-   further fix-and-recheck cycle or record a waiver in the ledger's
-   design-changes table; record either decision in the parity report.
+   resolved, remaining and new findings. A row that is not `MATCH` or
+   `EXPECTED` after this recheck is a parity blocker: stop, report the
+   ledger path and the remaining rows to the user, and raise no PR. The user
+   may authorize one further fix-and-recheck cycle or record a waiver in the
+   ledger's design-changes table; record either decision in the parity
+   report.
 7. Hand the ledger path and the final parity report to PR readiness as the
-   parity evidence.
+   parity evidence. PR readiness accepts `EXPECTED` rows with their reasons
+   and names them in the PR; the changed `parity-map.md`,
+   `parity-pairings.json` and `parity-actions/` files are part of the PR.
 
 If `parity-verifier` is unavailable, run `visual-parity-verification` from a
 fresh context that did not implement the change. If no browser tooling can
@@ -183,8 +211,10 @@ verification belongs to the inner implementation workflow.
 - Treating screenshots or a passing test suite as parity evidence.
 - Writing into, reusing, or reading verdicts from another session's parity
   folder.
-- Committing anything under the parity root or copying its state into
-  design documentation.
+- Committing anything under the parity root, or copying its state into
+  design documentation; only `parity-map.md`, `parity-pairings.json` and
+  `parity-actions/` at the project root are committed.
+- Editing `parity-map.md` from the verifier role.
 - Rebuilding the ledger from memory at the end instead of maintaining it
   during the work.
 - Landing any fix after the parity step without re-running it; a later fix
