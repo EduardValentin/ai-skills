@@ -163,6 +163,31 @@ class CheckTests(ParityMapCase):
         self.assertEqual(completed.returncode, 1)
         self.assertIn("row C1: Prototype component is empty", completed.stdout)
 
+    def test_root_prefix_without_selector_fails(self) -> None:
+        for cell in ("root:", "root:   "):
+            with self.subTest(cell=repr(cell)):
+                completed = run_map("check", str(self.write_map(ROW_C2.replace("| root:main.checkout |", f"| {cell} |"))))
+                self.assertEqual(completed.returncode, 1)
+                self.assertIn('row C2: Prototype component "root:" has no selector after the prefix', completed.stdout)
+
+    def test_header_without_separator_row_reads_nothing(self) -> None:
+        self.map_path.write_text("# Parity map\n\nOne row per root pair.\n\n" + "\n".join([MAP_HEADER, ROW_C1]) + "\n", encoding="utf-8")
+        completed = run_map("check", str(self.map_path))
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(completed.stdout.splitlines(), [f"{self.map_path}: expected a separator row after the header at line 6"])
+
+    def test_header_as_the_last_line_reads_nothing(self) -> None:
+        self.map_path.write_text("# Parity map\n\n" + MAP_HEADER + "\n", encoding="utf-8")
+        completed = run_map("check", str(self.map_path))
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(completed.stdout.splitlines(), [f"{self.map_path}: expected a separator row after the header at line 4"])
+
+    def test_separator_row_with_alignment_colons_is_accepted(self) -> None:
+        aligned = "|:--|:-:|--:|---|---|---|---|---|---|"
+        self.map_path.write_text("\n".join([MAP_HEADER, aligned, ROW_C1]) + "\n", encoding="utf-8")
+        completed = run_map("check", str(self.map_path))
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+
     def test_empty_real_root_fails(self) -> None:
         completed = run_map("check", str(self.write_map(ROW_C3.replace("| aside.legacy-summary |", "|  |"))))
         self.assertEqual(completed.returncode, 1)
@@ -415,6 +440,16 @@ class ManifestTests(ParityMapCase):
         self.assertEqual(completed.returncode, 1)
         self.assertIn("ledger row L1: expected 9 cells, found 8", completed.stderr)
         self.assertFalse(out.exists())
+
+    def test_manifest_and_ledger_writer_agree_across_an_interior_blank_line(self) -> None:
+        self.write_map(ROW_C1)
+        ledger = self.write_ledger(ledger_row("L1", "C1", "/orders", "default"), "", ledger_row("L2", "C1", "/orders", "empty"))
+        completed, out = self.manifest(ledger)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual([row["id"] for row in support.read_json(out)["rows"]], ["L1", "L2"])
+        written = support.run_ledger("--ledger", str(ledger), "--row", "L2", "--expected", "D1: approved")
+        self.assertEqual(written.returncode, 0, written.stderr)
+        self.assertIn("| L2 | C1 | /orders | empty | OrderSummary | [data-parity-root=\"OrderSummary\"] | modified | EXPECTED | D1: approved |", ledger.read_text(encoding="utf-8"))
 
     def test_bad_viewports_flag_exits_two(self) -> None:
         self.write_map(ROW_C1)

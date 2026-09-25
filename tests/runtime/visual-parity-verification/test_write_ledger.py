@@ -324,6 +324,63 @@ class VerdictOrderTests(unittest.TestCase):
         self.assertEqual(write_ledger.worst_verdict(["EXPECTED", "MISSING"]), "MISSING")
 
 
+LEDGER_WITH_BLANK_LINE = LEDGER.replace("| PENDING | |\n| L2 |", "| PENDING | |\n\n| L2 |")
+
+
+class InteriorBlankLineTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.ledger = self.root / "ledger.md"
+        self.ledger.write_text(LEDGER_WITH_BLANK_LINE, encoding="utf-8")
+        self.assertIn("| PENDING | |\n\n| L2 |", LEDGER_WITH_BLANK_LINE)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def lines(self):
+        return self.ledger.read_text(encoding="utf-8").splitlines()
+
+    def assert_only_row_changed(self, row_id: str) -> None:
+        before = LEDGER_WITH_BLANK_LINE.splitlines()
+        after = self.lines()
+        self.assertEqual(len(before), len(after))
+        for old, new in zip(before, after):
+            if old.startswith(f"| {row_id} "):
+                self.assertEqual(old.split("|")[:8], new.split("|")[:8])
+            else:
+                self.assertEqual(old, new)
+
+    def test_expected_reaches_a_row_after_a_blank_line(self) -> None:
+        completed = support.run_ledger("--ledger", str(self.ledger), "--row", "L2", "--expected", "D1: badge approved")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        l2 = next(line for line in self.lines() if line.startswith("| L2 "))
+        self.assertIn("| EXPECTED | D1: badge approved |", l2)
+        self.assert_only_row_changed("L2")
+
+    def test_diff_reaches_a_row_after_a_blank_line(self) -> None:
+        diff = support.write_json(self.root / "diffs" / "L2-1440x900.json", diff_result("MATCH"))
+        completed = support.run_ledger("--ledger", str(self.ledger), "--row", "L2", "--diff", str(diff))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        l2 = next(line for line in self.lines() if line.startswith("| L2 "))
+        self.assertIn("| MATCH | 1440x900: MATCH; diffs/L2-1440x900.json |", l2)
+        self.assert_only_row_changed("L2")
+
+    def test_append_gap_lands_after_the_last_pipe_row(self) -> None:
+        completed = support.run_ledger(
+            "--ledger", str(self.ledger), "--append-gap", "--map-id", "C1", "--route", "/orders",
+            "--state", "default", "--prototype-root", "OrderTotals", "--real-root", "#order-totals",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "L3")
+        lines = self.lines()
+        index = lines.index("| L3 | C1 | /orders | default | OrderTotals | #order-totals | provenance gap | PENDING |  |")
+        self.assertTrue(lines[index - 1].startswith("| L2 "))
+        self.assertEqual(lines[index + 1], "")
+        self.assertEqual(lines[index + 2], "## Design changes")
+        self.assertEqual([l for l in lines if not l.startswith("| L3 ")], LEDGER_WITH_BLANK_LINE.splitlines())
+
+
 class AppendGapTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()

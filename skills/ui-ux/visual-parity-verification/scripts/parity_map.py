@@ -30,6 +30,7 @@ ROUTES_ARROW = re.compile(r" (?:→|->) ")
 STATE_PATTERN = re.compile(r"^(?P<name>[^()]+?)\s*(?:\((?P<file>[^()]+)\))?$")
 VIEWPORT_PATTERN = re.compile(r"^\d+x\d+$")
 IGNORE_PATTERN = re.compile(r"^(?P<side>proto|real):(?P<entry>(?:hook|path):.+)$")
+SEPARATOR_PATTERN = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$")
 
 
 class MapError(Exception):
@@ -82,6 +83,8 @@ def read_table(path: Path, lines: list[str], expected_header: str, start: int = 
         raise MapError(f"{path}: has no table; expected header {expected_header}")
     if lines[header].strip() != expected_header:
         raise MapError(f'{path}: header is "{lines[header].strip()}", expected "{expected_header}"')
+    if header + 1 >= len(lines) or not SEPARATOR_PATTERN.match(lines[header + 1].strip()):
+        raise MapError(f"{path}: expected a separator row after the header at line {header + 2}")
     rows: list[list[str]] = []
     end = header + 2
     while end < len(lines) and (is_pipe_row(lines[end]) or not lines[end].strip()):
@@ -167,7 +170,10 @@ def parse_component(text: str) -> dict[str, str]:
     if not text:
         raise MapError("Prototype component is empty")
     if text.startswith(PROTO_ROOT_PREFIX):
-        return {"protoRoot": text[len(PROTO_ROOT_PREFIX):].strip()}
+        selector = text[len(PROTO_ROOT_PREFIX):].strip()
+        if not selector:
+            raise MapError(f'Prototype component "{PROTO_ROOT_PREFIX}" has no selector after the prefix')
+        return {"protoRoot": selector}
     return {"protoComponent": text}
 
 

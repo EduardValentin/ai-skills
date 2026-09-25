@@ -31,14 +31,14 @@ const VALUE_FLAGS = new Set([
   "--wait-for",
 ]);
 
-const isSelector = (value) => typeof value === "string" && value.length > 0;
+const isNonEmptyString = (value) => typeof value === "string" && value.length > 0;
 const STEP_SHAPES = {
-  click: { accepts: isSelector, expects: "a selector string" },
-  hover: { accepts: isSelector, expects: "a selector string" },
-  waitFor: { accepts: isSelector, expects: "a selector string" },
-  press: { accepts: isSelector, expects: "a key name string" },
+  click: { accepts: isNonEmptyString, expects: "a selector string" },
+  hover: { accepts: isNonEmptyString, expects: "a selector string" },
+  waitFor: { accepts: isNonEmptyString, expects: "a selector string" },
+  press: { accepts: isNonEmptyString, expects: "a key name string" },
   fill: {
-    accepts: (value) => Array.isArray(value) && value.length === 2 && isSelector(value[0]) && typeof value[1] === "string",
+    accepts: (value) => Array.isArray(value) && value.length === 2 && isNonEmptyString(value[0]) && typeof value[1] === "string",
     expects: "[selector, text]",
   },
   wait: { accepts: (value) => Number.isFinite(value) && value >= 0, expects: "a non-negative number of milliseconds" },
@@ -222,7 +222,7 @@ function parseAuth(entry, where) {
   if (entry === undefined || entry === null) return auth;
   if (typeof entry !== "object" || Array.isArray(entry)) usageError(`${where} must be an object with "storageState" and/or "headers"`);
   if (entry.storageState !== undefined && entry.storageState !== null) {
-    if (!isSelector(entry.storageState)) usageError(`${where}.storageState must be a file path`);
+    if (!isNonEmptyString(entry.storageState)) usageError(`${where}.storageState must be a file path`);
     auth.storageState = entry.storageState;
   }
   if (entry.headers !== undefined && entry.headers !== null) {
@@ -237,14 +237,14 @@ function parseAuth(entry, where) {
 function parseManifestRow(row, index, file) {
   const where = `manifest ${file} row ${index}`;
   for (const key of ["id", "protoRoute", "realRoute", "realRoot", "shareProto"]) {
-    if (!isSelector(row[key])) usageError(`${where}: "${key}" must be a non-empty string`);
+    if (!isNonEmptyString(row[key])) usageError(`${where}: "${key}" must be a non-empty string`);
   }
   if (Boolean(row.protoComponent) === Boolean(row.protoRoot)) {
     usageError(`${where} (${row.id}): exactly one of "protoComponent" or "protoRoot" is required`);
   }
   if (!Array.isArray(row.viewports)) usageError(`${where} (${row.id}): "viewports" must be an array of WxH strings`);
   for (const key of ["protoActions", "realActions"]) {
-    if (row[key] !== undefined && row[key] !== null && !isSelector(row[key])) usageError(`${where} (${row.id}): "${key}" must be a file path or null`);
+    if (row[key] !== undefined && row[key] !== null && !isNonEmptyString(row[key])) usageError(`${where} (${row.id}): "${key}" must be a file path or null`);
   }
   return {
     id: row.id,
@@ -282,7 +282,7 @@ function loadManifest(file) {
   const data = loadJson(file, "manifest");
   if (!data || typeof data !== "object" || !Array.isArray(data.rows)) usageError(`manifest ${file}: "rows" must be an array`);
   for (const key of ["prototypeUrl", "realUrl"]) {
-    if (!isSelector(data[key])) usageError(`manifest ${file}: "${key}" must be a non-empty string`);
+    if (!isNonEmptyString(data[key])) usageError(`manifest ${file}: "${key}" must be a non-empty string`);
   }
   const rows = data.rows.map((row, index) => parseManifestRow(row, index, file));
   const rowsById = new Map();
@@ -360,8 +360,8 @@ class ContextPool {
     this.contexts = new Map();
   }
 
-  async acquire(viewport, auth) {
-    const key = JSON.stringify([viewport.label, auth.storageState || "", this.colorScheme || "", auth.headers]);
+  async acquire(side, viewport, auth) {
+    const key = JSON.stringify([side, viewport.label, auth.storageState || "", this.colorScheme || "", auth.headers]);
     if (this.contexts.has(key)) return this.contexts.get(key);
     const contextOptions = { viewport: { width: viewport.width, height: viewport.height } };
     if (this.colorScheme) contextOptions.colorScheme = this.colorScheme;
@@ -440,7 +440,7 @@ function describeFailure(job, error) {
 
 async function captureOne(job, runtime) {
   const { options, rootFinderPath, snapshotScriptPath } = runtime;
-  const context = await runtime.pool.acquire(job.viewport, job.auth);
+  const context = await runtime.pool.acquire(job.side, job.viewport, job.auth);
   const page = await context.newPage();
   try {
     await page.goto(job.url, { waitUntil: "load", timeout: options.timeout });

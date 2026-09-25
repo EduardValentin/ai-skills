@@ -74,7 +74,8 @@ launches.
 ## What it does
 
 One browser for the whole run. Browser contexts are created lazily and
-cached per `(viewport, storage state, color scheme, headers)`; every capture
+cached per `(side, viewport, storage state, color scheme, headers)`, so the
+prototype and the real app never share cookies or storage; every capture
 opens its own page in the matching context and closes it afterwards.
 
 Per capture: `goto` the URL with `waitUntil: "load"`, run `--wait-for` if
@@ -192,7 +193,9 @@ stdout per written or linked file:
 `children=<n>` counts the root's direct children after collapsing wrapper
 children: a child flagged `wrapper` contributes its own non-wrapper
 descendants instead of itself, so the number matches the child signature
-the diff's root preflight compares. `<tag>`, `<role>`, `<name>`, `<w>x<h>`
+the diff's root preflight compares. It is counted before any `Ignore` entry
+applies, so it can exceed the count the diff sees by the number of ignored
+direct children. `<tag>`, `<role>`, `<name>`, `<w>x<h>`
 come from the captured root node. Error lines on stderr start with
 `<side> <WxH>` and, in manifest mode, end with `(row <rowId>)`.
 

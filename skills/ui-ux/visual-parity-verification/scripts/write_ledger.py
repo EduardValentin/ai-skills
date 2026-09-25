@@ -57,22 +57,35 @@ def escape_cell(text: str) -> str:
     return " ".join(text.replace("|", "\\|").split())
 
 
+def is_pipe_row(line: str) -> bool:
+    return line.lstrip().startswith("|")
+
+
 def find_elements_table(lines: list[str]) -> tuple[int, int]:
+    """Return the header index and the index just past the table's last pipe
+    row; blank lines inside the table are skipped, any other line ends it."""
     try:
         section = lines.index(ELEMENTS_SECTION)
     except ValueError as error:
         raise LedgerError("ledger has no '## Elements' section") from error
-    header = next((i for i in range(section, len(lines)) if lines[i].startswith("|")), None)
+    header = next((i for i in range(section, len(lines)) if is_pipe_row(lines[i])), None)
     if header is None or lines[header].strip() != ELEMENTS_HEADER:
         raise LedgerError("elements table header does not match the ledger template")
     end = header + 2
-    while end < len(lines) and lines[end].startswith("|"):
-        end += 1
+    for index in range(header + 2, len(lines)):
+        if is_pipe_row(lines[index]):
+            end = index + 1
+        elif lines[index].strip():
+            break
     return header, end
 
 
+def table_row_indexes(lines: list[str], header: int, end: int) -> list[int]:
+    return [index for index in range(header + 2, end) if is_pipe_row(lines[index])]
+
+
 def find_row(lines: list[str], header: int, end: int, row_id: str) -> int:
-    for index in range(header + 2, end):
+    for index in table_row_indexes(lines, header, end):
         if split_row(lines[index])[0] == row_id:
             return index
     raise LedgerError(f"ledger has no row {row_id}")
@@ -172,7 +185,7 @@ GAP_FIELDS = ("map_id", "route", "state", "prototype_root", "real_root")
 
 def next_row_id(lines: list[str], header: int, end: int) -> str:
     numbers = []
-    for index in range(header + 2, end):
+    for index in table_row_indexes(lines, header, end):
         cell = split_row(lines[index])[0]
         if cell.startswith("L") and cell[1:].isdigit():
             numbers.append(int(cell[1:]))
