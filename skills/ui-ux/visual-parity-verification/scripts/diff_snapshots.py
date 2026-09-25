@@ -82,15 +82,15 @@ def base_result(proto: dict[str, Any], real: dict[str, Any]) -> dict[str, Any]:
         "rootSummaries": {"prototype": proto["rootSummary"], "real": real["rootSummary"]},
         "blocked": None,
         "pairs": [],
-        "findings": {"style": [], "geometry": [], "missing": [], "structure": [], "content": [], "accessibility": []},
+        "findings": {"style": [], "geometry": [], "missing": [], "structure": [], "content": [], "accessibility": [], "ignored": []},
         "collapsed": {"prototype": [], "real": []},
         "suggestions": [],
+        "unappliedPairings": [],
         "lowestScore": None,
     }
 
 
-def blocked(reason: str, detail: Any, proto: dict[str, Any], real: dict[str, Any]) -> dict[str, Any]:
-    result = base_result(proto, real)
+def blocked(result: dict[str, Any], reason: str, detail: Any) -> dict[str, Any]:
     result["verdict"] = "BLOCKED"
     result["blocked"] = {"reason": reason, "detail": detail}
     return result
@@ -110,16 +110,17 @@ def write_result(path: Path, result: dict[str, Any]) -> None:
     path.write_text(json.dumps(result, indent=2, sort_keys=False) + "\n", encoding="utf-8")
 
 
-def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dict[str, Any], tolerances: dict[str, Any]) -> dict[str, Any]:
+def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dict[str, Any], tolerances: dict[str, Any], ignore: dict[str, list[dict[str, str]]] | None = None) -> dict[str, Any]:
+    result = base_result(proto, real)
     mismatches = condition_mismatches(proto, real)
     if mismatches:
-        return blocked("condition-mismatch", mismatches, proto, real)
+        return blocked(result, "condition-mismatch", mismatches)
+    result["findings"]["ignored"] = loading.prune_ignored_snapshots(proto, real, ignore or {})
     incompatible = root_incompatibility(proto, real)
     if incompatible:
-        return blocked("roots-incompatible", incompatible, proto, real)
+        return blocked(result, "roots-incompatible", incompatible)
 
     effective_tolerances = dict(comparison.DEFAULT_TOLERANCES, **tolerances)
-    result = base_result(proto, real)
     proto_root, result["collapsed"]["prototype"] = alignment.collapse_wrappers(proto["root"])
     real_root, result["collapsed"]["real"] = alignment.collapse_wrappers(real["root"])
     context = {"prototypeRoot": proto["rootSummary"], "realRoot": real["rootSummary"]}
@@ -137,10 +138,11 @@ def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dic
         for p in tree_alignment["pairs"]
     ]
     result["suggestions"] = tree_alignment["suggestions"]
+    result["unappliedPairings"] = tree_alignment["unappliedPairings"]
     scores = [p["score"] for p in tree_alignment["pairs"] if p["matchedBy"] == "score"]
     result["lowestScore"] = min(scores) if scores else None
 
-    result["findings"] = findings.collect_findings(tree_alignment, result["collapsed"], effective_tolerances)
+    result["findings"].update(findings.collect_findings(tree_alignment, result["collapsed"], effective_tolerances))
     result["findings"]["accessibility"] = findings.accessibility_findings(tree_alignment)
     result["verdict"] = findings.verdict_for(result["findings"])
     return result
@@ -154,24 +156,27 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--pairings", type=Path, help="pairings.json with confirmed manual matches")
     parser.add_argument("--row", help="ledger row id whose pairings apply")
     parser.add_argument("--tolerances", type=Path, help="JSON overriding default tolerances")
+    parser.add_argument("--ignore-prototype", action="append", default=[], metavar="ENTRY", help="hook:<value> or path:<prefix> to prune from the prototype")
+    parser.add_argument("--ignore-real", action="append", default=[], metavar="ENTRY", help="hook:<value> or path:<prefix> to prune from the real app")
     parser.add_argument("--print-review", action="store_true", help="print review lines after summary")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     arguments = parse_arguments(argv)
+    if arguments.pairings and not arguments.row:
+        print("--pairings is ignored without --row", file=sys.stderr)
     try:
         proto = loading.load_snapshot(arguments.prototype)
         real = loading.load_snapshot(arguments.real)
         all_pairings = loading.load_optional_json(arguments.pairings)
         tolerances = loading.load_optional_json(arguments.tolerances)
+        ignore = {"prototype": loading.parse_ignore_entries(arguments.ignore_prototype), "real": loading.parse_ignore_entries(arguments.ignore_real)}
+        row_pairings = all_pairings.get(arguments.row, {}) if arguments.row else {}
+        result = compare_snapshots(proto, real, row_pairings, tolerances, ignore)
     except loading.InputError as error:
         print(str(error), file=sys.stderr)
         return 2
-    if arguments.pairings and not arguments.row:
-        print("--pairings is ignored without --row", file=sys.stderr)
-    row_pairings = all_pairings.get(arguments.row, {}) if arguments.row else {}
-    result = compare_snapshots(proto, real, row_pairings, tolerances)
     write_result(arguments.out, result)
     print(summary_line(result))
     if arguments.print_review:

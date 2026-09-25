@@ -20,25 +20,28 @@ def content_exclusions(pair: dict[str, Any], siblings: list[dict[str, Any]]) -> 
     return exclusions
 
 
-def siblings_of(parent_pair: dict[str, Any] | None, node: dict[str, Any]) -> list[dict[str, Any]]:
-    if parent_pair is None:
+def siblings_of(family: list[dict[str, Any]] | None, node: dict[str, Any]) -> list[dict[str, Any]]:
+    """Siblings from the pre-detachment children list, so a globally paired
+    node still shields and is shielded by the nodes it was rendered among."""
+    if family is None:
         return []
-    return [child for child in parent_pair["prototype"]["children"] if child is not node]
+    return [child for child in family if child is not node]
+
+
+def families_by_member(original_children: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    return {child["path"]: family for family in original_children.values() for child in family}
 
 
 def collect_findings(alignment: dict[str, Any], collapsed: dict[str, list[dict[str, Any]]], tolerances: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     findings: dict[str, list[dict[str, Any]]] = {"style": [], "geometry": [], "missing": [], "structure": [], "content": [], "accessibility": []}
-    parent_of: dict[str, dict[str, Any]] = {}
-    for pair in alignment["pairs"]:
-        for child in pair["prototype"]["children"]:
-            parent_of[child["path"]] = pair
+    family_of = families_by_member(alignment["originalChildren"])
 
     exclusions: dict[str, tuple[str, ...]] = {}
     for pair in alignment["pairs"]:
         proto, real = pair["prototype"], pair["real"]
         if proto["ownText"] != real["ownText"]:
             findings["content"].append({"path": proto["path"], "realPath": real["path"], "prototype": proto["ownText"], "real": real["ownText"]})
-            for path, keys in content_exclusions(pair, siblings_of(parent_of.get(proto["path"]), proto)).items():
+            for path, keys in content_exclusions(pair, siblings_of(family_of.get(proto["path"]), proto)).items():
                 exclusions[path] = tuple(sorted(set(exclusions.get(path, ())) | set(keys)))
 
     for pair in alignment["pairs"]:
@@ -118,6 +121,8 @@ def review_lines(result: dict[str, Any]) -> list[str]:
                 f"review {pair['prototype']} <-> {pair['real']} "
                 f"score={pair['score']:.2f} roleName={role_name} text={text}"
             )
+    for item in result["unappliedPairings"]:
+        lines.append(f"pairing unapplied {item['prototype']} -> {item['real']} ({item['reason']})")
     for suggestion in result["suggestions"]:
         lines.append(
             f"suggest {suggestion['side']} {suggestion['path']} -> {suggestion['candidate']} "

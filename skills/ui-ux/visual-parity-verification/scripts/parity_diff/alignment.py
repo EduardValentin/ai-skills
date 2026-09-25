@@ -311,6 +311,23 @@ def index_by_path(root: dict[str, Any]) -> dict[str, tuple[dict[str, Any], dict[
     return index
 
 
+def original_children(root: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return {path: list(node["children"]) for path, (node, _) in index_by_path(root).items()}
+
+
+def unapplied_reason(proto_entry, real_entry) -> str | None:
+    if proto_entry is None:
+        return "unknown-prototype-path"
+    if real_entry is None:
+        return "unknown-real-path"
+    (proto_node, proto_parent), (real_node, real_parent) = proto_entry, real_entry
+    if proto_parent is None or real_parent is None:
+        return "root"
+    if proto_node not in proto_parent["children"] or real_node not in real_parent["children"]:
+        return "already-claimed"
+    return None
+
+
 def apply_global_pairings(proto_root: dict[str, Any], real_root: dict[str, Any], pairings: dict[str, str], alignment: dict[str, Any]) -> list[dict[str, Any]]:
     proto_index = index_by_path(proto_root)
     real_index = index_by_path(real_root)
@@ -319,14 +336,12 @@ def apply_global_pairings(proto_root: dict[str, Any], real_root: dict[str, Any],
         real_path = pairings[proto_path]
         proto_entry = proto_index.get(proto_path)
         real_entry = real_index.get(real_path)
-        if proto_entry is None or real_entry is None:
+        reason = unapplied_reason(proto_entry, real_entry)
+        if reason is not None:
+            alignment["unappliedPairings"].append({"prototype": proto_path, "real": real_path, "reason": reason})
             continue
         proto_node, proto_parent = proto_entry
         real_node, real_parent = real_entry
-        if proto_parent is None or real_parent is None:
-            continue
-        if proto_node not in proto_parent["children"] or real_node not in real_parent["children"]:
-            continue
         proto_parent["children"].remove(proto_node)
         real_parent["children"].remove(real_node)
         pair = make_pair(proto_node, real_node, "pairing")
@@ -340,6 +355,8 @@ def align_trees(proto_root: dict[str, Any], real_root: dict[str, Any], pairings:
         "pairs": [make_pair(proto_root, real_root, "root")],
         "missing": {"prototype": [], "real": []},
         "suggestions": [],
+        "unappliedPairings": [],
+        "originalChildren": original_children(proto_root),
     }
     global_pairs = apply_global_pairings(proto_root, real_root, pairings, alignment)
     align_children(proto_root["children"], real_root["children"], context or {}, alignment)

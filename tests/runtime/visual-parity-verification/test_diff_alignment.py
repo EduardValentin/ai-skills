@@ -409,3 +409,47 @@ class ChildSignatureTests(unittest.TestCase):
 
     def test_empty_root_has_empty_signature(self) -> None:
         self.assertEqual(child_signature(support.node("section")), [])
+
+
+class UnappliedPairingTests(unittest.TestCase):
+    def buttons(self) -> tuple[list[dict], list[dict]]:
+        return (
+            [support.node("button", role="button", name="Save"), support.node("button", role="button", name="Cancel")],
+            [support.node("button", role="button", name="Save")],
+        )
+
+    def test_applied_pairings_leave_the_list_empty(self) -> None:
+        alignment = align(*self.buttons(), pairings={"section > button:nth-of-type(1)": "section > button:nth-of-type(1)"})
+        self.assertEqual(alignment["unappliedPairings"], [])
+
+    def test_unknown_prototype_path(self) -> None:
+        alignment = align(*self.buttons(), pairings={"section > span:nth-of-type(9)": "section > button:nth-of-type(1)"})
+        self.assertEqual(alignment["unappliedPairings"], [
+            {"prototype": "section > span:nth-of-type(9)", "real": "section > button:nth-of-type(1)", "reason": "unknown-prototype-path"},
+        ])
+
+    def test_unknown_real_path(self) -> None:
+        alignment = align(*self.buttons(), pairings={"section > button:nth-of-type(1)": "section > span:nth-of-type(9)"})
+        self.assertEqual(alignment["unappliedPairings"], [
+            {"prototype": "section > button:nth-of-type(1)", "real": "section > span:nth-of-type(9)", "reason": "unknown-real-path"},
+        ])
+
+    def test_both_unknown_reports_the_prototype_path_first(self) -> None:
+        alignment = align(*self.buttons(), pairings={"section > span:nth-of-type(9)": "section > span:nth-of-type(9)"})
+        self.assertEqual([item["reason"] for item in alignment["unappliedPairings"]], ["unknown-prototype-path"])
+
+    def test_root_on_either_side(self) -> None:
+        for pairings in ({"section": "section > button:nth-of-type(1)"}, {"section > button:nth-of-type(1)": "section"}):
+            with self.subTest(pairings=pairings):
+                alignment = align(*self.buttons(), pairings=pairings)
+                self.assertEqual([item["reason"] for item in alignment["unappliedPairings"]], ["root"])
+                self.assertNotIn("pairing", {p["matchedBy"] for p in alignment["pairs"]})
+
+    def test_already_claimed_real_target(self) -> None:
+        alignment = align(*self.buttons(), pairings={
+            "section > button:nth-of-type(1)": "section > button:nth-of-type(1)",
+            "section > button:nth-of-type(2)": "section > button:nth-of-type(1)",
+        })
+        self.assertEqual(alignment["unappliedPairings"], [
+            {"prototype": "section > button:nth-of-type(2)", "real": "section > button:nth-of-type(1)", "reason": "already-claimed"},
+        ])

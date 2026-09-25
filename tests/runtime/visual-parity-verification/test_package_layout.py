@@ -17,6 +17,7 @@ MODULE_NAMES = {
     loading: (
         "InputError", "load_snapshot", "load_optional_json",
         "decode_gzip_base64_snapshot", "normalize_geometry", "inflate_styles",
+        "parse_ignore_entry", "prune_ignored",
     ),
     alignment: (
         "collapse_wrappers", "child_signature", "role_name_key", "text_key", "hook_key", "unique_keys",

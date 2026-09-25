@@ -357,3 +357,80 @@ class FindingTests(unittest.TestCase):
 
             lines = result.stdout.strip().split("\n")
             self.assertEqual(len(lines), 1)
+
+
+class UnappliedPairingOutputTests(unittest.TestCase):
+    def test_result_carries_unapplied_pairings_and_review_lines_print_them(self) -> None:
+        result = compare(
+            [support.node("button", role="button", name="Save")],
+            [support.node("button", role="button", name="Save")],
+            pairings={"section > span:nth-of-type(9)": "section > button:nth-of-type(1)"},
+        )
+        self.assertEqual(result["unappliedPairings"], [
+            {"prototype": "section > span:nth-of-type(9)", "real": "section > button:nth-of-type(1)", "reason": "unknown-prototype-path"},
+        ])
+        self.assertEqual(
+            findings.review_lines(result),
+            ["pairing unapplied section > span:nth-of-type(9) -> section > button:nth-of-type(1) (unknown-prototype-path)"],
+        )
+
+    def test_unapplied_lines_sit_between_review_pairs_and_suggestions(self) -> None:
+        result = compare(
+            [support.node("h2", role="heading", name="Orders", own_text="Orders"),
+             support.node("div", hook="group", children=[support.node("article", role="article", name="", own_text="Foo")]),
+             support.node("span", role="doc-subtitle", own_text="Extra Proto")],
+            [support.node("h2", role="heading", name="Orders", own_text="Orders"),
+             support.node("div", hook="group", children=[support.node("article", role="article", name="", own_text="Bar"), support.node("span", own_text="Extra")]),
+             support.node("span", own_text="Extra Real")],
+            pairings={"section": "section"},
+        )
+        kinds = [line.split(" ")[0] for line in findings.review_lines(result)]
+        self.assertEqual(kinds, ["review", "pairing", "suggest", "suggest"])
+
+    def test_base_result_has_an_empty_list(self) -> None:
+        result = compare([support.node("p", own_text="Same")], [support.node("p", own_text="Same")])
+        self.assertEqual(result["unappliedPairings"], [])
+
+    def test_print_review_flag_prints_the_unapplied_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            proto_snap = support.write_json(tmp_path / "proto.json", support.snapshot(support.node("section", children=[support.node("p", own_text="Same")])))
+            real_snap = support.write_json(tmp_path / "real.json", support.snapshot(support.node("section", children=[support.node("p", own_text="Same")])))
+            pairings = support.write_json(tmp_path / "pairings.json", {"L3": {"section > p:nth-of-type(1)": "section > em:nth-of-type(1)"}})
+            completed = support.run_diff(
+                "--prototype", str(proto_snap), "--real", str(real_snap), "--out", str(tmp_path / "out.json"),
+                "--pairings", str(pairings), "--row", "L3", "--print-review",
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            lines = completed.stdout.strip().split("\n")
+            self.assertEqual(lines[1:], ["pairing unapplied section > p:nth-of-type(1) -> section > em:nth-of-type(1) (unknown-real-path)"])
+
+
+class DetachedSiblingTests(unittest.TestCase):
+    def test_globally_paired_node_is_shielded_by_its_original_sibling(self) -> None:
+        result = compare(
+            [support.node("span", role="cell", own_text="Short", x=0, width=40),
+             support.node("button", role="button", name="Save", x=48, width=50)],
+            [support.node("span", role="cell", own_text="Much longer text", x=0, width=120),
+             support.node("button", role="button", name="Save", x=128, width=60)],
+            pairings={"section > button:nth-of-type(1)": "section > button:nth-of-type(1)"},
+        )
+        button_pair = next(p for p in result["pairs"] if p["prototype"] == "section > button:nth-of-type(1)")
+        self.assertEqual(button_pair["matchedBy"], "pairing")
+        self.assertEqual(len(result["findings"]["content"]), 1)
+        self.assertEqual(
+            [(f["path"], f["property"]) for f in result["findings"]["geometry"]],
+            [("section > button:nth-of-type(1)", "width")],
+        )
+
+    def test_globally_paired_node_with_a_content_mismatch_shields_its_original_siblings(self) -> None:
+        result = compare(
+            [support.node("button", role="button", name="Save", own_text="Save", x=0, width=40),
+             support.node("span", role="cell", own_text="Next", x=48, width=40)],
+            [support.node("button", role="button", name="Save", own_text="Save changes", x=0, width=120),
+             support.node("span", role="cell", own_text="Next", x=128, width=40)],
+            pairings={"section > button:nth-of-type(1)": "section > button:nth-of-type(1)"},
+        )
+        self.assertEqual(len(result["findings"]["content"]), 1)
+        self.assertEqual(result["findings"]["geometry"], [])
+        self.assertEqual(result["verdict"], "MATCH")
