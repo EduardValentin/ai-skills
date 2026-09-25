@@ -22,6 +22,59 @@ def compare(proto_children, real_children, pairings=None, tolerances=None):
 GOOD_CONTRAST = {"ratio": 12.6, "needsAnalyzer": False, "largeText": False}
 
 
+def compare_roots(proto_root, real_root, tolerances=None):
+    return diff_snapshots.compare_snapshots(support.snapshot(proto_root), support.snapshot(real_root), {}, tolerances or {})
+
+
+def value_cells(*texts: str) -> list[dict]:
+    return [support.node("span", own_text=text, x=index * 60, width=50, contrast=GOOD_CONTRAST) for index, text in enumerate(texts)]
+
+
+class PositionPairFindingTests(unittest.TestCase):
+    def test_nameless_value_cells_pair_by_position_and_differ_only_in_content(self) -> None:
+        result = compare(value_cells("$10", "$5", "$1"), value_cells("$12", "$7", "$2"))
+        cell_pairs = [p for p in result["pairs"] if p["matchedBy"] != "root"]
+        self.assertEqual([p["matchedBy"] for p in cell_pairs], ["position", "position", "position"])
+        self.assertFalse(any(p["needsReview"] for p in cell_pairs))
+        self.assertTrue(all(p["score"] is None and p["signals"] is None for p in cell_pairs))
+        self.assertEqual(len(result["findings"]["content"]), 3)
+        self.assertEqual(result["findings"]["style"], [])
+        self.assertEqual(result["findings"]["geometry"], [])
+        self.assertIsNone(result["lowestScore"])
+        self.assertEqual(result["verdict"], "MATCH")
+        self.assertEqual(findings.review_lines(result), ["review none"])
+
+
+class RootBoxTests(unittest.TestCase):
+    def test_root_box_and_margins_are_context_not_evidence(self) -> None:
+        result = compare_roots(
+            support.node("section", role="region", name="Orders", x=0, y=0, width=640, height=400, style={"marginBottom": "0px"},
+                         children=[support.node("p", own_text="Body", contrast=GOOD_CONTRAST)]),
+            support.node("section", role="region", name="Orders", x=24, y=80, width=600, height=520, style={"marginBottom": "32px"},
+                         children=[support.node("p", own_text="Body", contrast=GOOD_CONTRAST)]),
+        )
+        self.assertEqual(result["findings"]["geometry"], [])
+        self.assertEqual(result["findings"]["style"], [])
+        self.assertEqual(result["verdict"], "MATCH")
+
+    def test_root_padding_is_still_evidence(self) -> None:
+        result = compare_roots(
+            support.node("section", role="region", name="Orders", width=640, height=400, style={"paddingTop": "0px"}),
+            support.node("section", role="region", name="Orders", width=640, height=400, style={"paddingTop": "16px"}),
+        )
+        self.assertEqual([f["property"] for f in result["findings"]["style"]], ["paddingTop"])
+        self.assertEqual(result["verdict"], "DRIFT")
+
+    def test_child_margin_and_geometry_stay_evidence(self) -> None:
+        result = compare(
+            [support.node("p", own_text="Body", height=20, style={"marginBottom": "0px"})],
+            [support.node("p", own_text="Body", height=32, style={"marginBottom": "8px"})],
+        )
+        self.assertEqual([f["property"] for f in result["findings"]["style"]], ["marginBottom"])
+        self.assertEqual([f["property"] for f in result["findings"]["geometry"]], ["height"])
+        self.assertEqual(result["verdict"], "DRIFT")
+
+
 class FindingTests(unittest.TestCase):
     def test_content_mismatch_excludes_text_geometry_but_keeps_style(self) -> None:
         result = compare(
@@ -160,10 +213,12 @@ class FindingTests(unittest.TestCase):
                 support.node("h2", role="heading", name="Orders", own_text="Orders"),
                 support.node("div", hook="group-review", children=[
                     support.node("article", role="article", name="", y=4, children=[support.node("span", own_text="Bar")]),
+                    support.node("span", own_text="Extra"),
                 ]),
                 support.node("div", hook="group-equal", children=[
                     support.node("article", role="article", name="", children=[support.node("span", own_text="Same")]),
                     support.node("article", role="article", name="", children=[support.node("span", own_text="Same")]),
+                    support.node("span", own_text="Extra"),
                 ]),
             ],
         )
@@ -192,10 +247,12 @@ class FindingTests(unittest.TestCase):
             self.assertFalse(pair["needsReview"])
 
     def test_interactive_node_without_role_or_name_is_flagged(self) -> None:
+        heading = support.node("h2", role="heading", name="Orders", own_text="Orders")
         result = compare(
-            [support.node("div", focusable=True, own_text="Go", role="", name="")],
-            [support.node("button", role="button", name="Go", own_text="Go")],
+            [heading, support.node("div", focusable=True, own_text="Go", role="", name="")],
+            [heading, support.node("button", role="button", name="Go", own_text="Go")],
         )
+        self.assertIsNone(result["blocked"])
         checks = {(f["side"], f["check"]) for f in result["findings"]["accessibility"]}
         self.assertIn(("prototype", "missing-role"), checks)
 
@@ -216,6 +273,7 @@ class FindingTests(unittest.TestCase):
             support.node("h2", role="heading", name="Orders", own_text="Orders"),
             support.node("div", hook="group", children=[
                 support.node("article", role="article", name="", own_text="Bar"),
+                support.node("span", own_text="Extra"),
             ]),
             support.node("span", own_text="Extra Real"),
         ]

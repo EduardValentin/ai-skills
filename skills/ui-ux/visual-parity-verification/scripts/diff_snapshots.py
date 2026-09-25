@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -44,14 +45,22 @@ def _within_factor(a: float, b: float, factor: float) -> bool:
     return max(a, b) / min(a, b) <= factor
 
 
+def _child_signatures_agree(a: list[str], b: list[str]) -> bool:
+    longest = max(len(a), len(b))
+    return alignment.lcs_length(a, b) >= math.ceil(longest / 2)
+
+
 def root_incompatibility(proto: dict[str, Any], real: dict[str, Any]) -> dict[str, Any] | None:
-    proto_root, real_root = proto["rootSummary"], real["rootSummary"]
+    proto_root = dict(proto["rootSummary"], childSignature=alignment.child_signature(proto["root"]))
+    real_root = dict(real["rootSummary"], childSignature=alignment.child_signature(real["root"]))
     roles_conflict = bool(proto_root["role"]) and bool(real_root["role"]) and proto_root["role"] != real_root["role"]
+    tags_conflict = proto_root["tag"] != real_root["tag"]
     sizes_conflict = any(
         not _within_factor(proto_root[axis], real_root[axis], ROOT_SIZE_FACTOR)
         for axis in ("width", "height")
     )
-    if roles_conflict or sizes_conflict:
+    children_conflict = not _child_signatures_agree(proto_root["childSignature"], real_root["childSignature"])
+    if roles_conflict or tags_conflict or sizes_conflict or children_conflict:
         return {"prototype": proto_root, "real": real_root}
     return None
 

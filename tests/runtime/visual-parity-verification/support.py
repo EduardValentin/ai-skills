@@ -217,7 +217,10 @@ def _run(script: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(script), *arguments],
         cwd=REPO_ROOT,
-        env={key: value for key, value in os.environ.items() if key in {"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ"}},
+        env={
+            **{key: value for key, value in os.environ.items() if key in {"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ"}},
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
         capture_output=True,
         text=True,
         check=False,

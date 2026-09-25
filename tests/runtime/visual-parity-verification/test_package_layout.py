@@ -19,7 +19,7 @@ MODULE_NAMES = {
         "decode_gzip_base64_snapshot", "normalize_geometry", "inflate_styles",
     ),
     alignment: (
-        "collapse_wrappers", "role_name_key", "text_key", "hook_key", "unique_keys",
+        "collapse_wrappers", "child_signature", "role_name_key", "text_key", "hook_key", "unique_keys",
         "role_name_signal", "text_signal", "signature_signal", "geometry_signal", "fingerprint_signal",
         "anchor_pass", "fill_pass", "moved_pass", "apply_global_pairings",
         "align_trees", "make_pair", "needs_review",

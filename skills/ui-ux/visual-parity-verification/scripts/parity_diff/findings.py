@@ -9,6 +9,8 @@ from .comparison import compare_pair
 CONTRAST_NORMAL = 4.5
 CONTRAST_LARGE = 3.0
 INTERACTIVE_ROLES = frozenset({"button", "link", "checkbox", "radio", "switch", "tab", "menuitem", "combobox", "textbox", "slider", "option"})
+ROOT_GEOMETRY_EXCLUSIONS = ("x", "y", "width", "height")
+ROOT_STYLE_EXCLUSIONS = ("marginTop", "marginRight", "marginBottom", "marginLeft")
 
 
 def content_exclusions(pair: dict[str, Any], siblings: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
@@ -42,7 +44,10 @@ def collect_findings(alignment: dict[str, Any], collapsed: dict[str, list[dict[s
     for pair in alignment["pairs"]:
         proto, real = pair["prototype"], pair["real"]
         skip_name = proto.get("nameFrom") == "content" and real.get("nameFrom") == "content"
-        for finding in compare_pair(pair, tolerances, exclusions.get(proto["path"], ()), skip_name=skip_name):
+        is_root = pair["matchedBy"] == "root"
+        exclude_geometry = exclusions.get(proto["path"], ()) + (ROOT_GEOMETRY_EXCLUSIONS if is_root else ())
+        exclude_style = ROOT_STYLE_EXCLUSIONS if is_root else ()
+        for finding in compare_pair(pair, tolerances, exclude_geometry, exclude_style=exclude_style, skip_name=skip_name):
             findings[finding["category"]].append(finding)
         if pair["matchedBy"] == "moved":
             findings["structure"].append({"kind": "moved", "prototype": pair["prototype"]["path"], "real": pair["real"]["path"]})

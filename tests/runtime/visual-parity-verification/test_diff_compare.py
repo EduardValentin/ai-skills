@@ -115,6 +115,24 @@ class CompareTests(unittest.TestCase):
         )
         self.assertEqual(properties(findings), ["borderTopColor"])
 
+    def test_exclude_style_skips_only_the_named_keys(self) -> None:
+        pair = pair_of(
+            {"style": {"marginTop": "0px", "marginBottom": "0px"}},
+            {"style": {"marginTop": "8px", "marginBottom": "8px"}},
+        )
+        self.assertEqual(properties(comparison.compare_pair(pair, comparison.DEFAULT_TOLERANCES)), ["marginBottom", "marginTop"])
+        self.assertEqual(
+            properties(comparison.compare_pair(pair, comparison.DEFAULT_TOLERANCES, exclude_style=("marginTop",))),
+            ["marginBottom"],
+        )
+
+    def test_exclude_style_leaves_semantic_and_geometry_findings_alone(self) -> None:
+        pair = pair_of({"x": 0, "role": "button"}, {"x": 10, "role": ""})
+        self.assertEqual(
+            properties(comparison.compare_pair(pair, comparison.DEFAULT_TOLERANCES, exclude_style=("role",))),
+            ["role", "x"],
+        )
+
     def test_semantics_differences_are_style_findings_by_name(self) -> None:
         findings = comparison.compare_pair(
             pair_of({"role": "button", "focusable": True}, {"role": "", "focusable": False}),

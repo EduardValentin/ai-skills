@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "skills" / "ui-ux" / "visual-parity-verification" / "scripts"))
 
 import support  # noqa: E402
-from parity_diff.alignment import align_trees, score_pair, THRESHOLD  # noqa: E402
+from parity_diff.alignment import align_trees, child_signature, needs_review, score_pair, THRESHOLD  # noqa: E402
 
 
 def align(proto_children, real_children, pairings=None):
@@ -35,8 +35,8 @@ class AnchorAlignmentTests(unittest.TestCase):
         )
         rules = by_rule(alignment)
         self.assertIn(("section > button:nth-of-type(1)", "section > button:nth-of-type(1)", "pairing"), rules)
-        self.assertEqual([n["name"] for n in alignment["missing"]["prototype"]], ["Cancel"])
-        self.assertEqual([n["name"] for n in alignment["missing"]["real"]], ["Save"])
+        self.assertIn(("section > button:nth-of-type(2)", "section > button:nth-of-type(2)", "position"), rules)
+        self.assertEqual(alignment["missing"], {"prototype": [], "real": []})
 
     def test_pairing_across_levels_pairs_and_removes_missing(self) -> None:
         proto_button = support.node("button", role="button", name="Export")
@@ -229,6 +229,7 @@ class FillAlignmentTests(unittest.TestCase):
         real_children = [
             support.node("button", role="button", name="Delete", y=205),
             support.node("button", role="button", name="Delete", y=3),
+            support.node("span", own_text="", y=390, height=10),
         ]
         alignment = align_with_roots(proto_children, real_children)
         pairs = {(p["prototype"]["path"], p["real"]["path"]) for p in alignment["pairs"][1:]}
@@ -238,6 +239,7 @@ class FillAlignmentTests(unittest.TestCase):
         })
         self.assertTrue(all(p["matchedBy"] == "score" for p in alignment["pairs"][1:]))
         self.assertTrue(all(p["score"] >= THRESHOLD for p in alignment["pairs"][1:]))
+        self.assertEqual([n["tag"] for n in alignment["missing"]["real"]], ["span"])
 
     def test_geometry_and_fingerprint_alone_cannot_reach_threshold(self) -> None:
         proto = support.node("div", y=10, own_text="Alpha")
@@ -262,7 +264,7 @@ class FillAlignmentTests(unittest.TestCase):
 
     def test_rejected_leftover_carries_best_suggestion(self) -> None:
         proto_children = [support.node("p", own_text="Shipping estimate", y=0)]
-        real_children = [support.node("p", own_text="Delivery estimate", y=300)]
+        real_children = [support.node("p", own_text="Delivery estimate", y=300), support.node("span", own_text="", y=390, height=10)]
         alignment = align_with_roots(proto_children, real_children)
         self.assertEqual(len(alignment["missing"]["prototype"]), 1)
         suggestion = alignment["suggestions"][0]
@@ -310,3 +312,100 @@ class FillAlignmentTests(unittest.TestCase):
         self.assertEqual(moved[0]["prototype"]["path"], "section > header:nth-of-type(1) > button:nth-of-type(1)")
         self.assertEqual(moved[0]["real"]["path"], "section > button:nth-of-type(1)")
         self.assertEqual(alignment["missing"], {"prototype": [], "real": []})
+
+
+def value_cells(*texts: str) -> list[dict]:
+    return [support.node("span", own_text=text, x=index * 60, width=50) for index, text in enumerate(texts)]
+
+
+class PositionAlignmentTests(unittest.TestCase):
+    def test_same_shaped_gap_pairs_by_position_without_scoring(self) -> None:
+        alignment = align_with_roots(value_cells("$10", "$5", "$1"), value_cells("$12", "$7", "$2"))
+        pairs = alignment["pairs"][1:]
+        self.assertEqual([p["matchedBy"] for p in pairs], ["position", "position", "position"])
+        self.assertEqual(
+            [(p["prototype"]["path"], p["real"]["path"]) for p in pairs],
+            [(f"section > span:nth-of-type({n})", f"section > span:nth-of-type({n})") for n in (1, 2, 3)],
+        )
+        self.assertTrue(all(p["score"] is None and p["signals"] is None for p in pairs))
+        self.assertFalse(any(needs_review(p) for p in pairs))
+        self.assertEqual(alignment["missing"], {"prototype": [], "real": []})
+
+    def test_position_pairs_use_role_before_tag(self) -> None:
+        alignment = align_with_roots(
+            [support.node("span", role="cell", own_text="a"), support.node("div", role="cell", own_text="b")],
+            [support.node("div", role="cell", own_text="c"), support.node("span", role="cell", own_text="d")],
+        )
+        self.assertEqual([p["matchedBy"] for p in alignment["pairs"][1:]], ["position", "position"])
+
+    def test_unequal_gap_falls_through_to_scoring(self) -> None:
+        def cells(*texts: str) -> list[dict]:
+            return [support.node("span", role="cell", own_text=text, x=index * 60, width=50) for index, text in enumerate(texts)]
+
+        alignment = align_with_roots(
+            cells("$10", "$5") + [support.node("button", role="button", name="", x=120)],
+            cells("$12", "$7"),
+        )
+        rules = [p["matchedBy"] for p in alignment["pairs"][1:]]
+        self.assertEqual(rules, ["score", "score"])
+        self.assertTrue(all(p["score"] >= THRESHOLD for p in alignment["pairs"][1:]))
+        self.assertEqual([n["tag"] for n in alignment["missing"]["prototype"]], ["button"])
+
+    def test_nameless_cells_below_threshold_stay_missing_when_shapes_differ(self) -> None:
+        alignment = align_with_roots(
+            value_cells("$10", "$5") + [support.node("button", role="button", name="", x=120)],
+            value_cells("$12", "$7"),
+        )
+        self.assertEqual(alignment["pairs"][1:], [])
+        self.assertEqual([n["tag"] for n in alignment["missing"]["prototype"]], ["span", "span", "button"])
+        self.assertEqual([n["tag"] for n in alignment["missing"]["real"]], ["span", "span"])
+
+    def test_position_pairs_apply_per_gap_between_anchors(self) -> None:
+        alignment = align_with_roots(
+            [support.node("h2", role="heading", name="Orders", own_text="Orders")] + value_cells("$10", "$5"),
+            [support.node("h2", role="heading", name="Orders", own_text="Orders")] + value_cells("$12", "$7"),
+        )
+        rules = [(p["prototype"]["path"], p["matchedBy"]) for p in alignment["pairs"][1:]]
+        self.assertIn(("section > h2:nth-of-type(1)", "role-name"), rules)
+        self.assertEqual([rule for path, rule in rules if "span" in path], ["position", "position"])
+
+    def test_moved_pass_still_runs_on_leftovers_after_position_pairs(self) -> None:
+        alignment = align_with_roots(
+            [support.node("header", role="banner", name="Toolbar", children=[
+                support.node("button", role="button", name="Export"),
+            ])] + value_cells("$10", "$5"),
+            [support.node("button", role="button", name="Export"), support.node("header", role="banner", name="Toolbar")] + value_cells("$12", "$7"),
+        )
+        moved = [p for p in alignment["pairs"] if p["matchedBy"] == "moved"]
+        self.assertEqual(len(moved), 1)
+        self.assertEqual([p["matchedBy"] for p in alignment["pairs"] if p["prototype"]["tag"] == "span"], ["position", "position"])
+        self.assertEqual(alignment["missing"], {"prototype": [], "real": []})
+
+
+class ChildSignatureTests(unittest.TestCase):
+    def test_direct_children_use_role_or_tag(self) -> None:
+        root = support.node("section", children=[
+            support.node("h2", role="heading", name="Orders"),
+            support.node("p"),
+            support.node("button", role="button", name="Save"),
+        ])
+        self.assertEqual(child_signature(root), ["heading", "p", "button"])
+
+    def test_depth_one_wrappers_contribute_their_non_wrapper_descendants(self) -> None:
+        root = support.node("section", children=[
+            support.node("div", wrapper=True, children=[
+                support.node("h2", role="heading", name="Orders"),
+                support.node("div", wrapper=True, children=[support.node("p")]),
+            ]),
+            support.node("button", role="button", name="Save"),
+        ])
+        self.assertEqual(child_signature(root), ["heading", "p", "button"])
+
+    def test_non_wrapper_children_are_not_descended_into(self) -> None:
+        root = support.node("section", children=[
+            support.node("article", role="article", children=[support.node("h3", role="heading", name="One")]),
+        ])
+        self.assertEqual(child_signature(root), ["article"])
+
+    def test_empty_root_has_empty_signature(self) -> None:
+        self.assertEqual(child_signature(support.node("section")), [])

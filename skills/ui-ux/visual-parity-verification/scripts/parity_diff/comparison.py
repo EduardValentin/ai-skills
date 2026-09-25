@@ -101,7 +101,7 @@ def is_invisible_edge_color(key: str, proto_style: dict[str, Any], real_style: d
     return parse_px(proto_style.get(width_key)) == 0 and parse_px(real_style.get(width_key)) == 0
 
 
-def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geometry: tuple[str, ...] = (), *, skip_name: bool = False) -> list[dict[str, Any]]:
+def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geometry: tuple[str, ...] = (), *, exclude_style: tuple[str, ...] = (), skip_name: bool = False) -> list[dict[str, Any]]:
     proto, real = pair["prototype"], pair["real"]
     findings: list[dict[str, Any]] = []
 
@@ -114,7 +114,7 @@ def compare_pair(pair: dict[str, Any], tolerances: dict[str, Any], exclude_geome
         if proto.get(key) != real.get(key):
             record("style", key, proto.get(key), real.get(key))
     for key in sorted(set(proto["style"]) | set(real["style"])):
-        if is_invisible_edge_color(key, proto["style"], real["style"]):
+        if key in exclude_style or is_invisible_edge_color(key, proto["style"], real["style"]):
             continue
         a, b = proto["style"].get(key), real["style"].get(key)
         if not values_equal(key, a, b, tolerances, proto["style"].get("fontSize", ""), real["style"].get("fontSize", "")):

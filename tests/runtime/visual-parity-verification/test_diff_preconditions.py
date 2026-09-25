@@ -18,6 +18,14 @@ def simple_root(**overrides):
     return support.node("section", **merged)
 
 
+def surface_children():
+    return [
+        support.node("h2", role="heading", name="Orders", own_text="Orders"),
+        support.node("p", own_text="Body"),
+        support.node("button", role="button", name="Save"),
+    ]
+
+
 class DiffPreconditionTests(unittest.TestCase):
     def run_pair(self, proto, real):
         with tempfile.TemporaryDirectory() as temp:
@@ -62,7 +70,46 @@ class DiffPreconditionTests(unittest.TestCase):
 
     def test_root_without_role_on_one_side_is_compatible(self) -> None:
         proto = support.snapshot(simple_root())
-        real = support.snapshot(support.node("div", width=640, height=300))
+        real = support.snapshot(support.node("section", width=640, height=300))
+        _, result = self.run_pair(proto, real)
+        self.assertNotEqual(result["verdict"], "BLOCKED")
+
+    def test_root_tag_mismatch_is_blocked(self) -> None:
+        proto = support.snapshot(simple_root())
+        real = support.snapshot(support.node("div", role="region", name="Orders", width=640, height=300))
+        _, result = self.run_pair(proto, real)
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertEqual(result["blocked"]["reason"], "roots-incompatible")
+        self.assertEqual(result["blocked"]["detail"]["prototype"]["tag"], "section")
+        self.assertEqual(result["blocked"]["detail"]["real"]["tag"], "div")
+
+    def test_wrapper_root_around_the_surface_is_blocked_by_child_signature(self) -> None:
+        proto = support.snapshot(simple_root(children=surface_children()))
+        real = support.snapshot(support.node("section", width=640, height=300, children=[
+            support.node("section", role="region", name="Orders", width=640, height=300, children=surface_children()),
+        ]))
+        _, result = self.run_pair(proto, real)
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertEqual(result["blocked"]["reason"], "roots-incompatible")
+        detail = result["blocked"]["detail"]
+        self.assertEqual(detail["prototype"]["childSignature"], ["heading", "p", "button"])
+        self.assertEqual(detail["real"]["childSignature"], ["region"])
+        self.assertEqual(detail["prototype"]["width"], 640)
+        self.assertEqual(detail["real"]["height"], 300)
+
+    def test_child_signature_is_read_through_depth_one_wrappers(self) -> None:
+        proto = support.snapshot(simple_root(children=surface_children()))
+        real = support.snapshot(simple_root(children=[support.node("div", wrapper=True, children=surface_children())]))
+        _, result = self.run_pair(proto, real)
+        self.assertNotEqual(result["verdict"], "BLOCKED")
+
+    def test_child_signature_sharing_at_least_half_is_compatible(self) -> None:
+        proto = support.snapshot(simple_root(children=surface_children()))
+        real = support.snapshot(simple_root(children=[
+            support.node("h2", role="heading", name="Orders", own_text="Orders"),
+            support.node("p", own_text="Body"),
+            support.node("a", role="link", name="Save"),
+        ]))
         _, result = self.run_pair(proto, real)
         self.assertNotEqual(result["verdict"], "BLOCKED")
 

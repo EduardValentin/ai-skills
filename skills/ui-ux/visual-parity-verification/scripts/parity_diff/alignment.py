@@ -27,6 +27,20 @@ def collapse_wrappers(root: dict[str, Any]) -> tuple[dict[str, Any], list[dict[s
     return copied, collapsed
 
 
+def child_signature(root: dict[str, Any]) -> list[str]:
+    roles: list[str] = []
+
+    def visit(children: list[dict[str, Any]]) -> None:
+        for child in children:
+            if child["wrapper"]:
+                visit(child["children"])
+            else:
+                roles.append(child["role"] or child["tag"])
+
+    visit(root["children"])
+    return roles
+
+
 def make_pair(proto: dict[str, Any], real: dict[str, Any], matched_by: str, score: float | None = None, signals: dict[str, float] | None = None) -> dict[str, Any]:
     return {"prototype": proto, "real": real, "matchedBy": matched_by, "score": score, "signals": signals}
 
@@ -181,6 +195,18 @@ def best_scored_pairs(proto_nodes: list[dict[str, Any]], real_nodes: list[dict[s
     return pairs, remaining_proto, remaining_real
 
 
+def shape_of(nodes: list[dict[str, Any]]) -> list[str]:
+    return [node["role"] or node["tag"] for node in nodes]
+
+
+def structural_twins(proto_nodes: list[dict[str, Any]], real_nodes: list[dict[str, Any]]) -> bool:
+    return bool(proto_nodes) and shape_of(proto_nodes) == shape_of(real_nodes)
+
+
+def position_pairs(proto_nodes: list[dict[str, Any]], real_nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [make_pair(proto, real, "position") for proto, real in zip(proto_nodes, real_nodes)]
+
+
 def fill_pass(anchors: list[dict[str, Any]], proto_children: list[dict[str, Any]], real_children: list[dict[str, Any]], remaining_proto: list[dict[str, Any]], remaining_real: list[dict[str, Any]], context: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     proto_anchors = [pair["prototype"] for pair in anchors]
     real_anchors = [pair["real"] for pair in anchors]
@@ -193,7 +219,11 @@ def fill_pass(anchors: list[dict[str, Any]], proto_children: list[dict[str, Any]
     leftover_proto: list[dict[str, Any]] = []
     leftover_real: list[dict[str, Any]] = []
     for gap in sorted(gaps):
-        gap_pairs, gap_proto, gap_real = best_scored_pairs(gaps[gap][0], gaps[gap][1], context)
+        gap_proto, gap_real = gaps[gap]
+        if structural_twins(gap_proto, gap_real):
+            pairs.extend(position_pairs(gap_proto, gap_real))
+            continue
+        gap_pairs, gap_proto, gap_real = best_scored_pairs(gap_proto, gap_real, context)
         pairs.extend(gap_pairs)
         leftover_proto.extend(gap_proto)
         leftover_real.extend(gap_real)

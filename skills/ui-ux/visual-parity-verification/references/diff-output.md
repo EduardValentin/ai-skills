@@ -40,7 +40,7 @@ Each line lets the agent decide what to do with the result without opening the J
 | `conditions` | `viewport`, `devicePixelRatio`, `zoom`, `colorScheme` shared by both snapshots |
 | `urls` | `prototype` and `real` page URLs |
 | `rootSummaries` | Both root summaries |
-| `blocked` | `null`, or `{ reason, detail }` with reason `condition-mismatch` or `roots-incompatible` |
+| `blocked` | `null`, or `{ reason, detail }` with reason `condition-mismatch` or `roots-incompatible`, below |
 | `pairs` | Every aligned pair: `prototype` path, `real` path, `matchedBy`, `score`, `signals`, `needsReview` |
 | `findings` | Lists per category, below |
 | `collapsed` | Collapsed wrapper nodes per side: `path`, `tag`, `childCount` |
@@ -48,10 +48,33 @@ Each line lets the agent decide what to do with the result without opening the J
 | `lowestScore` | Lowest score among pairs matched by score, or `null` |
 
 `matchedBy` is one of `root`, `pairing`, `hook`, `role-name`, `text`,
-`score`, `moved`. `needsReview` is true for a `score` pair whose `roleName`
-signal is below 1 and whose `text` signal is 0 — matched without a shared
-name and without shared text identity. Review every pair with `needsReview`
-true and every suggestion.
+`position`, `score`, `moved`. `needsReview` is true for a `score` pair whose
+`roleName` signal is below 1 and whose `text` signal is 0 — matched without a
+shared name and without shared text identity. Review every pair with
+`needsReview` true and every suggestion.
+
+`position` pairs same-shaped sibling runs by order: when, between two
+anchors, the unmatched prototype children and the unmatched real children
+have the same `role`-or-`tag` sequence, they pair by index without scoring.
+Such a pair has `score` and `signals` `null` and is never `needsReview`; a
+text difference between the two lands under `content`.
+
+### Roots-incompatible detail
+
+The preflight compares the two roots before any alignment and blocks when
+any rule fails:
+
+1. both roots have a `role` and the roles differ;
+2. the `tag`s differ;
+3. `width` or `height` differ by more than a factor of 2;
+4. the child signatures share a longest common subsequence shorter than half
+   the longer signature (two empty signatures agree).
+
+A child signature is the `role`-or-`tag` of each direct child of the raw
+root, read through wrapper children at depth 1 (a wrapper contributes its
+own non-wrapper descendants in order). The `detail` is
+`{ prototype, real }`, each the root summary (`tag`, `role`, `name`, `width`,
+`height`) plus `childSignature`.
 
 The `text` rule, and the `text` signal used when scoring, key on a node's
 text identity rather than only its own text: a node's identity is its own
@@ -81,6 +104,12 @@ are reported under `style` with the field name as `property`.
 2. `DRIFT` when any `style` or `geometry` finding exists.
 3. `MISSING` when any `missing` finding exists and no `DRIFT`.
 4. `MATCH` otherwise.
+
+The root pair's own `x`, `y`, `width`, `height` and `marginTop`,
+`marginRight`, `marginBottom`, `marginLeft` never produce findings: the root's
+placement belongs to its parent and is not evidence about the surface. Its
+other styles and every child's full geometry stay compared. The root summary
+keeps `width` and `height` for the preflight.
 
 ## Tolerances
 
