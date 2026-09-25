@@ -52,3 +52,5 @@ Return the skill's parity verification report, beginning with the ledger path an
   selector or a `data-parity-root` value, whatever the real app's stack.
 - Record confirmed accessibility failures as findings even when the
   prototype shares them.
+- If no runnable prototype exists, stop and return `BLOCKED`; never
+  substitute a production analog or a design document as the basis.

@@ -1,8 +1,8 @@
 ---
 name: visual-parity-verification
-description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, or, when no runnable reference exists, consistently with credible production analogs, by snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into a caller-supplied parity ledger.
+description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, by snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into a caller-supplied parity ledger. Not for surfaces without a runnable prototype.
 compatibility: >-
-  Requires a running real app, a running prototype in a React development build or named production analogs, browser tooling that can inject the bundled browser scripts and evaluate a function with serialized arguments on both sides, Python 3 for the bundled host scripts, and a caller-supplied ledger and component map. Playwright is optional, for scripts/capture-snapshots.mjs; without it, drive browser tooling directly. Without any of these, return BLOCKED naming the missing input.
+  Requires a running real app, a running prototype in a React development build, browser tooling that can inject the bundled browser scripts and evaluate a function with serialized arguments on both sides, Python 3 for the bundled host scripts, and a caller-supplied ledger and component map. Playwright is optional, for scripts/capture-snapshots.mjs; without it, drive browser tooling directly. Without any of these, return BLOCKED naming the missing input; there is no fallback basis.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -26,13 +26,13 @@ inspects how its markup was produced.
 
 ## When To Use
 
-- A changed UI surface has a prototype or other runnable reference it must
-  match exactly, or has none and must be judged against credible
-  production analogs of the same role.
+- A changed UI surface has a runnable React prototype it must match
+  exactly.
 - The caller supplies a parity ledger and component map.
 
-Do not use for broad rendered validation without a comparison basis; that's
-ordinary visual validation.
+Do not use when no runnable prototype exists: there is nothing to diff
+against, and production analogs or design documents are not a basis. Do not
+use for broad rendered validation either; that's ordinary visual validation.
 
 ## Inputs
 
@@ -42,9 +42,8 @@ ordinary visual validation.
   only you write.
 - The component map, pairing each prototype component with a real app root
   selector or `data-parity-root` value and a route per side.
-- URLs of the running real app and prototype, or analog routes and
-  selectors when no reference exists, and the project's breakpoints or the
-  default viewport set below.
+- URLs of the running real app and prototype, and the project's
+  breakpoints or the default viewport set below.
 
 If the ledger or map is missing, return `BLOCKED` before any comparison and
 request it; do not scope the inventory yourself from screenshots or
@@ -52,14 +51,9 @@ impressions.
 
 ## Basis
 
-The basis follows one fact:
-
-- A runnable reference exists for the row: compare against it; local
-  preference never overrides the reference.
-- No runnable reference exists: compare against the closest credible
-  production analog by role and purpose, or a reusable component contract
-  or documented design constraint; name the analog in the row's evidence,
-  or mark the row `BLOCKED` if none exists.
+The prototype is the only basis. Compare every row against it; local
+preference never overrides it. A row whose prototype root cannot be
+captured is `BLOCKED`, never judged against something else.
 
 ## Matched Conditions
 

@@ -26,7 +26,7 @@ Return the ledger path with the updated rows, then this report:
 - <complete DOM evidence | partial DOM evidence | degraded manual evidence | no comparison evidence>
 
 ## Basis
-- <prototype URL and routes, or analog routes and why they are credible>
+- <prototype URL and routes>
 
 ## Matched conditions
 - viewport set: <widths x heights> | zoom: <percent> | device scale: <factor> | theme: <theme>
