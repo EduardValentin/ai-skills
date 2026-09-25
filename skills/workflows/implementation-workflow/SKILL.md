@@ -234,9 +234,12 @@ For each QA failure or visual finding:
    re-entries from remediation per unit is the limit; a third re-entry
    returns `IMPLEMENTATION BLOCKED`.
 5. Rerun only the affected verifier: failed and affected criteria for QA;
-   affected routes, states and viewports for visual. Every criterion and
-   every changed surface must have passing evidence against the final
-   implementation.
+   affected routes, states and viewports for visual. The rerun verifier
+   receives the fix delta, its prior report with the failed items marked,
+   and the instruction to re-verify only those items plus anything the
+   delta changes, treating earlier passing evidence as still valid. Every
+   criterion and every changed surface must have passing evidence against
+   the final implementation.
 
 ## Implementation Report
 
