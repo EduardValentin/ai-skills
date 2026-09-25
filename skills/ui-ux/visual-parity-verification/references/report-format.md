@@ -10,7 +10,8 @@ files for every viewport, `partial DOM evidence` when some rows do,
 `degraded manual evidence` when a row's verdict rests on anything other than
 a diff file, `no comparison evidence` otherwise. Degraded evidence may
 support a provisional `DRIFT` for a clearly visible defect with the missing
-diff stated; it can never support `MATCH` or `CLEAN`.
+diff stated; it can never support `MATCH` or `CLEAN`. `EXPECTED` rows pass
+on their own and always carry the reason the difference is intended.
 
 ## Report template
 
@@ -32,7 +33,7 @@ Return the ledger path with the updated rows, then this report:
 - viewport set: <widths x heights> | zoom: <percent> | device scale: <factor> | theme: <theme>
 
 ## Ledger rows written
-- <count MATCH> MATCH | <count DRIFT> DRIFT | <count MISSING> MISSING | <count BLOCKED> BLOCKED
+- <count MATCH> MATCH | <count EXPECTED> EXPECTED | <count DRIFT> DRIFT | <count MISSING> MISSING | <count BLOCKED> BLOCKED
 
 ## Findings
 - **P1** | severity: <blocker / major / minor> | ledger row <id> | <path property> | evidence: <prototype value vs real value> | diff: <relative diff path>
@@ -45,6 +46,9 @@ Return the ledger path with the updated rows, then this report:
 
 ## Pairings confirmed
 - <row id: prototype path to real path, or None>
+
+## Expected
+- <row id — reason, one per EXPECTED row, or None>
 
 ## Ledger provenance gaps
 - <rows appended for visible in-scope surfaces the map omitted, or None>

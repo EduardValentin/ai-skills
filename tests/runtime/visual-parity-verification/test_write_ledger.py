@@ -6,8 +6,10 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "skills" / "ui-ux" / "visual-parity-verification" / "scripts"))
 
 import support  # noqa: E402
+import write_ledger  # noqa: E402
 
 LEDGER = """# Parity ledger
 
@@ -216,6 +218,110 @@ class BlockedModeTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 1)
         self.assertIn("--blocked", completed.stderr)
+
+
+class ExpectedModeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.ledger = self.root / "ledger.md"
+        self.ledger.write_text(LEDGER, encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def rows(self):
+        return [line for line in self.ledger.read_text(encoding="utf-8").splitlines() if line.startswith("| L")]
+
+    def test_expected_writes_verdict_and_reason_only(self) -> None:
+        completed = support.run_ledger(
+            "--ledger", str(self.ledger), "--row", "L1", "--expected",
+            "D1: prototype updated after production shipped",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, "")
+        l1, l2 = self.rows()
+        self.assertIn("| EXPECTED |", l1)
+        self.assertIn("D1: prototype updated after production shipped", l1)
+        self.assertEqual(l2, "| L2 | C1 | /orders | empty | OrderSummary | [data-parity-root=\"OrderSummary\"] | modified | PENDING | |")
+
+    def test_expected_leaves_everything_else_byte_identical(self) -> None:
+        support.run_ledger("--ledger", str(self.ledger), "--row", "L1", "--expected", "reason")
+        before = LEDGER.splitlines()
+        after = self.ledger.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(before), len(after))
+        for old, new in zip(before, after):
+            if old.startswith("| L1 "):
+                self.assertEqual(old.split("|")[:8], new.split("|")[:8])
+            else:
+                self.assertEqual(old, new)
+
+    def test_expected_escapes_pipes_in_reason(self) -> None:
+        support.run_ledger("--ledger", str(self.ledger), "--row", "L1", "--expected", "spacing | approved in D1")
+        l1 = self.rows()[0]
+        self.assertIn("spacing \\| approved in D1", l1)
+        self.assertEqual(l1.count(" | "), 8)
+
+    def test_expected_requires_row(self) -> None:
+        completed = support.run_ledger("--ledger", str(self.ledger), "--expected", "reason")
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("--row", completed.stderr)
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), LEDGER)
+
+    def test_expected_refuses_missing_row(self) -> None:
+        completed = support.run_ledger("--ledger", str(self.ledger), "--row", "L9", "--expected", "reason")
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("L9", completed.stderr)
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), LEDGER)
+
+    def test_expected_refuses_empty_reason(self) -> None:
+        for reason in ("", "   "):
+            with self.subTest(reason=repr(reason)):
+                completed = support.run_ledger("--ledger", str(self.ledger), "--row", "L1", "--expected", reason)
+                self.assertEqual(completed.returncode, 1)
+                self.assertIn("--expected", completed.stderr)
+                self.assertEqual(self.ledger.read_text(encoding="utf-8"), LEDGER)
+
+    def test_expected_rejects_diff(self) -> None:
+        diff = support.write_json(self.root / "diffs" / "L1-1440x900.json", diff_result("MATCH"))
+        completed = support.run_ledger(
+            "--ledger", str(self.ledger), "--row", "L1", "--expected", "reason", "--diff", str(diff),
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("--expected", completed.stderr)
+        self.assertIn("--diff", completed.stderr)
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), LEDGER)
+
+    def test_expected_rejects_blocked(self) -> None:
+        completed = support.run_ledger(
+            "--ledger", str(self.ledger), "--row", "L1", "--expected", "reason", "--blocked", "other",
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("--expected", completed.stderr)
+        self.assertIn("--blocked", completed.stderr)
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), LEDGER)
+
+    def test_expected_rejects_append_gap(self) -> None:
+        completed = support.run_ledger(
+            "--ledger", str(self.ledger), "--row", "L1", "--expected", "reason", "--append-gap",
+            "--map-id", "C1", "--route", "/orders", "--state", "default",
+            "--prototype-root", "OrderTotals", "--real-root", "#order-totals",
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("--expected", completed.stderr)
+        self.assertIn("--append-gap", completed.stderr)
+        self.assertEqual(self.ledger.read_text(encoding="utf-8"), LEDGER)
+
+
+class VerdictOrderTests(unittest.TestCase):
+    def test_verdict_order_ranks_expected_between_missing_and_match(self) -> None:
+        self.assertEqual(write_ledger.VERDICT_ORDER, ("BLOCKED", "DRIFT", "MISSING", "EXPECTED", "MATCH"))
+
+    def test_expected_beats_match(self) -> None:
+        self.assertEqual(write_ledger.worst_verdict(["MATCH", "EXPECTED"]), "EXPECTED")
+
+    def test_missing_beats_expected(self) -> None:
+        self.assertEqual(write_ledger.worst_verdict(["EXPECTED", "MISSING"]), "MISSING")
 
 
 class AppendGapTests(unittest.TestCase):

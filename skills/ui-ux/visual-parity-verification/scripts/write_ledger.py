@@ -3,8 +3,10 @@
 
 Write mode edits only the Verdict and Evidence cells of one row. Blocked
 mode edits the same two cells with BLOCKED and a reason, for a row a capture
-error stopped before any diff could run. Append mode adds one PENDING row to
-the elements table. Every other byte is preserved.
+error stopped before any diff could run. Expected mode edits them with
+EXPECTED and the reason an approved design change makes the difference
+intended. Append mode adds one PENDING row to the elements table. Every
+other byte is preserved.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from typing import Any
 
 ELEMENTS_HEADER = "| Id | Map id | Route | State | Prototype root | Real app root | Change | Verdict | Evidence |"
 ELEMENTS_SECTION = "## Elements"
-VERDICT_ORDER = ("BLOCKED", "DRIFT", "MISSING", "MATCH")
+VERDICT_ORDER = ("BLOCKED", "DRIFT", "MISSING", "EXPECTED", "MATCH")
 VERDICT_CELL = 7
 EVIDENCE_CELL = 8
 MAX_LISTED_FINDINGS = 3
@@ -161,6 +163,10 @@ def write_blocked(ledger: Path, row_id: str, reason: str) -> None:
     write_row_cells(ledger, row_id, "BLOCKED", escape_cell(reason))
 
 
+def write_expected(ledger: Path, row_id: str, reason: str) -> None:
+    write_row_cells(ledger, row_id, "EXPECTED", escape_cell(reason))
+
+
 GAP_FIELDS = ("map_id", "route", "state", "prototype_root", "real_root")
 
 
@@ -190,6 +196,7 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--diff", action="append", type=Path, default=[], help="diff JSON; repeat per viewport")
     parser.add_argument("--append-gap", action="store_true", help="append a provenance-gap row instead of writing a verdict")
     parser.add_argument("--blocked", help="write BLOCKED and this reason into --row instead of a diff-backed verdict")
+    parser.add_argument("--expected", help="write EXPECTED and this reason into --row for an approved design change")
     parser.add_argument("--map-id")
     parser.add_argument("--route")
     parser.add_argument("--state")
@@ -198,11 +205,22 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def active_modes(arguments: argparse.Namespace) -> list[str]:
+    flags = {
+        "--expected": arguments.expected is not None,
+        "--blocked": arguments.blocked is not None,
+        "--diff": bool(arguments.diff),
+        "--append-gap": arguments.append_gap,
+    }
+    return [flag for flag, active in flags.items() if active]
+
+
 def main(argv: list[str]) -> int:
     arguments = parse_arguments(argv)
     try:
-        if arguments.blocked is not None and (arguments.append_gap or arguments.diff):
-            raise LedgerError("--blocked cannot be combined with --diff or --append-gap")
+        modes = active_modes(arguments)
+        if len(modes) > 1:
+            raise LedgerError(" and ".join(modes) + " cannot be combined")
         if arguments.append_gap:
             missing = [f"--{name.replace('_', '-')}" for name in GAP_FIELDS if getattr(arguments, name) is None]
             if missing:
@@ -213,6 +231,13 @@ def main(argv: list[str]) -> int:
             if not arguments.row:
                 raise LedgerError("--blocked needs --row")
             write_blocked(arguments.ledger, arguments.row, arguments.blocked)
+            return 0
+        if arguments.expected is not None:
+            if not arguments.row:
+                raise LedgerError("--expected needs --row")
+            if not arguments.expected.strip():
+                raise LedgerError("--expected needs a non-empty reason")
+            write_expected(arguments.ledger, arguments.row, arguments.expected)
             return 0
         if not arguments.row or not arguments.diff:
             raise LedgerError("write mode needs --row and at least one --diff")
