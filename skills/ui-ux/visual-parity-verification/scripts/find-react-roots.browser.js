@@ -22,17 +22,25 @@
     return "";
   }
 
-  function owningNames(fiber) {
-    const names = [];
+  function owningInstances(fiber) {
+    const instances = [];
     const seen = new Set();
     let current = fiber ? fiber.return : null;
     while (current && !seen.has(current)) {
       seen.add(current);
       const name = componentName(current.type);
-      if (name) names.push(name);
+      if (name) instances.push({ name, fiber: current });
       current = current.return;
     }
-    return names;
+    return instances;
+  }
+
+  function nearestOwningInstances(fiber, wanted) {
+    const nearest = new Map();
+    for (const { name, fiber: instance } of owningInstances(fiber)) {
+      if (wanted.has(name) && !nearest.has(name)) nearest.set(name, instance);
+    }
+    return nearest;
   }
 
   function pathSegment(element) {
@@ -71,23 +79,36 @@
     return elements.filter((element) => !elements.some((other) => other !== element && other.contains(element)));
   }
 
+  function documentOrder(a, b) {
+    if (a === b) return 0;
+    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  }
+
+  function outermostPerInstance(elementsByInstance) {
+    const kept = [];
+    for (const elements of elementsByInstance.values()) kept.push(...outermost(elements));
+    return kept.sort(documentOrder);
+  }
+
   function parityFindReactRoots(componentNames) {
     const wanted = new Set(Array.isArray(componentNames) ? componentNames : []);
     const found = new Map();
-    for (const name of wanted) found.set(name, []);
+    for (const name of wanted) found.set(name, new Map());
     let sawFiber = false;
     for (const element of document.querySelectorAll("*")) {
       const fiber = fiberOf(element);
       if (!fiber) continue;
       sawFiber = true;
-      for (const name of owningNames(fiber)) {
-        if (wanted.has(name) && !found.get(name).includes(element)) found.get(name).push(element);
+      for (const [name, instance] of nearestOwningInstances(fiber, wanted)) {
+        const elementsByInstance = found.get(name);
+        if (!elementsByInstance.has(instance)) elementsByInstance.set(instance, []);
+        elementsByInstance.get(instance).push(element);
       }
     }
     if (!sawFiber) return { error: "no-react-fibers" };
     const roots = {};
-    for (const [name, elements] of found) {
-      roots[name] = outermost(elements).map((element) => ({ selector: selectorFromBody(element), summary: summaryOf(element) }));
+    for (const [name, elementsByInstance] of found) {
+      roots[name] = outermostPerInstance(elementsByInstance).map((element) => ({ selector: selectorFromBody(element), summary: summaryOf(element) }));
     }
     return { roots };
   }

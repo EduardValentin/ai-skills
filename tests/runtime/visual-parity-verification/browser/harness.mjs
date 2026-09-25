@@ -67,6 +67,22 @@ checks.imgNameFromAuthor = byPath.get("section > img:nth-of-type(1)")?.nameFrom 
 checks.wrapperNameFromEmpty = byPath.get("section > div:nth-of-type(1)")?.nameFrom === "";
 checks.unparseableBackgroundIsNotWrapper = byPath.get("section > div:nth-of-type(3)")?.wrapper === false;
 
+const hiddenTextButton = byPath.get("section > button:nth-of-type(2)");
+details.hiddenTextButtonName = hiddenTextButton?.name;
+checks.nameFromContentSkipsHiddenText = hiddenTextButton?.name === "Continue" && hiddenTextButton?.nameFrom === "content";
+
+const opaqueSpan = byPath.get("section > div:nth-of-type(4) > span:nth-of-type(1)");
+const translucentSpan = byPath.get("section > div:nth-of-type(4) > span:nth-of-type(2)");
+details.colorSpans = { opaque: opaqueSpan?.contrast, translucent: translucentSpan?.contrast };
+const unparseableComputedBackground = window.getComputedStyle(window.document.querySelector("[data-parity='unparseable-bg']")).backgroundColor;
+checks.opaqueColorsEmitRgb = byPath.get("section > div:nth-of-type(3)")?.style.backgroundColor === unparseableComputedBackground
+  && unparseableComputedBackground.startsWith("oklch(")
+  && opaqueSpan?.style.color === "rgb(1, 2, 3)"
+  && opaqueSpan?.contrast?.needsAnalyzer === false
+  && typeof opaqueSpan?.contrast?.ratio === "number"
+  && translucentSpan?.style.backgroundColor === "rgba(4, 5, 6, 0.5)"
+  && translucentSpan?.contrast?.needsAnalyzer === true;
+
 checks.rootNotFound = window.paritySnapshot("Missing").error === "root-not-found";
 checks.rootAmbiguous = window.paritySnapshot("Duplicate").error === "root-ambiguous" && window.paritySnapshot("Duplicate").count === 2;
 checks.cssSelectorAlsoWorks = window.paritySnapshot("#app > section:nth-of-type(1)").rootSelector === "#app > section:nth-of-type(1)";
@@ -75,16 +91,26 @@ checks.noFibersIsAnError = window.parityFindReactRoots(["OrderSummary"]).error =
 
 function OrderSummary() {}
 function LineItem() {}
+function Card() {}
 const orderSummaryFiber = { type: OrderSummary, return: { type: "div", return: null } };
 const section = window.document.querySelector("[data-parity-root='OrderSummary']");
 section.__reactFiber$abc = { type: "section", return: orderSummaryFiber };
+const outerCardFiber = { type: Card, return: orderSummaryFiber };
+const wrapper = section.querySelector(".wrapper");
+wrapper.__reactFiber$abc = { type: "div", return: outerCardFiber };
 for (const paragraph of section.querySelectorAll("p")) {
-  paragraph.__reactFiber$abc = { type: "p", return: { type: LineItem, return: { type: "div", return: orderSummaryFiber } } };
+  paragraph.__reactFiber$abc = { type: "p", return: { type: LineItem, return: wrapper.__reactFiber$abc } };
 }
-const roots = window.parityFindReactRoots(["OrderSummary", "LineItem", "Unmounted"]);
+const subtotal = section.querySelector("[data-parity='subtotal']");
+const innerCardFiber = { type: Card, return: subtotal.parentElement.__reactFiber$abc };
+subtotal.__reactFiber$abc = { type: "span", return: innerCardFiber };
+const roots = window.parityFindReactRoots(["OrderSummary", "LineItem", "Card", "Unmounted"]);
 details.roots = roots;
 checks.findsOutermostRootPerComponent = roots.roots.OrderSummary.length === 1 && roots.roots.OrderSummary[0].selector === "body > div:nth-of-type(1) > section:nth-of-type(1)";
 checks.findsEveryInstance = roots.roots.LineItem.length === 2;
+checks.nestedInstancesEachYieldRoot = roots.roots.Card.length === 2
+  && roots.roots.Card[0].selector === "body > div:nth-of-type(1) > section:nth-of-type(1) > div:nth-of-type(1)"
+  && roots.roots.Card[1].selector === "body > div:nth-of-type(1) > section:nth-of-type(1) > div:nth-of-type(1) > p:nth-of-type(1) > span:nth-of-type(1)";
 checks.unmountedIsEmptyList = Array.isArray(roots.roots.Unmounted) && roots.roots.Unmounted.length === 0;
 checks.rootSummaryFromFinder = roots.roots.OrderSummary[0].summary.name === "Order summary" && roots.roots.OrderSummary[0].summary.width === 640;
 

@@ -117,10 +117,19 @@
     const title = element.getAttribute("title");
     if (title && title.trim()) return { name: collapseWhitespace(title), nameFrom: "author" };
     if (NAME_FROM_CONTENT_ROLES.has(elementRole)) {
-      const content = collapseWhitespace(element.textContent);
+      const content = includedText(element);
       return { name: content, nameFrom: content ? "content" : "" };
     }
     return { name: "", nameFrom: "" };
+  }
+
+  function includedText(element) {
+    const parts = [];
+    for (const child of element.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) parts.push(child.textContent);
+      if (child.nodeType === Node.ELEMENT_NODE && !isHidden(child, getComputedStyle(child))) parts.push(includedText(child));
+    }
+    return collapseWhitespace(parts.join(" "));
   }
 
   function isFocusable(element) {
@@ -166,18 +175,25 @@
     return canonicalColorContext;
   }
 
+  const VALIDITY_SENTINEL = "#010203";
+
+  function isValidFillStyle(context, text) {
+    context.fillStyle = VALIDITY_SENTINEL;
+    const sentinelSerialized = context.fillStyle;
+    context.fillStyle = text;
+    return context.fillStyle !== sentinelSerialized || text.trim().toLowerCase() === VALIDITY_SENTINEL;
+  }
+
   function canonicalColor(text) {
     if (!text || text === "transparent" || parseColor(text)) return text;
     try {
       const context = canonicalColorCanvasContext();
-      if (!context) return text;
-      context.fillStyle = "transparent";
-      context.fillStyle = text;
-      if (context.fillStyle === "rgba(0, 0, 0, 0)") return text;
+      if (!context || !isValidFillStyle(context, text)) return text;
       context.clearRect(0, 0, 1, 1);
       context.fillRect(0, 0, 1, 1);
       const data = context.getImageData(0, 0, 1, 1).data;
       const alpha = Math.round((data[3] / 255) * 1000) / 1000;
+      if (alpha === 1) return `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
       return `rgba(${data[0]}, ${data[1]}, ${data[2]}, ${alpha})`;
     } catch (error) {
       return text;
