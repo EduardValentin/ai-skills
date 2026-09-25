@@ -1,16 +1,17 @@
 # Parity ledger
 
 Session: <ticket id or branch>
-Component map: component-map.md
+Parity map: parity-map.md (committed at the project root)
 Viewport set: <widths used, including one below and one above each breakpoint>
 Theme: <theme or light>
 
 ## Elements
 
-One row per component map row, per meaningful state. The implementer fills
-every column except `Verdict` and `Evidence`, which the parity verifier
-writes from diff files. A row starts as `PENDING`. The session cannot raise a
-PR while any row is not `MATCH`.
+One row per touched `parity-map.md` row, per meaningful state; `Map id` is
+that row's id and `State` is one of its `States` names. The implementer
+fills every column except `Verdict` and `Evidence`, which the parity
+verifier writes from diff files. A row starts as `PENDING`. The session
+cannot raise a PR while any row is not `MATCH`.
 
 | Id | Map id | Route | State | Prototype root | Real app root | Change | Verdict | Evidence |
 |---|---|---|---|---|---|---|---|---|
