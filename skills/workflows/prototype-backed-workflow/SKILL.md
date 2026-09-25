@@ -156,9 +156,10 @@ without the user's explicit decision.
    every touched row's `States`, `Viewports` and `Ignore` are right; every
    element added or modified in the unit has a ledger row per meaningful
    state naming its map id; every design change has a row with both updated
-   columns reading yes. A difference the user accepted is recorded in the
-   design-changes table with its reason and the ledger rows it covers, so
-   the verifier can write those rows as `EXPECTED`. Run `parity_map.py
+   columns reading yes. A difference the user accepted is a design-changes
+   row whose `What changed` starts with `accepted:` followed by the reason
+   and whose `Ledger rows` lists the rows it covers, so the verifier can
+   write those rows as `EXPECTED` with that reason. Run `parity_map.py
    check`.
 2. Start both apps. Record the viewport set from the project's responsive
    configuration: one width just below and one just above each breakpoint,

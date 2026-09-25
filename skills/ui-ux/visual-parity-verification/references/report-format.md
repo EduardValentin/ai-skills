@@ -13,6 +13,32 @@ support a provisional `DRIFT` for a clearly visible defect with the missing
 diff stated; it can never support `MATCH` or `CLEAN`. `EXPECTED` rows pass
 on their own and always carry the reason the difference is intended.
 
+## Ledger evidence cell
+
+`write_ledger.py --row <id> --diff <file> ...` writes the row's worst
+verdict into `Verdict` and one part per diff file into `Evidence`, joined by
+` // `:
+
+```
+<WxH>: <VERDICT>[ <blocked reason>][ style=<n> geometry=<n> missing=<n>[ accessibility=<n>]][; <finding>]...; <diff path>
+```
+
+`<WxH>` is the diff's viewport. The blocked reason follows a `BLOCKED`
+verdict. The counts appear when the verdict is not `MATCH` or the diff has
+accessibility findings. Up to three findings follow, style and geometry as
+`<path> <property>: <prototype> vs <real>` and missing as
+`missing <side> <path>`. `<diff path>` is relative to the ledger's
+directory. Pipes inside a part are escaped as `\|` and runs of whitespace
+collapse to one space.
+
+`--row <id> --blocked <reason>` and `--row <id> --expected <reason>` write
+`BLOCKED` or `EXPECTED` into `Verdict` and only the reason into `Evidence`;
+those cells carry no viewport part.
+
+The recheck rule reads this cell: rerun every viewport whose part does not
+read `<WxH>: MATCH`; a `BLOCKED` row written with `--blocked` has no parts
+and reruns every viewport.
+
 ## Report template
 
 Return the ledger path with the updated rows, then this report:

@@ -30,8 +30,10 @@ Write `EXPECTED` only for a row the caller marked as an accepted difference, wit
 - Paths to the committed `parity-map.md` and `parity-pairings.json`, and to
   this session's parity folder, holding the ledger, snapshots and diffs.
   Never read or write another session's folder.
-- The rows marked as accepted differences, each with its reason, when the
-  caller has any.
+- Accepted differences, when the caller has any: the ledger's design-changes
+  rows whose `What changed` starts with `accepted:`. The reason after the
+  prefix is what you write with `--expected` into every ledger row that
+  row lists.
 - URLs of the running production app and running prototype app.
 - Routes, states and the project's breakpoints.
 - Diff or changed-file list, to expand rechecks when shared styles changed.

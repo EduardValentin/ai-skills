@@ -29,8 +29,7 @@ files, mockups and accessibility scans are context, never proof.
 - The project commits a parity map and the caller supplies a session
   ledger.
 
-Without a runnable prototype there is no basis; broad validation is
-ordinary visual validation.
+Without a runnable prototype there is no basis.
 
 ## Inputs
 
@@ -94,10 +93,10 @@ Paths resolve from the skill root.
 1. Capture. Run `parity_map.py check`, then `parity_map.py manifest` with
    both URLs and the viewport set (`--only-viewports` on a recheck, see
    Rechecks). Run `capture-snapshots.mjs --manifest` once per round and
-   read the summary lines once; no narration between captures. A capture
-   error line makes its row `BLOCKED` (`write_ledger.py --row <id>
-   --blocked "<side> <root> <route>: <error>"`); `no-react-fibers` blocks
-   every row at that prototype route.
+   read the summary lines once. A capture error line makes its row
+   `BLOCKED` (`write_ledger.py --row <id> --blocked "<side> <root>
+   <route>: <error>"`); `no-react-fibers` blocks every row at that
+   prototype route.
 2. Hand-driven states. When no recipe reaches a state, drive both sides by
    hand, inject the snapshot script by file path, evaluate
    `paritySnapshot(root, { encoding: "gzip-base64" })` and save the
@@ -111,11 +110,12 @@ Paths resolve from the skill root.
    or correct the entry behind each `pairing unapplied` line, then rerun
    that row's diffs. Propose, never write, an `Ignore` entry for a
    legitimate one-sided subtree and a finer map row for a subtree that
-   aligns poorly.
+   aligns poorly. `Ignore` prunes the node, not its layout effect, so it
+   fits only out-of-flow or zero-footprint subtrees.
 5. Ledger. Write each row from its diff files with
-   `scripts/write_ledger.py`. For a row the implementer or the ledger's
-   design-changes table marks as an accepted difference, write
-   `--expected "<reason>"`; the reason is mandatory.
+   `scripts/write_ledger.py`. For a row listed by a design-changes row
+   whose `What changed` starts with `accepted:`, write `--expected` with
+   that row's reason.
 6. Gap check. At each real app route, look for a visible in-scope surface
    the map omits; append a gap row with `write_ledger.py --append-gap`
    under the next free map id, capture it per side like any other row, and
@@ -148,10 +148,9 @@ Apply in this order:
    confirmed failure.
 2. `BLOCKED` when no finding is established but a required row or check is
    blocked, evidence is degraded, or status is `no comparison evidence`.
-3. `CLEAN` only with complete DOM evidence, every row `MATCH` or `EXPECTED`
-   (listed under `Expected` with reasons), every required accessibility
-   check complete and passing, and no visible in-scope surface missing
-   from the map.
+3. `CLEAN` only with complete DOM evidence, every row `MATCH` or `EXPECTED`,
+   every required accessibility check complete and passing, and no visible
+   in-scope surface missing from the map.
 
 ## Rechecks
 

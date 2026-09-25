@@ -23,7 +23,9 @@ session cannot raise a PR while any row is not `MATCH` or `EXPECTED`.
 One row per design decision made in this session. The prototype changes
 first. A production-first change is a rule violation that is remediated in
 the same session by updating the prototype; both columns must read yes before
-the parity step runs.
+the parity step runs. A difference the user accepted is a row whose `What
+changed` starts with `accepted:` followed by the reason; the verifier writes
+that reason as `EXPECTED` into every ledger row the `Ledger rows` cell lists.
 
 | Id | What changed | Changed first in | Prototype updated | Production updated | Ledger rows |
 |---|---|---|---|---|---|

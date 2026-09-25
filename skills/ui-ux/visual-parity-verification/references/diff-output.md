@@ -30,6 +30,11 @@ child signature. Each pruned node is listed under `findings.ignored` as
 `{ side, path, entry }` in document order; an entry that matches nothing adds
 no item. The category never affects the verdict.
 
+Pruning removes the node from the comparison, not its layout effect: an
+in-flow prototype-only element still shifts its siblings, which then show as
+geometry drift. Use `Ignore` for out-of-flow or zero-footprint elements;
+otherwise record the row `EXPECTED` with a reason or change the prototype.
+
 ## Summary line
 
 ```
