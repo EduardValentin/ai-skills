@@ -10,8 +10,9 @@ Theme: <theme or light>
 One row per touched `parity-map.md` row, per meaningful state; `Map id` is
 that row's id and `State` is one of its `States` names. The implementer
 fills every column except `Verdict` and `Evidence`, which the parity
-verifier writes from diff files. A row starts as `PENDING`. The session
-cannot raise a PR while any row is not `MATCH`.
+verifier writes from diff files. A row starts as `PENDING`. An `EXPECTED`
+row carries the reason for its accepted difference in `Evidence`. The
+session cannot raise a PR while any row is not `MATCH` or `EXPECTED`.
 
 | Id | Map id | Route | State | Prototype root | Real app root | Change | Verdict | Evidence |
 |---|---|---|---|---|---|---|---|---|
