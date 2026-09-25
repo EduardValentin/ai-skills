@@ -158,6 +158,44 @@ class CheckTests(ParityMapCase):
         self.assertEqual(len(lines), 2)
         self.assertTrue(all(line.startswith(f"{self.map_path}: row C1: ") for line in lines), lines)
 
+    def test_empty_prototype_component_fails(self) -> None:
+        completed = run_map("check", str(self.write_map(ROW_C1.replace("| OrderSummary |", "|  |"))))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("row C1: Prototype component is empty", completed.stdout)
+
+    def test_empty_real_root_fails(self) -> None:
+        completed = run_map("check", str(self.write_map(ROW_C3.replace("| aside.legacy-summary |", "|  |"))))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("row C3: Real app root is empty", completed.stdout)
+
+    def test_unbalanced_state_parenthesis_fails(self) -> None:
+        completed = run_map("check", str(self.write_map(ROW_C1.replace("hover (order-hover.json)", "hover (order-hover.json"))))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('row C1: States "hover (order-hover.json" is not name or name (file.json)', completed.stdout)
+
+    def test_arrow_without_surrounding_spaces_fails(self) -> None:
+        completed = run_map("check", str(self.write_map(ROW_C1.replace("/orders → /orders", "/orders→/orders"))))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('row C1: Routes "/orders→/orders" is not <real> → <prototype>', completed.stdout)
+
+    def test_more_than_one_arrow_is_ambiguous(self) -> None:
+        completed = run_map("check", str(self.write_map(ROW_C1.replace("/orders → /orders", "/orders → /a -> /b"))))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('row C1: Routes "/orders → /a -> /b" has more than one arrow', completed.stdout)
+
+    def test_blank_lines_inside_the_table_are_skipped(self) -> None:
+        self.map_path.write_text(map_text(ROW_C1, "", ROW_C2.replace("| C2 |", "| X2 |")), encoding="utf-8")
+        completed = run_map("check", str(self.map_path))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('row X2: Id "X2" is not C<n>', completed.stdout)
+
+    def test_pipe_row_after_prose_is_reported_not_read(self) -> None:
+        self.map_path.write_text(map_text(ROW_C1) + "\nSome prose.\n\n" + ROW_C2.replace("| C2 |", "| X2 |") + "\n", encoding="utf-8")
+        completed = run_map("check", str(self.map_path))
+        self.assertEqual(completed.returncode, 1)
+        self.assertNotIn("X2", completed.stdout)
+        self.assertIn(f"{self.map_path}: row outside the table at line 11", completed.stdout)
+
     def test_missing_map_file_fails(self) -> None:
         completed = run_map("check", str(self.root / "absent.md"))
         self.assertEqual(completed.returncode, 1)
@@ -197,6 +235,20 @@ class RowTests(ParityMapCase):
         self.assertEqual(row["viewports"], ["375x667", "1440x900"])
         self.assertEqual(row["ignore"], {"prototype": [], "real": []})
         self.assertEqual(row["confidence"], "obvious")
+
+    def test_row_works_across_a_blank_line_inside_the_table(self) -> None:
+        self.map_path.write_text(map_text(ROW_C1, "", ROW_C2), encoding="utf-8")
+        check = run_map("check", str(self.map_path))
+        self.assertEqual(check.returncode, 0, check.stdout)
+        completed = run_map("row", str(self.map_path), "C2")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["protoRoot"], "main.checkout")
+
+    def test_escaped_pipe_in_a_cell_is_unescaped(self) -> None:
+        escaped = ROW_C1.replace('[data-parity-root="OrderSummary"]', '[data-parity-root="a\\|b"]')
+        completed = run_map("row", str(self.write_map(escaped)), "C1")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["realRoot"], '[data-parity-root="a|b"]')
 
     def test_unknown_id_exits_one(self) -> None:
         completed = run_map("row", str(self.write_map(ROW_C1)), "C9")
@@ -354,6 +406,14 @@ class ManifestTests(ParityMapCase):
         completed, out = self.manifest(ledger, "--project-root", str(self.root))
         self.assertEqual(completed.returncode, 1)
         self.assertIn("names a missing file parity-actions/order-hover.json", completed.stdout)
+        self.assertFalse(out.exists())
+
+    def test_short_ledger_row_exits_one(self) -> None:
+        self.write_map(ROW_C1)
+        ledger = self.write_ledger("| L1 | C1 | /orders | default | OrderSummary | x | modified | PENDING |")
+        completed, out = self.manifest(ledger)
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("ledger row L1: expected 9 cells, found 8", completed.stderr)
         self.assertFalse(out.exists())
 
     def test_bad_viewports_flag_exits_two(self) -> None:

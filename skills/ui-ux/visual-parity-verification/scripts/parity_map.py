@@ -19,13 +19,14 @@ from typing import Any
 MAP_HEADER = "| Id | Prototype component | Real app root | Routes (real → prototype) | States | Viewports | Ignore | Confidence | Notes |"
 ELEMENTS_HEADER = "| Id | Map id | Route | State | Prototype root | Real app root | Change | Verdict | Evidence |"
 ELEMENTS_SECTION = "## Elements"
+LEDGER_CELLS = 9
 COLUMNS = ("Id", "Prototype component", "Real app root", "Routes", "States", "Viewports", "Ignore", "Confidence", "Notes")
 CONFIDENCES = ("obvious", "confirmed")
 ACTIONS_DIR = "parity-actions"
 PROTO_ROOT_PREFIX = "root:"
 
 ID_PATTERN = re.compile(r"^C(\d+)$")
-ROUTES_PATTERN = re.compile(r"^(?P<real>\S.*?)\s*(?:→|->)\s*(?P<proto>\S.*)$")
+ROUTES_ARROW = re.compile(r" (?:→|->) ")
 STATE_PATTERN = re.compile(r"^(?P<name>[^()]+?)\s*(?:\((?P<file>[^()]+)\))?$")
 VIEWPORT_PATTERN = re.compile(r"^\d+x\d+$")
 IGNORE_PATTERN = re.compile(r"^(?P<side>proto|real):(?P<entry>(?:hook|path):.+)$")
@@ -47,7 +48,7 @@ def split_row(line: str) -> list[str]:
     escaped = False
     for char in line.strip().strip("|"):
         if escaped:
-            current += "\\" + char
+            current += char if char == "|" else "\\" + char
             escaped = False
         elif char == "\\":
             escaped = True
@@ -64,34 +65,56 @@ def split_list(text: str, separator: str) -> list[str]:
     return [item.strip() for item in text.split(separator) if item.strip()]
 
 
-def read_table(path: Path, expected_header: str, section: str | None = None) -> list[list[str]]:
+def read_lines(path: Path) -> list[str]:
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        return path.read_text(encoding="utf-8").splitlines()
     except OSError as error:
         raise MapError(f"{path}: cannot read: {error.strerror}") from error
-    start = 0
-    if section is not None:
-        if section not in lines:
-            raise MapError(f"{path}: has no '{section}' section")
-        start = lines.index(section)
-    header = next((i for i in range(start, len(lines)) if lines[i].startswith("|")), None)
+
+
+def is_pipe_row(line: str) -> bool:
+    return line.lstrip().startswith("|")
+
+
+def read_table(path: Path, lines: list[str], expected_header: str, start: int = 0) -> tuple[list[list[str]], int]:
+    header = next((i for i in range(start, len(lines)) if is_pipe_row(lines[i])), None)
     if header is None:
         raise MapError(f"{path}: has no table; expected header {expected_header}")
     if lines[header].strip() != expected_header:
         raise MapError(f'{path}: header is "{lines[header].strip()}", expected "{expected_header}"')
     rows: list[list[str]] = []
-    for line in lines[header + 2:]:
-        if not line.startswith("|"):
-            break
-        rows.append(split_row(line))
+    end = header + 2
+    while end < len(lines) and (is_pipe_row(lines[end]) or not lines[end].strip()):
+        if is_pipe_row(lines[end]):
+            rows.append(split_row(lines[end]))
+        end += 1
+    return rows, end
+
+
+def read_map_table(path: Path) -> list[list[str]]:
+    lines = read_lines(path)
+    rows, end = read_table(path, lines, MAP_HEADER)
+    stray = next((i for i in range(end, len(lines)) if is_pipe_row(lines[i])), None)
+    if stray is not None:
+        raise MapError(f"{path}: row outside the table at line {stray + 1}")
+    return rows
+
+
+def read_ledger_table(path: Path) -> list[list[str]]:
+    lines = read_lines(path)
+    if ELEMENTS_SECTION not in lines:
+        raise MapError(f"{path}: has no '{ELEMENTS_SECTION}' section")
+    rows, _ = read_table(path, lines, ELEMENTS_HEADER, lines.index(ELEMENTS_SECTION))
     return rows
 
 
 def parse_routes(text: str) -> tuple[str, str]:
-    match = ROUTES_PATTERN.match(text)
-    if match is None:
+    parts = [part.strip() for part in ROUTES_ARROW.split(text)]
+    if len(parts) > 2:
+        raise MapError(f'Routes "{text}" has more than one arrow')
+    if len(parts) != 2 or not all(parts):
         raise MapError(f'Routes "{text}" is not <real> → <prototype>')
-    return match.group("real"), match.group("proto")
+    return parts[0], parts[1]
 
 
 def parse_route_fields(text: str) -> dict[str, str]:
@@ -203,7 +226,7 @@ def missing_action_files(row: dict[str, Any], project_root: Path | None) -> list
 
 def check_map(path: Path, project_root: Path | None) -> tuple[list[str], dict[str, dict[str, Any]]]:
     try:
-        table = read_table(path, MAP_HEADER)
+        table = read_map_table(path)
     except MapError as error:
         return [str(error)], {}
     problems: list[str] = []
@@ -234,11 +257,10 @@ def load_checked_map(path: Path, project_root: Path | None) -> dict[str, dict[st
 
 
 def read_ledger_rows(ledger: Path) -> list[dict[str, str]]:
-    table = read_table(ledger, ELEMENTS_HEADER, ELEMENTS_SECTION)
     rows = []
-    for cells in table:
-        if len(cells) < 4:
-            raise MapError(f"{ledger}: ledger row {cells[0] if cells else ''}: expected 9 cells, found {len(cells)}")
+    for cells in read_ledger_table(ledger):
+        if len(cells) != LEDGER_CELLS:
+            raise MapError(f"ledger row {cells[0]}: expected {LEDGER_CELLS} cells, found {len(cells)}")
         rows.append({"id": cells[0], "mapId": cells[1], "route": cells[2], "state": cells[3]})
     return rows
 

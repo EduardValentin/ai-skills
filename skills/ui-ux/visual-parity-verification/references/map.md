@@ -29,12 +29,18 @@ Header, exactly:
 | `Id` | `C<n>`, unique, strictly increasing down the table. |
 | `Prototype component` | React component name, or `root:<selector>` to address the prototype side by selector. |
 | `Real app root` | CSS selector or `data-parity-root` value, passed through to the capture command. |
-| `Routes (real → prototype)` | `<real route> → <prototype route>`; `->` is also accepted. Both sides non-empty. |
+| `Routes (real → prototype)` | `<real route> → <prototype route>`; `->` is also accepted. Exactly one arrow, with a space on both sides; both sides non-empty. |
 | `States` | Comma-separated `name` or `name (file.json)`. Names are unique per row. With `--project-root`, each file must exist under `<root>/parity-actions/`. At least one state. |
 | `Viewports` | Empty for the full set, or comma-separated `WxH` integers. |
 | `Ignore` | Empty, or `;`-separated `proto:<entry>` and `real:<entry>` where an entry is `hook:<data-parity value>` or `path:<snapshot path prefix>` (the diff command's ignore grammar). |
 | `Confidence` | `obvious` (name match) or `confirmed` (checked by hand). |
 | `Notes` | Free text; source locators live here. |
+
+The table starts at the first pipe row after the title. Blank lines inside
+the table are skipped, not terminators; the table ends at the first non-blank
+line that is not a pipe row, and any pipe row after that is reported as
+`row outside the table at line N`. A literal `|` inside a cell is written
+`\|` and comes back unescaped in `row` and manifest output.
 
 Example row:
 
@@ -90,7 +96,8 @@ row named in `Map id`:
   ledger `Route` is informational; when it differs from the map's real route
   a warning goes to stderr and the map route is used.
 - The ledger `State` must be one of the map row's `States`; otherwise exit 1
-  naming the ledger row. A `Map id` missing from the map also exits 1.
+  naming the ledger row. A `Map id` missing from the map, or a ledger row
+  with other than nine cells, also exits 1 naming the row.
 - Row viewports are the map's subset or the full `--viewports`, intersected
   with `--only-viewports` when given. A row left with no viewports is emitted
   with an empty list and a stderr warning.
