@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "skills" / "ui-ux" / "visual-parity-verification" / "scripts"))
 
 import support  # noqa: E402
-import diff_snapshots  # noqa: E402
+from parity_diff import loading  # noqa: E402
 
 
 class InflateStylesTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class InflateStylesTests(unittest.TestCase):
         original = copy.deepcopy(snap["root"])
 
         delta = support.delta_snapshot(snap)
-        diff_snapshots.inflate_styles(delta["root"])
+        loading.inflate_styles(delta["root"])
 
         self.assertEqual(delta["root"], original)
 
@@ -34,7 +34,7 @@ class InflateStylesTests(unittest.TestCase):
             support.node("h2", own_text="Orders", style={"fontSize": "20px"}),
         ])
         before = copy.deepcopy(root)
-        diff_snapshots.inflate_styles(root)
+        loading.inflate_styles(root)
         self.assertEqual(root, before)
 
     def test_child_overriding_one_key_inherits_the_rest_from_parent(self) -> None:
@@ -43,7 +43,7 @@ class InflateStylesTests(unittest.TestCase):
         child["style"] = {"fontSize": "20px"}
         parent["children"] = [child]
 
-        diff_snapshots.inflate_styles(parent)
+        loading.inflate_styles(parent)
 
         inflated_child = parent["children"][0]
         self.assertEqual(inflated_child["style"]["fontSize"], "20px")
@@ -108,7 +108,7 @@ class InflateStylesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "old-shape.json"
             support.write_json(path, old_shape_snapshot)
-            loaded = diff_snapshots.load_snapshot(path)
+            loaded = loading.load_snapshot(path)
 
         self.assertEqual(loaded["root"]["geometry"], {"x": 0, "y": 0, "width": 640, "height": 300})
         child = loaded["root"]["children"][0]

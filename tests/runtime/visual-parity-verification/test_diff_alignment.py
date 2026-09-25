@@ -8,13 +8,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "skills" / "ui-ux" / "visual-parity-verification" / "scripts"))
 
 import support  # noqa: E402
-import diff_snapshots  # noqa: E402
+from parity_diff.alignment import align_trees, score_pair, THRESHOLD  # noqa: E402
 
 
 def align(proto_children, real_children, pairings=None):
     proto = support.assign_paths(support.node("section", children=proto_children))
     real = support.assign_paths(support.node("section", children=real_children))
-    return diff_snapshots.align_trees(proto, real, pairings or {})
+    return align_trees(proto, real, pairings or {})
 
 
 def by_rule(alignment):
@@ -194,7 +194,7 @@ def align_with_roots(proto_children, real_children, pairings=None):
         "prototypeRoot": {"width": 640, "height": 400},
         "realRoot": {"width": 640, "height": 400},
     }
-    return diff_snapshots.align_trees(proto, real, pairings or {}, context)
+    return align_trees(proto, real, pairings or {}, context)
 
 
 class FillAlignmentTests(unittest.TestCase):
@@ -237,24 +237,24 @@ class FillAlignmentTests(unittest.TestCase):
             ("section > button:nth-of-type(2)", "section > button:nth-of-type(1)"),
         })
         self.assertTrue(all(p["matchedBy"] == "score" for p in alignment["pairs"][1:]))
-        self.assertTrue(all(p["score"] >= diff_snapshots.THRESHOLD for p in alignment["pairs"][1:]))
+        self.assertTrue(all(p["score"] >= THRESHOLD for p in alignment["pairs"][1:]))
 
     def test_geometry_and_fingerprint_alone_cannot_reach_threshold(self) -> None:
         proto = support.node("div", y=10, own_text="Alpha")
         real = support.node("div", y=10, own_text="Beta")
-        score, signals = diff_snapshots.score_pair(proto, real, {
+        score, signals = score_pair(proto, real, {
             "prototypeRoot": {"width": 640, "height": 400},
             "realRoot": {"width": 640, "height": 400},
         })
         self.assertEqual(signals["roleName"], 0.0)
         self.assertEqual(signals["text"], 0.0)
         self.assertEqual(signals["signature"], 0.5)
-        self.assertLess(score, diff_snapshots.THRESHOLD)
+        self.assertLess(score, THRESHOLD)
 
     def test_fingerprint_signal_normalizes_color_syntax(self) -> None:
         proto = support.node("div", own_text="Alpha", style={"color": "rgba(255, 255, 255, 1)"})
         real = support.node("div", own_text="Beta", style={"color": "rgb(255, 255, 255)"})
-        _, signals = diff_snapshots.score_pair(proto, real, {
+        _, signals = score_pair(proto, real, {
             "prototypeRoot": {"width": 640, "height": 400},
             "realRoot": {"width": 640, "height": 400},
         })
@@ -269,7 +269,7 @@ class FillAlignmentTests(unittest.TestCase):
         self.assertEqual(suggestion["side"], "prototype")
         self.assertEqual(suggestion["path"], "section > p:nth-of-type(1)")
         self.assertEqual(suggestion["candidate"], "section > p:nth-of-type(1)")
-        self.assertLess(suggestion["score"], diff_snapshots.THRESHOLD)
+        self.assertLess(suggestion["score"], THRESHOLD)
 
     def test_subtree_signature_distinguishes_cards(self) -> None:
         card_a = support.node("article", role="article", name="", y=0, children=[

@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "skills" / "ui-ux" 
 
 import support  # noqa: E402
 import diff_snapshots  # noqa: E402
+from parity_diff import findings  # noqa: E402
 
 
 def compare(proto_children, real_children, pairings=None, tolerances=None):
@@ -220,7 +221,7 @@ class FindingTests(unittest.TestCase):
         ]
         result = compare(proto_children, real_children)
 
-        lines = diff_snapshots.review_lines(result)
+        lines = findings.review_lines(result)
         review_pairs = [l for l in lines if l.startswith("review ") and "<->" in l]
         suggestions = [l for l in lines if l.startswith("suggest ")]
 
@@ -238,7 +239,7 @@ class FindingTests(unittest.TestCase):
 
     def test_review_lines_with_identical_snapshots(self) -> None:
         result = compare([support.node("p", own_text="Same")], [support.node("p", own_text="Same")])
-        lines = diff_snapshots.review_lines(result)
+        lines = findings.review_lines(result)
         self.assertEqual(lines, ["review none"])
 
     def test_print_review_flag_outputs_review_lines(self) -> None:

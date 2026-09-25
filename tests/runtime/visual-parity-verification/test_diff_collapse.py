@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "skills" / "ui-ux" 
 
 import support  # noqa: E402
 import diff_snapshots  # noqa: E402
+from parity_diff import alignment  # noqa: E402
 
 
 class CollapseTests(unittest.TestCase):
@@ -22,7 +23,7 @@ class CollapseTests(unittest.TestCase):
             support.node("button", own_text="Save", role="button", name="Save"),
         ])
         support.assign_paths(root)
-        collapsed_root, collapsed = diff_snapshots.collapse_wrappers(root)
+        collapsed_root, collapsed = alignment.collapse_wrappers(root)
         self.assertEqual([c["ownText"] for c in collapsed_root["children"]], ["Title", "one", "two", "Save"])
         self.assertEqual(collapsed, [{"path": "section > div:nth-of-type(1)", "tag": "div", "childCount": 2}])
 
@@ -35,14 +36,14 @@ class CollapseTests(unittest.TestCase):
             ]),
         ])
         support.assign_paths(root)
-        collapsed_root, collapsed = diff_snapshots.collapse_wrappers(root)
+        collapsed_root, collapsed = alignment.collapse_wrappers(root)
         self.assertEqual(collapsed_root["children"][0]["ownText"], "deep")
         self.assertEqual(len(collapsed), 2)
 
     def test_root_is_never_collapsed(self) -> None:
         root = support.node("div", wrapper=True, children=[support.node("p", own_text="x")])
         support.assign_paths(root)
-        collapsed_root, collapsed = diff_snapshots.collapse_wrappers(root)
+        collapsed_root, collapsed = alignment.collapse_wrappers(root)
         self.assertEqual(collapsed_root["tag"], "div")
         self.assertEqual(collapsed, [])
 
@@ -51,7 +52,7 @@ class CollapseTests(unittest.TestCase):
             support.node("div", wrapper=True, children=[support.node("p", own_text="x")]),
         ])
         support.assign_paths(root)
-        diff_snapshots.collapse_wrappers(root)
+        alignment.collapse_wrappers(root)
         self.assertTrue(root["children"][0]["wrapper"])
 
     def test_result_records_collapsed_per_side(self) -> None:
