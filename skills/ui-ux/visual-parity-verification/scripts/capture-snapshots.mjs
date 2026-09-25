@@ -260,6 +260,24 @@ function parseManifestRow(row, index, file) {
   };
 }
 
+function directoryUrl(value, where) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return usageError(`${where} is not an absolute URL: "${value}"`);
+  }
+  if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url.href;
+}
+
+function samePrototype(row, source) {
+  return row.protoRoute === source.protoRoute
+    && row.protoComponent === source.protoComponent
+    && row.protoRoot === source.protoRoot
+    && row.protoActions === source.protoActions;
+}
+
 function loadManifest(file) {
   const data = loadJson(file, "manifest");
   if (!data || typeof data !== "object" || !Array.isArray(data.rows)) usageError(`manifest ${file}: "rows" must be an array`);
@@ -267,17 +285,21 @@ function loadManifest(file) {
     if (!isSelector(data[key])) usageError(`manifest ${file}: "${key}" must be a non-empty string`);
   }
   const rows = data.rows.map((row, index) => parseManifestRow(row, index, file));
-  const ids = new Set();
+  const rowsById = new Map();
   for (const row of rows) {
-    if (ids.has(row.id)) usageError(`manifest ${file}: duplicate row id "${row.id}"`);
-    ids.add(row.id);
+    if (rowsById.has(row.id)) usageError(`manifest ${file}: duplicate row id "${row.id}"`);
+    rowsById.set(row.id, row);
   }
   for (const row of rows) {
-    if (!ids.has(row.shareProto)) usageError(`manifest ${file} row ${row.id}: shareProto "${row.shareProto}" names no row`);
+    const source = rowsById.get(row.shareProto);
+    if (!source) usageError(`manifest ${file} row ${row.id}: shareProto "${row.shareProto}" names no row`);
+    if (!samePrototype(row, source)) {
+      usageError(`manifest ${file} row ${row.id}: shareProto "${source.id}" names a row with a different prototype route, root or actions`);
+    }
   }
   return {
-    prototypeUrl: data.prototypeUrl,
-    realUrl: data.realUrl,
+    prototypeUrl: directoryUrl(data.prototypeUrl, `manifest ${file}: "prototypeUrl"`),
+    realUrl: directoryUrl(data.realUrl, `manifest ${file}: "realUrl"`),
     prototype: parseAuth(data.prototype, `manifest ${file}: "prototype"`),
     real: parseAuth(data.real, `manifest ${file}: "real"`),
     rows,

@@ -95,9 +95,14 @@ rest and exits 1 at the end.
 (see `map.md`): `prototypeUrl`, `realUrl`, `viewports` and `rows`, each row
 with `id`, `protoRoute`, `realRoute`, `protoComponent` or `protoRoot`,
 `realRoot`, `viewports` (`"WxH"` strings), `protoActions`, `realActions`
-(recipe paths or null) and `shareProto` (a row id). Routes are joined onto
-the base URLs with `new URL(route, base)`. `ignore` is for the diff step and
-is not read here.
+(recipe paths or null) and `shareProto` (a row id). The base URLs are
+treated as directories (a missing trailing `/` is added) and routes are
+joined onto them with `new URL(route, base)`, so a relative route resolves
+under the base and a route with a leading `/` replaces the base's path. The
+top-level `viewports` list is informational; each row's own `viewports`
+drive the capture. A row whose `shareProto` names a row with a different
+prototype route, root or actions is a usage error. `ignore` is for the diff
+step and is not read here.
 
 Two optional top-level objects carry authentication, added by hand or copied
 from the flags; `parity_map.py` does not emit them:

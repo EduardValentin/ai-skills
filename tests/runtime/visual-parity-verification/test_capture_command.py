@@ -56,8 +56,8 @@ def manifest_row(row_id: str, share: str, viewports: list[str], **overrides: obj
     return row
 
 
-def manifest(rows: list[dict[str, object]], viewports: list[str]) -> dict[str, object]:
-    return {"prototypeUrl": FIXTURE_DIR_URL, "realUrl": FIXTURE_DIR_URL, "viewports": viewports, "rows": rows}
+def manifest(rows: list[dict[str, object]], viewports: list[str], base_url: str = FIXTURE_DIR_URL) -> dict[str, object]:
+    return {"prototypeUrl": base_url, "realUrl": base_url, "viewports": viewports, "rows": rows}
 
 
 def summary_lines(stdout: str, side: str) -> list[str]:
@@ -202,23 +202,36 @@ class CaptureParsingTests(unittest.TestCase):
             files={"steps.json": [{"hover": "button"}, {"dance": "button"}]},
         )
         self.assertEqual(completed.returncode, 2, completed.stderr)
-        self.assertIn("steps.json", completed.stderr)
-        self.assertIn("step 1", completed.stderr)
-        self.assertIn("dance", completed.stderr)
+        self.assertEqual(
+            completed.stderr,
+            'usage: actions file steps.json step 1: unknown step "dance" (expected one of click, hover, waitFor, press, fill, wait)\n',
+        )
 
     def test_header_without_separator_exits_two(self) -> None:
         completed = self.run_in_temp(
             ["--viewport", "800x600", "--real-url", FIXTURE_URL, "--real-root", "x", "--real-header", "Authorization"],
         )
         self.assertEqual(completed.returncode, 2, completed.stderr)
-        self.assertIn('--real-header must be "Name: value"', completed.stderr)
+        self.assertEqual(completed.stderr, 'usage: --real-header must be "Name: value", got "Authorization"\n')
 
     def test_timeout_zero_exits_two(self) -> None:
         completed = self.run_in_temp(
             ["--viewport", "800x600", "--real-url", FIXTURE_URL, "--real-root", "x", "--timeout", "0"],
         )
         self.assertEqual(completed.returncode, 2, completed.stderr)
-        self.assertIn("--timeout must be a positive integer", completed.stderr)
+        self.assertEqual(completed.stderr, 'usage: --timeout must be a positive integer number of milliseconds, got "0"\n')
+
+    def test_share_proto_with_different_prototype_exits_two(self) -> None:
+        rows = [manifest_row("R1", "R1", ["800x600"]), manifest_row("R2", "R1", ["800x600"], protoRoot="Duplicate")]
+        completed = self.run_in_temp(
+            ["--manifest", "manifest.json"],
+            files={"manifest.json": manifest(rows, ["800x600"])},
+        )
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertEqual(
+            completed.stderr,
+            'usage: manifest manifest.json row R2: shareProto "R1" names a row with a different prototype route, root or actions\n',
+        )
 
     def test_prototype_actions_without_prototype_url_exits_two(self) -> None:
         completed = self.run_in_temp(
@@ -271,6 +284,19 @@ class CaptureBrowserTests(unittest.TestCase):
             self.assertEqual(len(real_lines), 2, completed.stdout)
             for row_id, line in zip(["R1", "R2"], real_lines):
                 self.assertRegex(line, rf"^real 800x600 {ROOT_LINE} -> {re.escape(str(out / row_id / 'real-800x600.json'))}$")
+
+    def test_manifest_base_url_without_trailing_slash_is_treated_as_a_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            out = Path(work) / "out"
+            manifest_path = write_json(
+                Path(work) / "manifest.json",
+                manifest([manifest_row("R1", "R1", ["800x600"])], ["800x600"], base_url=FIXTURE_DIR_URL.rstrip("/")),
+            )
+            completed = self.capture(["--manifest", str(manifest_path), "--out", str(out)])
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertTrue((out / "R1" / "prototype-800x600.json").exists(), completed.stdout)
+            self.assertTrue((out / "R1" / "real-800x600.json").exists(), completed.stdout)
+            self.assertEqual(support.read_json(out / "R1" / "real-800x600.json")["url"], FIXTURE_URL)
 
     def test_manifest_captures_source_prototype_on_demand_for_earlier_rows(self) -> None:
         with tempfile.TemporaryDirectory() as work:
