@@ -1,20 +1,22 @@
 # Durable map
 
-The adopting project commits three parity files at its root. Sessions read
-and extend them; snapshots, diffs and the ledger stay in the gitignored
-session folder. `scripts/parity_map.py` checks the map, prints one row, and
-turns the ledger plus the map into the capture manifest.
+The adopting project commits three parity files under `.parity/`. Sessions
+read and extend them; snapshots, diffs and the ledger stay in the gitignored
+session folder `.parity/sessions/<session>/`. `scripts/parity_map.py` checks
+the map, prints one row, and turns the ledger plus the map into the capture
+manifest.
 
 ## Files
 
-- `parity-map.md`: one row per root pair the project has ever verified. Ids
-  are stable and never reused. The implementer maintains it; the verifier
-  reads it and never writes it.
-- `parity-pairings.json`: confirmed manual pairings, keyed by map id, then
-  prototype path to real path. The verifier writes pairings it confirms
+- `.parity/parity-map.md`: one row per root pair the project has ever
+  verified. Ids are stable and never reused. The implementer maintains it;
+  the verifier reads it and never writes it.
+- `.parity/parity-pairings.json`: confirmed manual pairings, keyed by map id,
+  then prototype path to real path. The verifier writes pairings it confirms
   under the row's map id.
-- `parity-actions/<name>.json`: optional action recipes, named from the
-  map's `States` column. One recipe serves both sides of a row.
+- `.parity/parity-actions/<name>.json`: optional action recipes, named from
+  the map's `States` column and resolved next to the map. One recipe serves
+  both sides of a row.
 
 ## Map contract
 
@@ -30,7 +32,7 @@ Header, exactly:
 | `Prototype component` | React component name, or `root:<selector>` to address the prototype side by selector. |
 | `Real app root` | CSS selector or `data-parity-root` value, passed through to the capture command. |
 | `Routes (real → prototype)` | `<real route> → <prototype route>`; `->` is also accepted. Exactly one arrow, with a space on both sides; both sides non-empty. |
-| `States` | Comma-separated `name` or `name (file.json)`. Names are unique per row. With `--project-root`, each file must exist under `<root>/parity-actions/`. At least one state. |
+| `States` | Comma-separated `name` or `name (file.json)`. Names are unique per row. Each file must exist under `parity-actions/` in the map's directory, or under `<DIR>/parity-actions/` when `--actions-root DIR` is given. At least one state. |
 | `Viewports` | Empty for the full set, or comma-separated `WxH` integers. |
 | `Ignore` | Empty, or `;`-separated `proto:<entry>` and `real:<entry>` where an entry is `hook:<data-parity value>` or `path:<snapshot path prefix>` (the diff command's ignore grammar). |
 | `Confidence` | `obvious` (name match) or `confirmed` (checked by hand, or the real root carries `data-parity-root` for that component). |
@@ -51,22 +53,25 @@ Example row:
 ## CLI
 
 ```
-parity_map.py check <map> [--project-root DIR]
+parity_map.py check <map> [--actions-root DIR]
 parity_map.py row <map> <id>
 parity_map.py manifest <map> --ledger <ledger> --prototype-url U --real-url U
-  --viewports WxH,... [--only-viewports WxH,...] [--project-root DIR] --out <file>
+  --viewports WxH,... [--only-viewports WxH,...] [--actions-root DIR] --out <file>
 ```
 
 `check` exits 0 silently or exits 1 with one line per problem on stdout,
 each `<map>: row <id>: <problem>`, for example
-`parity-map.md: row C3: Viewports "800x" is not WxH`. A header mismatch is
-one line quoting the header found and the header expected. Checked: header,
+`.parity/parity-map.md: row C3: Viewports "800x" is not WxH`. A header
+mismatch is one line quoting the header found and the header expected.
+Checked: header,
 cell count, id format, duplicate or non-increasing ids, empty component or
 root, routes arrow, state syntax and duplicate names, viewport syntax,
-ignore syntax, confidence, and referenced action files when `--project-root`
-is given.
+ignore syntax, confidence, and referenced action files, which must exist
+under `parity-actions/` in the directory holding the map or, with
+`--actions-root DIR`, under `DIR/parity-actions/`.
 
-`row` runs `check` first, then prints the row as JSON:
+`row` runs `check` first, validating action files against the map's
+directory, then prints the row as JSON:
 
 ```json
 {
@@ -102,8 +107,8 @@ row named in `Map id`:
   with `--only-viewports` when given. A row left with no viewports is emitted
   with an empty list and a stderr warning.
 - `protoActions` and `realActions` are the same path,
-  `<project-root or map directory>/parity-actions/<file>`, or null when the
-  state names no file.
+  `<actions root, default the map's directory>/parity-actions/<file>`, or
+  null when the state names no file.
 - `shareProto` is the id of the first manifest row with the same
   `(protoRoute, prototype component or root, protoActions)`; the first row
   names itself. The capture command captures the prototype once per group.

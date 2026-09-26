@@ -168,16 +168,16 @@ The diff skips the `name` comparison when both sides' `nameFrom` is
 
 ## Pairings file
 
-`parity-pairings.json`, committed at the project root, keyed by map id, then
-prototype path to real path:
+`.parity/parity-pairings.json`, committed next to the map, keyed by map id,
+then prototype path to real path:
 
 ```json
 { "C3": { "section > button:nth-of-type(2)": "section > a:nth-of-type(1)" } }
 ```
 
-Pass it with `--pairings parity-pairings.json --row C3`; `--row` names the
-key to read, which is the ledger row's `Map id`, not the ledger row id.
-Pairings are applied before any other rule and are final.
+Pass it with `--pairings .parity/parity-pairings.json --row C3`; `--row`
+names the key to read, which is the ledger row's `Map id`, not the ledger
+row id. Pairings are applied before any other rule and are final.
 
 Pairings resolve anywhere in the two trees by full path, regardless of depth.
 A paired node is taken out of ordinary alignment along with its position

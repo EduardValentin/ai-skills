@@ -1,6 +1,6 @@
 ---
 name: visual-parity-verification
-description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, by reading the project's committed parity-map.md and parity-pairings.json, snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into the session's parity ledger. Not for surfaces without a runnable prototype.
+description: Use when verifying that changed UI surfaces render identically to a runnable React reference prototype, by reading the project's committed .parity/parity-map.md and .parity/parity-pairings.json, snapshotting each root pair's rendered subtree on both sides, diffing the snapshots with the bundled scripts, and writing one verdict per row into the session's parity ledger. Not for surfaces without a runnable prototype.
 compatibility: >-
   Requires a running real app, a running prototype in a React development build, browser tooling that injects the bundled browser scripts and evaluates a function with serialized arguments on both sides, Python 3 for the bundled host scripts, a caller-supplied ledger and committed parity map. Playwright is optional, for scripts/capture-snapshots.mjs; without it, drive browser tooling directly. Without any of these, return BLOCKED naming the missing input; there is no fallback basis.
 metadata:
@@ -15,8 +15,8 @@ metadata:
 Compare the rendered real app to its basis one root pair at a time: a
 prototype React component and the real app element, whatever its stack,
 rendering the same surface. The prototype is the only basis; local
-preference never overrides it. The committed `parity-map.md` declares the
-pairs; the bundled scripts build the manifest, capture, align, compare and
+preference never overrides it. The committed `.parity/parity-map.md` declares
+the pairs; the bundled scripts build the manifest, capture, align, compare and
 write the verdict into the ledger. You reach the states no recipe covers,
 supply nothing the scripts can derive, and read only the printed output of
 the diff and ledger writer, never the snapshot JSON. Screenshots, source
@@ -31,14 +31,14 @@ files, mockups and accessibility scans are context, never proof.
 
 ## Inputs
 
-- The committed `parity-map.md`: one durable row per root pair the project
-  has ever verified, with routes, `States`, `Viewports` and `Ignore`
+- The committed `.parity/parity-map.md`: one durable row per root pair the
+  project has ever verified, with routes, `States`, `Viewports` and `Ignore`
   entries (`references/map.md`).
-- The committed `parity-pairings.json`, keyed by map id, and the optional
-  `parity-actions/` recipes.
-- The session ledger, with the viewport set and theme at the top; each
-  row's `Map id` names a map row, and you write only its `Verdict` and
-  `Evidence` cells.
+- The committed `.parity/parity-pairings.json`, keyed by map id, and the
+  optional `.parity/parity-actions/` recipes.
+- The session ledger, `.parity/sessions/<session>/ledger.md`, with the
+  viewport set and theme at the top; each row's `Map id` names a map row,
+  and you write only its `Verdict` and `Evidence` cells.
 - Both app URLs and the project's breakpoints. For authentication, add
   `prototype` or `real` objects with `storageState` and `headers` to the
   manifest by hand (`references/capture.md`).
@@ -100,14 +100,14 @@ Paths resolve from the skill root.
    `paritySnapshot(root, { encoding: "gzip-base64" })` and save the
    returned string verbatim as the snapshot file.
 3. Diff. Per row and viewport, run `scripts/diff_snapshots.py
-   --print-review --pairings parity-pairings.json --row <map id>` with the
-   row's manifest `ignore` entries as `--ignore-prototype` and
+   --print-review --pairings .parity/parity-pairings.json --row <map id>`
+   with the row's manifest `ignore` entries as `--ignore-prototype` and
    `--ignore-real`; read only the printed summary and review lines.
 4. Review. Confirm or reject each `review` pair and each `suggest` line.
-   Write confirmed pairs into `parity-pairings.json` under the map id, drop
-   or correct the entry behind each `pairing unapplied` line, then rerun
-   that row's diffs; copy each `hook suggest` line into the report's Hook
-   suggestions section. Propose, never write, an `Ignore` entry for a
+   Write confirmed pairs into `.parity/parity-pairings.json` under the map
+   id, drop or correct the entry behind each `pairing unapplied` line, then
+   rerun that row's diffs; copy each `hook suggest` line into the report's
+   Hook suggestions section. Propose, never write, an `Ignore` entry for a
    legitimate one-sided subtree and a finer map row for a subtree that
    aligns poorly. `Ignore` prunes the node, not its layout effect, so it
    fits only out-of-flow or zero-footprint subtrees.
@@ -172,7 +172,8 @@ Return the ledger path with the updated rows, then the report template in
 - Writing a verdict without a diff file behind it.
 - Editing snapshot or diff JSON by hand.
 - Leaving a ledger row `PENDING` or blank.
-- Writing `Ignore` entries or any other cell of `parity-map.md` yourself.
+- Writing `Ignore` entries or any other cell of `.parity/parity-map.md`
+  yourself.
 - Narrating between captures, or running one capture per row when a
   manifest exists.
 - Writing `EXPECTED` without a reason.

@@ -44,10 +44,10 @@ Do not load this workflow for work that touches no user-visible surface.
 - Parity is proven, not asserted. The parity step below is mandatory for
   every prototype-backed application and is the last gate before the PR.
   Screenshots, unit tests, type checks and code inspection do not substitute.
-- Parity has three committed files at the project root, `parity-map.md`,
-  `parity-pairings.json` and `parity-actions/`, and per-session records under
-  the gitignored parity root that are never committed or copied into design
-  documentation.
+- Parity has three committed files, `.parity/parity-map.md`,
+  `.parity/parity-pairings.json` and `.parity/parity-actions/`, and
+  per-session records under the gitignored `.parity/sessions/` that are never
+  committed or copied into design documentation.
 
 ## Preparation
 
@@ -110,38 +110,42 @@ hooks with it:
 
 ## Parity Artifacts
 
-Three files at the project root are committed with the code and shared by
-every session:
+Everything parity writes lives under `.parity/` at the project root. Three
+entries are committed with the code and shared by every session; the fourth
+is disposable and never committed:
 
-- `parity-map.md`, created from `assets/parity-map.md`: one row per root
-  pair the project has ever verified. A root pair is a prototype React
+- `.parity/parity-map.md`, created from `assets/parity-map.md`: one row per
+  root pair the project has ever verified. A root pair is a prototype React
   component name and the real app element that renders the same surface,
   given as a CSS selector or as the value of a `data-parity-root`
   attribute. Each row carries a stable `C<n>` id, a route per side, its
   `States` (each optionally naming a recipe), a `Viewports` subset,
   `Ignore` entries and a `Confidence`. Ids are never reused; a new pair
   takes the next free id.
-- `parity-pairings.json`: manual pairings the verifier confirmed, keyed by
-  map id.
-- `parity-actions/<name>.json`: optional action recipes that reach a state
-  on both sides, named from the map's `States` column.
+- `.parity/parity-pairings.json`: manual pairings the verifier confirmed,
+  keyed by map id.
+- `.parity/parity-actions/<name>.json`: optional action recipes that reach a
+  state on both sides, named from the map's `States` column.
+- `.parity/sessions/<session>/`: one folder per session holding only
+  `ledger.md`, created from `assets/ledger.md`, and the `snapshots/` and
+  `diffs/` the verifier writes.
 
-The parity root is `.parity/` at the project root unless the project's
-agent instructions name another path. Confirm it is gitignored before writing
-into it; if it is not, add it to the ignore file as part of the session.
+The project's `.gitignore` carries one line for the sessions folder; add it
+as part of the session when it is missing:
 
-Each session owns one folder under that root, named after the ticket id when
-one exists (for example `GEN-123`) or, for ad hoc work, a short kebab-case
-name the agent chooses that describes the change. Never write into another
-session's folder and never reuse one; a leftover folder from an earlier
-session is not evidence for this one. The folder holds only `ledger.md`,
-created from `assets/ledger.md`, and the `snapshots/` and `diffs/` the
-verifier writes.
+```gitignore
+.parity/sessions/
+```
+
+`<session>` is the ticket id when one exists (for example `GEN-123`) or, for
+ad hoc work, a short kebab-case name the agent chooses that describes the
+change. Never write into another session's folder and never reuse one; a
+leftover folder from an earlier session is not evidence for this one.
 
 `ledger.md` has one row per touched map row, per meaningful state; its
-`Map id` column points at a `parity-map.md` row, and the verifier writes its
-`Verdict` and `Evidence` columns. A second table records design changes made
-in the session and whether both sides were updated.
+`Map id` column points at a `.parity/parity-map.md` row, and the verifier
+writes its `Verdict` and `Evidence` columns. A second table records design
+changes made in the session and whether both sides were updated.
 
 `data-parity-root` and `data-parity` are the only markup the parity scripts
 read beyond native semantics; Implementation Rules say where to write them.
@@ -151,11 +155,11 @@ add a map row for a new root pair, derived from the two apps and confirmed
 when it is not an obvious name match; edit `States`, `Viewports` or `Ignore`
 for touched rows; add a ledger row when an element is added or modified and
 a design-change row when a design decision is made; commit the map with the
-code. Run the parity skill's `parity_map.py check parity-map.md
---project-root .` before the parity step. Do not wait for the parity step to
-reconstruct any of it. The verifier writes only `parity-pairings.json` and
-the ledger; it never edits `parity-map.md` and reports the `Ignore` entries
-it proposes for the implementer to add.
+code. Run the parity skill's `parity_map.py check .parity/parity-map.md`
+before the parity step. Do not wait for the parity step to reconstruct any of
+it. The verifier writes only `.parity/parity-pairings.json` and the ledger;
+it never edits `.parity/parity-map.md` and reports the `Ignore` entries it
+proposes for the implementer to add.
 
 ## Parity Step
 
@@ -207,8 +211,9 @@ without the user's explicit decision.
    report.
 7. Hand the ledger path and the final parity report to PR readiness as the
    parity evidence. PR readiness accepts `EXPECTED` rows with their reasons
-   and names them in the PR; the changed `parity-map.md`,
-   `parity-pairings.json` and `parity-actions/` files are part of the PR.
+   and names them in the PR; the changed `.parity/parity-map.md`,
+   `.parity/parity-pairings.json` and `.parity/parity-actions/` files are
+   part of the PR.
 
 If `parity-verifier` is unavailable, run `visual-parity-verification` from a
 fresh context that did not implement the change. If no browser tooling can
@@ -229,10 +234,10 @@ verification belongs to the inner implementation workflow.
 - Adding parity hooks to one app only.
 - Writing into, reusing, or reading verdicts from another session's parity
   folder.
-- Committing anything under the parity root, or copying its state into
-  design documentation; only `parity-map.md`, `parity-pairings.json` and
-  `parity-actions/` at the project root are committed.
-- Editing `parity-map.md` from the verifier role.
+- Committing anything under `.parity/sessions/`, or copying its state into
+  design documentation; only `.parity/parity-map.md`,
+  `.parity/parity-pairings.json` and `.parity/parity-actions/` are committed.
+- Editing `.parity/parity-map.md` from the verifier role.
 - Rebuilding the ledger from memory at the end instead of maintaining it
   during the work.
 - Landing any fix after the parity step without re-running it; a later fix

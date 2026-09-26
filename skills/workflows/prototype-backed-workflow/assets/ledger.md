@@ -1,14 +1,14 @@
 # Parity ledger
 
 Session: <ticket id or branch>
-Parity map: parity-map.md (committed at the project root)
+Parity map: .parity/parity-map.md
 Viewport set: <widths used, including one below and one above each breakpoint>
 Theme: <theme or light>
 
 ## Elements
 
-One row per touched `parity-map.md` row, per meaningful state; `Map id` is
-that row's id and `State` is one of its `States` names. The implementer
+One row per touched `.parity/parity-map.md` row, per meaningful state; `Map
+id` is that row's id and `State` is one of its `States` names. The implementer
 fills every column except `Verdict` and `Evidence`, which the parity
 verifier writes from diff files. A row starts as `PENDING`. An `EXPECTED`
 row carries the reason for its accepted difference in `Evidence`. The
