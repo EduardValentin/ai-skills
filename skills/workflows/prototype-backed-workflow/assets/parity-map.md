@@ -20,10 +20,11 @@ lives under `parity-actions/`. Viewports is empty for the full viewport set
 or a comma-separated `WxH` subset. Ignore is empty or semicolon-separated
 `proto:` and `real:` entries, each `hook:<data-parity value>` or
 `path:<snapshot path prefix>`; only the implementer adds them, because they
-change what is verified. Confidence is `obvious` for a name match or
-`confirmed` after the pairing was checked by hand. Source file locators belong
-in Notes. Run `parity_map.py check parity-map.md --project-root .` before the
-parity step.
+change what is verified. Confidence is `obvious` for a name match, or
+`confirmed` when the pairing was checked by hand or the real root carries
+`data-parity-root` for that component. Source file locators belong in Notes.
+Run `parity_map.py check parity-map.md --project-root .` before the parity
+step.
 
 | Id | Prototype component | Real app root | Routes (real → prototype) | States | Viewports | Ignore | Confidence | Notes |
 |---|---|---|---|---|---|---|---|---|
