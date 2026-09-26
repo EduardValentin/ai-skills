@@ -21,7 +21,8 @@ record and the ledger. The first audit creates the baseline; a later one refresh
    one history slice over the whole scope and the full window. Packets are defined in
    `slicing.md`, classification rules in `mapping.md`.
 3. Merge: resolve edges whose target lies in another slice; reuse IDs where path and symbol match
-   the existing record, assign new ones otherwise, mark vanished rows `removed`; attach history
+   the existing record or a slice's `moved from` tag, assign new ones otherwise, delete vanished
+   rows; attach history
    rows to units by path; decide component boundaries from the slices' published-surface and
    enforcement observations; compute metrics per `metrics.md` when there are more than five
    components.

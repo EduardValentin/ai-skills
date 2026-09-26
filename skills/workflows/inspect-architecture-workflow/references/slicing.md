@@ -30,7 +30,9 @@ holding this slice's existing rows, so IDs and prior classifications are reused.
 
 Returns, as markdown tables in the template row formats:
 
-- Units in the slice (path and symbol, kind, ring, visibility, actors, status).
+- Units in the slice (path and symbol, kind, ring, visibility, actors), each tagged `new`,
+  `changed`, `moved from <old path>`, or `unchanged` against the baseline rows in the packet.
+  The tag drives the merge and never reaches the record.
 - Edges leaving the slice's units, targets named by path and symbol even outside the slice;
   `external:` targets tagged framework, vendor, runtime, or standard library.
 - Boundaries whose port is declared in the slice.
@@ -101,9 +103,11 @@ per rule so `OK` coverage is visible.
 ## Merge rules
 
 1. **Units and edges.** Key units by path and symbol; key edges by from, to, and kind. Reuse the
-   baseline ID when the key matches; assign the next free ID otherwise. Baseline rows with no
-   match are marked `removed` (audit), held as a candidate record update (change review), or
-   left untouched (plan review).
+   baseline ID when the key matches, and when a slice tags a unit `moved from` a baseline path,
+   so the unit keeps its ID under the new path; assign the next free ID otherwise. Baseline rows
+   with no match are deleted (audit), held as a candidate deletion (change review), or left
+   untouched (plan review). Slice tags and the reason for a change are merge input only; the
+   record row that results holds the current fact and nothing about how it got there.
 2. **Cross-slice edges.** An edge returned with a path target is resolved to the unit ID from the
    slice that owns that path; an unresolved target becomes an open question, never a silent drop.
 3. **Components and metrics.** The coordinator decides component boundaries from the slices'
