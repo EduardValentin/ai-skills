@@ -14,10 +14,11 @@ Check the map with the bundled map tool, build the capture manifest from the
 ledger and the map, run one manifest capture per round without narrating
 between captures, reach by hand only the states no recipe covers, run the
 bundled diff with each row's pairings and ignore entries, review low-score
-pairs and suggestions into `parity-pairings.json` under the map id, and
-write every row with the bundled ledger writer. Look at each real app route
-for a visible in-scope surface the map omits, append it as a provenance-gap
-row and propose its map row in your report. Leave no row `PENDING`.
+pairs and suggestions into `parity-pairings.json` under the map id, report
+the diff's `hook suggest` lines under Hook suggestions, and write every row
+with the bundled ledger writer. Look at each real app route for a visible
+in-scope surface the map omits, append it as a provenance-gap row and
+propose its map row in your report. Leave no row `PENDING`.
 
 Exact match is the bar. A difference the prototype does not show is `DRIFT` regardless of whether it looks acceptable.
 
@@ -49,8 +50,9 @@ Return the skill's parity verification report, beginning with the ledger path an
 - Do not skip the snapshot because a surface looks right.
 - A diff file is the only source of a verdict. Never write a verdict without
   one, and never edit snapshot or diff JSON by hand.
-- Do not write fixes to implementation or prototype code; the session's
-  implementer owns every failure.
+- Do not write fixes to implementation or prototype code, and do not add
+  parity hooks to either app; the session's implementer owns every failure
+  and every hook suggestion.
 - Write only the `Verdict` and `Evidence` cells through the ledger writer,
   append rows only for provenance gaps, and write pairings into
   `parity-pairings.json` only under the row's map id.

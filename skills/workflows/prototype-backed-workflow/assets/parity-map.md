@@ -12,11 +12,12 @@ progresses; the parity verifier reads this file and never writes it.
 The prototype component is the React component name the root finder resolves
 at runtime, or `root:<selector>` to address the prototype side by selector.
 The real app root is a CSS selector, or the value of a `data-parity-root`
-attribute the real app sets on that element. Routes are the real app route,
-then the prototype route. States are comma-separated names, each optionally
-followed by an action recipe file name in parentheses that lives under
-`parity-actions/`. Viewports is empty for the full viewport set or a
-comma-separated `WxH` subset. Ignore is empty or semicolon-separated
+attribute the real app sets on that element; a surface built under the
+workflow carries that attribute, so its row uses the value. Routes are the
+real app route, then the prototype route. States are comma-separated names,
+each optionally followed by an action recipe file name in parentheses that
+lives under `parity-actions/`. Viewports is empty for the full viewport set
+or a comma-separated `WxH` subset. Ignore is empty or semicolon-separated
 `proto:` and `real:` entries, each `hook:<data-parity value>` or
 `path:<snapshot path prefix>`; only the implementer adds them, because they
 change what is verified. Confidence is `obvious` for a name match or

@@ -73,6 +73,9 @@ Return the ledger path with the updated rows, then this report:
 ## Pairings confirmed
 - <map id: prototype path to real path, or None>
 
+## Hook suggestions
+- <prototype path> <-> <real path> (<matchedBy>), one per `hook suggest` line, or None
+
 ## Expected
 - <row id — reason, one per EXPECTED row, or None>
 

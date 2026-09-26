@@ -90,6 +90,24 @@ and validates the app.
 - Represent asynchronous behavior with loading, success, empty and error
   states.
 
+## Implementation Rules
+
+When building or changing a surface from the prototype, write its parity
+hooks with it:
+
+- Put `data-parity-root="<ComponentName>"` on the real app element that
+  renders the prototype component, and use that value as the map row's
+  `Real app root` with `Confidence` `confirmed`.
+- Give matching `data-parity="<name>"` to elements on both apps that have
+  no role with an accessible name and no stable unique text: value cells,
+  counters, icons, repeated items, wrappers that carry style. The diff
+  anchors siblings by hook first, then by role and name, then by text;
+  everything else is scored or paired by position and lands in the review
+  lines and the manual pairings.
+- Names are unique within a root and identical across apps. Never hook one
+  side only; a one-sided hook anchors nothing and comes back as a hook
+  suggestion.
+
 ## Parity Artifacts
 
 Three files at the project root are committed with the code and shared by
@@ -125,11 +143,8 @@ verifier writes.
 `Verdict` and `Evidence` columns. A second table records design changes made
 in the session and whether both sides were updated.
 
-The real app may set `data-parity-root="<ComponentName>"` on a root and
-`data-parity="<short name>"` on elements inside it that the verifier has
-trouble aligning. The prototype may set the same `data-parity` hooks. Both
-attributes are optional and are the only markup the parity scripts read
-beyond native semantics.
+`data-parity-root` and `data-parity` are the only markup the parity scripts
+read beyond native semantics; Implementation Rules say where to write them.
 
 The implementer maintains the map and the ledger as the work progresses:
 add a map row for a new root pair, derived from the two apps and confirmed
@@ -174,8 +189,9 @@ without the user's explicit decision.
 4. Read the ledger. For every row that is not `MATCH` or `EXPECTED`, the
    implementer fixes the production side, or the prototype side when the
    design change was made there and production is the source of the row's
-   basis. A fix to a shared primitive, token or global style widens the
-   recheck to every row.
+   basis. In the same step, act on the report's `Hook suggestions`: add the
+   named `data-parity` hooks to both apps before the recheck. A fix to a
+   shared primitive, token or global style widens the recheck to every row.
 5. A confirmed accessibility failure the prototype shares is a design defect:
    fix it in the prototype first, mirror it in production, record a
    design-change row, and re-verify. Only the user may waive it; a waiver is
@@ -210,6 +226,7 @@ verification belongs to the inner implementation workflow.
 - Raising or preparing a PR while any ledger row is `PENDING`, `DRIFT`,
   `MISSING` or `BLOCKED`.
 - Treating screenshots or a passing test suite as parity evidence.
+- Adding parity hooks to one app only.
 - Writing into, reusing, or reading verdicts from another session's parity
   folder.
 - Committing anything under the parity root, or copying its state into

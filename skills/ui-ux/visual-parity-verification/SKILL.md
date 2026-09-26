@@ -29,8 +29,6 @@ files, mockups and accessibility scans are context, never proof.
 - The project commits a parity map and the caller supplies a session
   ledger.
 
-Without a runnable prototype there is no basis.
-
 ## Inputs
 
 - The committed `parity-map.md`: one durable row per root pair the project
@@ -108,7 +106,8 @@ Paths resolve from the skill root.
 4. Review. Confirm or reject each `review` pair and each `suggest` line.
    Write confirmed pairs into `parity-pairings.json` under the map id, drop
    or correct the entry behind each `pairing unapplied` line, then rerun
-   that row's diffs. Propose, never write, an `Ignore` entry for a
+   that row's diffs; copy each `hook suggest` line into the report's Hook
+   suggestions section. Propose, never write, an `Ignore` entry for a
    legitimate one-sided subtree and a finer map row for a subtree that
    aligns poorly. `Ignore` prunes the node, not its layout effect, so it
    fits only out-of-flow or zero-footprint subtrees.
@@ -118,8 +117,8 @@ Paths resolve from the skill root.
    that row's reason.
 6. Gap check. At each real app route, look for a visible in-scope surface
    the map omits; append a gap row with `write_ledger.py --append-gap`
-   under the next free map id, capture it per side like any other row, and
-   propose the map row (`Id`, roots, routes) in the report.
+   under the next free map id, capture it per side, and propose the map
+   row (`Id`, roots, routes) in the report.
 
 ## Row Verdicts
 
