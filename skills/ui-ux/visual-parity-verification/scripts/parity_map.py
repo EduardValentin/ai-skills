@@ -220,17 +220,15 @@ def id_number(row_id: str) -> int:
     return int(ID_PATTERN.match(row_id).group(1))
 
 
-def missing_action_files(row: dict[str, Any], project_root: Path | None) -> list[str]:
-    if project_root is None:
-        return []
+def missing_action_files(row: dict[str, Any], actions_root: Path) -> list[str]:
     problems = []
     for state in row["states"]:
-        if state["actions"] and not (project_root / ACTIONS_DIR / state["actions"]).is_file():
+        if state["actions"] and not (actions_root / ACTIONS_DIR / state["actions"]).is_file():
             problems.append(f'States "{state["name"]} ({state["actions"]})" names a missing file {ACTIONS_DIR}/{state["actions"]}')
     return problems
 
 
-def check_map(path: Path, project_root: Path | None) -> tuple[list[str], dict[str, dict[str, Any]]]:
+def check_map(path: Path, actions_root: Path) -> tuple[list[str], dict[str, dict[str, Any]]]:
     try:
         table = read_map_table(path)
     except MapError as error:
@@ -250,13 +248,18 @@ def check_map(path: Path, project_root: Path | None) -> tuple[list[str], dict[st
             problems.append(f'{path}: row {row_id}: Id "{row_id}" must be greater than "{highest}"')
         else:
             highest = row_id
-        problems.extend(f"{path}: row {row_id}: {problem}" for problem in missing_action_files(row, project_root))
+        problems.extend(f"{path}: row {row_id}: {problem}" for problem in missing_action_files(row, actions_root))
         rows.setdefault(row_id, row)
     return problems, rows
 
 
-def load_checked_map(path: Path, project_root: Path | None) -> dict[str, dict[str, Any]]:
-    problems, rows = check_map(path, project_root)
+def actions_root_of(arguments: argparse.Namespace) -> Path:
+    override = getattr(arguments, "actions_root", None)
+    return override if override is not None else arguments.map.parent
+
+
+def load_checked_map(path: Path, actions_root: Path) -> dict[str, dict[str, Any]]:
+    problems, rows = check_map(path, actions_root)
     if problems:
         raise CheckFailed(problems)
     return rows
@@ -310,8 +313,8 @@ def assign_shared_prototypes(rows: list[dict[str, Any]]) -> None:
 
 
 def build_manifest(arguments: argparse.Namespace) -> dict[str, Any]:
-    map_rows = load_checked_map(arguments.map, arguments.project_root)
-    actions_base = arguments.project_root if arguments.project_root is not None else arguments.map.parent
+    actions_base = actions_root_of(arguments)
+    map_rows = load_checked_map(arguments.map, actions_base)
     problems: list[str] = []
     rows: list[dict[str, Any]] = []
     for ledger_row in read_ledger_rows(arguments.ledger):
@@ -342,7 +345,7 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 
     check = commands.add_parser("check", help="validate the map; one line per problem")
     check.add_argument("map", type=Path)
-    check.add_argument("--project-root", type=Path, help="project root holding parity-actions/")
+    check.add_argument("--actions-root", type=Path, help="directory holding parity-actions/; defaults to the map's directory")
 
     row = commands.add_parser("row", help="print one map row as JSON")
     row.add_argument("map", type=Path)
@@ -355,20 +358,20 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     manifest.add_argument("--real-url", required=True)
     manifest.add_argument("--viewports", required=True, type=viewport_list, help="full set, comma-separated WxH")
     manifest.add_argument("--only-viewports", type=viewport_list, help="restrict every row to these viewports")
-    manifest.add_argument("--project-root", type=Path, help="project root holding parity-actions/; defaults to the map's directory")
+    manifest.add_argument("--actions-root", type=Path, help="directory holding parity-actions/; defaults to the map's directory")
     manifest.add_argument("--out", required=True, type=Path)
     return parser.parse_args(argv)
 
 
 def run_check(arguments: argparse.Namespace) -> int:
-    problems, _ = check_map(arguments.map, arguments.project_root)
+    problems, _ = check_map(arguments.map, actions_root_of(arguments))
     for problem in problems:
         print(problem)
     return 1 if problems else 0
 
 
 def run_row(arguments: argparse.Namespace) -> int:
-    rows = load_checked_map(arguments.map, None)
+    rows = load_checked_map(arguments.map, actions_root_of(arguments))
     if arguments.id not in rows:
         raise MapError(f"{arguments.map}: has no row {arguments.id}")
     print(json.dumps(rows[arguments.id], indent=2, ensure_ascii=False))

@@ -22,7 +22,7 @@ ROW_C3 = "| C3 | OrderSummary | aside.legacy-summary | /orders-legacy → /order
 LEDGER_HEAD = """# Parity ledger
 
 Session: GEN-123
-Parity map: parity-map.md (committed at the project root)
+Parity map: .parity/parity-map.md
 Viewport set: 375, 1440
 Theme: light
 
@@ -61,6 +61,7 @@ class ParityMapCase(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.map_path = self.root / "parity-map.md"
+        self.write_recipe("order-hover.json")
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -141,14 +142,21 @@ class CheckTests(ParityMapCase):
         self.assertEqual(completed.returncode, 1)
         self.assertIn("row C2: expected 9 cells, found 8", completed.stdout)
 
-    def test_missing_action_file_fails_under_project_root(self) -> None:
-        completed = run_map("check", str(self.write_map(ROW_C1)), "--project-root", str(self.root))
+    def test_missing_action_file_fails_next_to_the_map_by_default(self) -> None:
+        (self.root / "parity-actions" / "order-hover.json").unlink()
+        completed = run_map("check", str(self.write_map(ROW_C1)))
         self.assertEqual(completed.returncode, 1)
         self.assertIn('row C1: States "hover (order-hover.json)" names a missing file parity-actions/order-hover.json', completed.stdout)
 
-    def test_present_action_file_passes_under_project_root(self) -> None:
-        self.write_recipe("order-hover.json")
-        completed = run_map("check", str(self.write_map(ROW_C1)), "--project-root", str(self.root))
+    def test_present_action_file_next_to_the_map_passes(self) -> None:
+        completed = run_map("check", str(self.write_map(ROW_C1)))
+        self.assertEqual(completed.returncode, 0, completed.stdout)
+
+    def test_actions_root_overrides_the_map_directory(self) -> None:
+        (self.root / "parity-actions" / "order-hover.json").unlink()
+        elsewhere = self.root / "elsewhere"
+        support.write_json(elsewhere / "parity-actions" / "order-hover.json", [{"hover": "button"}])
+        completed = run_map("check", str(self.write_map(ROW_C1)), "--actions-root", str(elsewhere))
         self.assertEqual(completed.returncode, 0, completed.stdout)
 
     def test_every_problem_is_listed_on_its_own_line(self) -> None:
@@ -334,7 +342,7 @@ class ManifestTests(ParityMapCase):
             ledger_row("L4", "C2", "/checkout", "default"),
             ledger_row("L5", "C1", "/orders", "empty"),
         )
-        completed, out = self.manifest(ledger, "--project-root", str(self.root))
+        completed, out = self.manifest(ledger, "--actions-root", str(self.root))
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         rows = {row["id"]: row for row in support.read_json(out)["rows"]}
         self.assertEqual(rows["L1"]["shareProto"], "L1")
@@ -425,10 +433,11 @@ class ManifestTests(ParityMapCase):
         self.assertIn('row C1: Confidence "maybe" is not obvious or confirmed', completed.stdout)
         self.assertFalse(out.exists())
 
-    def test_missing_action_file_fails_manifest_under_project_root(self) -> None:
+    def test_missing_action_file_fails_manifest_under_actions_root(self) -> None:
+        (self.root / "parity-actions" / "order-hover.json").unlink()
         self.write_map(ROW_C1)
         ledger = self.write_ledger(ledger_row("L1", "C1", "/orders", "default"))
-        completed, out = self.manifest(ledger, "--project-root", str(self.root))
+        completed, out = self.manifest(ledger, "--actions-root", str(self.root))
         self.assertEqual(completed.returncode, 1)
         self.assertIn("names a missing file parity-actions/order-hover.json", completed.stdout)
         self.assertFalse(out.exists())
