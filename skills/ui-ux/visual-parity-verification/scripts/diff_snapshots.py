@@ -86,6 +86,7 @@ def base_result(proto: dict[str, Any], real: dict[str, Any]) -> dict[str, Any]:
         "collapsed": {"prototype": [], "real": []},
         "suggestions": [],
         "unappliedPairings": [],
+        "hookSuggestions": [],
         "lowestScore": None,
     }
 
@@ -134,11 +135,13 @@ def compare_snapshots(proto: dict[str, Any], real: dict[str, Any], pairings: dic
             "score": p["score"],
             "signals": p["signals"],
             "needsReview": alignment.needs_review(p),
+            "hooks": {"prototype": alignment.hook_key(p["prototype"]), "real": alignment.hook_key(p["real"])},
         }
         for p in tree_alignment["pairs"]
     ]
     result["suggestions"] = tree_alignment["suggestions"]
     result["unappliedPairings"] = tree_alignment["unappliedPairings"]
+    result["hookSuggestions"] = findings.hook_suggestions(result["pairs"])
     scores = [p["score"] for p in tree_alignment["pairs"] if p["matchedBy"] == "score"]
     result["lowestScore"] = min(scores) if scores else None
 

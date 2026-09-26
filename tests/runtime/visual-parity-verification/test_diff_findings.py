@@ -42,7 +42,164 @@ class PositionPairFindingTests(unittest.TestCase):
         self.assertEqual(result["findings"]["geometry"], [])
         self.assertIsNone(result["lowestScore"])
         self.assertEqual(result["verdict"], "MATCH")
+        self.assertEqual(findings.review_lines(result), [
+            "review none",
+            "hook suggest section > span:nth-of-type(1) <-> section > span:nth-of-type(1) (position)",
+            "hook suggest section > span:nth-of-type(2) <-> section > span:nth-of-type(2) (position)",
+            "hook suggest section > span:nth-of-type(3) <-> section > span:nth-of-type(3) (position)",
+        ])
+
+
+class HookSuggestionTests(unittest.TestCase):
+    def suggestions_of(self, result) -> list[dict]:
+        return result["hookSuggestions"]
+
+    def test_pairs_carry_both_hooks(self) -> None:
+        result = compare(
+            [support.node("p", hook="total", own_text="Total"), support.node("p", own_text="Body")],
+            [support.node("p", hook="total", own_text="Total"), support.node("p", own_text="Body")],
+        )
+        hooks = {p["prototype"]: p["hooks"] for p in result["pairs"]}
+        self.assertEqual(hooks["section"], {"prototype": None, "real": None})
+        self.assertEqual(hooks["section > p:nth-of-type(1)"], {"prototype": "total", "real": "total"})
+        self.assertEqual(hooks["section > p:nth-of-type(2)"], {"prototype": None, "real": None})
+
+    def test_hook_anchored_pairs_produce_no_suggestion(self) -> None:
+        result = compare(
+            [support.node("span", hook="subtotal", own_text="$10"), support.node("span", hook="tax", own_text="$1")],
+            [support.node("span", hook="subtotal", own_text="$12"), support.node("span", hook="tax", own_text="$2")],
+        )
+        self.assertEqual([p["matchedBy"] for p in result["pairs"][1:]], ["hook", "hook"])
+        self.assertEqual(self.suggestions_of(result), [])
         self.assertEqual(findings.review_lines(result), ["review none"])
+
+    def test_name_and_text_anchored_pairs_produce_no_suggestion(self) -> None:
+        result = compare(
+            [support.node("h2", role="heading", name="Orders", own_text="Orders"), support.node("p", own_text="Body")],
+            [support.node("h2", role="heading", name="Orders", own_text="Orders"), support.node("p", own_text="Body")],
+        )
+        self.assertEqual([p["matchedBy"] for p in result["pairs"][1:]], ["role-name", "text"])
+        self.assertEqual(self.suggestions_of(result), [])
+
+    def test_score_pair_produces_one_suggestion(self) -> None:
+        result = compare(
+            [support.node("article", role="article", name="", y=0, children=[support.node("span", own_text="Foo")])],
+            [support.node("article", role="article", name="", y=4, children=[support.node("span", own_text="Bar")]),
+             support.node("span", own_text="Extra")],
+        )
+        article = next(p for p in result["pairs"] if p["prototype"] == "section > article:nth-of-type(1)")
+        self.assertEqual(article["matchedBy"], "score")
+        self.assertIn(
+            {"prototype": "section > article:nth-of-type(1)", "real": "section > article:nth-of-type(1)", "matchedBy": "score"},
+            self.suggestions_of(result),
+        )
+        self.assertIn(
+            "hook suggest section > article:nth-of-type(1) <-> section > article:nth-of-type(1) (score)",
+            findings.review_lines(result),
+        )
+
+    def test_position_pair_produces_one_suggestion(self) -> None:
+        result = compare(value_cells("$10"), value_cells("$12"))
+        self.assertEqual(
+            self.suggestions_of(result),
+            [{"prototype": "section > span:nth-of-type(1)", "real": "section > span:nth-of-type(1)", "matchedBy": "position"}],
+        )
+
+    def test_moved_pair_produces_one_suggestion(self) -> None:
+        result = compare(
+            [support.node("header", role="banner", name="Toolbar", children=[support.node("button", role="button", name="Export")]),
+             support.node("h2", role="heading", name="Orders", own_text="Orders")],
+            [support.node("header", role="banner", name="Toolbar"),
+             support.node("h2", role="heading", name="Orders", own_text="Orders"),
+             support.node("button", role="button", name="Export")],
+        )
+        self.assertEqual(
+            self.suggestions_of(result),
+            [{"prototype": "section > header:nth-of-type(1) > button:nth-of-type(1)", "real": "section > button:nth-of-type(1)", "matchedBy": "moved"}],
+        )
+
+    def test_one_sided_hook_produces_one_suggestion(self) -> None:
+        result = compare(
+            [support.node("p", hook="total", own_text="Total")],
+            [support.node("p", own_text="Total")],
+        )
+        pair = result["pairs"][1]
+        self.assertEqual(pair["matchedBy"], "text")
+        self.assertEqual(pair["hooks"], {"prototype": "total", "real": None})
+        self.assertEqual(
+            self.suggestions_of(result),
+            [{"prototype": "section > p:nth-of-type(1)", "real": "section > p:nth-of-type(1)", "matchedBy": "text"}],
+        )
+        self.assertEqual(findings.review_lines(result), [
+            "review none",
+            "hook suggest section > p:nth-of-type(1) <-> section > p:nth-of-type(1) (text)",
+        ])
+
+    def test_differing_hooks_on_a_pairing_produce_one_suggestion(self) -> None:
+        result = compare(
+            [support.node("button", hook="save", role="button", name="Save")],
+            [support.node("button", hook="submit", role="button", name="Save")],
+            pairings={"section > button:nth-of-type(1)": "section > button:nth-of-type(1)"},
+        )
+        self.assertEqual(result["pairs"][1]["matchedBy"], "pairing")
+        self.assertEqual([s["matchedBy"] for s in self.suggestions_of(result)], ["pairing"])
+
+    def test_root_pair_never_produces_a_suggestion(self) -> None:
+        result = compare_roots(
+            support.node("section", hook="orders", role="region", name="Orders", width=640, height=400),
+            support.node("section", role="region", name="Orders", width=640, height=400),
+        )
+        self.assertEqual(result["pairs"][0]["hooks"], {"prototype": "orders", "real": None})
+        self.assertEqual(self.suggestions_of(result), [])
+        self.assertEqual(findings.review_lines(result), ["review none"])
+
+    def test_suggestions_follow_pair_order(self) -> None:
+        result = compare(
+            [support.node("p", hook="total", own_text="Total"), *value_cells("$10", "$5")],
+            [support.node("p", own_text="Total"), *value_cells("$12", "$7")],
+        )
+        self.assertEqual(
+            [s["prototype"] for s in self.suggestions_of(result)],
+            [p["prototype"] for p in result["pairs"][1:]],
+        )
+
+    def test_hook_lines_print_after_review_pairing_and_suggest_lines(self) -> None:
+        result = compare(
+            [support.node("article", role="article", name="", own_text="Foo"),
+             support.node("span", role="doc-subtitle", own_text="Extra Proto")],
+            [support.node("article", role="article", name="", own_text="Bar"),
+             support.node("span", own_text="Extra Real")],
+            pairings={"section > em:nth-of-type(1)": "section > em:nth-of-type(1)"},
+        )
+        kinds = [line.split(" ")[0] for line in findings.review_lines(result)]
+        self.assertEqual(kinds, ["review", "pairing", "suggest", "suggest", "hook"])
+        self.assertNotIn("review none", findings.review_lines(result))
+
+    def test_blocked_result_carries_an_empty_list(self) -> None:
+        proto = support.snapshot(support.node("section", children=value_cells("$10")), width=1440)
+        real = support.snapshot(support.node("section", children=value_cells("$12")), width=1024)
+        result = diff_snapshots.compare_snapshots(proto, real, {}, {})
+        self.assertEqual(result["verdict"], "BLOCKED")
+        self.assertEqual(result["hookSuggestions"], [])
+
+    def test_print_review_flag_prints_hook_lines_after_review_none(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            proto_snap = support.write_json(tmp_path / "proto.json", support.snapshot(support.node("section", children=value_cells("$10"))))
+            real_snap = support.write_json(tmp_path / "real.json", support.snapshot(support.node("section", children=value_cells("$12"))))
+            out_file = tmp_path / "out.json"
+            completed = support.run_diff("--prototype", str(proto_snap), "--real", str(real_snap), "--out", str(out_file), "--print-review")
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            lines = completed.stdout.strip().split("\n")
+            self.assertEqual(lines[1:], [
+                "review none",
+                "hook suggest section > span:nth-of-type(1) <-> section > span:nth-of-type(1) (position)",
+            ])
+            written = support.read_json(out_file)
+            self.assertEqual(written["hookSuggestions"], [
+                {"prototype": "section > span:nth-of-type(1)", "real": "section > span:nth-of-type(1)", "matchedBy": "position"},
+            ])
+            self.assertEqual(written["pairs"][1]["hooks"], {"prototype": None, "real": None})
 
 
 class RootBoxTests(unittest.TestCase):
@@ -385,7 +542,7 @@ class UnappliedPairingOutputTests(unittest.TestCase):
             pairings={"section": "section"},
         )
         kinds = [line.split(" ")[0] for line in findings.review_lines(result)]
-        self.assertEqual(kinds, ["review", "pairing", "suggest", "suggest"])
+        self.assertEqual(kinds, ["review", "pairing", "suggest", "suggest", "hook"])
 
     def test_base_result_has_an_empty_list(self) -> None:
         result = compare([support.node("p", own_text="Same")], [support.node("p", own_text="Same")])

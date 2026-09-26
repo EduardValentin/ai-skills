@@ -28,7 +28,7 @@ MODULE_NAMES = {
     comparison: ("DEFAULT_TOLERANCES", "normalize_color", "values_equal", "compare_pair"),
     findings: (
         "content_exclusions", "siblings_of", "collect_findings",
-        "accessibility_findings", "verdict_for", "review_lines",
+        "accessibility_findings", "verdict_for", "review_lines", "hook_suggestions",
     ),
 }
 

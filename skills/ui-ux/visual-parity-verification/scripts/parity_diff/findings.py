@@ -11,6 +11,7 @@ CONTRAST_LARGE = 3.0
 INTERACTIVE_ROLES = frozenset({"button", "link", "checkbox", "radio", "switch", "tab", "menuitem", "combobox", "textbox", "slider", "option"})
 ROOT_GEOMETRY_EXCLUSIONS = ("x", "y", "width", "height")
 ROOT_STYLE_EXCLUSIONS = ("marginTop", "marginRight", "marginBottom", "marginLeft")
+UNANCHORED_RULES = frozenset({"score", "position", "moved"})
 
 
 def content_exclusions(pair: dict[str, Any], siblings: list[dict[str, Any]]) -> dict[str, tuple[str, ...]]:
@@ -109,9 +110,32 @@ def verdict_for(findings: dict[str, list[dict[str, Any]]]) -> str:
     return "MATCH"
 
 
+def wants_hook(pair: dict[str, Any]) -> bool:
+    if pair["matchedBy"] == "root":
+        return False
+    return pair["matchedBy"] in UNANCHORED_RULES or pair["hooks"]["prototype"] != pair["hooks"]["real"]
+
+
+def hook_suggestions(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {"prototype": pair["prototype"], "real": pair["real"], "matchedBy": pair["matchedBy"]}
+        for pair in pairs
+        if wants_hook(pair)
+    ]
+
+
 def review_lines(result: dict[str, Any]) -> list[str]:
     if result["blocked"]:
         return ["review blocked"]
+    lines = attention_lines(result)
+    if not lines:
+        lines.append("review none")
+    for suggestion in result["hookSuggestions"]:
+        lines.append(f"hook suggest {suggestion['prototype']} <-> {suggestion['real']} ({suggestion['matchedBy']})")
+    return lines
+
+
+def attention_lines(result: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     for pair in result["pairs"]:
         if pair["needsReview"]:
@@ -128,6 +152,4 @@ def review_lines(result: dict[str, Any]) -> list[str]:
             f"suggest {suggestion['side']} {suggestion['path']} -> {suggestion['candidate']} "
             f"score={suggestion['score']:.2f}"
         )
-    if not lines:
-        lines.append("review none")
     return lines

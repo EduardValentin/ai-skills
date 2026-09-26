@@ -52,8 +52,9 @@ With the `--print-review` flag, after the summary line the script prints one lin
 - `pairing unapplied <prototypePath> -> <realPath> (<reason>)` for each entry in `unappliedPairings`
 - `suggest <side> <path> -> <candidate> score=<0.00>` for each suggestion
 - `review none` if there are no review pairs, no unapplied pairings and no suggestions
+- `hook suggest <prototypePath> <-> <realPath> (<matchedBy>)` for each entry in `hookSuggestions`, after every line above
 
-Each line lets the agent decide what to do with the result without opening the JSON file.
+Each line lets the agent decide what to do with the result without opening the JSON file. A run whose only lines are hook suggestions prints `review none` followed by the hook lines.
 
 ## Top level
 
@@ -64,11 +65,12 @@ Each line lets the agent decide what to do with the result without opening the J
 | `urls` | `prototype` and `real` page URLs |
 | `rootSummaries` | Both root summaries |
 | `blocked` | `null`, or `{ reason, detail }` with reason `condition-mismatch` or `roots-incompatible`, below |
-| `pairs` | Every aligned pair: `prototype` path, `real` path, `matchedBy`, `score`, `signals`, `needsReview` |
+| `pairs` | Every aligned pair: `prototype` path, `real` path, `matchedBy`, `score`, `signals`, `needsReview`, `hooks` (`prototype` and `real` `data-parity` values, each a string or `null`) |
 | `findings` | Lists per category, below |
 | `collapsed` | Collapsed wrapper nodes per side: `path`, `tag`, `childCount` |
 | `suggestions` | For each unmatched node: `side`, `path`, best `candidate` path and its `score` |
 | `unappliedPairings` | Pairings entries that were skipped: `prototype` path, `real` path, `reason` |
+| `hookSuggestions` | Pairs that would anchor with a `data-parity` hook: `prototype` path, `real` path, `matchedBy`; empty on a blocked run |
 | `lowestScore` | Lowest score among pairs matched by score, or `null` |
 
 `matchedBy` is one of `root`, `pairing`, `hook`, `role-name`, `text`,
@@ -76,6 +78,13 @@ Each line lets the agent decide what to do with the result without opening the J
 `roleName` signal is below 1 and whose `text` signal is 0 — matched without a
 shared name and without shared text identity. Review every pair with
 `needsReview` true and every suggestion.
+
+A pair whose two nodes carry the same `data-parity` value anchors
+deterministically by the `hook` rule and never needs a pairings entry.
+`hookSuggestions` lists, in `pairs` order, every non-root pair matched by
+`score`, `position` or `moved`, and every non-root pair whose `hooks` differ
+(one side hooked, or two values); giving both nodes one matching hook removes
+the entry on the next run.
 
 `position` pairs same-shaped sibling runs by order: when, between two
 anchors, the unmatched prototype children and the unmatched real children
