@@ -6,8 +6,8 @@ Header: audit <date> at commit <hash>, scope <scope>; last update <date> at comm
 
 An edge from A to B means A's source names B. Direction `inward` points toward policy.
 
-| ID | From | To | Kind | Crosses component | Crosses ring | Direction | Status |
-|---|---|---|---|---|---|---|---|
+| ID | From | To | Kind | Crosses component | Crosses ring | Direction |
+|---|---|---|---|---|---|---|
 
 ## Forbidden edges
 

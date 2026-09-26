@@ -44,7 +44,10 @@ as accepted structure.
 
 1. Append the run to `ledger.md` and new rows to `change-history.md`; write `slices/`.
 2. Update `docs/architecture/` directly, in the diff's branch, only for candidate rows whose
-   target has no open `SHOULD_CHANGE` finding in this run. Refresh the metrics rows of touched
+   target has no open `SHOULD_CHANGE` finding in this run. Write each row as the current fact:
+   a moved unit gets its new path under its old ID, a deleted one loses its row, and no cell
+   gains a note about the ticket, plan step, or commit that caused the change; the ledger's
+   change history holds that. Refresh the metrics rows of touched
    components. In every record file written, replace the header's last-update part (date,
    commit, mode) in place and leave the last-audit part; never add a header line.
 3. Candidate rows implicated in an open finding are not written. List them in the ledger under

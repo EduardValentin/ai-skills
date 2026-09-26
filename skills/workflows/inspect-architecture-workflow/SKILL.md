@@ -71,7 +71,12 @@ Every artifact opens with one header line. In the record it names the last
 full audit (date, commit, scope) and the last update (date, commit, mode); a
 write replaces that line in place, never adds one. The record carries no
 history of its own, since git and the ledger's run log do; nothing is ever
-appended to a record file outside its tables. The ledger is
+appended to a record file outside its tables. A cell states the current fact
+only: a path, a symbol, a kind, a ring, a name. It never carries provenance
+("moved from", "renamed in", "added by", a ticket, a PR, a plan step, a run,
+or a finding). A moved or renamed unit keeps its ID and gets its new path; a
+unit or edge that no longer exists loses its row; its ID is retired, never
+reused. The ledger is
 derived state: start one when none exists; only the committed record is a
 required baseline. Ledger IDs and run numbers are transitory and never appear
 in a committed file; the record refers to a finding only by the target's path
