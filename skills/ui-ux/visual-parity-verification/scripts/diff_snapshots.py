@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
