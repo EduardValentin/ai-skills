@@ -1,7 +1,11 @@
 import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
+const MAX_NODE_MODULES_DEPTH = 3;
 
 export async function git(root, args) {
   const { stdout } = await run("git", args, { cwd: root, maxBuffer: 64 * 1024 * 1024 });
@@ -30,6 +34,47 @@ export async function nameStatus(root, ref) {
     if (status === "R") return { status, path: paths[1], oldPath: paths[0] };
     return { status, path: paths[0] };
   });
+}
+
+export async function renames(root, ref) {
+  const changes = await nameStatus(root, ref);
+  return new Map(changes.filter((change) => change.status === "R").map((change) => [change.oldPath, change.path]));
+}
+
+async function findNodeModules(absDir, relDir, depth, results) {
+  if (depth > MAX_NODE_MODULES_DEPTH) return;
+  let entries;
+  try { entries = await readdir(absDir, { withFileTypes: true }); }
+  catch { return; }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === ".git") continue;
+    const rel = path.join(relDir, entry.name);
+    if (entry.name === "node_modules") { results.push(rel); continue; }
+    await findNodeModules(path.join(absDir, entry.name), rel, depth + 1, results);
+  }
+}
+
+async function linkNodeModules(root, worktreeDir) {
+  const found = [];
+  await findNodeModules(root, "", 0, found);
+  for (const rel of found) {
+    const dest = path.join(worktreeDir, rel);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await symlink(path.join(root, rel), dest, "dir");
+  }
+}
+
+export async function withBaseWorktree(root, ref, fn) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "arch-base-"));
+  try {
+    await git(root, ["worktree", "add", "--detach", dir, ref]);
+    await linkNodeModules(root, dir);
+    return await fn(dir);
+  } finally {
+    try { await git(root, ["worktree", "remove", "--force", dir]); }
+    catch { await rm(dir, { recursive: true, force: true }).catch(() => {}); }
+    await git(root, ["worktree", "prune"]);
+  }
 }
 
 export async function logNames(root, ref) {

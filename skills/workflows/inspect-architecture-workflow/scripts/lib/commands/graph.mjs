@@ -3,11 +3,8 @@ import { GRAPH_DIR, loadOrBuildGraph } from "../graph.mjs";
 
 export async function run(args, ctx) {
   const { flags } = parseFlags(args);
-  if (flags.commit) {
-    console.error("not supported yet");
-    return 1;
-  }
   const graph = await loadOrBuildGraph(ctx.root, {
+    commit: typeof flags.commit === "string" ? flags.commit : undefined,
     cruiseJsonPath: flags["cruise-json"],
     exportsJsonPath: flags["exports-json"],
     force: Boolean(flags.force),
