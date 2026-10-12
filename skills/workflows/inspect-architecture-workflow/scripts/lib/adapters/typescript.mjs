@@ -19,7 +19,7 @@ export function normalizeCruise(cruise, frameworks = []) {
   const edges = [];
   const warnings = [];
   for (const m of cruise.modules) {
-    modules.add(m.source);
+    if (m.followable !== false) modules.add(m.source);
     for (const d of m.dependencies ?? []) {
       const types = d.dependencyTypes ?? [];
       if (types.includes("npm") || types.includes("core")) {

@@ -6,6 +6,7 @@ export const MODEL_DIR = "docs/architecture/model";
 export const DEFAULT_RINGS = ["entities", "use-cases", "adapters", "frameworks"];
 export const KINDS = ["entity", "use-case", "port", "boundary-data", "controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui", "mixed"];
 const FILES = ["components", "rules", "overrides", "boundaries"];
+export const HARD_PROBLEM = /overlap|unknown ring|unknown kind|duplicate component|not a component|rings must/;
 
 async function readJson(file) {
   try { return JSON.parse(await readFile(file, "utf8")); }
