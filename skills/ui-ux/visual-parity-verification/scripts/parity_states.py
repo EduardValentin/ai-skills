@@ -12,10 +12,14 @@ STATES_FILE = "parity-states.json"
 SIDES = ("prototype", "real")
 STEP_KINDS = ("click", "hover", "press", "fill", "wait", "waitFor", "use")
 LENGTH_WARNING = 12
-NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+NAME_CHARS = "[A-Za-z0-9_-]+"
+NAME_PATTERN = re.compile(f"^{NAME_CHARS}$")
 ACTIONS_DIR = "parity-actions"
 MIN_SHARED_PREFIX = 3
-REFERENCE_PATTERN = re.compile(r"\(([A-Za-z0-9_-]+)\.json\)")
+REFERENCE_PATTERN = re.compile(rf"\(({NAME_CHARS})\.json\)")
+UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+STATES_CELL = 4
+MAX_CHAIN_DEPTH = 64
 
 
 class StatesError(Exception):
@@ -38,8 +42,13 @@ def side_steps(definition: Any, side: str) -> list[Any]:
     if isinstance(definition, list):
         return definition
     if isinstance(definition, dict):
-        return definition.get(side, []) or []
+        steps = definition.get(side, [])
+        return steps if isinstance(steps, list) else []
     return []
+
+
+def is_fill_value(value: Any) -> bool:
+    return isinstance(value, list) and len(value) == 2 and isinstance(value[0], str) and bool(value[0]) and isinstance(value[1], str)
 
 
 def step_problem(step: Any) -> str | None:
@@ -50,16 +59,13 @@ def step_problem(step: Any) -> str | None:
     kind, value = next(iter(step.items()))
     if kind not in STEP_KINDS:
         return f'unknown kind "{kind}"'
-    if kind == "fill" and not (isinstance(value, list) and len(value) == 2 and all(isinstance(v, str) for v in value)):
+    if kind == "fill" and not is_fill_value(value):
         return '"fill" expects [selector, text]'
     if kind == "wait" and not (isinstance(value, int) and not isinstance(value, bool) and value >= 0):
         return '"wait" expects milliseconds'
     if kind != "fill" and kind != "wait" and not (isinstance(value, str) and value):
         return f'"{kind}" expects a non-empty string'
     return None
-
-
-MAX_CHAIN_DEPTH = 64
 
 
 def resolve_state(states: dict[str, Any], name: str, side: str, chain: tuple[str, ...] = ()) -> list[dict[str, Any]]:
@@ -90,9 +96,11 @@ def validate_states(states: dict[str, Any]) -> tuple[list[str], list[str]]:
         if not NAME_PATTERN.match(name):
             problems.append(f"{label}: name must match letters, digits, dash or underscore")
         if isinstance(definition, dict):
-            for side in definition:
+            for side, side_value in definition.items():
                 if side not in SIDES:
                     problems.append(f'{label}: unknown side "{side}"')
+                elif not isinstance(side_value, list):
+                    problems.append(f"{label}: {side} must be a step list")
         elif not isinstance(definition, list):
             problems.append(f"{label}: must be a step list or an object with prototype and real step lists")
             continue
@@ -120,12 +128,17 @@ def validate_states(states: dict[str, Any]) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
+def is_kind(step: Any, kind: str) -> bool:
+    return isinstance(step, dict) and kind in step
+
+
 def strip_readiness(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     start = 0
-    while start < len(steps) and set(steps[start]) <= {"waitFor", "wait"} and start < 2:
-        start += 1
+    for kind in ("waitFor", "wait"):
+        if start < len(steps) and is_kind(steps[start], kind):
+            start += 1
     end = len(steps)
-    while end > start and "wait" in steps[end - 1]:
+    while end > start and is_kind(steps[end - 1], "wait"):
         end -= 1
     return steps[start:end]
 
@@ -197,8 +210,6 @@ def extract_fragments(states: dict[str, Any]) -> list[str]:
     names = sorted(lists, key=lambda n: (-len(lists[n]), n))
     for index, longer in enumerate(names):
         for shorter in names[index + 1:]:
-            if not isinstance(states[longer], list) or not isinstance(states[shorter], list):
-                continue
             length = shared_prefix(states[longer], states[shorter])
             if length < MIN_SHARED_PREFIX or any("use" in step for step in states[longer][:length]):
                 continue
@@ -217,16 +228,27 @@ def extract_fragments(states: dict[str, Any]) -> list[str]:
     return report
 
 
-def rewrite_map_references(map_path: Path, stems: dict[str, str]) -> int:
-    text = map_path.read_text(encoding="utf-8")
+def rewrite_states_cell(line: str, stems: dict[str, str]) -> tuple[str, int]:
+    if not line.lstrip().startswith("|"):
+        return line, 0
+    pipes = [match.start() for match in UNESCAPED_PIPE.finditer(line)]
+    if len(pipes) <= STATES_CELL + 1:
+        return line, 0
+    start, end = pipes[STATES_CELL] + 1, pipes[STATES_CELL + 1]
 
     def replace(match: re.Match[str]) -> str:
         stem = match.group(1)
         return f"({stems.get(stem, stem)})"
 
-    rewritten, count = REFERENCE_PATTERN.subn(replace, text)
-    map_path.write_text(rewritten, encoding="utf-8")
-    return count
+    cell, count = REFERENCE_PATTERN.subn(replace, line[start:end])
+    return line[:start] + cell + line[end:], count
+
+
+def rewrite_map_references(map_path: Path, stems: dict[str, str]) -> int:
+    lines = map_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    rewritten = [rewrite_states_cell(line, stems) for line in lines]
+    map_path.write_text("".join(line for line, _ in rewritten), encoding="utf-8")
+    return sum(count for _, count in rewritten)
 
 
 def migrate_actions(map_path: Path) -> list[str]:

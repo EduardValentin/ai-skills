@@ -148,6 +148,22 @@ class MigrateTests(unittest.TestCase):
             resolved = parity_states.state_sides(states, name)
             self.assertEqual(resolved["prototype"], shared + [{"click": suffix}])
 
+    def test_strip_readiness_takes_one_waitfor_then_one_wait(self) -> None:
+        self.assertEqual(
+            parity_states.strip_readiness([{"waitFor": "#a"}, {"waitFor": "#b"}, {"click": "#c"}, {"wait": 100}]),
+            [{"waitFor": "#b"}, {"click": "#c"}],
+        )
+        self.assertEqual(parity_states.strip_readiness([{"wait": 500}, {"click": "#c"}]), [{"click": "#c"}])
+
+    def test_references_are_rewritten_only_in_the_states_cell(self) -> None:
+        self.recipe("open.json", [{"click": "#a"}])
+        row = '| C1 | OrderSummary | [data-parity-root="OrderSummary"] | /orders → /orders | open (open.json) | | | confirmed | see (foo.json) |'
+        self.map_path.write_text("\n".join(["# Parity map", "", MAP_HEADER, SEPARATOR, row, ""]), encoding="utf-8")
+        report = parity_states.migrate_actions(self.map_path)
+        rewritten = self.map_path.read_text()
+        self.assertIn("| open (open) | | | confirmed | see (foo.json) |", rewritten)
+        self.assertTrue(any(line.startswith("rewrote 1 references") for line in report), report)
+
 
 if __name__ == "__main__":
     unittest.main()

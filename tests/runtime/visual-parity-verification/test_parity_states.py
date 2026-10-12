@@ -129,6 +129,14 @@ class ValidateTests(unittest.TestCase):
         cycle_problems = [p for p in problems if "cycle" in p]
         self.assertEqual(len(cycle_problems), 2)
 
+    def test_side_that_is_not_a_list_reports_one_problem(self) -> None:
+        problems, _ = self.problems({"s": {"prototype": "click", "real": {"click": "#a"}}})
+        self.assertEqual(problems, ['state "s": prototype must be a step list', 'state "s": real must be a step list'])
+
+    def test_fill_requires_a_non_empty_selector(self) -> None:
+        problems, _ = self.problems({"a": [{"fill": ["", "x"]}], "b": [{"fill": ["#f", 3]}], "c": [{"fill": ["#f", ""]}]})
+        self.assertEqual(problems, ['state "a": step 0: "fill" expects [selector, text]', 'state "b": step 0: "fill" expects [selector, text]'])
+
 
 if __name__ == "__main__":
     unittest.main()

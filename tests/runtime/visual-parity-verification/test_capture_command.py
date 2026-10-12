@@ -19,6 +19,7 @@ CAPTURE_SCRIPT = support.SCRIPTS_DIR / "capture-snapshots.mjs"
 FIXTURE = Path(__file__).resolve().parent / "browser" / "fixture.html"
 ALLOWED_ENV_KEYS = {"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ"}
 FIXTURE_URL = f"file://{FIXTURE}"
+ROOT_AFTER_CLICK = FIXTURE.parent / "root-after-click.html"
 FIXTURE_DIR_URL = f"file://{FIXTURE.parent}/"
 FIXTURE_DIRECT_CHILDREN = 9
 """h2, p, p (through the wrapper div), button, label, the unparseable-bg div,
@@ -413,6 +414,37 @@ class CaptureBrowserTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertIn('root=section region "Delayed"', completed.stdout)
             self.assertNotIn("steps=", completed.stdout)
+
+    def test_root_created_by_a_step_is_captured_per_side(self) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            recipe = write_json(Path(work) / "open.json", [{"click": "button"}])
+            completed = self.capture(
+                [
+                    "--real-url", ROOT_AFTER_CLICK.as_uri(),
+                    "--real-root", '[data-parity-root="Created"]',
+                    "--real-actions", str(recipe),
+                    "--timeout", "2000",
+                    "--viewport", "800x600",
+                    "--out", work,
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertRegex(completed.stdout, r'^real 800x600 \d+ nodes children=\d+ steps=1 root=section region "Created"')
+
+    def test_manifest_root_created_by_a_step_is_captured(self) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            out = Path(work) / "out"
+            row = manifest_row(
+                "R1", "R1", ["800x600"],
+                realRoute=ROOT_AFTER_CLICK.name,
+                realRoot='[data-parity-root="Created"]',
+                realSteps=[{"click": "button"}],
+            )
+            manifest_path = write_json(Path(work) / "manifest.json", manifest([row], ["800x600"]))
+            completed = self.capture(["--manifest", str(manifest_path), "--out", str(out), "--timeout", "2000"])
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertRegex(completed.stdout, r'real 800x600 \d+ nodes children=\d+ steps=1 root=section region "Created"')
+            self.assertTrue((out / "R1" / "real-800x600.json").exists())
 
     def test_root_that_never_appears_reports_selector_and_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as work:

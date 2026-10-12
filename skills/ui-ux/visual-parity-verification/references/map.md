@@ -50,8 +50,9 @@ other entries pull in with `use`. Write a state as the shortest list that
 reaches it, extending another state with `use` rather than repeating its
 steps.
 
-Readiness belongs to the capture command, which waits for network idle, the
-root, fonts and two animation frames before and after the steps
+Readiness belongs to the capture command, which lets the page settle
+(network idle, fonts, two animation frames) before the steps and waits for
+network idle, the root, fonts and two animation frames after the last step
 (`capture.md`). States never carry readiness steps: no `waitFor` on the root,
 no settle sleeps.
 
@@ -70,8 +71,8 @@ once. It exits 1 with one line on stderr when that folder is missing, when
 `parity-states.json` already exists, or when a recipe is not a readable
 JSON array. It:
 
-- strips up to two leading readiness steps (`waitFor` and `wait`, in either
-  order) and every trailing `wait` from each recipe;
+- strips the leading readiness steps, one `waitFor` then one `wait` (either
+  may be absent), and every trailing `wait` from each recipe;
 - merges `proto-<x>.json` and `real-<x>.json` into one two-sided entry
   `<x>`; a bare `<x>.json` beside them supplies the side without a prefixed
   file, and a name with no prefixed file stays a plain step list;

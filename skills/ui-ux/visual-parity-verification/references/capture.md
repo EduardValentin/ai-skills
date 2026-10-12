@@ -61,7 +61,7 @@ capture-snapshots.mjs --out <dir> --viewport WxH [--viewport WxH ...]
 | `--prototype-header "Name: value"`, `--real-header "Name: value"` | Repeatable. Extra HTTP header on every request of that side. The separator is `: `. |
 | `--timeout MS` | Default `30000`. Applies to `goto`, `--wait-for`, every step, every network-idle wait and each readiness wait. Positive integer. |
 | `--color-scheme light\|dark` | Sets the browser context's `colorScheme`. Omit to use Playwright's default. |
-| `--wait-for SELECTOR` | `page.waitForSelector` after `goto`, before the first readiness wait. |
+| `--wait-for SELECTOR` | `page.waitForSelector` after `goto`, before the settle or readiness wait. |
 | `--headed` | Launch Chromium with a visible window instead of headless. |
 
 Per-side mode needs at least one of `--prototype-url` or `--real-url`; a
@@ -79,12 +79,16 @@ prototype and the real app never share cookies or storage; every capture
 opens its own page in the matching context and closes it afterwards.
 
 Per capture: `goto` the URL with `waitUntil: "load"`, run `--wait-for` if
-given, wait for readiness, run the side's steps (see Steps), wait for
-readiness again, resolve the root (component name on the prototype side, or
+given, let the page settle and run the side's steps (see Steps) when it has
+any, wait for readiness, resolve the root (component name on the prototype side, or
 the given selector/attribute value otherwise), inject the snapshot script
 and evaluate `paritySnapshot(root)`, then write the result as compact JSON.
 
-Readiness means, in order: the page reaches `networkidle`; the root is
+Settling means the page reaches `networkidle`, `document.fonts.ready`
+settles and two animation frames pass; it never waits for the root, so a
+root a step creates is still found. Readiness, which runs once after the
+last step (or straight after load when there are no steps), means, in
+order: the page reaches `networkidle`; the root is
 present — a selector root (or `data-parity-root` value) is attached to the
 DOM, or a component name has at least one root through
 `parityFindReactRoots`, both polled every 100 ms, so a page without React
@@ -97,6 +101,7 @@ of:
 ```
 <side> <WxH>: root "<selector>" did not appear within <timeout> ms
 <side> <WxH>: no roots found for component "<name>" within <timeout> ms
+<side> <WxH>: fonts and paint did not settle within <timeout> ms
 ```
 
 Root resolution errors — more than one root for the named component (every
@@ -157,7 +162,7 @@ not `MATCH`, read from the ledger's evidence cell, through
 A side's steps come from the manifest row's `protoSteps` / `realSteps` in
 manifest mode, or from a recipe file (`--prototype-actions FILE` /
 `--real-actions FILE`, a JSON array of steps) in per-side mode. They run in
-order after the first readiness wait, each with the `--timeout` budget:
+order after the page settles, each with the `--timeout` budget:
 
 | Step | Runs |
 |---|---|
@@ -173,8 +178,8 @@ kind or a value of the wrong shape is a usage error naming the file (or the
 manifest row and key) and the step index, raised before the browser
 launches. `use` steps never reach this command: `parity_map.py manifest`
 expands them from `parity-states.json` (`map.md`, "States file"). Because
-the readiness wait runs before and after the steps, steps never wait for the
-root or sleep for the page to settle.
+the page settles before the steps and the readiness wait runs after them,
+steps never wait for the root or sleep for the page to settle.
 
 After the last step — and also when the side has no steps — the pointer is
 parked at `0,0` and the page waits for `networkidle`, so hover styling from

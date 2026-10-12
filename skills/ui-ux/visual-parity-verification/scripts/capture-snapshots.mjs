@@ -460,6 +460,11 @@ async function awaitPaint(page, timeout) {
   }
 }
 
+async function awaitSettled(page, timeout) {
+  await page.waitForLoadState("networkidle", { timeout });
+  await awaitPaint(page, timeout);
+}
+
 async function awaitReady(page, job, runtime) {
   await page.waitForLoadState("networkidle", { timeout: runtime.options.timeout });
   if (job.component) await awaitComponent(page, job, runtime);
@@ -513,7 +518,7 @@ async function captureOne(job, runtime) {
   try {
     await page.goto(job.url, { waitUntil: "load", timeout: options.timeout });
     if (options.waitFor) await page.waitForSelector(options.waitFor, { timeout: options.timeout });
-    await awaitReady(page, job, runtime);
+    if (job.steps.length > 0) await awaitSettled(page, options.timeout);
     await runRecipe(page, job.steps, options.timeout);
     await awaitReady(page, job, runtime);
 

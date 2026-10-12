@@ -87,11 +87,11 @@ Paths resolve from the skill root.
 ## Procedure
 
 1. Capture. Run `parity_map.py check`, then `parity_map.py manifest` with
-   both URLs and the viewport set (`--only-viewports` on a recheck). Run
+   both URLs and viewports (`--only-viewports` on a recheck). Run
    `capture-snapshots.mjs --manifest` once per round and read the summary
-   lines once. The capture waits for each root itself; states carry no
-   readiness steps. A capture error line makes its row `BLOCKED`
-   (`write_ledger.py --row <id> --blocked "<side> <root> <route>:
+   lines once. The capture waits for each root after the state's steps;
+   states carry no readiness steps. A capture error line makes its row
+   `BLOCKED` (`write_ledger.py --row <id> --blocked "<side> <root> <route>:
    <error>"`); `no roots found for component` everywhere means a
    production build.
 2. Hand-driven states. When no named state reaches a state, drive both
@@ -101,7 +101,7 @@ Paths resolve from the skill root.
 3. Diff. Per row and viewport, run `scripts/diff_snapshots.py
    --print-review --pairings .parity/parity-pairings.json --row <map id>`
    with the row's manifest `ignore` entries as `--ignore-prototype` and
-   `--ignore-real`; read only the printed summary and review lines.
+   `--ignore-real`; read only the summary and review lines.
 4. Review. Confirm or reject each `review` pair and each `suggest` line.
    Write confirmed pairs into `.parity/parity-pairings.json` under the map
    id, drop or correct the entry behind each `pairing unapplied` line, then

@@ -2,9 +2,9 @@
 """Check the durable parity map, print one of its rows, or build a capture manifest.
 
 `check` validates parity-map.md and the parity-states.json beside it against
-the contract in references/map.md and prints one line per warning and problem. `row` prints one map row as JSON. `manifest`
-joins the ledger's Elements rows with the map and writes the capture manifest
-the capture command consumes.
+the contract in references/map.md and prints one line per warning and problem.
+`row` prints one map row as JSON. `manifest` joins the ledger's Elements rows
+with the map and writes the capture manifest the capture command consumes.
 """
 
 from __future__ import annotations
