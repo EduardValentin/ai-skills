@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_CONFIG = path.join(path.dirname(fileURLToPath(import.meta.url)), "default-cruise-config.cjs");
+export const DEFAULT_CONFIG = path.join(path.dirname(fileURLToPath(import.meta.url)), "default-cruise-config.cjs");
 const CONFIG_CANDIDATES = [".dependency-cruiser.cjs", ".dependency-cruiser.js", ".dependency-cruiser.json"];
 
 async function exists(file) { try { await access(file); return true; } catch { return false; } }
@@ -15,26 +15,43 @@ export function packageName(specifier) {
 }
 
 const NODE_MODULES_PATH = /(^|\/)node_modules\//;
+const OUTSIDE_ROOT = /^(\.\.\/)+/;
 
 function isExternalEntry(entry) {
   const types = entry.dependencyTypes ?? [];
   const entryPath = entry.resolved ?? entry.source ?? "";
   return Boolean(entry.coreModule)
-    || Boolean(entry.couldNotResolve)
     || types.some((type) => type === "core" || type.startsWith("npm"))
     || NODE_MODULES_PATH.test(entryPath);
+}
+
+function outsideRootName(entryPath) {
+  const match = OUTSIDE_ROOT.exec(entryPath);
+  return match ? entryPath.slice(match[0].length).split("/")[0] : null;
 }
 
 export function normalizeCruise(cruise, frameworks = []) {
   const modules = new Set();
   const edges = [];
-  const warnings = [];
+  const warnings = new Set();
+  const warnOutside = (entryPath) => warnings.add(`module outside the root: ${entryPath}`);
   for (const m of cruise.modules) {
-    if (!isExternalEntry(m)) modules.add(m.source);
+    if (m.couldNotResolve || isExternalEntry(m)) continue;
+    if (outsideRootName(m.source) !== null) { warnOutside(m.source); continue; }
+    modules.add(m.source);
+  }
+  for (const m of cruise.modules) {
+    if (!modules.has(m.source)) continue;
     for (const d of m.dependencies ?? []) {
       const types = d.dependencyTypes ?? [];
+      if (d.couldNotResolve) { warnings.add(`unresolved import ${d.module} in ${m.source}`); continue; }
+      const outsideName = outsideRootName(d.resolved ?? "");
+      if (outsideName !== null) {
+        warnOutside(d.resolved);
+        edges.push({ from: m.source, external: { name: outsideName, tag: "vendor" } });
+        continue;
+      }
       if (isExternalEntry(d)) {
-        if (d.couldNotResolve) warnings.push(`unresolved import ${d.module} in ${m.source}`);
         const name = packageName(d.module);
         const tag = types.includes("core") ? "runtime" : frameworks.includes(name) ? "framework" : "vendor";
         edges.push({ from: m.source, external: { name, tag } });
@@ -45,7 +62,7 @@ export function normalizeCruise(cruise, frameworks = []) {
       modules.add(d.resolved);
     }
   }
-  return { modules, edges, warnings };
+  return { modules, edges, warnings: [...warnings] };
 }
 
 function loadTypescript(root) {
@@ -87,14 +104,17 @@ async function resolveConfig(root, tooling) {
   return DEFAULT_CONFIG;
 }
 
+async function readPackageJson(file) {
+  try { return JSON.parse(await readFile(file, "utf8")); }
+  catch { return null; }
+}
+
 async function findDependencyCruiserPackage(startDir) {
   let dir = startDir;
   while (true) {
     const candidate = path.join(dir, "package.json");
-    if (await exists(candidate)) {
-      const pkg = JSON.parse(await readFile(candidate, "utf8"));
-      if (pkg.name === "dependency-cruiser") return { dir, pkg };
-    }
+    const pkg = await readPackageJson(candidate);
+    if (pkg?.name === "dependency-cruiser") return { dir, pkg };
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -115,11 +135,24 @@ export async function locateCruiserBin(root) {
   throw new Error(`dependency-cruiser is not installed in ${root}; the TypeScript adapter needs it`);
 }
 
-async function runCruise(root, config, roots) {
+async function tsConfigFor(root, tooling) {
+  for (const candidate of [tooling.tsConfig, "tsconfig.json"]) {
+    if (candidate && (await exists(path.join(root, candidate)))) return path.join(root, candidate);
+  }
+  return null;
+}
+
+export async function cruiseArguments(root, tooling, config, roots) {
+  const tsConfig = config === DEFAULT_CONFIG ? await tsConfigFor(root, tooling) : null;
+  return ["--output-type", "json", "--config", config, ...(tsConfig ? ["--ts-config", tsConfig] : []), ...roots];
+}
+
+async function runCruise(root, tooling, roots) {
   const bin = await locateCruiserBin(root);
+  const cruiseArgs = await cruiseArguments(root, tooling, await resolveConfig(root, tooling), roots);
   const isBinShim = path.basename(path.dirname(bin)) === ".bin";
   const command = isBinShim ? bin : process.execPath;
-  const args = isBinShim ? ["--output-type", "json", "--config", config, ...roots] : [bin, "--output-type", "json", "--config", config, ...roots];
+  const args = isBinShim ? cruiseArgs : [bin, ...cruiseArgs];
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd: root });
     let stdout = "", stderr = "";
@@ -166,7 +199,7 @@ export function createTypescriptAdapter({ root, tooling }) {
     async extract({ roots, cruiseJsonPath, exportsJsonPath, frameworks = [] }) {
       const cruise = cruiseJsonPath
         ? JSON.parse(await readFile(path.resolve(root, cruiseJsonPath), "utf8"))
-        : await runCruise(root, await resolveConfig(root, tooling), roots);
+        : await runCruise(root, tooling, roots);
       const normalized = normalizeCruise(cruise, frameworks);
       const modules = exportsJsonPath
         ? await extractFromExportsJson(root, exportsJsonPath, normalized)

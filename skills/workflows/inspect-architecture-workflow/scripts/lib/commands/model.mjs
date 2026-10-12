@@ -1,6 +1,14 @@
 import { parseFlags } from "../args.mjs";
+import { listTracked } from "../git.mjs";
 import { loadOrBuildGraph } from "../graph.mjs";
 import { HARD_PROBLEM, loadModel, validateModel, writeModelFile } from "../model.mjs";
+
+const USAGE = "usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule>";
+const EDIT_USAGE = {
+  "add-override": "usage: arch model add-override <path> ring=<r> kind=<k> [actors=a,b] [reason=<text>]",
+  "add-component": "usage: arch model add-component <id> <name> paths=<glob,...> [enforcement=<text>] [release=<text>] [entry=<glob,...>]",
+  "add-rule": "usage: arch model add-rule match=<glob> ring=<r> kind=<k> [actors=a,b] [before=<glob>]",
+};
 
 const LIST_KEYS = new Set(["actors", "paths", "entry"]);
 
@@ -22,8 +30,8 @@ function upsert(array, matches, entry) {
   if (index >= 0) array[index] = entry; else array.push(entry);
 }
 
-function refuseOrWrite(model, name, data) {
-  const problems = validateModel(model);
+function refuseOrWrite(model, name, data, existingPaths) {
+  const problems = validateModel(model, existingPaths);
   const hard = problems.filter((p) => HARD_PROBLEM.test(p));
   if (hard.length) {
     for (const problem of problems) console.error(problem);
@@ -33,17 +41,17 @@ function refuseOrWrite(model, name, data) {
 }
 
 async function validate(flags, ctx) {
+  let graph;
   try {
-    const graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"], force: true });
-    if (graph.warnings.length) {
-      for (const warning of graph.warnings) console.error(warning);
-      return 1;
-    }
+    graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"], force: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!message.startsWith("model is invalid")) console.error(message);
     return 1;
   }
+  for (const warning of graph.warnings) console.error(warning);
+  const problems = validateModel(await loadModel(ctx.root), new Set(graph.units.map((u) => u.path)));
+  if (problems.length) return 1;
   console.log("model: ok");
   return 0;
 }
@@ -92,7 +100,12 @@ function removePort(model, plain) {
   return refuseOrWrite(model, "boundaries", model.boundaries);
 }
 
-function addComponent(model, plain, kv) {
+async function trackedPaths(root) {
+  try { return new Set(await listTracked(root)); }
+  catch { return undefined; }
+}
+
+async function addComponent(model, plain, kv, root) {
   const [id, name] = plain;
   const entry = {
     id,
@@ -103,7 +116,7 @@ function addComponent(model, plain, kv) {
     entryPoints: kv.entry ?? [],
   };
   model.components.components.push(entry);
-  return refuseOrWrite(model, "components", model.components);
+  return refuseOrWrite(model, "components", model.components, await trackedPaths(root));
 }
 
 function addRule(model, kv) {
@@ -155,9 +168,16 @@ const EDITS = {
   "remove-rule": (model, plain, kv) => removeRule(model, kv),
 };
 
+const REQUIRED = {
+  "add-override": ({ plain }) => plain.length >= 1,
+  "add-component": ({ plain, kv }) => plain.length >= 2 && kv.paths !== undefined && kv.paths.length > 0,
+  "add-rule": ({ kv }) => Boolean(kv.match),
+};
+
 export async function run(args, ctx) {
   const { positional, flags } = parseFlags(args);
   const [sub, ...rest] = positional;
+  if (!sub) { console.error(USAGE); return 1; }
   if (sub === "validate") return validate(flags, ctx);
 
   const edit = EDITS[sub];
@@ -165,7 +185,8 @@ export async function run(args, ctx) {
     console.error(`unknown model subcommand: ${sub}; known: validate, ${Object.keys(EDITS).join(", ")}`);
     return 1;
   }
-  const model = await loadModel(ctx.root);
   const { kv, plain } = splitArgs(rest);
-  return edit(model, plain, kv);
+  if (REQUIRED[sub] && !REQUIRED[sub]({ plain, kv })) { console.error(EDIT_USAGE[sub]); return 1; }
+  const model = await loadModel(ctx.root);
+  return edit(model, plain, kv, ctx.root);
 }

@@ -5,6 +5,7 @@ import { selectAdapter } from "./adapters/index.mjs";
 import { git, headCommit, isClean, withBaseWorktree } from "./git.mjs";
 
 export const GRAPH_DIR = ".architecture/graph";
+export const GRAPH_VERSION = 2;
 export function graphPath(root, commit) { return path.join(root, GRAPH_DIR, `${commit}.json`); }
 
 export function stronglyConnected(nodes, edges) {
@@ -91,7 +92,7 @@ export function buildGraph({ model, extracted, commit }) {
     components: stronglyConnected(model.components.components.map((c) => c.id), componentEdges.map((e) => [e.from, e.to])),
   };
   const uncovered = units.filter((u) => u.component === null || u.ring === null).map((u) => u.path);
-  return { version: 1, commit, language: extracted.language ?? "typescript", generatedAt: new Date().toISOString(), rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
+  return { version: GRAPH_VERSION, commit, language: extracted.language ?? "typescript", generatedAt: new Date().toISOString(), rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
 }
 
 async function resolveWorkingTreeKey(root) {
@@ -104,10 +105,22 @@ async function resolveCommitKey(root, ref) {
   return (await git(root, ["rev-parse", "--short=8", ref])).trim();
 }
 
+export function sourceRoots(model) {
+  const roots = model.components.tooling?.roots;
+  return Array.isArray(roots) && roots.length > 0 ? roots : ["."];
+}
+
+async function readCachedGraph(file) {
+  try {
+    const graph = JSON.parse(await readFile(file, "utf8"));
+    return graph.version === GRAPH_VERSION ? graph : null;
+  } catch { return null; }
+}
+
 async function buildIn(buildRoot, { cruiseJsonPath, exportsJsonPath, commit }) {
   const model = await loadModel(buildRoot);
   const adapter = await selectAdapter(model, buildRoot);
-  const extracted = await adapter.extract({ roots: model.components.tooling?.roots ?? ["."], cruiseJsonPath, exportsJsonPath, frameworks: model.rules.frameworks ?? [] });
+  const extracted = await adapter.extract({ roots: sourceRoots(model), cruiseJsonPath, exportsJsonPath, frameworks: model.rules.frameworks ?? [] });
   extracted.language = adapter.language;
   const problems = validateModel(model, new Set(extracted.modules.map((m) => m.path)));
   const hard = problems.filter((p) => HARD_PROBLEM.test(p));
@@ -124,7 +137,8 @@ export async function loadOrBuildGraph(root, { commit, cruiseJsonPath, exportsJs
   const key = commit ? await resolveCommitKey(root, commit) : await resolveWorkingTreeKey(root);
   const file = graphPath(root, key);
   const useCache = !force && !cruiseJsonPath && !exportsJsonPath && key !== "working-tree";
-  if (useCache) { try { return JSON.parse(await readFile(file, "utf8")); } catch { /* build below */ } }
+  const cached = useCache ? await readCachedGraph(file) : null;
+  if (cached) return cached;
   const needsWorktree = Boolean(commit) && (key !== (await headCommit(root)) || !(await isClean(root)));
   const graph = needsWorktree
     ? await withBaseWorktree(root, commit, (dir) => buildIn(dir, { cruiseJsonPath, exportsJsonPath, commit: key }))

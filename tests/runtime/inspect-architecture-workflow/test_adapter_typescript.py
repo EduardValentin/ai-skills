@@ -110,3 +110,73 @@ def test_locate_cruiser_bin_missing_is_a_clear_error(tmp_path: Path):
     result = _locate(tmp_path)
     assert result.returncode == 0, result.stderr
     assert result.stderr == f"ERR:dependency-cruiser is not installed in {tmp_path}; the TypeScript adapter needs it"
+
+
+def _normalize(cruise: dict) -> dict:
+    script = (f"import {{ normalizeCruise }} from '{ADAPTER.as_posix()}';"
+              f"const n = normalizeCruise({json.dumps(cruise)}, []);"
+              "process.stdout.write(JSON.stringify({modules:[...n.modules].sort(), edges:n.edges, warnings:n.warnings}));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_unresolved_import_is_a_warning_and_never_an_edge():
+    cruise = {"modules": [
+        {"source": "src/a.ts", "dependencies": [
+            {"module": "@app/missing", "resolved": "@app/missing", "dependencyTypes": ["unknown"], "couldNotResolve": True},
+            {"module": "./gone", "resolved": "./gone", "dependencyTypes": ["local"], "couldNotResolve": True},
+        ]},
+        {"source": "@app/missing", "couldNotResolve": True, "dependencies": []},
+        {"source": "./gone", "couldNotResolve": True, "dependencies": []},
+    ]}
+    out = _normalize(cruise)
+    assert out["edges"] == []
+    assert out["modules"] == ["src/a.ts"]
+    assert "unresolved import @app/missing in src/a.ts" in out["warnings"]
+    assert "unresolved import ./gone in src/a.ts" in out["warnings"]
+
+
+def test_dependency_outside_the_root_is_an_external_with_a_warning():
+    cruise = {"modules": [
+        {"source": "src/a.ts", "dependencies": [
+            {"module": "../../sibling/x", "resolved": "../sibling/x.ts", "dependencyTypes": ["local"], "couldNotResolve": False},
+        ]},
+        {"source": "../sibling/x.ts", "dependencies": []},
+    ]}
+    out = _normalize(cruise)
+    assert out["modules"] == ["src/a.ts"]
+    assert out["edges"] == [{"from": "src/a.ts", "external": {"name": "sibling", "tag": "vendor"}}]
+    assert "module outside the root: ../sibling/x.ts" in out["warnings"]
+
+
+def test_cruise_arguments_pass_the_tsconfig_only_with_the_bundled_config(tmp_path: Path):
+    (tmp_path / "tsconfig.json").write_text("{}")
+    (tmp_path / "tsconfig.app.json").write_text("{}")
+    script = (f"import {{ cruiseArguments, DEFAULT_CONFIG }} from '{ADAPTER.as_posix()}';"
+              f"const root = {json.dumps(str(tmp_path))};"
+              "const out = [await cruiseArguments(root, {}, DEFAULT_CONFIG, ['src']),"
+              " await cruiseArguments(root, {tsConfig: 'tsconfig.app.json'}, DEFAULT_CONFIG, ['src']),"
+              " await cruiseArguments(root, {}, root + '/.dependency-cruiser.cjs', ['src'])];"
+              "process.stdout.write(JSON.stringify(out));")
+    result = run_node(script, tmp_path)
+    assert result.returncode == 0, result.stderr
+    bundled, named, own = json.loads(result.stdout)
+    assert bundled[bundled.index("--ts-config") + 1] == str(tmp_path / "tsconfig.json")
+    assert named[named.index("--ts-config") + 1] == str(tmp_path / "tsconfig.app.json")
+    assert "--ts-config" not in own
+
+
+def test_locate_cruiser_bin_skips_a_malformed_package_json(tmp_path: Path):
+    pkg_dir = tmp_path / "node_modules/dependency-cruiser"
+    (pkg_dir / "src/main").mkdir(parents=True)
+    (pkg_dir / "src/main/index.mjs").write_text("")
+    (pkg_dir / "src/main/package.json").write_text("{not json")
+    (pkg_dir / "package.json").write_text(json.dumps({
+        "name": "dependency-cruiser",
+        "exports": {".": "./src/main/index.mjs"},
+        "bin": {"dependency-cruise": "bin/dependency-cruise.mjs"},
+    }))
+    result = _locate(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == str(pkg_dir / "bin/dependency-cruise.mjs")

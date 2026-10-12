@@ -14,6 +14,6 @@ export async function run(args, ctx) {
   const graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"] });
   const model = await loadModel(ctx.root);
   const table = await query(graph, model, { positional: rest, flags }, ctx.root);
-  console.log(flags.json ? JSON.stringify(table) : renderMarkdown(table));
+  console.log(flags.json ? JSON.stringify({ columns: table.columns, rows: table.rows }) : renderMarkdown(table));
   return 0;
 }

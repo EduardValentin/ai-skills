@@ -71,3 +71,24 @@ def init_repo(path: Path) -> None:
     git(["init", "-q", "-b", "main"], path)
     git(["add", "-A"], path)
     git(["commit", "-q", "-m", "fixture"], path)
+
+
+FAKE_TYPESCRIPT = """module.exports = {
+  ScriptTarget: { Latest: 99 },
+  SyntaxKind: {},
+  createSourceFile: () => ({ statements: [] }),
+};
+"""
+
+
+def install_fake_tooling(root: Path) -> None:
+    """Stand-ins for dependency-cruiser (prints the saved cruise.json) and typescript (counts no exports)."""
+    shim = root / "node_modules/.bin/depcruise"
+    shim.parent.mkdir(parents=True, exist_ok=True)
+    shim.write_text("#!/bin/sh\ncat cruise.json\n")
+    shim.chmod(0o755)
+    ts = root / "node_modules/typescript"
+    ts.mkdir(parents=True, exist_ok=True)
+    (ts / "package.json").write_text('{"name": "typescript", "main": "index.js"}\n')
+    (ts / "index.js").write_text(FAKE_TYPESCRIPT)
+    (root / ".gitignore").write_text("node_modules/\n.architecture/\n")

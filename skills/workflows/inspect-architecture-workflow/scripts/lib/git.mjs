@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -26,12 +26,17 @@ export async function listTracked(root) {
   return stdout.split("\n").filter(Boolean);
 }
 
+export async function listUntracked(root) {
+  const stdout = await git(root, ["ls-files", "--others", "--exclude-standard"]);
+  return stdout.split("\n").filter(Boolean);
+}
+
 export async function nameStatus(root, ref) {
   const stdout = await git(root, ["diff", "--name-status", "-M", "--relative", ref]);
   return stdout.split("\n").filter(Boolean).map((line) => {
     const [code, ...paths] = line.split("\t");
     const status = code[0];
-    if (status === "R") return { status, path: paths[1], oldPath: paths[0] };
+    if (status === "R" || status === "C") return { status, path: paths[1], oldPath: paths[0] };
     return { status, path: paths[0] };
   });
 }
@@ -69,12 +74,32 @@ async function showPrefix(root) {
   return (await git(root, ["rev-parse", "--show-prefix"])).trim();
 }
 
+async function linkAncestorNodeModules(root, prefix, worktreeTop) {
+  const segments = prefix.split("/").filter(Boolean);
+  for (let depth = 0; depth < segments.length; depth += 1) {
+    const rel = segments.slice(0, depth).join("/");
+    const source = path.join(path.resolve(root, ...segments.slice(depth).map(() => "..")), "node_modules");
+    if (!(await isDirectory(source))) continue;
+    const dest = path.join(worktreeTop, rel, "node_modules");
+    await mkdir(path.dirname(dest), { recursive: true });
+    try { await symlink(source, dest, "dir"); }
+    catch (error) { if (error.code !== "EEXIST") throw error; }
+  }
+}
+
+async function isDirectory(file) {
+  try { return (await stat(file)).isDirectory(); }
+  catch { return false; }
+}
+
 export async function withBaseWorktree(root, ref, fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "arch-base-"));
   try {
     await git(root, ["worktree", "add", "--detach", dir, ref]);
-    const subdir = path.join(dir, await showPrefix(root));
+    const prefix = await showPrefix(root);
+    const subdir = path.join(dir, prefix);
     await linkNodeModules(root, subdir);
+    await linkAncestorNodeModules(root, prefix, dir);
     return await fn(subdir);
   } finally {
     try { await git(root, ["worktree", "remove", "--force", dir]); }

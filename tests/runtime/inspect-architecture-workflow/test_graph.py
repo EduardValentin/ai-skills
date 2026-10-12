@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, run_arch, run_node
+from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, git, init_repo, install_fake_tooling, run_arch, run_node
 
 GRAPH = SKILL_DIR / "scripts" / "lib" / "graph.mjs"
 
@@ -111,3 +111,77 @@ def test_tarjan_finds_nested_cycles():
     result = run_node(script, Path.cwd())
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == [["a", "b"]]
+
+
+def test_empty_roots_fall_back_to_the_project_root(tmp_path: Path):
+    script = (f"import {{ sourceRoots }} from '{GRAPH.as_posix()}';"
+              "process.stdout.write(JSON.stringify([sourceRoots({components:{tooling:{roots:[]}}}), sourceRoots({components:{}}), sourceRoots({components:{tooling:{roots:['src']}}})]));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [["."], ["."], ["src"]]
+    root = copy_fixture("payroll", tmp_path / "p")
+    comp = root / "docs/architecture/model/components.json"
+    data = json.loads(comp.read_text())
+    data["tooling"]["roots"] = []
+    comp.write_text(json.dumps(data))
+    assert len(build(root)["units"]) == 8
+
+
+def _clean_repo_with_tooling(tmp_path: Path) -> tuple[Path, str]:
+    root = copy_fixture("payroll", tmp_path / "p")
+    install_fake_tooling(root)
+    init_repo(root)
+    return root, git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
+
+
+def test_clean_tree_reuses_the_commit_keyed_cache(tmp_path: Path):
+    root, head = _clean_repo_with_tooling(tmp_path)
+    first = run_arch(["graph", "--json"], root)
+    assert first.returncode == 0, first.stderr
+    cached = root / f".architecture/graph/{head}.json"
+    assert cached.exists()
+    stamp = json.loads(first.stdout)["generatedAt"]
+    second = run_arch(["graph", "--json"], root)
+    assert second.returncode == 0, second.stderr
+    assert json.loads(second.stdout)["generatedAt"] == stamp
+
+
+def test_cached_graph_of_an_older_version_is_rebuilt(tmp_path: Path):
+    root, head = _clean_repo_with_tooling(tmp_path)
+    assert run_arch(["graph"], root).returncode == 0
+    cached = root / f".architecture/graph/{head}.json"
+    old = json.loads(cached.read_text())
+    old["version"] = 1
+    old["generatedAt"] = "2000-01-01T00:00:00.000Z"
+    cached.write_text(json.dumps(old))
+    result = run_arch(["graph", "--json"], root)
+    assert result.returncode == 0, result.stderr
+    rebuilt = json.loads(result.stdout)
+    assert rebuilt["version"] == 2 and rebuilt["generatedAt"] != "2000-01-01T00:00:00.000Z"
+    assert json.loads(cached.read_text())["version"] == 2
+
+
+def _zone_of(abstract: int, concrete: int, importers: int, imports_out: int) -> str | None:
+    units = [{"path": "c/x.ts", "component": "C", "exports": {"abstract": abstract, "concrete": concrete}}]
+    edges = []
+    for i in range(importers):
+        units.append({"path": f"in{i}.ts", "component": f"I{i}", "exports": {"abstract": 0, "concrete": 1}})
+        edges.append({"from": f"in{i}.ts", "to": "c/x.ts"})
+    if imports_out:
+        units.append({"path": "c/y.ts", "component": "C", "exports": {"abstract": 0, "concrete": 0}})
+        units.append({"path": "out.ts", "component": "O", "exports": {"abstract": 0, "concrete": 1}})
+        for source in ["c/x.ts", "c/y.ts"][:imports_out]:
+            edges.append({"from": source, "to": "out.ts"})
+    script = (f"import {{ metricsFor }} from '{GRAPH.as_posix()}';"
+              f"const [c] = metricsFor({json.dumps(units)}, {json.dumps(edges)}, [{{id:'C', name:'c'}}]);"
+              "process.stdout.write(JSON.stringify(c.inZone));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_zone_classification():
+    assert _zone_of(abstract=0, concrete=5, importers=3, imports_out=0) == "pain"
+    assert _zone_of(abstract=0, concrete=5, importers=2, imports_out=0) is None
+    assert _zone_of(abstract=5, concrete=0, importers=0, imports_out=2) == "uselessness"
+    assert _zone_of(abstract=1, concrete=1, importers=1, imports_out=1) is None

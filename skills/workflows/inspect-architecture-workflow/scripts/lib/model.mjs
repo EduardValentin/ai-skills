@@ -19,6 +19,10 @@ export async function loadModel(root) {
   return { dir, components, rules, overrides, boundaries };
 }
 
+export function allowedKinds(model) {
+  return model.rules.kinds ?? KINDS;
+}
+
 export function componentOf(model, filePath) {
   const hit = model.components.components.find((component) => matchesAny(filePath, component.paths));
   return hit ? hit.id : null;
@@ -36,6 +40,7 @@ export function classify(model, filePath) {
 export function validateModel(model, existingPaths) {
   const problems = [];
   const rings = model.rules.rings ?? DEFAULT_RINGS;
+  const kinds = allowedKinds(model);
   if (rings.length < 2 || new Set(rings).size !== rings.length) problems.push("rules.json: rings must list at least two distinct rings");
   const ids = new Set();
   for (const component of model.components.components) {
@@ -54,7 +59,7 @@ export function validateModel(model, existingPaths) {
   }
   const checkEntry = (entry, where) => {
     if (!rings.includes(entry.ring)) problems.push(`${where}: unknown ring: ${entry.ring}`);
-    if (!KINDS.includes(entry.kind)) problems.push(`${where}: unknown kind: ${entry.kind}`);
+    if (!kinds.includes(entry.kind)) problems.push(`${where}: unknown kind: ${entry.kind}`);
   };
   model.rules.rules.forEach((rule, index) => {
     checkEntry(rule, `rule ${index} (${rule.match})`);

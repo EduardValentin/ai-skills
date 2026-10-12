@@ -114,3 +114,109 @@ def test_component_graph_sorts_component_ids_numerically():
     result = run_node(script, Path.cwd())
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == [["C3", "C2", 1], ["C3", "C10", 1], ["C10", "C2", 1]]
+
+
+def _set_components(root: Path, edit) -> None:
+    comp = root / "docs/architecture/model/components.json"
+    data = json.loads(comp.read_text())
+    edit(data["components"])
+    comp.write_text(json.dumps(data))
+
+
+def test_entry_point_globs_expand_to_one_row_per_unit(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    _set_components(root, lambda cs: next(c for c in cs if c["id"] == "C3").update(entryPoints=["src/web/*.ts"]))
+    rows = q(root, "entry-points")["rows"]
+    assert rows == [
+        ["src/web/main.ts", "C3", ["src/web/payroll-controller.ts"]],
+        ["src/web/payroll-controller.ts", "C3", ["src/adapters/pg-payroll-repository.ts", "src/adapters/system-clock.ts", "src/domain/payroll-use-case.ts"]],
+    ]
+
+
+def test_externals_query_lists_importers_by_component(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    rows = q(root, "externals")["rows"]
+    assert ["pg", "vendor", ["C2"], ["src/adapters/pg-payroll-repository.ts"]] in rows
+    assert all(r[1] == "vendor" for r in q(root, "externals", "--tag", "vendor")["rows"])
+
+
+def test_cycles_query_lists_module_and_component_cycles(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    assert q(root, "cycles")["rows"] == []
+    cruise = json.loads((root / "cruise.json").read_text())
+    emp = next(m for m in cruise["modules"] if m["source"] == "src/domain/employee.ts")
+    emp["dependencies"].append({"module": "../web/payroll-controller", "resolved": "src/web/payroll-controller.ts", "dependencyTypes": ["local", "import"], "dynamic": False, "couldNotResolve": False})
+    (root / "cruise.json").write_text(json.dumps(cruise))
+    rows = q(root, "cycles")["rows"]
+    assert ["component", ["C1", "C2", "C3"]] in rows
+    assert any(r[0] == "module" and "src/domain/employee.ts" in r[1] for r in rows)
+
+
+def test_edges_query_lists_outgoing_and_incoming_edges(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    out = q(root, "edges", "src/domain/clock.ts")
+    assert out["columns"] == ["Direction", "Other", "Kind", "Ring direction"]
+    assert sorted(out["rows"]) == [
+        ["in", "src/adapters/system-clock.ts", "type-import", "inward"],
+        ["in", "src/domain/payroll-use-case.ts", "import", "inward"],
+    ]
+    rows = q(root, "edges", "src/web/payroll-controller.ts")["rows"]
+    assert ["out", "src/domain/payroll-use-case.ts", "import", "inward"] in rows
+    assert ["in", "src/web/main.ts", "import", "inward"] in rows
+
+
+def test_edges_without_path_prints_usage(tmp_path: Path):
+    result = run_arch(["query", "edges", *FIXTURE_FLAGS], copy_fixture("payroll", tmp_path / "p"))
+    assert result.returncode == 1
+    assert result.stderr.strip() == "usage: arch query edges <path>"
+
+
+def test_boolean_flags_never_consume_the_next_argument(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    result = run_arch(["query", "fan-in", "--json", "src/domain/clock.ts", *FIXTURE_FLAGS], root)
+    assert result.returncode == 0, result.stderr
+    importers = {r[0] for r in json.loads(result.stdout)["rows"]}
+    assert importers == {"src/domain/payroll-use-case.ts", "src/adapters/system-clock.ts"}
+
+
+def test_null_cells_render_empty_except_metric_columns(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    _set_components(root, lambda cs: cs.append({"id": "C4", "name": "island", "paths": ["src/island/**"], "enforcement": "none", "releaseUnit": "", "entryPoints": []}))
+    metrics = run_arch(["query", "metrics", *FIXTURE_FLAGS], root)
+    assert "| C4 island | 0 | 0 | 0 | undefined | undefined | undefined | none |" in metrics.stdout.splitlines()
+    ports = run_arch(["query", "ports", *FIXTURE_FLAGS], root)
+    clock = next(l for l in ports.stdout.splitlines() if l.startswith("| src/domain/clock.ts:Clock"))
+    assert clock.startswith("| src/domain/clock.ts:Clock | C1 |  | ")
+    assert "undefined" not in ports.stdout
+    as_json = q(root, "metrics")
+    assert set(as_json) == {"columns", "rows"}
+    assert next(r for r in as_json["rows"] if r[0] == "C4 island")[4:7] == [None, None, None]
+
+
+def test_touched_lists_untracked_units_and_skips_deleted_non_units(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    (root / "src/domain/notes.md").write_text("notes\n")
+    init_repo(root)
+    (root / "src/domain/notes.md").unlink()
+    (root / "src/domain/payslip.ts").write_text("export class Payslip {}\n")
+    cruise = json.loads((root / "cruise.json").read_text())
+    cruise["modules"].append({"source": "src/domain/payslip.ts", "dependencies": []})
+    (root / "cruise.json").write_text(json.dumps(cruise))
+    exports = json.loads((root / "exports.json").read_text())
+    exports["src/domain/payslip.ts"] = {"exports": {"abstract": 0, "concrete": 1}, "implements": []}
+    (root / "exports.json").write_text(json.dumps(exports))
+    rows = q(root, "touched", "--base", "HEAD")["rows"]
+    paths = {r[0]: r[4] for r in rows}
+    assert paths.get("src/domain/payslip.ts") == "added"
+    assert "src/domain/notes.md" not in paths
+
+
+def test_touched_lists_a_deleted_unit(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    init_repo(root)
+    (root / "src/web/main.ts").unlink()
+    cruise = json.loads((root / "cruise.json").read_text())
+    cruise["modules"] = [m for m in cruise["modules"] if m["source"] != "src/web/main.ts"]
+    (root / "cruise.json").write_text(json.dumps(cruise))
+    rows = q(root, "touched", "--base", "HEAD")["rows"]
+    assert ["src/web/main.ts", "C3", "composition-root", "frameworks", "deleted", ""] in rows

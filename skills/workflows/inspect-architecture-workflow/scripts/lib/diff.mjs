@@ -25,10 +25,15 @@ export function diffGraphs(base, head, renames) {
     const c = headComp.get(id) ?? {};
     const pair = (k) => [b[k] ?? null, c[k] ?? null];
     const [d0, d1] = pair("distance");
-    return { id, fanIn: pair("fanIn"), fanOut: pair("fanOut"), instability: pair("instability"), abstractness: pair("abstractness"), distance: pair("distance"), movedPastThreshold: d0 !== null && d1 !== null && Math.abs(d1 - d0) >= 0.1 };
+    return { id, fanIn: pair("fanIn"), fanOut: pair("fanOut"), instability: pair("instability"), abstractness: pair("abstractness"), distance: pair("distance"), movedPastThreshold: d0 !== null && d1 !== null && Math.round(Math.abs(d1 - d0) * 100) >= 10 };
   });
-  const key = (c) => c.join(",");
-  const baseCycles = new Set(base.cycles.components.map(key)), headCycles = new Set(head.cycles.components.map(key));
+  const moduleCycles = (cycles) => cycles.map((members) => members.map((p) => mapPath(renames, p)).sort());
   return { base: base.commit, head: head.commit, units: { added, removed, moved, modifiedClassification }, edges: { added: edgesAdded, removed: edgesRemoved }, components,
-    cycles: { new: head.cycles.components.filter((c) => !baseCycles.has(key(c))), gone: base.cycles.components.filter((c) => !headCycles.has(key(c))) } };
+    cycles: { ...cycleChanges(base.cycles.components, head.cycles.components), modules: cycleChanges(moduleCycles(base.cycles.modules), head.cycles.modules) } };
+}
+
+function cycleChanges(baseCycles, headCycles) {
+  const key = (c) => c.join(",");
+  const baseKeys = new Set(baseCycles.map(key)), headKeys = new Set(headCycles.map(key));
+  return { new: headCycles.filter((c) => !baseKeys.has(key(c))), gone: baseCycles.filter((c) => !headKeys.has(key(c))) };
 }

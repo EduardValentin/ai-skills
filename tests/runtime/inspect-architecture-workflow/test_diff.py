@@ -1,7 +1,11 @@
 import json
 from pathlib import Path
 
-from support import FIXTURE_FLAGS, copy_fixture, git, init_repo, run_arch
+import shutil
+
+from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+
+DIFF = SKILL_DIR / "scripts" / "lib" / "diff.mjs"
 
 
 def test_diff_reports_move_not_remove_and_add(tmp_path: Path):
@@ -109,3 +113,84 @@ def test_diff_reports_base_only_component_with_null_head_metrics(tmp_path: Path)
     out = json.loads(run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root).stdout)
     c3 = next(c for c in out["components"] if c["id"] == "C3")
     assert c3["fanOut"] == [1, None]
+
+
+def _add_dependency(root: Path, source: str, target: str) -> None:
+    cruise = json.loads((root / "cruise.json").read_text())
+    module = next(m for m in cruise["modules"] if m["source"] == source)
+    module["dependencies"].append({"module": target, "resolved": target, "dependencyTypes": ["local", "import"], "dynamic": False, "couldNotResolve": False})
+    (root / "cruise.json").write_text(json.dumps(cruise))
+
+
+def _moved(d0: float, d1: float) -> bool:
+    graph = lambda d: {"commit": "x", "units": [], "edges": [], "components": [{"id": "C1", "distance": d}], "cycles": {"modules": [], "components": []}}
+    script = (f"import {{ diffGraphs }} from '{DIFF.as_posix()}';"
+              f"const r = diffGraphs({json.dumps(graph(d0))}, {json.dumps(graph(d1))}, new Map());"
+              "process.stdout.write(JSON.stringify(r.components[0].movedPastThreshold));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_distance_threshold_includes_the_boundary():
+    assert _moved(0.5, 0.6) is True
+    assert _moved(0.5, 0.59) is False
+    assert _moved(0.6, 0.5) is True
+
+
+def test_diff_against_a_base_without_a_model_says_how_to_proceed(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    model = root / "docs/architecture/model"
+    saved = tmp_path / "model"
+    shutil.move(str(model), str(saved))
+    init_repo(root)
+    first = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
+    shutil.move(str(saved), str(model))
+    git(["add", "-A"], root)
+    git(["commit", "-q", "-m", "model"], root)
+    result = run_arch(["diff", first, *FIXTURE_FLAGS], root)
+    assert result.returncode == 1
+    assert result.stderr.strip() == (f'no architecture model at {first}; evaluate the working tree with '
+                                     f'"arch query touched --base {first}" (change-review.md, Map step 4)')
+
+
+def test_diff_markdown_renders_missing_values_with_the_query_renderer(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    init_repo(root)
+    base = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
+    components_path = root / "docs/architecture/model/components.json"
+    components = json.loads(components_path.read_text())
+    components["components"] = [c for c in components["components"] if c["id"] != "C3"]
+    components_path.write_text(json.dumps(components))
+    result = run_arch(["diff", base, *FIXTURE_FLAGS], root)
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert "| Component | Fan-in | Fan-out | I | A | D | Moved |" in lines
+    c3 = next(l for l in lines if l.startswith("| C3 |"))
+    assert c3 == "| C3 | 0 ->  | 1 ->  | 1 -> undefined | 0 -> undefined | 0 -> undefined | false |"
+    assert " - " not in c3 and "-> -" not in result.stdout
+
+
+def test_diff_reports_module_cycles(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    init_repo(root)
+    base = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
+    _add_dependency(root, "src/domain/employee.ts", "src/domain/payroll-use-case.ts")
+    result = run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root)
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert out["cycles"]["modules"] == {"new": [["src/domain/employee.ts", "src/domain/payroll-use-case.ts"]], "gone": []}
+    assert out["cycles"]["new"] == []
+    markdown = run_arch(["diff", base, *FIXTURE_FLAGS], root).stdout
+    assert "+ src/domain/employee.ts -> src/domain/payroll-use-case.ts" in markdown.split("## Cycles")[1]
+
+
+def test_diff_against_head_on_a_dirty_tree(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    init_repo(root)
+    _add_dependency(root, "src/domain/employee.ts", "src/adapters/system-clock.ts")
+    result = run_arch(["diff", "HEAD", *FIXTURE_FLAGS, "--json"], root)
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert [(e["from"], e["to"]) for e in out["edges"]["added"]] == [("src/domain/employee.ts", "src/adapters/system-clock.ts")]
+    assert out["units"]["added"] == [] and out["units"]["removed"] == []

@@ -1,5 +1,7 @@
+import { matchesAny } from "./glob.mjs";
 import { classify, componentOf } from "./model.mjs";
-import { logNames, nameStatus } from "./git.mjs";
+import { listUntracked, logNames, nameStatus } from "./git.mjs";
+import { loadOrBuildGraph } from "./graph.mjs";
 
 function unitsByPath(graph) {
   return new Map(graph.units.map((u) => [u.path, u]));
@@ -7,7 +9,7 @@ function unitsByPath(graph) {
 
 function metrics(graph) {
   const rows = graph.components.map((c) => [`${c.id} ${c.name}`, c.units, c.fanIn, c.fanOut, c.instability, c.abstractness, c.distance, c.inZone ?? "none"]);
-  return { columns: ["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"], rows };
+  return { columns: ["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"], rows, undefinedColumns: ["I", "A", "D"] };
 }
 
 function componentGraph(graph) {
@@ -43,6 +45,14 @@ function fanIn(graph, model, { positional }) {
   return { columns: ["Importer", "Component", "Kind"], rows };
 }
 
+function edges(graph, model, { positional }) {
+  const [target] = positional;
+  if (!target) throw new Error("usage: arch query edges <path>");
+  const outgoing = graph.edges.filter((e) => e.from === target).map((e) => ["out", e.to, e.kind, e.direction]);
+  const incoming = graph.edges.filter((e) => e.to === target).map((e) => ["in", e.from, e.kind, e.direction]);
+  return { columns: ["Direction", "Other", "Kind", "Ring direction"], rows: [...outgoing, ...incoming] };
+}
+
 function units(graph, model, { flags }) {
   const { component, kind, ring } = flags;
   const rows = graph.units
@@ -51,9 +61,22 @@ function units(graph, model, { flags }) {
   return { columns: ["Path", "Kind", "Ring", "Actors", "Abstract", "Concrete"], rows };
 }
 
+const CHANGE_LABELS = { A: "added", C: "added", M: "modified", T: "modified", D: "deleted" };
+
+async function baseUnitPaths(root, flags) {
+  try {
+    const base = await loadOrBuildGraph(root, { commit: flags.base, cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"] });
+    return new Set(base.units.map((u) => u.path));
+  } catch {
+    return null;
+  }
+}
+
 async function touched(graph, model, { flags }, root) {
   if (!flags.base || flags.base === true) throw new Error("usage: arch query touched --base <ref>");
   const changes = await nameStatus(root, flags.base);
+  const listed = new Set(changes.map((change) => change.path));
+  for (const untracked of await listUntracked(root)) if (!listed.has(untracked)) changes.push({ status: "A", path: untracked });
   const byPath = unitsByPath(graph);
   const neighborsOf = new Map();
   for (const e of graph.edges) {
@@ -62,15 +85,16 @@ async function touched(graph, model, { flags }, root) {
     neighborsOf.get(e.from).add(e.to);
     neighborsOf.get(e.to).add(e.from);
   }
+  const deletions = changes.some((change) => change.status === "D");
+  const baseUnits = deletions ? await baseUnitPaths(root, flags) : null;
+  const wasUnit = (filePath) => (baseUnits ? baseUnits.has(filePath) : classify(model, filePath).component !== null);
   const rows = [];
   for (const change of changes) {
-    if (change.status !== "D" && !byPath.has(change.path)) continue;
+    const deleted = change.status === "D";
+    if (deleted ? !wasUnit(change.path) : !byPath.has(change.path)) continue;
     const info = classify(model, change.path);
-    const label = change.status === "A" ? "added"
-      : change.status === "M" ? "modified"
-      : change.status === "D" ? "deleted"
-      : `moved from ${change.oldPath}`;
-    const neighbors = change.status === "D" ? [] : [...(neighborsOf.get(change.path) ?? [])].sort();
+    const label = CHANGE_LABELS[change.status] ?? `moved from ${change.oldPath}`;
+    const neighbors = deleted ? [] : [...(neighborsOf.get(change.path) ?? [])].sort();
     rows.push([change.path, info.component, info.kind, info.ring, label, neighbors.join(", ")]);
   }
   return { columns: ["Path", "Component", "Kind", "Ring", "Change", "Neighbors"], rows };
@@ -100,9 +124,11 @@ function ports(graph, model) {
 function entryPoints(graph, model) {
   const rows = [];
   for (const component of model.components.components) {
-    for (const entry of component.entryPoints ?? []) {
-      const constructs = graph.edges.filter((e) => e.from === entry).map((e) => e.to).sort();
-      rows.push([entry, component.id, constructs]);
+    const globs = component.entryPoints ?? [];
+    if (globs.length === 0) continue;
+    for (const unit of graph.units.filter((u) => matchesAny(u.path, globs))) {
+      const constructs = graph.edges.filter((e) => e.from === unit.path).map((e) => e.to).sort();
+      rows.push([unit.path, component.id, constructs]);
     }
   }
   return { columns: ["Path", "Component", "Constructs"], rows };
@@ -152,6 +178,7 @@ export const QUERIES = {
   cycles,
   "ring-crossings": ringCrossings,
   "fan-in": fanIn,
+  edges,
   units,
   touched,
   ports,
@@ -160,15 +187,16 @@ export const QUERIES = {
   volatility,
 };
 
-function renderCell(value) {
-  if (value === null || value === undefined) return "undefined";
+export function renderValue(value, missing = "") {
+  if (value === null || value === undefined) return missing;
   if (Array.isArray(value)) return value.join(", ");
   return String(value);
 }
 
-export function renderMarkdown({ columns, rows }) {
+export function renderMarkdown({ columns, rows, undefinedColumns = [] }) {
+  const missing = columns.map((column) => (undefinedColumns.includes(column) ? "undefined" : ""));
   const header = `| ${columns.join(" | ")} |`;
   const separator = `|${columns.map(() => "---").join("|")}|`;
-  const body = rows.map((row) => `| ${row.map(renderCell).join(" | ")} |`);
+  const body = rows.map((row) => `| ${row.map((value, i) => renderValue(value, missing[i])).join(" | ")} |`);
   return [header, separator, ...body].join("\n");
 }
