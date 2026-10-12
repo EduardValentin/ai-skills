@@ -56,12 +56,12 @@ capture-snapshots.mjs --out <dir> --viewport WxH [--viewport WxH ...]
 | `--prototype-root SELECTOR` | Use this selector or `data-parity-root` value directly; skips root resolution. |
 | `--real-url URL` | Real app page to open. Requires `--real-root`. |
 | `--real-root SELECTOR-OR-ATTR-VALUE` | Selector or `data-parity-root` value passed straight to `paritySnapshot`. |
-| `--prototype-actions FILE`, `--real-actions FILE` | Action recipe run on that side after load (see Recipes). |
+| `--prototype-actions FILE`, `--real-actions FILE` | Recipe file of steps run on that side after load (see Steps). |
 | `--prototype-storage-state FILE`, `--real-storage-state FILE` | Playwright storage state for that side's browser context (see Authentication). |
 | `--prototype-header "Name: value"`, `--real-header "Name: value"` | Repeatable. Extra HTTP header on every request of that side. The separator is `: `. |
-| `--timeout MS` | Default `30000`. Applies to `goto`, `--wait-for`, every recipe step and the network-idle wait. Positive integer. |
+| `--timeout MS` | Default `30000`. Applies to `goto`, `--wait-for`, every step, every network-idle wait and each readiness wait. Positive integer. |
 | `--color-scheme light\|dark` | Sets the browser context's `colorScheme`. Omit to use Playwright's default. |
-| `--wait-for SELECTOR` | `page.waitForSelector` after `goto`, before the recipe and root resolution. |
+| `--wait-for SELECTOR` | `page.waitForSelector` after `goto`, before the settle or readiness wait. |
 | `--headed` | Launch Chromium with a visible window instead of headless. |
 
 Per-side mode needs at least one of `--prototype-url` or `--real-url`; a
@@ -79,31 +79,56 @@ prototype and the real app never share cookies or storage; every capture
 opens its own page in the matching context and closes it afterwards.
 
 Per capture: `goto` the URL with `waitUntil: "load"`, run `--wait-for` if
-given, run the side's recipe (see Recipes), resolve the root (component name
-on the prototype side, or the given selector/attribute value otherwise),
-inject the snapshot script and evaluate `paritySnapshot(root)`, then write
-the result as compact JSON.
+given, let the page settle and run the side's steps (see Steps) when it has
+any, wait for readiness, resolve the root (component name on the prototype side, or
+the given selector/attribute value otherwise), inject the snapshot script
+and evaluate `paritySnapshot(root)`, then write the result as compact JSON.
 
-Root resolution errors — `no-react-fibers`, zero roots for the named
-component, or more than one root (every candidate selector is printed) — a
-`paritySnapshot` error result, a load timeout or a failed step are reported
-as one line on stderr per failed capture; the command keeps going with the
-rest and exits 1 at the end.
+Settling means the page reaches `networkidle`, `document.fonts.ready`
+settles and two animation frames pass; it never waits for the root, so a
+root a step creates is still found. Readiness, which runs once after the
+last step (or straight after load when there are no steps), means, in
+order: the page reaches `networkidle`; the root is
+present — a selector root (or `data-parity-root` value) is attached to the
+DOM, or a component name has at least one root through
+`parityFindReactRoots`, both polled every 100 ms, so a page without React
+fibers yet or a component that mounts late is retried until `--timeout`;
+`document.fonts.ready` settles (skipped when the page has no
+`document.fonts`); and two animation frames pass. Each wait has the
+`--timeout` budget. A root that never appears fails the capture with one
+of:
+
+```
+<side> <WxH>: root "<selector>" did not appear within <timeout> ms
+<side> <WxH>: no roots found for component "<name>" within <timeout> ms
+<side> <WxH>: fonts and paint did not settle within <timeout> ms
+```
+
+Root resolution errors — more than one root for the named component (every
+candidate selector is printed) — a readiness timeout, any other readiness
+failure (such as a root that is not a valid selector, printed as the
+browser reported it), a `paritySnapshot`
+error result, a load timeout or a failed step are reported as one line on
+stderr per failed capture; the command keeps going with the rest and exits
+1 at the end.
 
 ## Manifest mode
 
 `--manifest <file>` consumes the JSON that `parity_map.py manifest` writes
 (see `map.md`): `prototypeUrl`, `realUrl`, `viewports` and `rows`, each row
 with `id`, `protoRoute`, `realRoute`, `protoComponent` or `protoRoot`,
-`realRoot`, `viewports` (`"WxH"` strings), `protoActions`, `realActions`
-(recipe paths or null) and `shareProto` (a row id). The base URLs are
+`realRoot`, `viewports` (`"WxH"` strings), `protoSteps`, `realSteps`
+(arrays of inline step objects, already resolved — never a `use` step; a
+missing key means no steps) and `shareProto` (a row id). The base URLs are
 treated as directories (a missing trailing `/` is added) and routes are
 joined onto them with `new URL(route, base)`, so a relative route resolves
 under the base and a route with a leading `/` replaces the base's path. The
 top-level `viewports` list is informational; each row's own `viewports`
 drive the capture. A row whose `shareProto` names a row with a different
-prototype route, root or actions is a usage error. `ignore` is for the diff
-step and is not read here.
+prototype route, root or steps is a usage error, as is a `protoSteps` or
+`realSteps` value that is not an array or holds a malformed step (the
+message names the row index, the key and the step index). `ignore` is for
+the diff step and is not read here.
 
 Two optional top-level objects carry authentication, added by hand or copied
 from the flags; `parity_map.py` does not emit them:
@@ -132,10 +157,12 @@ not `MATCH`, read from the ledger's evidence cell, through
 `parity_map.py manifest --only-viewports` or this command's
 `--only-viewports`.
 
-## Recipes
+## Steps
 
-A recipe file is a JSON array of steps, run in order after load and
-`--wait-for`, each with the `--timeout` budget:
+A side's steps come from the manifest row's `protoSteps` / `realSteps` in
+manifest mode, or from a recipe file (`--prototype-actions FILE` /
+`--real-actions FILE`, a JSON array of steps) in per-side mode. They run in
+order after the page settles, each with the `--timeout` budget:
 
 | Step | Runs |
 |---|---|
@@ -147,12 +174,16 @@ A recipe file is a JSON array of steps, run in order after load and
 | `{"waitFor": "selector"}` | `page.waitForSelector` |
 
 Each step is an object with exactly one key. A malformed file, an unknown
-kind or a value of the wrong shape is a usage error naming the file and the
-step index, raised before the browser launches.
+kind or a value of the wrong shape is a usage error naming the file (or the
+manifest row and key) and the step index, raised before the browser
+launches. `use` steps never reach this command: `parity_map.py manifest`
+expands them from `parity-states.json` (`map.md`, "States file"). Because
+the page settles before the steps and the readiness wait runs after them,
+steps never wait for the root or sleep for the page to settle.
 
-After the last step — and also when the side has no recipe — the pointer is
+After the last step — and also when the side has no steps — the pointer is
 parked at `0,0` and the page waits for `networkidle`, so hover styling from
-the pointer's resting place never leaks into a capture and a hover recipe
+the pointer's resting place never leaks into a capture and a hover state
 must move the pointer onto its target itself. A failing step prints
 `<side> <WxH> step <i> <kind>: <error>` and counts as a failed capture.
 
@@ -185,9 +216,12 @@ or `real`, `<W>x<H>` is the viewport value verbatim). One line goes to
 stdout per written or linked file:
 
 ```
-<side> <WxH> <nodes> nodes children=<n> root=<tag> <role> "<name>" <w>x<h> -> <path>
-<side> <WxH> <nodes> nodes children=<n> root=<tag> <role> "<name>" <w>x<h> (shared from <rowId>) -> <path>
+<side> <WxH> <nodes> nodes children=<n> [steps=<s> ]root=<tag> <role> "<name>" <w>x<h> -> <path>
+<side> <WxH> <nodes> nodes children=<n> [steps=<s> ]root=<tag> <role> "<name>" <w>x<h> (shared from <rowId>) -> <path>
 ```
+
+`steps=<s>` is the number of steps the capture ran and appears only when
+`<s>` is above zero; a shared prototype line repeats its source's count.
 
 `<nodes>` counts the root plus every descendant in the written tree.
 `children=<n>` counts the root's direct children after collapsing wrapper

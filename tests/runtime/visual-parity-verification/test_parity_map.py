@@ -15,7 +15,7 @@ MAP_SCRIPT = support.SCRIPTS_DIR / "parity_map.py"
 MAP_HEADER = "| Id | Prototype component | Real app root | Routes (real → prototype) | States | Viewports | Ignore | Confidence | Notes |"
 SEPARATOR = "|---|---|---|---|---|---|---|---|---|"
 
-ROW_C1 = '| C1 | OrderSummary | [data-parity-root="OrderSummary"] | /orders → /orders | default, empty, hover (order-hover.json) | | proto:hook:beta; real:path:section > div:nth-of-type(2) | confirmed | Two roots share the summary |'
+ROW_C1 = '| C1 | OrderSummary | [data-parity-root="OrderSummary"] | /orders → /orders | default, empty, hover (order-hover) | | proto:hook:beta; real:path:section > div:nth-of-type(2) | confirmed | Two roots share the summary |'
 ROW_C2 = "| C2 | root:main.checkout | main.checkout | /checkout -> /proto/checkout | default | 375x667, 1440x900 | | obvious | none |"
 ROW_C3 = "| C3 | OrderSummary | aside.legacy-summary | /orders-legacy → /orders | default | | | confirmed | none |"
 
@@ -61,7 +61,7 @@ class ParityMapCase(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.map_path = self.root / "parity-map.md"
-        self.write_recipe("order-hover.json")
+        self.write_states({"order-hover": [{"hover": "button"}]})
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -75,8 +75,8 @@ class ParityMapCase(unittest.TestCase):
         ledger.write_text(ledger_text(*rows), encoding="utf-8")
         return ledger
 
-    def write_recipe(self, name: str) -> Path:
-        return support.write_json(self.root / "parity-actions" / name, [{"hover": "button"}])
+    def write_states(self, states: dict) -> Path:
+        return support.write_json(self.root / "parity-states.json", states)
 
 
 class CheckTests(ParityMapCase):
@@ -142,23 +142,6 @@ class CheckTests(ParityMapCase):
         self.assertEqual(completed.returncode, 1)
         self.assertIn("row C2: expected 9 cells, found 8", completed.stdout)
 
-    def test_missing_action_file_fails_next_to_the_map_by_default(self) -> None:
-        (self.root / "parity-actions" / "order-hover.json").unlink()
-        completed = run_map("check", str(self.write_map(ROW_C1)))
-        self.assertEqual(completed.returncode, 1)
-        self.assertIn('row C1: States "hover (order-hover.json)" names a missing file parity-actions/order-hover.json', completed.stdout)
-
-    def test_present_action_file_next_to_the_map_passes(self) -> None:
-        completed = run_map("check", str(self.write_map(ROW_C1)))
-        self.assertEqual(completed.returncode, 0, completed.stdout)
-
-    def test_actions_root_overrides_the_map_directory(self) -> None:
-        (self.root / "parity-actions" / "order-hover.json").unlink()
-        elsewhere = self.root / "elsewhere"
-        support.write_json(elsewhere / "parity-actions" / "order-hover.json", [{"hover": "button"}])
-        completed = run_map("check", str(self.write_map(ROW_C1)), "--actions-root", str(elsewhere))
-        self.assertEqual(completed.returncode, 0, completed.stdout)
-
     def test_every_problem_is_listed_on_its_own_line(self) -> None:
         broken = ROW_C1.replace("| confirmed |", "| maybe |").replace("proto:hook:beta", "hook:beta")
         completed = run_map("check", str(self.write_map(broken)))
@@ -202,9 +185,9 @@ class CheckTests(ParityMapCase):
         self.assertIn("row C3: Real app root is empty", completed.stdout)
 
     def test_unbalanced_state_parenthesis_fails(self) -> None:
-        completed = run_map("check", str(self.write_map(ROW_C1.replace("hover (order-hover.json)", "hover (order-hover.json"))))
+        completed = run_map("check", str(self.write_map(ROW_C1.replace("hover (order-hover)", "hover (order-hover"))))
         self.assertEqual(completed.returncode, 1)
-        self.assertIn('row C1: States "hover (order-hover.json" is not name or name (file.json)', completed.stdout)
+        self.assertIn('row C1: States "hover (order-hover" is not name or name (state)', completed.stdout)
 
     def test_arrow_without_surrounding_spaces_fails(self) -> None:
         completed = run_map("check", str(self.write_map(ROW_C1.replace("/orders → /orders", "/orders→/orders"))))
@@ -247,9 +230,9 @@ class RowTests(ParityMapCase):
             "protoRoute": "/orders",
             "realRoute": "/orders",
             "states": [
-                {"name": "default", "actions": None},
-                {"name": "empty", "actions": None},
-                {"name": "hover", "actions": "order-hover.json"},
+                {"name": "default", "reference": None, "prototype": [], "real": []},
+                {"name": "empty", "reference": None, "prototype": [], "real": []},
+                {"name": "hover", "reference": "order-hover", "prototype": [{"hover": "button"}], "real": [{"hover": "button"}]},
             ],
             "viewports": [],
             "ignore": {"prototype": ["hook:beta"], "real": ["path:section > div:nth-of-type(2)"]},
@@ -295,6 +278,55 @@ class RowTests(ParityMapCase):
         self.assertIn('Confidence "maybe"', completed.stdout + completed.stderr)
 
 
+class StatesReferenceTests(ParityMapCase):
+    def test_unknown_reference_fails_check(self) -> None:
+        self.write_states({})
+        completed = run_map("check", str(self.write_map(ROW_C1)))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('row C1: States "hover (order-hover)" names a state that is not in parity-states.json', completed.stdout)
+
+    def test_old_file_reference_points_at_migrate(self) -> None:
+        completed = run_map("check", str(self.write_map(ROW_C1.replace("(order-hover)", "(order-hover.json)"))))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("looks like a recipe file; run parity_map.py migrate-actions", completed.stdout)
+
+    def test_states_problems_and_warnings_print(self) -> None:
+        self.write_states({"order-hover": [{"hover": "button"}, {"wait": 300}], "loop": [{"use": "loop"}]})
+        completed = run_map("check", str(self.write_map(ROW_C1)))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn('states: state "loop": use cycle: loop -> loop', completed.stdout)
+        self.assertIn('warning: ', completed.stdout)
+        self.assertIn('is a fixed wait', completed.stdout)
+
+    def test_warnings_alone_keep_exit_zero(self) -> None:
+        self.write_states({"order-hover": [{"hover": "button"}, {"wait": 300}]})
+        completed = run_map("check", str(self.write_map(ROW_C1)))
+        self.assertEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("warning:", completed.stdout)
+
+    def test_row_prints_resolved_steps_per_side(self) -> None:
+        self.write_states({"frag": [{"click": "#dev"}], "order-hover": {"prototype": [{"use": "frag"}, {"hover": "button"}]}})
+        completed = run_map("row", str(self.write_map(ROW_C1)), "C1")
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        hover = next(s for s in json.loads(completed.stdout)["states"] if s["name"] == "hover")
+        self.assertEqual(hover["reference"], "order-hover")
+        self.assertEqual(hover["prototype"], [{"click": "#dev"}, {"hover": "button"}])
+        self.assertEqual(hover["real"], [])
+
+    def test_row_prints_states_warnings_on_stderr(self) -> None:
+        self.write_states({"order-hover": [{"hover": "button"}, {"wait": 300}]})
+        completed = run_map("row", str(self.write_map(ROW_C1)), "C1")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("warning: ", completed.stderr)
+        self.assertEqual(json.loads(completed.stdout)["id"], "C1")
+
+    def test_unreadable_states_file_fails_check(self) -> None:
+        (self.root / "parity-states.json").write_text("{not json", encoding="utf-8")
+        completed = run_map("check", str(self.write_map(ROW_C1)))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("cannot read states file", completed.stdout)
+
+
 class ManifestTests(ParityMapCase):
     def manifest(self, ledger: Path, *extra: str, map_path: Path | None = None):
         out = self.root / "manifest.json"
@@ -327,13 +359,12 @@ class ManifestTests(ParityMapCase):
             "realRoot": '[data-parity-root="OrderSummary"]',
             "viewports": ["375x667", "1024x768", "1440x900"],
             "ignore": {"prototype": ["hook:beta"], "real": ["path:section > div:nth-of-type(2)"]},
-            "protoActions": None,
-            "realActions": None,
+            "protoSteps": [],
+            "realSteps": [],
             "shareProto": "L1",
         }])
 
-    def test_prototype_is_shared_by_route_component_and_actions(self) -> None:
-        self.write_recipe("order-hover.json")
+    def test_prototype_is_shared_by_route_and_component(self) -> None:
         self.write_map(ROW_C1, ROW_C2, ROW_C3)
         ledger = self.write_ledger(
             ledger_row("L1", "C1", "/orders", "default"),
@@ -342,7 +373,7 @@ class ManifestTests(ParityMapCase):
             ledger_row("L4", "C2", "/checkout", "default"),
             ledger_row("L5", "C1", "/orders", "empty"),
         )
-        completed, out = self.manifest(ledger, "--actions-root", str(self.root))
+        completed, out = self.manifest(ledger)
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         rows = {row["id"]: row for row in support.read_json(out)["rows"]}
         self.assertEqual(rows["L1"]["shareProto"], "L1")
@@ -350,17 +381,46 @@ class ManifestTests(ParityMapCase):
         self.assertEqual(rows["L3"]["shareProto"], "L3")
         self.assertEqual(rows["L4"]["shareProto"], "L4")
         self.assertEqual(rows["L5"]["shareProto"], "L1")
-        recipe = str(self.root / "parity-actions" / "order-hover.json")
-        self.assertEqual((rows["L3"]["protoActions"], rows["L3"]["realActions"]), (recipe, recipe))
         self.assertEqual(rows["L2"]["realRoot"], "aside.legacy-summary")
 
-    def test_actions_path_defaults_to_the_map_directory(self) -> None:
+    def test_manifest_rows_carry_resolved_steps(self) -> None:
+        self.write_states({"order-hover": {"prototype": [{"hover": "button"}], "real": [{"hover": "li"}]}})
         self.write_map(ROW_C1)
         ledger = self.write_ledger(ledger_row("L1", "C1", "/orders", "hover"))
         completed, out = self.manifest(ledger)
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-        row = support.read_json(out)["rows"][0]
-        self.assertEqual(row["protoActions"], str(self.root / "parity-actions" / "order-hover.json"))
+        row = json.loads(out.read_text())["rows"][0]
+        self.assertEqual(row["protoSteps"], [{"hover": "button"}])
+        self.assertEqual(row["realSteps"], [{"hover": "li"}])
+        self.assertNotIn("protoActions", row)
+
+    def test_prototype_is_shared_by_resolved_prototype_steps(self) -> None:
+        self.write_states({
+            "order-hover": {"prototype": [{"click": "#seed"}], "real": [{"hover": "li"}]},
+            "order-focus": {"prototype": [{"click": "#seed"}], "real": [{"press": "Tab"}]},
+            "order-other": {"prototype": [{"click": "#other"}]},
+        })
+        self.write_map(ROW_C1.replace("hover (order-hover)", "hover (order-hover), focus (order-focus), other (order-other)"))
+        ledger = self.write_ledger(
+            ledger_row("L1", "C1", "/orders", "hover"),
+            ledger_row("L2", "C1", "/orders", "focus"),
+            ledger_row("L3", "C1", "/orders", "other"),
+        )
+        completed, out = self.manifest(ledger)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        rows = {r["id"]: r for r in json.loads(out.read_text())["rows"]}
+        self.assertEqual(rows["L2"]["shareProto"], "L1")
+        self.assertEqual(rows["L3"]["shareProto"], "L3")
+
+    def test_rows_with_no_prototype_steps_share_the_default_capture(self) -> None:
+        self.write_states({"order-hover": {"real": [{"hover": "li"}]}})
+        self.write_map(ROW_C1)
+        ledger = self.write_ledger(ledger_row("L1", "C1", "/orders", "default"), ledger_row("L2", "C1", "/orders", "hover"))
+        completed, out = self.manifest(ledger)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        rows = {r["id"]: r for r in json.loads(out.read_text())["rows"]}
+        self.assertEqual(rows["L2"]["shareProto"], "L1")
+        self.assertEqual(rows["L2"]["protoSteps"], [])
 
     def test_selector_prototype_row_emits_proto_root_and_its_viewport_subset(self) -> None:
         self.write_map(ROW_C1, ROW_C2)
@@ -433,13 +493,13 @@ class ManifestTests(ParityMapCase):
         self.assertIn('row C1: Confidence "maybe" is not obvious or confirmed', completed.stdout)
         self.assertFalse(out.exists())
 
-    def test_missing_action_file_fails_manifest_under_actions_root(self) -> None:
-        (self.root / "parity-actions" / "order-hover.json").unlink()
+    def test_unknown_state_reference_fails_manifest(self) -> None:
+        self.write_states({})
         self.write_map(ROW_C1)
         ledger = self.write_ledger(ledger_row("L1", "C1", "/orders", "default"))
-        completed, out = self.manifest(ledger, "--actions-root", str(self.root))
+        completed, out = self.manifest(ledger)
         self.assertEqual(completed.returncode, 1)
-        self.assertIn("names a missing file parity-actions/order-hover.json", completed.stdout)
+        self.assertIn("names a state that is not in parity-states.json", completed.stdout)
         self.assertFalse(out.exists())
 
     def test_short_ledger_row_exits_one(self) -> None:

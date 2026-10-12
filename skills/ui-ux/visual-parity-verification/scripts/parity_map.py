@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Check the durable parity map, print one of its rows, or build a capture manifest.
 
-`check` validates parity-map.md against the contract in references/map.md and
-prints one line per problem. `row` prints one map row as JSON. `manifest`
-joins the ledger's Elements rows with the map and writes the capture manifest
-the capture command consumes.
+`check` validates parity-map.md and the parity-states.json beside it against
+the contract in references/map.md and prints one line per warning and problem.
+`row` prints one map row as JSON. `manifest` joins the ledger's Elements rows
+with the map and writes the capture manifest the capture command consumes.
 """
 
 from __future__ import annotations
@@ -16,18 +16,24 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+
+import parity_states
+
 MAP_HEADER = "| Id | Prototype component | Real app root | Routes (real → prototype) | States | Viewports | Ignore | Confidence | Notes |"
 ELEMENTS_HEADER = "| Id | Map id | Route | State | Prototype root | Real app root | Change | Verdict | Evidence |"
 ELEMENTS_SECTION = "## Elements"
 LEDGER_CELLS = 9
 COLUMNS = ("Id", "Prototype component", "Real app root", "Routes", "States", "Viewports", "Ignore", "Confidence", "Notes")
 CONFIDENCES = ("obvious", "confirmed")
-ACTIONS_DIR = "parity-actions"
 PROTO_ROOT_PREFIX = "root:"
 
 ID_PATTERN = re.compile(r"^C(\d+)$")
 ROUTES_ARROW = re.compile(r" (?:→|->) ")
-STATE_PATTERN = re.compile(r"^(?P<name>[^()]+?)\s*(?:\((?P<file>[^()]+)\))?$")
+STATE_PATTERN = re.compile(r"^(?P<name>[^()]+?)\s*(?:\((?P<reference>[^()]+)\))?$")
 VIEWPORT_PATTERN = re.compile(r"^\d+x\d+$")
 IGNORE_PATTERN = re.compile(r"^(?P<side>proto|real):(?P<entry>(?:hook|path):.+)$")
 SEPARATOR_PATTERN = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$")
@@ -133,11 +139,18 @@ def parse_states(text: str) -> list[dict[str, str | None]]:
     for entry in entries:
         match = STATE_PATTERN.match(entry)
         if match is None:
-            raise MapError(f'States "{entry}" is not name or name (file.json)')
+            raise MapError(f'States "{entry}" is not name or name (state)')
         name = match.group("name").strip()
+        reference = match.group("reference")
+        if reference is not None:
+            reference = reference.strip()
+            if reference.endswith(".json"):
+                raise MapError(f'States "{entry}" looks like a recipe file; run parity_map.py migrate-actions to convert parity-actions/ into parity-states.json')
+            if not parity_states.NAME_PATTERN.match(reference):
+                raise MapError(f'States "{entry}" reference must match letters, digits, dash or underscore')
         if any(state["name"] == name for state in states):
             raise MapError(f'States name "{name}" is listed twice')
-        states.append({"name": name, "actions": match.group("file")})
+        states.append({"name": name, "reference": reference})
     return states
 
 
@@ -220,20 +233,28 @@ def id_number(row_id: str) -> int:
     return int(ID_PATTERN.match(row_id).group(1))
 
 
-def missing_action_files(row: dict[str, Any], actions_root: Path) -> list[str]:
+def states_path_for(map_path: Path) -> Path:
+    return map_path.parent / parity_states.STATES_FILE
+
+
+def missing_references(row: dict[str, Any], states: dict[str, Any]) -> list[str]:
     problems = []
     for state in row["states"]:
-        if state["actions"] and not (actions_root / ACTIONS_DIR / state["actions"]).is_file():
-            problems.append(f'States "{state["name"]} ({state["actions"]})" names a missing file {ACTIONS_DIR}/{state["actions"]}')
+        reference = state["reference"]
+        if reference and reference not in states:
+            problems.append(f'States "{state["name"]} ({reference})" names a state that is not in {parity_states.STATES_FILE}')
     return problems
 
 
-def check_map(path: Path, actions_root: Path) -> tuple[list[str], dict[str, dict[str, Any]]]:
+def check_map(path: Path) -> tuple[list[str], list[str], dict[str, dict[str, Any]], dict[str, Any]]:
     try:
         table = read_map_table(path)
-    except MapError as error:
-        return [str(error)], {}
-    problems: list[str] = []
+        states = parity_states.load_states(states_path_for(path))
+    except (MapError, parity_states.StatesError) as error:
+        return [str(error)], [], {}, {}
+    state_problems, state_warnings = parity_states.validate_states(states)
+    problems = [f"{path}: states: {problem}" for problem in state_problems]
+    warnings = [f"warning: {path}: states: {warning}" for warning in state_warnings]
     rows: dict[str, dict[str, Any]] = {}
     highest = ""
     for cells in table:
@@ -248,21 +269,18 @@ def check_map(path: Path, actions_root: Path) -> tuple[list[str], dict[str, dict
             problems.append(f'{path}: row {row_id}: Id "{row_id}" must be greater than "{highest}"')
         else:
             highest = row_id
-        problems.extend(f"{path}: row {row_id}: {problem}" for problem in missing_action_files(row, actions_root))
+        problems.extend(f"{path}: row {row_id}: {problem}" for problem in missing_references(row, states))
         rows.setdefault(row_id, row)
-    return problems, rows
+    return problems, warnings, rows, states
 
 
-def actions_root_of(arguments: argparse.Namespace) -> Path:
-    override = getattr(arguments, "actions_root", None)
-    return override if override is not None else arguments.map.parent
-
-
-def load_checked_map(path: Path, actions_root: Path) -> dict[str, dict[str, Any]]:
-    problems, rows = check_map(path, actions_root)
+def load_checked_map(path: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    problems, warnings, rows, states = check_map(path)
+    for warning in warnings:
+        print(warning, file=sys.stderr)
     if problems:
         raise CheckFailed(problems)
-    return rows
+    return rows, states
 
 
 def read_ledger_rows(ledger: Path) -> list[dict[str, str]]:
@@ -274,8 +292,13 @@ def read_ledger_rows(ledger: Path) -> list[dict[str, str]]:
     return rows
 
 
-def actions_path(base: Path, state: dict[str, str | None]) -> str | None:
-    return str(base / ACTIONS_DIR / state["actions"]) if state["actions"] else None
+def resolved_sides(states: dict[str, Any], state: dict[str, str | None]) -> dict[str, list[dict[str, Any]]]:
+    if not state["reference"]:
+        return {"prototype": [], "real": []}
+    try:
+        return parity_states.state_sides(states, state["reference"])
+    except parity_states.StatesError as error:
+        raise MapError(f'States "{state["name"]} ({state["reference"]})": {error}') from error
 
 
 def row_viewports(map_row: dict[str, Any], viewports: list[str], only: list[str] | None) -> list[str]:
@@ -283,7 +306,7 @@ def row_viewports(map_row: dict[str, Any], viewports: list[str], only: list[str]
     return [v for v in chosen if v in only] if only is not None else list(chosen)
 
 
-def manifest_row(ledger_row: dict[str, str], map_row: dict[str, Any], arguments: argparse.Namespace, actions_base: Path) -> dict[str, Any]:
+def manifest_row(ledger_row: dict[str, str], map_row: dict[str, Any], arguments: argparse.Namespace, states: dict[str, Any]) -> dict[str, Any]:
     state = next((s for s in map_row["states"] if s["name"] == ledger_row["state"]), None)
     if state is None:
         raise MapError(f'ledger row {ledger_row["id"]}: state "{ledger_row["state"]}" is not in map row {map_row["id"]} States')
@@ -292,29 +315,28 @@ def manifest_row(ledger_row: dict[str, str], map_row: dict[str, Any], arguments:
     viewports = row_viewports(map_row, arguments.viewports, arguments.only_viewports)
     if not viewports:
         print(f'warning: ledger row {ledger_row["id"]}: no viewports left after --only-viewports', file=sys.stderr)
-    actions = actions_path(actions_base, state)
+    sides = resolved_sides(states, state)
     row: dict[str, Any] = {"id": ledger_row["id"], "mapId": map_row["id"], "protoRoute": map_row["protoRoute"], "realRoute": map_row["realRoute"]}
     if "protoRoot" in map_row:
         row["protoRoot"] = map_row["protoRoot"]
     else:
         row["protoComponent"] = map_row["protoComponent"]
-    row.update({"realRoot": map_row["realRoot"], "viewports": viewports, "ignore": map_row["ignore"], "protoActions": actions, "realActions": actions})
+    row.update({"realRoot": map_row["realRoot"], "viewports": viewports, "ignore": map_row["ignore"], "protoSteps": sides["prototype"], "realSteps": sides["real"]})
     return row
 
 
-def share_key(row: dict[str, Any]) -> tuple[str, str, str | None]:
-    return row["protoRoute"], row.get("protoComponent", PROTO_ROOT_PREFIX + row.get("protoRoot", "")), row["protoActions"]
+def share_key(row: dict[str, Any]) -> tuple[str, str, str]:
+    return row["protoRoute"], row.get("protoComponent", PROTO_ROOT_PREFIX + row.get("protoRoot", "")), json.dumps(row["protoSteps"], sort_keys=True)
 
 
 def assign_shared_prototypes(rows: list[dict[str, Any]]) -> None:
-    first_by_key: dict[tuple[str, str, str | None], str] = {}
+    first_by_key: dict[tuple[str, str, str], str] = {}
     for row in rows:
         row["shareProto"] = first_by_key.setdefault(share_key(row), row["id"])
 
 
 def build_manifest(arguments: argparse.Namespace) -> dict[str, Any]:
-    actions_base = actions_root_of(arguments)
-    map_rows = load_checked_map(arguments.map, actions_base)
+    map_rows, states = load_checked_map(arguments.map)
     problems: list[str] = []
     rows: list[dict[str, Any]] = []
     for ledger_row in read_ledger_rows(arguments.ledger):
@@ -323,7 +345,7 @@ def build_manifest(arguments: argparse.Namespace) -> dict[str, Any]:
             problems.append(f'ledger row {ledger_row["id"]}: map id {ledger_row["mapId"]} is not in {arguments.map}')
             continue
         try:
-            rows.append(manifest_row(ledger_row, map_row, arguments, actions_base))
+            rows.append(manifest_row(ledger_row, map_row, arguments, states))
         except MapError as error:
             problems.append(str(error))
     if problems:
@@ -345,7 +367,6 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 
     check = commands.add_parser("check", help="validate the map; one line per problem")
     check.add_argument("map", type=Path)
-    check.add_argument("--actions-root", type=Path, help="directory holding parity-actions/; defaults to the map's directory")
 
     row = commands.add_parser("row", help="print one map row as JSON")
     row.add_argument("map", type=Path)
@@ -358,23 +379,27 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     manifest.add_argument("--real-url", required=True)
     manifest.add_argument("--viewports", required=True, type=viewport_list, help="full set, comma-separated WxH")
     manifest.add_argument("--only-viewports", type=viewport_list, help="restrict every row to these viewports")
-    manifest.add_argument("--actions-root", type=Path, help="directory holding parity-actions/; defaults to the map's directory")
     manifest.add_argument("--out", required=True, type=Path)
+
+    migrate = commands.add_parser("migrate-actions", help="convert parity-actions/*.json into parity-states.json once")
+    migrate.add_argument("map", type=Path)
     return parser.parse_args(argv)
 
 
 def run_check(arguments: argparse.Namespace) -> int:
-    problems, _ = check_map(arguments.map, actions_root_of(arguments))
-    for problem in problems:
-        print(problem)
+    problems, warnings, _, _ = check_map(arguments.map)
+    for line in warnings + problems:
+        print(line)
     return 1 if problems else 0
 
 
 def run_row(arguments: argparse.Namespace) -> int:
-    rows = load_checked_map(arguments.map, actions_root_of(arguments))
+    rows, states = load_checked_map(arguments.map)
     if arguments.id not in rows:
         raise MapError(f"{arguments.map}: has no row {arguments.id}")
-    print(json.dumps(rows[arguments.id], indent=2, ensure_ascii=False))
+    row = rows[arguments.id]
+    row["states"] = [{**state, **resolved_sides(states, state)} for state in row["states"]]
+    print(json.dumps(row, indent=2, ensure_ascii=False))
     return 0
 
 
@@ -385,9 +410,19 @@ def run_manifest(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def run_migrate(arguments: argparse.Namespace) -> int:
+    try:
+        for line in parity_states.migrate_actions(arguments.map):
+            print(line)
+    except parity_states.StatesError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str]) -> int:
     arguments = parse_arguments(argv)
-    runner = {"check": run_check, "row": run_row, "manifest": run_manifest}[arguments.command]
+    runner = {"check": run_check, "row": run_row, "manifest": run_manifest, "migrate-actions": run_migrate}[arguments.command]
     try:
         return runner(arguments)
     except CheckFailed as failure:

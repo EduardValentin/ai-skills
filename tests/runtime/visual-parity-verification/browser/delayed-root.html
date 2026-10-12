@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Delayed root</title></head>
+<body>
+<div id="app"></div>
+<script>
+  setTimeout(() => {
+    const section = document.createElement("section");
+    section.setAttribute("data-parity-root", "Delayed");
+    section.setAttribute("aria-label", "Delayed");
+    section.innerHTML = "<h2>Arrived</h2><p>late</p>";
+    document.getElementById("app").appendChild(section);
+  }, 1200);
+</script>
+</body>
+</html>

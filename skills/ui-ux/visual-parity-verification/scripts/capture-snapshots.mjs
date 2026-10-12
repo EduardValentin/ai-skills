@@ -243,8 +243,11 @@ function parseManifestRow(row, index, file) {
     usageError(`${where} (${row.id}): exactly one of "protoComponent" or "protoRoot" is required`);
   }
   if (!Array.isArray(row.viewports)) usageError(`${where} (${row.id}): "viewports" must be an array of WxH strings`);
-  for (const key of ["protoActions", "realActions"]) {
-    if (row[key] !== undefined && row[key] !== null && !isNonEmptyString(row[key])) usageError(`${where} (${row.id}): "${key}" must be a file path or null`);
+  const steps = {};
+  for (const key of ["protoSteps", "realSteps"]) {
+    const value = row[key] === undefined ? [] : row[key];
+    if (!Array.isArray(value)) usageError(`${where}: "${key}" must be an array of steps`);
+    steps[key] = value.map((step, index) => parseStep(step, `${where} ${key} step ${index}`));
   }
   return {
     id: row.id,
@@ -254,8 +257,8 @@ function parseManifestRow(row, index, file) {
     protoRoot: row.protoRoot || null,
     realRoot: row.realRoot,
     viewports: row.viewports.map((value) => parseViewport(value, `${where} (${row.id}) viewport`)),
-    protoActions: row.protoActions || null,
-    realActions: row.realActions || null,
+    protoSteps: steps.protoSteps,
+    realSteps: steps.realSteps,
     shareProto: row.shareProto,
   };
 }
@@ -275,7 +278,7 @@ function samePrototype(row, source) {
   return row.protoRoute === source.protoRoute
     && row.protoComponent === source.protoComponent
     && row.protoRoot === source.protoRoot
-    && row.protoActions === source.protoActions;
+    && JSON.stringify(row.protoSteps) === JSON.stringify(source.protoSteps);
 }
 
 function loadManifest(file) {
@@ -294,7 +297,7 @@ function loadManifest(file) {
     const source = rowsById.get(row.shareProto);
     if (!source) usageError(`manifest ${file} row ${row.id}: shareProto "${row.shareProto}" names no row`);
     if (!samePrototype(row, source)) {
-      usageError(`manifest ${file} row ${row.id}: shareProto "${source.id}" names a row with a different prototype route, root or actions`);
+      usageError(`manifest ${file} row ${row.id}: shareProto "${source.id}" names a row with a different prototype route, root or steps`);
     }
   }
   return {
@@ -400,6 +403,75 @@ async function runRecipe(page, steps, timeout) {
   await page.waitForLoadState("networkidle", { timeout });
 }
 
+function rootIsAttached(root) {
+  let found = null;
+  try {
+    found = document.querySelector(root);
+  } catch {
+    found = null;
+  }
+  if (found) return true;
+  const escaped = root.replace(/["\\]/g, "\\$&");
+  return document.querySelector(`[data-parity-root="${escaped}"]`) !== null;
+}
+
+function componentHasRoots(name) {
+  if (typeof globalThis.parityFindReactRoots !== "function") return false;
+  const roots = globalThis.parityFindReactRoots([name]).roots;
+  return Boolean(roots && roots[name] && roots[name].length > 0);
+}
+
+function readinessTimeout(message) {
+  return (error) => {
+    if (error && error.name === "TimeoutError") throw new CaptureError(message);
+    throw error;
+  };
+}
+
+async function awaitComponent(page, job, runtime) {
+  const { timeout } = runtime.options;
+  await page.addScriptTag({ path: runtime.rootFinderPath });
+  await page.waitForFunction(componentHasRoots, job.component, { timeout, polling: 100 })
+    .catch(readinessTimeout(`no roots found for component "${job.component}" within ${timeout} ms`));
+}
+
+async function awaitRoot(page, job, runtime) {
+  const { timeout } = runtime.options;
+  await page.waitForFunction(rootIsAttached, job.root, { timeout, polling: 100 })
+    .catch(readinessTimeout(`root "${job.root}" did not appear within ${timeout} ms`));
+}
+
+function fontsAndTwoFrames() {
+  const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
+  return fontsReady.then(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+}
+
+async function awaitPaint(page, timeout) {
+  let timer;
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new CaptureError(`fonts and paint did not settle within ${timeout} ms`)), timeout);
+  });
+  try {
+    await Promise.race([page.evaluate(fontsAndTwoFrames), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function awaitSettled(page, timeout) {
+  await page.waitForLoadState("networkidle", { timeout });
+  await awaitPaint(page, timeout);
+}
+
+async function awaitReady(page, job, runtime) {
+  await page.waitForLoadState("networkidle", { timeout: runtime.options.timeout });
+  if (job.component) await awaitComponent(page, job, runtime);
+  else await awaitRoot(page, job, runtime);
+  await awaitPaint(page, runtime.options.timeout);
+}
+
 async function resolvePrototypeRoot(page, job, rootFinderPath) {
   await page.addScriptTag({ path: rootFinderPath });
   const found = await page.evaluate((names) => globalThis.parityFindReactRoots(names), [job.component]);
@@ -419,10 +491,11 @@ function writeSnapshot(filePath, snapshot) {
   fs.writeFileSync(filePath, JSON.stringify(snapshot));
 }
 
-function summaryOf(snapshot) {
+function summaryOf(snapshot, stepCount) {
   const { tag, role, name, geometry } = snapshot.root;
   const nodes = `${countNodes(snapshot.root)} nodes children=${countDirectChildren(snapshot.root)}`;
-  return `${nodes} root=${tag} ${role} "${name}" ${geometry.width}x${geometry.height}`;
+  const steps = stepCount > 0 ? ` steps=${stepCount}` : "";
+  return `${nodes}${steps} root=${tag} ${role} "${name}" ${geometry.width}x${geometry.height}`;
 }
 
 function summaryLine(job, summary, sharedFrom = null) {
@@ -445,7 +518,9 @@ async function captureOne(job, runtime) {
   try {
     await page.goto(job.url, { waitUntil: "load", timeout: options.timeout });
     if (options.waitFor) await page.waitForSelector(options.waitFor, { timeout: options.timeout });
+    if (job.steps.length > 0) await awaitSettled(page, options.timeout);
     await runRecipe(page, job.steps, options.timeout);
+    await awaitReady(page, job, runtime);
 
     const resolvedRoot = job.component ? await resolvePrototypeRoot(page, job, rootFinderPath) : job.root;
     await page.addScriptTag({ path: snapshotScriptPath });
@@ -453,7 +528,7 @@ async function captureOne(job, runtime) {
     if (snapshot && snapshot.error) throw new CaptureError(`${snapshot.error} for root "${resolvedRoot}"`);
 
     writeSnapshot(job.filePath, snapshot);
-    return summaryOf(snapshot);
+    return summaryOf(snapshot, job.steps.length);
   } finally {
     await page.close();
   }
@@ -506,7 +581,7 @@ function prototypeJob(manifest, row, viewport, runtime) {
     url: new URL(row.protoRoute, manifest.prototypeUrl).href,
     component: row.protoComponent,
     root: row.protoRoot,
-    steps: runtime.recipes.get(row.protoActions),
+    steps: row.protoSteps,
     auth: manifest.prototype,
     filePath: rowFilePath(row.id, "prototype", viewport, runtime.options.out),
   };
@@ -520,7 +595,7 @@ function realJob(manifest, row, viewport, runtime) {
     url: new URL(row.realRoute, manifest.realUrl).href,
     component: null,
     root: row.realRoot,
-    steps: runtime.recipes.get(row.realActions),
+    steps: row.realSteps,
     auth: manifest.real,
     filePath: rowFilePath(row.id, "real", viewport, runtime.options.out),
   };
@@ -578,10 +653,7 @@ async function runManifest(manifest, runtime) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const manifest = options.manifest ? loadManifest(options.manifest) : null;
-  const actionFiles = manifest
-    ? manifest.rows.flatMap((row) => [row.protoActions, row.realActions])
-    : [options.prototype.actions, options.real.actions];
-  const recipes = loadRecipes(actionFiles);
+  const recipes = manifest ? null : loadRecipes([options.prototype.actions, options.real.actions]);
   const playwright = resolvePlaywright();
   fs.mkdirSync(options.out, { recursive: true });
 
