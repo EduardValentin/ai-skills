@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { classify, loadModel, validateModel, DEFAULT_RINGS, HARD_PROBLEM } from "./model.mjs";
 import { selectAdapter } from "./adapters/index.mjs";
-import { headCommit, isClean } from "./git.mjs";
+import { git, headCommit, isClean } from "./git.mjs";
 
 export const GRAPH_DIR = ".architecture/graph";
 export function graphPath(root, commit) { return path.join(root, GRAPH_DIR, `${commit}.json`); }
@@ -93,20 +93,34 @@ export function buildGraph({ model, extracted, commit }) {
   return { version: 1, commit, language: extracted.language ?? "typescript", generatedAt: new Date().toISOString(), rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
 }
 
-export async function loadOrBuildGraph(root, { commit, cruiseJsonPath, force } = {}) {
-  const key = commit ?? ((await isClean(root)) ? await headCommit(root) : "working-tree");
+async function resolveWorkingTreeKey(root) {
+  if (!(await isClean(root))) return "working-tree";
+  try { return await headCommit(root); }
+  catch { return "working-tree"; }
+}
+
+async function resolveCommitKey(root, ref) {
+  return (await git(root, ["rev-parse", "--short=8", ref])).trim();
+}
+
+export async function loadOrBuildGraph(root, { commit, cruiseJsonPath, exportsJsonPath, force } = {}) {
+  const key = commit ? await resolveCommitKey(root, commit) : await resolveWorkingTreeKey(root);
   const file = graphPath(root, key);
-  if (!force && key !== "working-tree") { try { return JSON.parse(await readFile(file, "utf8")); } catch { /* build below */ } }
+  const useCache = !force && !cruiseJsonPath && !exportsJsonPath && key !== "working-tree";
+  if (useCache) { try { return JSON.parse(await readFile(file, "utf8")); } catch { /* build below */ } }
   const model = await loadModel(root);
   const adapter = await selectAdapter(model, root);
-  const extracted = await adapter.extract({ roots: model.components.tooling?.roots ?? ["."], cruiseJsonPath, frameworks: model.rules.frameworks ?? [] });
+  const extracted = await adapter.extract({ roots: model.components.tooling?.roots ?? ["."], cruiseJsonPath, exportsJsonPath, frameworks: model.rules.frameworks ?? [] });
   extracted.language = adapter.language;
   const problems = validateModel(model, new Set(extracted.modules.map((m) => m.path)));
   const hard = problems.filter((p) => HARD_PROBLEM.test(p));
-  if (hard.length) throw new Error(`model is invalid:\n${hard.join("\n")}`);
+  if (hard.length) {
+    for (const problem of problems) console.error(problem);
+    throw new Error(`model is invalid:\n${hard.join("\n")}`);
+  }
   const graph = buildGraph({ model, extracted, commit: key });
   graph.warnings.push(...problems);
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(graph, null, 1)}\n`, "utf8");
+  await writeFile(file, `${JSON.stringify(graph, null, 2)}\n`, "utf8");
   return graph;
 }

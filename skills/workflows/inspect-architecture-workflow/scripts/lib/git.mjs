@@ -13,7 +13,7 @@ export async function headCommit(root) {
 }
 
 export async function isClean(root) {
-  try { return (await git(root, ["status", "--porcelain"])).trim() === ""; }
+  try { return (await git(root, ["status", "--porcelain", "--", ".", ":!.architecture"])).trim() === ""; }
   catch { return false; }
 }
 

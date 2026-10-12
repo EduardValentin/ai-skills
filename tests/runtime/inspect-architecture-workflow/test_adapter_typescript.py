@@ -25,6 +25,31 @@ def test_normalize_cruise_classifies_edges(tmp_path: Path):
     assert ("src/adapters/pg-payroll-repository.ts", "pg", "vendor") in externals
 
 
+def test_normalize_cruise_treats_npm_dev_and_node_modules_entries_as_external():
+    cruise = {
+        "modules": [
+            {
+                "source": "src/a.ts",
+                "dependencies": [
+                    {"module": "x", "resolved": "node_modules/x/index.js", "dependencyTypes": ["npm-dev", "import"], "dynamic": False, "couldNotResolve": False},
+                ],
+            },
+            {"source": "node_modules/x/index.js", "dependencies": []},
+        ],
+    }
+    script = (f"import {{ normalizeCruise }} from '{ADAPTER.as_posix()}';"
+              f"const n = normalizeCruise({json.dumps(cruise)}, []);"
+              "process.stdout.write(JSON.stringify({modules:[...n.modules].sort(), edges:n.edges}));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert "node_modules/x/index.js" not in out["modules"]
+    assert "src/a.ts" in out["modules"]
+    externals = [e for e in out["edges"] if "external" in e]
+    assert externals == [{"from": "src/a.ts", "external": {"name": "x", "tag": "vendor"}}]
+    assert not any(e.get("to") == "node_modules/x/index.js" for e in out["edges"])
+
+
 def test_extract_uses_saved_cruise_and_counts_exports(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     has_ts = run_node("import {createRequire} from 'node:module';try{createRequire(process.cwd()+'/x.js').resolve('typescript');process.stdout.write('yes')}catch{process.stdout.write('no')}", root).stdout == "yes"

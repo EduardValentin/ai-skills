@@ -14,21 +14,32 @@ export function packageName(specifier) {
   return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
 }
 
+const NODE_MODULES_PATH = /(^|\/)node_modules\//;
+
+function isExternalEntry(entry) {
+  const types = entry.dependencyTypes ?? [];
+  const entryPath = entry.resolved ?? entry.source ?? "";
+  return Boolean(entry.coreModule)
+    || Boolean(entry.couldNotResolve)
+    || types.some((type) => type === "core" || type.startsWith("npm"))
+    || NODE_MODULES_PATH.test(entryPath);
+}
+
 export function normalizeCruise(cruise, frameworks = []) {
   const modules = new Set();
   const edges = [];
   const warnings = [];
   for (const m of cruise.modules) {
-    if (m.followable !== false) modules.add(m.source);
+    if (!isExternalEntry(m)) modules.add(m.source);
     for (const d of m.dependencies ?? []) {
       const types = d.dependencyTypes ?? [];
-      if (types.includes("npm") || types.includes("core")) {
+      if (isExternalEntry(d)) {
+        if (d.couldNotResolve) warnings.push(`unresolved import ${d.module} in ${m.source}`);
         const name = packageName(d.module);
         const tag = types.includes("core") ? "runtime" : frameworks.includes(name) ? "framework" : "vendor";
         edges.push({ from: m.source, external: { name, tag } });
         continue;
       }
-      if (d.couldNotResolve) { warnings.push(`unresolved import ${d.module} in ${m.source}`); continue; }
       const kind = types.includes("type-only") ? "type-import" : d.dynamic ? "dynamic" : "import";
       edges.push({ from: m.source, to: d.resolved, kind });
       modules.add(d.resolved);
@@ -100,22 +111,44 @@ function runCruise(root, config, roots) {
   });
 }
 
+async function extractFromExportsJson(root, exportsJsonPath, normalized) {
+  const exportsJson = JSON.parse(await readFile(path.resolve(root, exportsJsonPath), "utf8"));
+  const modules = [];
+  for (const modulePath of [...normalized.modules].sort()) {
+    const entry = exportsJson[modulePath];
+    if (!entry) {
+      normalized.warnings.push(`no exports entry for ${modulePath}`);
+      modules.push({ path: modulePath, exports: { abstract: 0, concrete: 0 }, implements: [] });
+      continue;
+    }
+    modules.push({ path: modulePath, exports: entry.exports, implements: entry.implements ?? [] });
+  }
+  return modules;
+}
+
+async function extractFromTypescript(root, normalized) {
+  const ts = loadTypescript(root);
+  const modules = [];
+  for (const modulePath of [...normalized.modules].sort()) {
+    let text;
+    try { text = await readFile(path.join(root, modulePath), "utf8"); }
+    catch { normalized.warnings.push(`cannot read ${modulePath}`); modules.push({ path: modulePath, exports: { abstract: 0, concrete: 0 }, implements: [] }); continue; }
+    modules.push({ path: modulePath, ...scanExports(ts, modulePath, text) });
+  }
+  return modules;
+}
+
 export function createTypescriptAdapter({ root, tooling }) {
   return {
     language: "typescript",
-    async extract({ roots, cruiseJsonPath, frameworks = [] }) {
+    async extract({ roots, cruiseJsonPath, exportsJsonPath, frameworks = [] }) {
       const cruise = cruiseJsonPath
         ? JSON.parse(await readFile(path.resolve(root, cruiseJsonPath), "utf8"))
         : await runCruise(root, await resolveConfig(root, tooling), roots);
       const normalized = normalizeCruise(cruise, frameworks);
-      const ts = loadTypescript(root);
-      const modules = [];
-      for (const modulePath of [...normalized.modules].sort()) {
-        let text;
-        try { text = await readFile(path.join(root, modulePath), "utf8"); }
-        catch { normalized.warnings.push(`cannot read ${modulePath}`); modules.push({ path: modulePath, exports: { abstract: 0, concrete: 0 }, implements: [] }); continue; }
-        modules.push({ path: modulePath, ...scanExports(ts, modulePath, text) });
-      }
+      const modules = exportsJsonPath
+        ? await extractFromExportsJson(root, exportsJsonPath, normalized)
+        : await extractFromTypescript(root, normalized);
       return { modules, edges: normalized.edges, warnings: normalized.warnings };
     },
   };

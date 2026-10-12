@@ -8,8 +8,8 @@ export async function run(args, ctx) {
     return 1;
   }
   const graph = await loadOrBuildGraph(ctx.root, {
-    commit: flags.commit === true ? undefined : flags.commit,
     cruiseJsonPath: flags["cruise-json"],
+    exportsJsonPath: flags["exports-json"],
     force: Boolean(flags.force),
   });
   for (const warning of graph.warnings) console.error(warning);

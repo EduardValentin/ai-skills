@@ -1,31 +1,17 @@
 import json
 from pathlib import Path
 
-import pytest
-
-from support import SKILL_DIR, copy_fixture, run_arch, run_node
+from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, run_arch, run_node
 
 GRAPH = SKILL_DIR / "scripts" / "lib" / "graph.mjs"
 
-_HAS_TYPESCRIPT = run_node(
-    "import {createRequire} from 'node:module';"
-    "try{createRequire(process.cwd()+'/x.js').resolve('typescript');process.stdout.write('yes')}catch{process.stdout.write('no')}",
-    Path.cwd(),
-).stdout == "yes"
-
-needs_typescript = pytest.mark.skipif(
-    not _HAS_TYPESCRIPT,
-    reason="typescript is not resolvable in this environment; the graph command needs it to scan exports",
-)
-
 
 def build(root: Path) -> dict:
-    result = run_arch(["graph", "--cruise-json", "cruise.json", "--json"], root)
+    result = run_arch(["graph", *FIXTURE_FLAGS, "--json"], root)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
 
 
-@needs_typescript
 def test_graph_units_and_edges_are_classified(tmp_path: Path):
     g = build(copy_fixture("payroll", tmp_path / "p"))
     units = {u["path"]: u for u in g["units"]}
@@ -38,7 +24,6 @@ def test_graph_units_and_edges_are_classified(tmp_path: Path):
     assert e2["direction"] == "inward" and e2["crossesComponent"] is False
 
 
-@needs_typescript
 def test_metrics_match_hand_computation(tmp_path: Path):
     g = build(copy_fixture("payroll", tmp_path / "p"))
     c = {x["id"]: x for x in g["components"]}
@@ -51,7 +36,6 @@ def test_metrics_match_hand_computation(tmp_path: Path):
     assert {(e["from"], e["to"], e["modules"]) for e in g["componentEdges"]} == {("C2", "C1", 2), ("C3", "C1", 1), ("C3", "C2", 1)}
 
 
-@needs_typescript
 def test_component_with_no_edges_has_null_metrics_not_nan(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     comp = root / "docs/architecture/model/components.json"
@@ -64,7 +48,6 @@ def test_component_with_no_edges_has_null_metrics_not_nan(tmp_path: Path):
     assert "NaN" not in json.dumps(g)
 
 
-@needs_typescript
 def test_cycles_are_detected_at_module_and_component_level(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     cruise = json.loads((root / "cruise.json").read_text())
@@ -76,7 +59,6 @@ def test_cycles_are_detected_at_module_and_component_level(tmp_path: Path):
     assert any(set(cycle) >= {"C1", "C3"} for cycle in g["cycles"]["components"])
 
 
-@needs_typescript
 def test_uncovered_lists_modules_without_component_or_rule(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     (root / "src/scripts").mkdir()
@@ -88,10 +70,9 @@ def test_uncovered_lists_modules_without_component_or_rule(tmp_path: Path):
     assert g["uncovered"] == ["src/scripts/seed.ts"]
 
 
-@needs_typescript
 def test_graph_is_written_to_cache_and_summary_printed(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["graph", "--cruise-json", "cruise.json"], root)
+    result = run_arch(["graph", *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("graph: 8 units,")
     assert (root / ".architecture/graph/working-tree.json").exists()
