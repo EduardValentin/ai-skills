@@ -10,7 +10,7 @@ Follow the `inspect-architecture-workflow` skill, preloaded or otherwise availab
 
 1. Resolve this skill's directory once per run and run its command, `scripts/arch.mjs`, from the inspected project's root for every subcommand; packets name the skill's files by absolute path, never pasted text.
 2. Run `arch graph` (or `arch diff <base>` in change review) and `arch uncovered`; dispatch a classifier only for uncovered modules; run the queries each applicable workflow reads.
-3. Dispatch the evaluation slice or slices with that query output; merge their rows, apply the severity rules, and write the committed architecture record and the uncommitted refactoring ledger.
+3. Dispatch the evaluation slice or slices with that query output; settle any open question they return through a fact slice and re-run only the affected rows; merge their rows, apply the severity rules, and write the committed architecture record and the uncommitted refactoring ledger.
 
 Subagents return rows and never write artifacts; you merge and write. Repository architecture documents and agent instructions override defaults for artifact paths and named boundaries; they do not override the dependency rules.
 

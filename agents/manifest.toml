@@ -3,7 +3,7 @@ version = 1
 [[agent]]
 id = "architecture-code-auditor"
 source = "architecture-code-auditor.md"
-description = "Read-only classifier that reads modules the architecture model leaves uncovered and returns proposed model rules, overrides, or components with behavioral reasons. Dispatched by the architecture-coordinator."
+description = "Read-only code reader that classifies modules the architecture model leaves uncovered, proposing model rules, overrides, or components with behavioral reasons, and answers evaluator fact questions with evidence lines. Dispatched by the architecture-coordinator."
 groups = ["inspect-architecture-workflow"]
 
 [agent.codex]

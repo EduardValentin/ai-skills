@@ -7,9 +7,10 @@ writes. Rule numbers refer to the rule file named after the workflow (`reference
 for W1, and so on). A target matching no `SHOULD_CHANGE` condition is written as `OK` with the
 rule it satisfies.
 
-Columns of every assessment row: `id`, `workflow`, `target` (inventory IDs), `rule`,
-`verdict` (`OK`, `SHOULD_CHANGE`, `RESOLVED`, `ACCEPTED`), `severity`, `evidence` (paths), `change`,
-`protects` (the upcoming change), `run`.
+Columns of every assessment row: `id`, `workflow`, `target` (a unit path, an edge `from -> to` as
+paths, a port as `path:symbol`, or a component ID), `rule`, `verdict` (`OK`, `SHOULD_CHANGE`,
+`RESOLVED`, `ACCEPTED`), `severity`, `evidence` (paths), `change`, `protects` (the upcoming
+change), `run`.
 
 Before applying a decision table, check the intended exceptions and cohesion groups in
 `decisions.md`. A candidate finding whose edge, layer skip, or shared shape a recorded exception

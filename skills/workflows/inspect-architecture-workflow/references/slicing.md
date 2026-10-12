@@ -38,10 +38,10 @@ Agent: `architecture-evaluator`, or a general-purpose agent with the same packet
 rules R1 to R3 are not a slice; the coordinator applies them during severity escalation and
 ordering.
 
-Evaluators judge rows. The merged inventory in the packet is the evidence; an evaluator opens
-only the skill files the packet names, never a project file. A fact the inventory lacks comes
-back as an open question, which the coordinator settles from the mapping slice's return or a
-targeted re-map of that path, never by letting the evaluator read code.
+Evaluators judge rows. The query output in the packet is the evidence; an evaluator opens only
+the skill files the packet names, never a project file. A fact the graph lacks comes back as an
+open question, which the coordinator settles through the fact slice below, never by letting the
+evaluator read code.
 
 Packet adds: the absolute paths of `references/workflows/preamble.md` and, per workflow to run,
 its workflow file (inputs, procedure, decision table with base severities) and its rule file,
@@ -51,8 +51,8 @@ W1, and so on); `references/metrics.md` for W6 only; the output of the queries t
 tables; the baseline's `decisions.md`; in change or plan review, the rows marked `proposed` or
 `changed`, with the instruction to evaluate only those targets and the edges touching them.
 
-Fan-out follows the inventory size. An audit dispatches one evaluator per workflow, W1 to W8, in
-parallel, each over the full inventory. Change and plan review dispatch **one** evaluator that
+Fan-out follows the graph size. An audit dispatches one evaluator per workflow, W1 to W8, in
+parallel, each over the full graph. Change and plan review dispatch **one** evaluator that
 runs every applicable workflow in order over the small changed set; eight sessions over a
 handful of rows is this skill's single largest avoidable cost. A workflow is applicable when a
 changed or proposed row falls in a section it reads (a diff touching no tests skips W7; one
@@ -67,6 +67,16 @@ Returns: assessment rows in the ledger row format: `verdict`, base `severity` fr
 and the rule, `change` as a description (the coordinator assigns `CH-` names), `protects` when
 the packet's upcoming changes make it determinable, and `checked` counts per rule so `OK`
 coverage is visible.
+
+## Fact slice
+
+Agent: `architecture-code-auditor`. Dispatched when an evaluator returns an open question the
+graph cannot answer: where a concrete detail is constructed, the types in a port's signature,
+the shape of data crossing a boundary, or a power only tests use. One slice per affected
+component. Packet adds: the paths in question and the exact question for each, copied from the
+evaluator's return. Returns: one row per fact (path, fact, evidence line as `path:line`) and
+nothing else. The coordinator appends those rows to the evaluation packet and re-runs only the
+workflow rows the questions came from.
 
 ## Merge rules
 
@@ -89,7 +99,8 @@ coverage is visible.
 Run `arch graph` (or `arch diff <base>` in review modes) and `arch uncovered` first; dispatch
 mapping slices only for uncovered modules, in parallel, and apply their proposals before
 evaluation; run `arch query volatility` and the other queries each applicable workflow reads;
-then dispatch the evaluation slice or slices in parallel. Merge returns in memory and write
+then dispatch the evaluation slice or slices in parallel, and a fact slice for any open question
+they return. Merge returns in memory and write
 them to `slices/` once; do not re-read what was just written. Give slices enough time for real
 inspection. A slice that returns prose instead of rows is re-dispatched once with the row format
 restated; a second failure is recorded as an open question with the slice's paths.

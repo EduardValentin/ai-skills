@@ -84,13 +84,13 @@ full audit (date, commit, scope) and the last update (date, commit, mode); a
 write replaces that line in place, never adds one. The record carries no
 history of its own, since git and the ledger's run log do; nothing is ever
 appended to a record file outside its tables, and no model entry names a
-ticket, a PR, a plan step, a run, or a finding. A moved or renamed unit keeps
-its ID and gets its new path; a unit or edge that no longer exists loses its
-row; its ID is retired, never reused. The ledger is derived state: start one
-when none exists; only the committed record is a required baseline. Ledger
-IDs and run numbers are transitory and never appear in a committed file; the
-record names a finding only by its target (a unit path, an edge as paths, a
-port as path:symbol, or a component ID) and the rule number.
+ticket, a PR, a plan step, a run, or a finding. A moved or renamed unit is the
+same unit under its new path; a vanished unit or edge simply leaves the graph.
+The ledger is derived state: start one when none exists; only the committed
+record is a required baseline. Ledger IDs and run numbers are transitory and
+never appear in a committed file; the record names a finding only by its target
+(a unit path, an edge as paths, a port as path:symbol, or a component ID) and
+the rule number.
 
 ## Shared references
 
@@ -115,14 +115,16 @@ port as path:symbol, or a component ID) and the rule number.
 
 A run's cost is agent sessions, not skill text.
 
-- Callers run the structural precheck before dispatching a review: a plan or
-  diff whose files `arch query touched` places in one component, adding no
-  package, port, cross-component import, or external dependency, is not
-  reviewed.
+- Callers run the structural precheck before dispatching a review, by hand,
+  with no command: they match the plan's or diff's file list against the globs
+  in `docs/architecture/model/components.json`. A plan or diff whose files all
+  fall in one component, adding no package, port, cross-component import, or
+  external dependency, is not reviewed. `arch query touched` belongs to change
+  review.
 - Mapping is a command, not an agent: `arch graph`, `arch diff`, and
   `arch uncovered`. A mapping agent is dispatched only for uncovered modules.
 - Packets name skill files by absolute path and carry query output, never
-  pasted inventory.
+  pasted graph rows.
 - Audit fans out one evaluator per workflow; change and plan review dispatch
   one evaluator for every applicable workflow.
 - Evaluators judge query output and open no project file.

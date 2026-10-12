@@ -6,25 +6,32 @@ and compared with the derived graph in W8.
 
 ## Unit kinds
 
+The allowed kinds are the `kinds` list in `model/rules.json`; when it is absent, the default
+list below applies. `arch model` refuses an override or rule whose kind is not listed.
+
 | Kind | Recognize by |
 |---|---|
-| entity | Rules a clerk would apply without software, bound to the data they need; no imports beyond other entities and value types |
-| use-case | Application-specific sequencing, gating, input validation; calls entities and ports; has a request and response model |
-| port | Interface, protocol, abstract type, or function type declared on the policy side and implemented elsewhere |
-| boundary-data | Request, response, view model, record, payload: public fields, no behavior |
-| adapter | Controller, presenter, gateway implementation, mapper, sender, listener: converts between policy shapes and an external agency |
-| view | UI code bound to a framework that copies a view model to the screen |
-| framework-glue | Configuration, routing tables, DI registration, migrations |
-| composition-root | Constructs concrete details and wires them; imports every level |
-| test | Test suites, fixtures, fakes, testing API |
-| utility | Behavior-free helpers with no domain meaning (string, date, math) |
-| mixed | A unit that matches two or more kinds; always a candidate for W2 and W3 |
+| entity | Rules a clerk would apply without software, bound to the data they need, importing nothing beyond other entities and value types. |
+| use-case | Application-specific sequencing, gating, and input validation that calls entities and ports through a request and response model. |
+| port | An interface, protocol, abstract type, or function type declared on the policy side and implemented elsewhere. |
+| boundary-data | A request, response, view model, record, or payload with public fields and no behavior. |
+| controller | Converts an incoming request from a delivery mechanism into a use-case request and calls the use case. |
+| presenter | Turns use-case output into a view model of display-ready strings and flags. |
+| gateway | Implements a port against a database, a vendor service, or another external agency. |
+| adapter | Any other converter between policy shapes and an external agency: a mapper, sender, or listener. |
+| composition-root | Constructs concrete details and wires them together, importing every level. |
+| entry-point | A place control enters: a route handler, CLI command, job trigger, or message consumer. |
+| test | A test suite, fixture, fake, or testing API. |
+| config | Configuration, routing tables, dependency-injection registration, and migrations. |
+| ui | Framework-bound screen code that copies a view model to the screen. |
+| mixed | A unit that matches two or more kinds; always a candidate for W2 and W3. |
 
 ## Ring and level
 
-Rings: `entities`, `use-cases`, `adapters`, `frameworks`, with `tests` and `composition` as the
-two outermost pseudo-rings. Classify by what the unit does, not by folder name; a `services/`
-folder full of SQL is `adapters`.
+Rings: `entities`, `use-cases`, `adapters`, `frameworks`, innermost first, unless `rules.json`
+lists others. A test is `kind: test` in the `adapters` ring; a composition root is
+`kind: composition-root` in the `frameworks` ring. Classify by what the unit does, not by folder
+name; a `services/` folder full of SQL is `adapters`.
 
 The ring is the unit's level for most purposes: entities highest, frameworks lowest. When W1 must
 compare two units in one ring, or decide whether a `mixed` unit is policy or detail, use the finer

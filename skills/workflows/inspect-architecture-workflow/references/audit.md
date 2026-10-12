@@ -17,7 +17,9 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 
 1. When `docs/architecture/model` is missing, create it from the templates and write
    `components.json` from the repository's package and folder layout (one component per
-   workspace package and per top-level app folder) and `rules.json` from the project's
+   workspace package and per top-level app folder), with `tooling.roots` listing one entry per
+   source root in that layout and `tooling.tsConfig` naming the TypeScript config that declares
+   the project's path aliases when it uses any; write `rules.json` from the project's
    conventions document when one exists. When the project runs a code formatter over JSON (for
    example a `prettier` config or a `format:check` script), add `docs/architecture/model` to its
    ignore file so the canonical model files are not reformatted.

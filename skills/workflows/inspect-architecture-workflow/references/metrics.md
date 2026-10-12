@@ -35,7 +35,8 @@ so fan-out is 1.
 Every value is rounded to two decimals. A component is in the zone of pain when D is defined, I
 is 0.2 or less, A is 0.2 or less, and fan-in is 3 or more; in the zone of uselessness when A is
 0.8 or more and I is 0.8 or more. `arch query metrics` prints `none` in the Zone column when
-neither applies, and `undefined` for a number with no defined value.
+neither applies, and `undefined` in the I, A, or D column when that value is undefined (`null`
+with `--json`).
 
 ## Instability
 
@@ -83,8 +84,8 @@ close to the line. A component with a large D fell to one of two sides:
 1. **Across the graph.** Compute D for every component, then the mean and standard deviation.
    Examine every component more than one standard deviation from the mean; the rest are within
    the graph's own norm.
-2. **Over time.** Keep each component's D from the previous run in the inventory. A component
-   whose D crossed a threshold since then (default 0.1, tune per project) deserves a look at the
+2. **Over time.** `arch diff <base>` compares each component's D with the graph built at the
+   base commit and flags a move of 0.10 or more. A flagged component deserves a look at the
    dependencies or abstractions that changed.
 3. **In words.** For each examined component, state which side of the line it fell to, whether it
    is volatile, and what the harm is: "concrete, depended on by nine components, changed in six
