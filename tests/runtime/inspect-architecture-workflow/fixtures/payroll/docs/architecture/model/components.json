@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "tooling": {"language":"typescript","roots":["src"]},
+  "tooling": { "language": "typescript", "roots": [ "src" ] },
   "components": [
-    {"id": "C1", "name": "domain", "paths": ["src/domain/**"], "enforcement": "none", "releaseUnit": "", "entryPoints": []},
-    {"id": "C2", "name": "adapters", "paths": ["src/adapters/**"], "enforcement": "none", "releaseUnit": "", "entryPoints": []},
-    {"id": "C3", "name": "web", "paths": ["src/web/**"], "enforcement": "none", "releaseUnit": "", "entryPoints": ["src/web/main.ts"]}
+    { "id": "C1", "name": "domain", "paths": [ "src/domain/**" ], "enforcement": "none", "releaseUnit": "", "entryPoints": [] },
+    { "id": "C2", "name": "adapters", "paths": [ "src/adapters/**" ], "enforcement": "none", "releaseUnit": "", "entryPoints": [] },
+    { "id": "C3", "name": "web", "paths": [ "src/web/**" ], "enforcement": "none", "releaseUnit": "", "entryPoints": [ "src/web/main.ts" ] }
   ]
 }

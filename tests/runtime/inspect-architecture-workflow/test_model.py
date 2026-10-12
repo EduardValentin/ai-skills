@@ -63,6 +63,6 @@ def test_write_model_file_is_canonical(tmp_path: Path):
     assert lines[0] == "{"
     assert lines[1] == '  "version": 1,'
     assert lines[2] == '  "overrides": ['
-    assert lines[3].startswith('    {"path": "a.ts"')
-    assert lines[4].startswith('    {"path": "b.ts"')
+    assert lines[3].startswith('    { "path": "a.ts"')
+    assert lines[4].startswith('    { "path": "b.ts"')
     assert text.endswith("]\n}\n")

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "rings": ["entities","use-cases","adapters","frameworks"],
+  "rings": [ "entities", "use-cases", "adapters", "frameworks" ],
   "frameworks": [],
   "rules": []
 }

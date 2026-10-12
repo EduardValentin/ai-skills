@@ -1,8 +1,8 @@
 {
   "version": 1,
   "ports": [
-    {"id": "B1", "path": "src/domain/payroll-repository.ts", "symbol": "PayrollRepository", "owner": "C1", "humbleSide": "adapters"},
-    {"id": "B2", "path": "src/domain/clock.ts", "symbol": "Clock", "owner": "C1"}
+    { "id": "B1", "path": "src/domain/payroll-repository.ts", "symbol": "PayrollRepository", "owner": "C1", "humbleSide": "adapters" },
+    { "id": "B2", "path": "src/domain/clock.ts", "symbol": "Clock", "owner": "C1" }
   ],
   "shapes": []
 }

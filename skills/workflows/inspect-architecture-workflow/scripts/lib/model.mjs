@@ -81,7 +81,7 @@ function prefixOverlap(a, b) {
 
 const SORT_KEYS = { components: ["components", "id"], rules: null, overrides: ["overrides", "path"], boundaries: null };
 
-function entryLine(entry) { return JSON.stringify(entry).replace(/":/g, '": ').replace(/,"/g, ', "'); }
+function inline(value) { return JSON.stringify(value, null, 1).replace(/\n\s*/g, " "); }
 
 export function canonicalJson(name, data) {
   const lines = ["{"];
@@ -93,10 +93,10 @@ export function canonicalJson(name, data) {
       const sortKey = SORT_KEYS[name] && SORT_KEYS[name][0] === key ? SORT_KEYS[name][1] : null;
       const entries = sortKey ? [...value].sort((a, b) => String(a[sortKey]).localeCompare(String(b[sortKey]), undefined, { numeric: true })) : value;
       lines.push(`  "${key}": [`);
-      entries.forEach((entry, i) => lines.push(`    ${entryLine(entry)}${i < entries.length - 1 ? "," : ""}`));
+      entries.forEach((entry, i) => lines.push(`    ${inline(entry)}${i < entries.length - 1 ? "," : ""}`));
       lines.push(`  ]${comma}`);
     } else {
-      lines.push(`  "${key}": ${JSON.stringify(value)}${comma}`);
+      lines.push(`  "${key}": ${inline(value)}${comma}`);
     }
   });
   lines.push("}");
