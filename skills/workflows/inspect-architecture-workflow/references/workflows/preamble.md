@@ -1,6 +1,7 @@
 # Evaluation workflows
 
-Run W1 to W8 in order. Each workflow names the inventory sections it reads, its procedure, a
+Run W1 to W8 in order. Each workflow names the queries it reads, run by the coordinator with
+`arch query`, its procedure, a
 decision table whose conditions are evaluated in order (the first match decides), and what it
 writes. Rule numbers refer to the rule file named after the workflow (`references/rules/w1.md`
 for W1, and so on). A target matching no `SHOULD_CHANGE` condition is written as `OK` with the

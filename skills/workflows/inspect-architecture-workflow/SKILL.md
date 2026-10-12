@@ -101,8 +101,9 @@ port as path:symbol, or a component ID) and the rule number.
 - `references/workflows/preamble.md`: shared row columns and severity scale;
   `references/workflows/w1.md` through `references/workflows/w8.md` hold each
   workflow's inputs, procedure, and decision table.
-- `references/mapping.md`: how mapping slices fill inventory rows.
+- `references/mapping.md`: how classification rules and overrides cover every module.
 - `references/slicing.md`: subagent packets, returns, and merge rules.
+- `references/command.md`: the arch command's subcommands, flags, and queries.
 - `references/metrics.md`: instability, abstractness, distance.
 - `references/verdicts.md`: row verdicts, severity escalation, return contract.
 - Templates: `assets/docs/README.md`, `assets/docs/decisions.md`,

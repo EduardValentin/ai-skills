@@ -1,32 +1,8 @@
 # Mapping the architecture
 
-How a mapping slice fills inventory rows, which the coordinator merges into the committed record
-(`docs/architecture/`) or holds as candidate record updates. Work from the code, not
-from documentation; documentation is recorded as the intended structure and compared with the
-mapped graph in W8. A slice covers one component or top-level folder, returns rows, and never
-writes files.
-
-## Identifiers
-
-- Component: `C<n>` with its path, for example `C3 packages/billing`.
-- Unit: `U<n>` with its path and symbol, for example `U17 src/billing/PayrollService.ts:PayrollService`.
-- Edge: `E<n>`, `from -> to`, using unit IDs. Shared data shapes use `E<n> C2 ~ C5 (table orders)`.
-- Boundary: `B<n>`.
-- External pseudo-unit: `external:<name>`, tagged framework, vendor, runtime, or standard library.
-
-IDs are never reused: a unit or edge that vanishes loses its row and its ID is retired; a moved
-or renamed unit keeps its ID under its new path. Rows carry no provenance notes.
-
-## Components
-
-A component is an enforced unit behind one published surface: a package with an export map or
-index, a module system module, a separately built library, or a folder whose imports a
-build-failing rule restricts. With none of these, record each top-level source folder as a
-component with enforcement `none`; W8 reports the gap.
-
-Per component record: path; published surface (exported symbols reachable from outside);
-enforcement mode (`visibility`, `exports`, `build-unit`, `import-rule`, `none`); ring (by the
-majority of its units, mixed rings noted); actors; whether it is a release unit with a version.
+How a person or agent classifies modules so the `arch` command can derive the rest of the graph.
+Work from the code, not from documentation; documentation is recorded as the intended structure
+and compared with the derived graph in W8.
 
 ## Unit kinds
 
@@ -72,24 +48,6 @@ requests would change it. Derive them from the ticket or brief when present, fro
 (which features touched the unit and for whom), and from domain vocabulary in the code (finance,
 compliance, delivery terms). Two actors on one unit is the evidence W2 needs; one actor is `OK`.
 
-## Edges
-
-Record every source dependency:
-
-| Edge kind | Recognize by |
-|---|---|
-| import | Module import, include, require, using |
-| implements | Class implements interface, protocol conformance, structural satisfaction declared |
-| extends | Inheritance |
-| constructs | `new Concrete(...)`, factory call to a concrete detail |
-| signature | A type from another unit in a parameter, return, field, or generic argument |
-| shared-shape | Two components read or write the same table, document, topic, or wire format |
-
-Per edge record: from, to, kind, `crosses-component` yes or no, `crosses-ring` yes or no,
-`direction` `inward` (toward policy), `outward` (toward detail), or `lateral` (same ring). An
-outward edge from a policy unit is the primary W1 finding. Per component, also list the forbidden
-edges the design names (in documentation or agent instructions) and whether each is enforced.
-
 ## Boundaries
 
 Per port record: owner unit and its ring; implementers and their rings; consumers; the crossing
@@ -103,31 +61,26 @@ List every place control enters (routes, handlers, CLI commands, job triggers, m
 and every place concrete details are constructed. A concrete detail constructed outside a
 composition root is a W1 finding; more than one composition root per deployable is noted for W8.
 
-## Metrics
+## What the command derives
 
-Compute only when there are more than five components. Per component: fan-in (units outside
-depending on units inside), fan-out (units inside depending on units outside), I = fan-out /
-(fan-in + fan-out), A = abstract types / total types, counting types that exist only to be
-implemented, D = abs(A + I - 1). Record volatility from change history (changes in the last N
-releases). Keep the previous run's D for W6 to compare.
+Units are modules (files). Edges, externals, component edges, fan-in, fan-out, instability,
+abstractness, distance, cycles, entry-point construction, port implementers and consumers, and
+volatility come from `arch graph`, `arch diff`, and `arch query`, never from an agent. A unit's
+component comes from `model/components.json` globs; its ring, kind, and actors come from an
+override, else the first matching rule in `model/rules.json`.
 
-## Change history
+## Classifying uncovered modules
 
-The single history slice produces it, not mapping slices (see `slicing.md`). It walks the
-version-control log once for the whole scope, default the last ten commits touching it or the
-commits the ticket names, and returns one row per touched file per commit: the reason in one
-phrase, the actor it served, and whether the reason is policy or detail. The coordinator attaches
-rows to units by path and writes them to the ledger's `change-history.md`. The rows feed W2 (two
-reasons on one unit), W1 (a high-level unit changing for low-level reasons), and W6 (volatility).
-A scope with no history of its own yields an empty table, and those workflows run without
-volatility evidence.
+`arch uncovered` lists modules no component glob or no rule classifies. For each, decide from
+the module's behavior (the sections above) whether a rule covers a folder or naming pattern
+(`model add-rule`), a single file is an exception (`model add-override`), or a new component
+exists (`model add-component`). Prefer a rule over an override; an override needs a reason in
+one sentence that names behavior, never a ticket. Rerun `arch uncovered` until it prints nothing.
 
 ## Incremental update
 
-Audit re-run: re-derive components, units, and edges for the scope; delete the rows of those no
-longer present; add new ones with new IDs; refresh metrics and change history; leave every other
-row untouched. Change review: map only units the diff touches, their direct dependents
-and dependencies, and every edge the diff adds, removes, or redirects; hold the resulting row
-additions, removals, and alterations as candidate record updates, written to the record only where
-no open finding disputes them, and set each written file's header last-update part to this run. Plan review: the same, from proposed
-rows (see `plan-review.md`).
+Change review: `arch diff <base>` reports units added, removed, moved, or reclassified and
+edges added or removed; `arch uncovered` reports what the diff left unclassified. The model
+changes only through the edit subcommands, only for rows no open finding disputes, and never
+with a note about the ticket, plan step, or commit that caused the change. A plan review
+changes nothing; it builds its overlay per `plan-review.md`.

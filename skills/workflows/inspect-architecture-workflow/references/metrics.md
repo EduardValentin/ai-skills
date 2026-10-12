@@ -7,23 +7,35 @@ a finding on its own: every flagged value is explained in words before it become
 
 ## What is counted
 
-The unit of counting is the module or file, since most codebases are file-per-module. A dependency
-is any source reference: import, implements, extends, construct, or a type used in a signature.
-Only dependencies that cross the component boundary count.
+The unit of counting is the module (file). A dependency is any source reference the adapter
+resolves: import, implements, extends, construct, or a type used in a signature. Externals (npm
+packages, runtime modules) and modules with no component are excluded from both fan-in and
+fan-out.
 
 For a component C:
 
 | Quantity | Definition |
 |---|---|
-| Fan-in | Number of modules outside C that depend on at least one module inside C. Two modules in one neighbor that both depend on C count as 2. |
-| Fan-out | Number of modules inside C that depend on at least one module outside C, excluding the standard library and runtime. |
-| Abstract types | Interfaces, protocols, abstract classes, and any type that exists only to be implemented (a port type, a structural type used as a contract). |
-| Total types | All classes, interfaces, and named types declared in C. |
-| Volatility | Number of commits or releases that changed C in the observation window (default the last ten commits touching the scope, or the releases since the previous run). |
+| Fan-in | Number of distinct modules outside C, each itself in some component, that import at least one module inside C. |
+| Fan-out | Number of distinct modules inside C that import at least one module outside C that is itself in some component (efferent coupling). |
+| Abstract exports | Exported interfaces, type aliases, and abstract classes across C's modules. |
+| Total exports | All exported symbols, abstract and concrete, across C's modules. |
+| Volatility | Commits that touched C since `--since <ref>` (`arch query volatility`). |
 
-Worked count: component `Cc` holds modules `t` and `u`. Modules `q`, `r`, and `s` in other
-components import `t` or `u`, so fan-in is 3. Module `u` imports `v` in another component, so
-fan-out is 1.
+Worked count: component `Cc` holds modules `t` and `u`. Modules `q`, `r`, and `s`, each in some
+other component, import `t` or `u`, so fan-in is 3. Module `u` imports `v` in another component,
+so fan-out is 1.
+
+| Metric | Formula | Undefined when |
+|---|---|---|
+| I (instability) | fan-out / (fan-in + fan-out) | fan-in and fan-out are both 0 |
+| A (abstractness) | abstract exports / total exports | C has no exports |
+| D (distance) | abs(A + I - 1) | I or A is undefined |
+
+Every value is rounded to two decimals. A component is in the zone of pain when D is defined, I
+is 0.2 or less, A is 0.2 or less, and fan-in is 3 or more; in the zone of uselessness when A is
+0.8 or more and I is 0.8 or more. `arch query metrics` prints `none` in the Zone column when
+neither applies, and `undefined` for a number with no defined value.
 
 ## Instability
 
@@ -85,6 +97,6 @@ close to the line. A component with a large D fell to one of two sides:
 
 ## Recording
 
-Inventory section `Metrics`: one row per component with fan-in, fan-out, I, A, D, previous D, and
-volatility. Recompute on every audit; in change-review mode recompute only for components the diff
-touches and mark the others carried over.
+`arch query metrics` prints the table; `arch diff <base>` reports the delta per component and
+flags a move of 0.10 or more in D; `arch query volatility --since` counts commits per component.
+Nothing is written by hand.
