@@ -18,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "skills" / "ui-ux" / "visual-parity-verification" / "scripts"
 DIFF_SCRIPT = SCRIPTS_DIR / "diff_snapshots.py"
 LEDGER_SCRIPT = SCRIPTS_DIR / "write_ledger.py"
+MAP_SCRIPT = SCRIPTS_DIR / "parity_map.py"
 
 BASE_STYLE: dict[str, str] = {
     "fontFamily": "Inter, sans-serif",
@@ -233,6 +234,10 @@ def run_diff(*arguments: str) -> subprocess.CompletedProcess[str]:
 
 def run_ledger(*arguments: str) -> subprocess.CompletedProcess[str]:
     return _run(LEDGER_SCRIPT, *arguments)
+
+
+def run_map(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return _run(MAP_SCRIPT, *arguments)
 
 
 def read_json(path: Path) -> Any:

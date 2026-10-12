@@ -13,6 +13,9 @@ SIDES = ("prototype", "real")
 STEP_KINDS = ("click", "hover", "press", "fill", "wait", "waitFor", "use")
 LENGTH_WARNING = 12
 NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+ACTIONS_DIR = "parity-actions"
+MIN_SHARED_PREFIX = 3
+REFERENCE_PATTERN = re.compile(r"\(([A-Za-z0-9_-]+)\.json\)")
 
 
 class StatesError(Exception):
@@ -114,4 +117,101 @@ def validate_states(states: dict[str, Any]) -> tuple[list[str], list[str]]:
                 continue
             if len(resolved) > LENGTH_WARNING:
                 warnings.append(f'state "{name}": {side} resolves to {len(resolved)} steps; split it or shorten it')
+    return problems, warnings
+
+
+def strip_readiness(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    start = 0
+    while start < len(steps) and set(steps[start]) <= {"waitFor", "wait"} and start < 2:
+        start += 1
+    end = len(steps)
+    while end > start and "wait" in steps[end - 1]:
+        end -= 1
+    return steps[start:end]
+
+
+def recipe_name(file: Path) -> tuple[str | None, str]:
+    stem = file.stem
+    for side, prefix in (("prototype", "proto-"), ("real", "real-")):
+        if stem.startswith(prefix):
+            return side, stem[len(prefix):]
+    return None, stem
+
+
+def read_recipes(folder: Path) -> dict[str, Any]:
+    states: dict[str, Any] = {}
+    sources: dict[str, list[str]] = {}
+    stems: dict[str, str] = {}
+    for file in sorted(folder.glob("*.json")):
+        side, name = recipe_name(file)
+        steps = strip_readiness(json.loads(file.read_text(encoding="utf-8")))
+        sources.setdefault(name, []).append(file.name)
+        stems[file.stem] = name
+        if side is None:
+            states[name] = steps
+        else:
+            entry = states.setdefault(name, {"prototype": [], "real": []})
+            if isinstance(entry, list):
+                entry = {"prototype": entry, "real": entry}
+                states[name] = entry
+            entry[side] = steps
+    return {"states": states, "sources": sources, "stems": stems}
+
+
+def shared_prefix(a: list[Any], b: list[Any]) -> int:
+    count = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        count += 1
+    return count
+
+
+def extract_fragments(states: dict[str, Any]) -> list[str]:
+    report: list[str] = []
+    lists = {name: steps for name, steps in states.items() if isinstance(steps, list)}
+    names = sorted(lists, key=lambda n: (-len(lists[n]), n))
+    for index, longer in enumerate(names):
+        for shorter in names[index + 1:]:
+            if not isinstance(states[longer], list) or not isinstance(states[shorter], list):
+                continue
+            length = shared_prefix(states[longer], states[shorter])
+            if length < MIN_SHARED_PREFIX or any("use" in step for step in states[longer][:length]):
+                continue
+            fragment = f"{longer}-{length}"
+            states[fragment] = list(states[longer][:length])
+            for name in (longer, shorter):
+                states[name] = [{"use": fragment}] + states[name][length:]
+            report.append(f"fragment {fragment}: {length} shared steps from {longer} and {shorter}")
+    return report
+
+
+def rewrite_map_references(map_path: Path, stems: dict[str, str]) -> int:
+    text = map_path.read_text(encoding="utf-8")
+
+    def replace(match: re.Match[str]) -> str:
+        stem = match.group(1)
+        return f"({stems.get(stem, stem)})"
+
+    rewritten, count = REFERENCE_PATTERN.subn(replace, text)
+    map_path.write_text(rewritten, encoding="utf-8")
+    return count
+
+
+def migrate_actions(map_path: Path) -> list[str]:
+    folder = map_path.parent / ACTIONS_DIR
+    target = map_path.parent / STATES_FILE
+    if not folder.is_dir():
+        raise StatesError(f"{folder}: no {ACTIONS_DIR} folder to migrate")
+    if target.exists():
+        raise StatesError(f"{target} already exists; remove it to migrate again")
+    read = read_recipes(folder)
+    states = read["states"]
+    report = [f"state {name}: {' + '.join(files)}" for name, files in sorted(read["sources"].items())]
+    report.extend(extract_fragments(states))
+    target.write_text(json.dumps(states, indent=2) + "\n", encoding="utf-8")
+    report.append(f"wrote {target} with {len(states)} entries")
+    report.append(f"rewrote {rewrite_map_references(map_path, read['stems'])} references in {map_path}")
+    report.append(f"{folder} left in place; delete it after check passes")
+    return report
     return problems, warnings

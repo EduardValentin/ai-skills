@@ -380,6 +380,9 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     manifest.add_argument("--viewports", required=True, type=viewport_list, help="full set, comma-separated WxH")
     manifest.add_argument("--only-viewports", type=viewport_list, help="restrict every row to these viewports")
     manifest.add_argument("--out", required=True, type=Path)
+
+    migrate = commands.add_parser("migrate-actions", help="convert parity-actions/*.json into parity-states.json once")
+    migrate.add_argument("map", type=Path)
     return parser.parse_args(argv)
 
 
@@ -407,9 +410,19 @@ def run_manifest(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def run_migrate(arguments: argparse.Namespace) -> int:
+    try:
+        for line in parity_states.migrate_actions(arguments.map):
+            print(line)
+    except parity_states.StatesError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str]) -> int:
     arguments = parse_arguments(argv)
-    runner = {"check": run_check, "row": run_row, "manifest": run_manifest}[arguments.command]
+    runner = {"check": run_check, "row": run_row, "manifest": run_manifest, "migrate-actions": run_migrate}[arguments.command]
     try:
         return runner(arguments)
     except CheckFailed as failure:
