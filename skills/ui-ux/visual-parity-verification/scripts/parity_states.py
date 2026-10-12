@@ -49,21 +49,26 @@ def step_problem(step: Any) -> str | None:
         return f'unknown kind "{kind}"'
     if kind == "fill" and not (isinstance(value, list) and len(value) == 2 and all(isinstance(v, str) for v in value)):
         return '"fill" expects [selector, text]'
-    if kind == "wait" and not (isinstance(value, int) and value >= 0):
+    if kind == "wait" and not (isinstance(value, int) and not isinstance(value, bool) and value >= 0):
         return '"wait" expects milliseconds'
     if kind != "fill" and kind != "wait" and not (isinstance(value, str) and value):
         return f'"{kind}" expects a non-empty string'
     return None
 
 
+MAX_CHAIN_DEPTH = 64
+
+
 def resolve_state(states: dict[str, Any], name: str, side: str, chain: tuple[str, ...] = ()) -> list[dict[str, Any]]:
     if name in chain:
         raise StatesError("use cycle: " + " -> ".join(chain + (name,)))
+    if len(chain) >= MAX_CHAIN_DEPTH:
+        raise StatesError(f'use chain deeper than {MAX_CHAIN_DEPTH} at "{name}"')
     if name not in states:
         raise StatesError(f'state "{name}" is not defined')
     resolved: list[dict[str, Any]] = []
     for step in side_steps(states[name], side):
-        if isinstance(step, dict) and "use" in step:
+        if isinstance(step, dict) and isinstance(step.get("use"), str):
             resolved.extend(resolve_state(states, step["use"], side, chain + (name,)))
         else:
             resolved.append(step)
@@ -98,12 +103,13 @@ def validate_states(states: dict[str, Any]) -> tuple[list[str], list[str]]:
                     problems.append(f'{label}: use "{step["use"]}" is not defined')
                 elif "wait" in step:
                     warnings.append(f"{label}: step {index} is a fixed wait; prefer waitFor or the capture tool's readiness wait")
-    for name in states:
-        for side in SIDES:
+    for name, definition in states.items():
+        declared_sides = ("prototype",) if isinstance(definition, list) else SIDES
+        for side in declared_sides:
             try:
                 resolved = resolve_state(states, name, side)
             except StatesError as error:
-                if "cycle" in str(error):
+                if "cycle" in str(error) or "chain deeper than" in str(error):
                     problems.append(f'state "{name}": {error}')
                 continue
             if len(resolved) > LENGTH_WARNING:

@@ -66,6 +66,17 @@ class ResolveTests(unittest.TestCase):
         states = {"s": {"real": steps(("press", "Tab"))}}
         self.assertEqual(parity_states.state_sides(states, "s"), {"prototype": [], "real": steps(("press", "Tab"))})
 
+    def test_use_with_non_string_value_is_left_as_a_raw_step(self) -> None:
+        states = {"a": steps(("use", ["x"]))}
+        self.assertEqual(parity_states.resolve_state(states, "a", "real"), steps(("use", ["x"])))
+
+    def test_resolve_state_caps_chain_depth(self) -> None:
+        states = {f"s{i}": steps(("use", f"s{i + 1}")) for i in range(70)}
+        states["s70"] = steps(("click", "#end"))
+        with self.assertRaises(parity_states.StatesError) as caught:
+            parity_states.resolve_state(states, "s0", "real")
+        self.assertIn("deeper than 64", str(caught.exception))
+
 
 class ValidateTests(unittest.TestCase):
     def problems(self, states):
@@ -97,7 +108,26 @@ class ValidateTests(unittest.TestCase):
         long_state = steps(*[("click", f"#{i}") for i in range(13)])
         _, warnings = self.problems({"slow": steps(("wait", 500)), "long": long_state})
         self.assertTrue(any('state "slow": step 0 is a fixed wait' in w for w in warnings), warnings)
-        self.assertTrue(any('state "long": real resolves to 13 steps' in w for w in warnings), warnings)
+        self.assertTrue(any('state "long": prototype resolves to 13 steps' in w for w in warnings), warnings)
+
+    def test_malformed_use_value_reports_problem_without_crashing(self) -> None:
+        problems, _ = self.problems({"a": [{"use": ["x"]}]})
+        self.assertTrue(any('"use" expects a non-empty string' in p for p in problems), problems)
+
+    def test_wait_rejects_bool(self) -> None:
+        problems, _ = self.problems({"a": [{"wait": True}]})
+        self.assertTrue(any('"wait" expects milliseconds' in p for p in problems), problems)
+
+    def test_deep_use_chain_reports_without_crashing(self) -> None:
+        states = {f"s{i}": steps(("use", f"s{i + 1}")) for i in range(70)}
+        states["s70"] = steps(("click", "#end"))
+        problems, _ = self.problems(states)
+        self.assertTrue(any("deeper than 64" in p for p in problems), problems)
+
+    def test_cycle_reports_once_per_declared_side(self) -> None:
+        problems, _ = self.problems({"a": steps(("use", "b")), "b": steps(("use", "a"))})
+        cycle_problems = [p for p in problems if "cycle" in p]
+        self.assertEqual(len(cycle_problems), 2)
 
 
 if __name__ == "__main__":
