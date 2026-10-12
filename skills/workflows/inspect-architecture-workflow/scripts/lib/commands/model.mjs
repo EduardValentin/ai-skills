@@ -1,3 +1,143 @@
+import { parseFlags } from "../args.mjs";
+import { loadOrBuildGraph } from "../graph.mjs";
+import { HARD_PROBLEM, loadModel, validateModel, writeModelFile } from "../model.mjs";
+
+const LIST_KEYS = new Set(["actors", "paths", "entry"]);
+
+function splitArgs(args) {
+  const kv = {};
+  const plain = [];
+  for (const arg of args) {
+    const eq = arg.indexOf("=");
+    if (eq < 0) { plain.push(arg); continue; }
+    const key = arg.slice(0, eq);
+    const raw = arg.slice(eq + 1);
+    kv[key] = LIST_KEYS.has(key) ? raw.split(",").filter((s) => s.length > 0) : raw;
+  }
+  return { kv, plain };
+}
+
+function upsert(array, matches, entry) {
+  const index = array.findIndex(matches);
+  if (index >= 0) array[index] = entry; else array.push(entry);
+}
+
+function refuseOrWrite(model, name, data) {
+  const problems = validateModel(model);
+  const hard = problems.filter((p) => HARD_PROBLEM.test(p));
+  if (hard.length) {
+    for (const problem of problems) console.error(problem);
+    return 1;
+  }
+  return writeModelFile(model, name, data).then(() => 0);
+}
+
+async function validate(flags, ctx) {
+  try {
+    const graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"], force: true });
+    if (graph.warnings.length) {
+      for (const warning of graph.warnings) console.error(warning);
+      return 1;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.startsWith("model is invalid")) console.error(message);
+    return 1;
+  }
+  console.log("model: ok");
+  return 0;
+}
+
+function addOverride(model, plain, kv) {
+  const [targetPath] = plain;
+  const entry = { path: targetPath, ring: kv.ring, kind: kv.kind, actors: kv.actors ?? [] };
+  if (kv.reason !== undefined) entry.reason = kv.reason;
+  upsert(model.overrides.overrides, (o) => o.path === targetPath, entry);
+  return refuseOrWrite(model, "overrides", model.overrides);
+}
+
+function removeOverride(model, plain) {
+  const [targetPath] = plain;
+  const index = model.overrides.overrides.findIndex((o) => o.path === targetPath);
+  if (index < 0) { console.error(`no override for ${targetPath}`); return 1; }
+  model.overrides.overrides.splice(index, 1);
+  return refuseOrWrite(model, "overrides", model.overrides);
+}
+
+function nextPortId(ports) {
+  const max = ports.reduce((n, port) => {
+    const match = /^B(\d+)$/.exec(port.id);
+    return match ? Math.max(n, Number(match[1])) : n;
+  }, 0);
+  return `B${max + 1}`;
+}
+
+function addPort(model, plain, kv) {
+  const [targetPath, symbol] = plain;
+  const ports = model.boundaries.ports;
+  const matches = (port) => port.path === targetPath && port.symbol === symbol;
+  const existing = ports.find(matches);
+  const entry = { id: existing?.id ?? nextPortId(ports), path: targetPath, symbol, owner: kv.owner };
+  if (kv.humble !== undefined) entry.humbleSide = kv.humble;
+  upsert(ports, matches, entry);
+  return refuseOrWrite(model, "boundaries", model.boundaries);
+}
+
+function removePort(model, plain) {
+  const [targetPath, symbol] = plain;
+  const ports = model.boundaries.ports;
+  const index = ports.findIndex((port) => port.path === targetPath && port.symbol === symbol);
+  if (index < 0) { console.error(`no port for ${targetPath}:${symbol}`); return 1; }
+  ports.splice(index, 1);
+  return refuseOrWrite(model, "boundaries", model.boundaries);
+}
+
+function addComponent(model, plain, kv) {
+  const [id, name] = plain;
+  const entry = {
+    id,
+    name,
+    paths: kv.paths ?? [],
+    enforcement: kv.enforcement ?? "none",
+    releaseUnit: kv.release ?? "",
+    entryPoints: kv.entry ?? [],
+  };
+  model.components.components.push(entry);
+  return refuseOrWrite(model, "components", model.components);
+}
+
+function addRule(model, kv) {
+  const entry = { match: kv.match, ring: kv.ring, kind: kv.kind, actors: kv.actors ?? [] };
+  const rules = model.rules.rules;
+  let insertAt = rules.length;
+  if (kv.before !== undefined) {
+    const index = rules.findIndex((rule) => rule.match === kv.before);
+    if (index >= 0) insertAt = index;
+  }
+  rules.splice(insertAt, 0, entry);
+  return refuseOrWrite(model, "rules", model.rules);
+}
+
+const EDITS = {
+  "add-override": addOverride,
+  "remove-override": removeOverride,
+  "add-port": addPort,
+  "remove-port": removePort,
+  "add-component": addComponent,
+  "add-rule": (model, plain, kv) => addRule(model, kv),
+};
+
 export async function run(args, ctx) {
-  throw new Error("not implemented");
+  const { positional, flags } = parseFlags(args);
+  const [sub, ...rest] = positional;
+  if (sub === "validate") return validate(flags, ctx);
+
+  const edit = EDITS[sub];
+  if (!edit) {
+    console.error(`unknown model subcommand: ${sub}; known: validate, ${Object.keys(EDITS).join(", ")}`);
+    return 1;
+  }
+  const model = await loadModel(ctx.root);
+  const { kv, plain } = splitArgs(rest);
+  return edit(model, plain, kv);
 }
