@@ -30,7 +30,7 @@ export async function run(args, ctx) {
   const { positional, flags } = parseFlags(args);
   const [base] = positional;
   if (!base) {
-    console.error("usage: arch diff <base> [--cruise-json <file>] [--json]");
+    console.error("usage: arch diff <base> [--cruise-json <file>] [--exports-json <file>] [--json]");
     return 1;
   }
   const cruiseJsonPath = flags["cruise-json"];

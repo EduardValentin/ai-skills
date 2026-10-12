@@ -54,26 +54,32 @@ async function findNodeModules(absDir, relDir, depth, results) {
   }
 }
 
-async function linkNodeModules(root, worktreeDir) {
+async function linkNodeModules(root, worktreeSubdir) {
   const found = [];
   await findNodeModules(root, "", 0, found);
   for (const rel of found) {
-    const dest = path.join(worktreeDir, rel);
+    const dest = path.join(worktreeSubdir, rel);
     await mkdir(path.dirname(dest), { recursive: true });
-    await symlink(path.join(root, rel), dest, "dir");
+    try { await symlink(path.join(root, rel), dest, "dir"); }
+    catch (error) { if (error.code !== "EEXIST") throw error; }
   }
+}
+
+async function showPrefix(root) {
+  return (await git(root, ["rev-parse", "--show-prefix"])).trim();
 }
 
 export async function withBaseWorktree(root, ref, fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "arch-base-"));
   try {
     await git(root, ["worktree", "add", "--detach", dir, ref]);
-    await linkNodeModules(root, dir);
-    return await fn(dir);
+    const subdir = path.join(dir, await showPrefix(root));
+    await linkNodeModules(root, subdir);
+    return await fn(subdir);
   } finally {
     try { await git(root, ["worktree", "remove", "--force", dir]); }
     catch { await rm(dir, { recursive: true, force: true }).catch(() => {}); }
-    await git(root, ["worktree", "prune"]);
+    try { await git(root, ["worktree", "prune"]); } catch { /* best-effort cleanup, never masks the original error */ }
   }
 }
 

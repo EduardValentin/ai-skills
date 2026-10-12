@@ -51,7 +51,61 @@ def test_graph_at_commit_uses_a_worktree_and_caches(tmp_path: Path):
     init_repo(root)
     base = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
     (root / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
+    # Dirty cruise.json too, dropping a module: if the build ever read this
+    # working-tree file instead of the worktree's committed one, the cache
+    # would end up with 7 units instead of 8.
+    cruise = json.loads((root / "cruise.json").read_text())
+    cruise["modules"] = [m for m in cruise["modules"] if m["source"] != "src/web/main.ts"]
+    (root / "cruise.json").write_text(json.dumps(cruise))
     result = run_arch(["graph", "--commit", base, *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
-    assert (root / f".architecture/graph/{base}.json").exists()
+    cached = root / f".architecture/graph/{base}.json"
+    assert cached.exists()
+    assert len(json.loads(cached.read_text())["units"]) == 8
     assert git(["worktree", "list"], root).stdout.count("\n") == 1
+
+
+def test_graph_at_commit_works_from_a_repository_subdirectory(tmp_path: Path):
+    repo = tmp_path / "repo"
+    pkg = repo / "pkg"
+    copy_fixture("payroll", pkg)
+    init_repo(repo)
+    base = git(["rev-parse", "--short=8", "HEAD"], repo).stdout.strip()
+    (pkg / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
+    result = run_arch(["graph", "--commit", base, *FIXTURE_FLAGS], pkg)
+    assert result.returncode == 0, result.stderr
+    assert (pkg / f".architecture/graph/{base}.json").exists()
+    assert git(["worktree", "list"], repo).stdout.count("\n") == 1
+
+
+def test_diff_reports_removed_when_rename_target_is_not_covered(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    init_repo(root)
+    base = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
+    (root / "scripts").mkdir()
+    (root / "src/domain/employee.ts").rename(root / "scripts/employee.ts")
+    cruise = json.loads((root / "cruise.json").read_text())
+    cruise["modules"] = [m for m in cruise["modules"] if m["source"] != "src/domain/employee.ts"]
+    for m in cruise["modules"]:
+        m["dependencies"] = [d for d in m["dependencies"] if d.get("resolved") != "src/domain/employee.ts"]
+    (root / "cruise.json").write_text(json.dumps(cruise))
+    exports = json.loads((root / "exports.json").read_text())
+    exports.pop("src/domain/employee.ts")
+    (root / "exports.json").write_text(json.dumps(exports))
+    git(["add", "-A"], root)
+    out = json.loads(run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root).stdout)
+    assert out["units"]["moved"] == []
+    assert out["units"]["removed"] == ["src/domain/employee.ts"]
+
+
+def test_diff_reports_base_only_component_with_null_head_metrics(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    init_repo(root)
+    base = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
+    components_path = root / "docs/architecture/model/components.json"
+    components = json.loads(components_path.read_text())
+    components["components"] = [c for c in components["components"] if c["id"] != "C3"]
+    components_path.write_text(json.dumps(components))
+    out = json.loads(run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root).stdout)
+    c3 = next(c for c in out["components"] if c["id"] == "C3")
+    assert c3["fanOut"] == [3, None]
