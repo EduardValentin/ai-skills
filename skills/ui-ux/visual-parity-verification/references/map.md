@@ -32,7 +32,7 @@ Header, exactly:
 | `Prototype component` | React component name, or `root:<selector>` to address the prototype side by selector. |
 | `Real app root` | CSS selector or `data-parity-root` value, passed through to the capture command. |
 | `Routes (real → prototype)` | `<real route> → <prototype route>`; `->` is also accepted. Exactly one arrow, with a space on both sides; both sides non-empty. |
-| `States` | Comma-separated `name` or `name (file.json)`. Names are unique per row. Each file must exist under `parity-actions/` in the map's directory, or under `<DIR>/parity-actions/` when `--actions-root DIR` is given. At least one state. |
+| `States` | Comma-separated `name` or `name (state)`. Names are unique per row. Each `state` is a name defined in `parity-states.json` in the map's directory. At least one state. |
 | `Viewports` | Empty for the full set, or comma-separated `WxH` integers. |
 | `Ignore` | Empty, or `;`-separated `proto:<entry>` and `real:<entry>` where an entry is `hook:<data-parity value>` or `path:<snapshot path prefix>` (the diff command's ignore grammar). |
 | `Confidence` | `obvious` (name match) or `confirmed` (checked by hand, or the real root carries `data-parity-root` for that component). |
@@ -53,10 +53,10 @@ Example row:
 ## CLI
 
 ```
-parity_map.py check <map> [--actions-root DIR]
+parity_map.py check <map>
 parity_map.py row <map> <id>
 parity_map.py manifest <map> --ledger <ledger> --prototype-url U --real-url U
-  --viewports WxH,... [--only-viewports WxH,...] [--actions-root DIR] --out <file>
+  --viewports WxH,... [--only-viewports WxH,...] --out <file>
 ```
 
 `check` exits 0 silently or exits 1 with one line per problem on stdout,
@@ -106,12 +106,12 @@ row named in `Map id`:
 - Row viewports are the map's subset or the full `--viewports`, intersected
   with `--only-viewports` when given. A row left with no viewports is emitted
   with an empty list and a stderr warning.
-- `protoActions` and `realActions` are the same path,
-  `<actions root, default the map's directory>/parity-actions/<file>`, or
-  null when the state names no file.
+- `protoSteps` and `realSteps` are the state's resolved steps for each side,
+  with every `use` expanded, or empty lists when the state names no state.
 - `shareProto` is the id of the first manifest row with the same
-  `(protoRoute, prototype component or root, protoActions)`; the first row
-  names itself. The capture command captures the prototype once per group.
+  `(protoRoute, prototype component or root, protoSteps)`, so rows whose
+  resolved prototype steps are equal share one capture; the first row names
+  itself. The capture command captures the prototype once per group.
 
 ```json
 {
@@ -128,8 +128,8 @@ row named in `Map id`:
       "realRoot": "[data-parity-root=\"OrderSummary\"]",
       "viewports": ["375x667", "1440x900"],
       "ignore": {"prototype": ["hook:beta"], "real": ["path:section > div:nth-of-type(2)"]},
-      "protoActions": null,
-      "realActions": null,
+      "protoSteps": [],
+      "realSteps": [],
       "shareProto": "L1"
     }
   ]
