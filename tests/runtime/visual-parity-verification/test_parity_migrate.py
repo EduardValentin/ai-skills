@@ -77,6 +77,77 @@ class MigrateTests(unittest.TestCase):
         checked = support.run_map("check", str(self.map_path))
         self.assertEqual(checked.returncode, 0, checked.stdout)
 
+    def test_invalid_json_recipe_is_an_error(self) -> None:
+        self.actions.mkdir(parents=True, exist_ok=True)
+        (self.actions / "broken.json").write_text("{not json", encoding="utf-8")
+        self.map_path.write_text(map_text("broken (broken.json)"), encoding="utf-8")
+        with self.assertRaises(parity_states.StatesError) as caught:
+            parity_states.migrate_actions(self.map_path)
+        self.assertIn("cannot read recipe", str(caught.exception))
+        self.assertFalse((self.root / "parity-states.json").exists())
+        completed = support.run_map("migrate-actions", str(self.map_path))
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("cannot read recipe", completed.stderr)
+
+    def test_non_list_recipe_is_an_error(self) -> None:
+        self.recipe("shape.json", {"click": "#a"})
+        self.map_path.write_text(map_text("shape (shape.json)"), encoding="utf-8")
+        with self.assertRaises(parity_states.StatesError) as caught:
+            parity_states.migrate_actions(self.map_path)
+        self.assertIn("recipe must be a JSON array of steps", str(caught.exception))
+        self.assertFalse((self.root / "parity-states.json").exists())
+        completed = support.run_map("migrate-actions", str(self.map_path))
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("recipe must be a JSON array of steps", completed.stderr)
+
+    def test_bare_recipe_is_base_with_prototype_override(self) -> None:
+        self.recipe("proto-zzz.json", [{"click": "#special"}])
+        self.recipe("zzz.json", [{"click": "#base"}])
+        self.map_path.write_text(map_text("zzz (zzz.json)"), encoding="utf-8")
+        report = parity_states.migrate_actions(self.map_path)
+        states = json.loads((self.root / "parity-states.json").read_text())
+        self.assertEqual(states["zzz"], {"prototype": [{"click": "#special"}], "real": [{"click": "#base"}]})
+        self.assertTrue(any("state zzz" in line and "proto-zzz.json" in line and "zzz.json" in line for line in report), report)
+
+    def test_bare_recipe_is_base_with_real_override(self) -> None:
+        self.recipe("aaa.json", [{"click": "#base"}])
+        self.recipe("real-aaa.json", [{"click": "#special"}])
+        self.map_path.write_text(map_text("aaa (aaa.json)"), encoding="utf-8")
+        report = parity_states.migrate_actions(self.map_path)
+        states = json.loads((self.root / "parity-states.json").read_text())
+        self.assertEqual(states["aaa"], {"prototype": [{"click": "#base"}], "real": [{"click": "#special"}]})
+        self.assertTrue(any("state aaa" in line and "aaa.json" in line and "real-aaa.json" in line for line in report), report)
+
+    def test_fragment_name_collision_avoids_clobbering_existing_state(self) -> None:
+        self.recipe("a.json", [{"click": "#1"}, {"click": "#2"}, {"click": "#3"}, {"click": "#a"}])
+        self.recipe("b.json", [{"click": "#1"}, {"click": "#2"}, {"click": "#3"}, {"click": "#b"}])
+        self.recipe("a-3.json", [{"click": "#keep"}])
+        self.map_path.write_text(map_text("a (a.json), b (b.json), existing (a-3.json)"), encoding="utf-8")
+        report = parity_states.migrate_actions(self.map_path)
+        states = json.loads((self.root / "parity-states.json").read_text())
+        self.assertEqual(states["a-3"], [{"click": "#keep"}])
+        self.assertEqual(states["a-3-2"], [{"click": "#1"}, {"click": "#2"}, {"click": "#3"}])
+        self.assertEqual(states["a"], [{"use": "a-3-2"}, {"click": "#a"}])
+        self.assertEqual(states["b"], [{"use": "a-3-2"}, {"click": "#b"}])
+        self.assertTrue(any("a-3-2" in line and "a-3" in line for line in report), report)
+
+    def test_three_recipes_consolidate_into_one_fragment(self) -> None:
+        shared = [{"click": "#1"}, {"click": "#2"}, {"click": "#3"}]
+        self.recipe("a.json", shared + [{"click": "#a"}])
+        self.recipe("b.json", shared + [{"click": "#b"}])
+        self.recipe("c.json", shared + [{"click": "#c"}])
+        self.map_path.write_text(map_text("a (a.json), b (b.json), c (c.json)"), encoding="utf-8")
+        report = parity_states.migrate_actions(self.map_path)
+        states = json.loads((self.root / "parity-states.json").read_text())
+        fragment_lines = [line for line in report if line.startswith("fragment ")]
+        self.assertEqual(len(fragment_lines), 1, report)
+        for name, suffix in (("a", "#a"), ("b", "#b"), ("c", "#c")):
+            self.assertEqual(len(states[name]), 2)
+            self.assertIn("use", states[name][0])
+            self.assertEqual(states[name][1], {"click": suffix})
+            resolved = parity_states.state_sides(states, name)
+            self.assertEqual(resolved["prototype"], shared + [{"click": suffix}])
+
 
 if __name__ == "__main__":
     unittest.main()

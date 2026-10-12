@@ -138,23 +138,38 @@ def recipe_name(file: Path) -> tuple[str | None, str]:
     return None, stem
 
 
+def read_recipe_file(file: Path) -> list[Any]:
+    try:
+        data = json.loads(file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise StatesError(f"{file}: cannot read recipe: {error}") from error
+    if not isinstance(data, list):
+        raise StatesError(f"{file}: recipe must be a JSON array of steps")
+    return data
+
+
 def read_recipes(folder: Path) -> dict[str, Any]:
-    states: dict[str, Any] = {}
+    bases: dict[str, list[Any]] = {}
+    sides: dict[str, dict[str, list[Any]]] = {}
     sources: dict[str, list[str]] = {}
     stems: dict[str, str] = {}
     for file in sorted(folder.glob("*.json")):
         side, name = recipe_name(file)
-        steps = strip_readiness(json.loads(file.read_text(encoding="utf-8")))
+        steps = strip_readiness(read_recipe_file(file))
         sources.setdefault(name, []).append(file.name)
         stems[file.stem] = name
         if side is None:
-            states[name] = steps
+            bases[name] = steps
         else:
-            entry = states.setdefault(name, {"prototype": [], "real": []})
-            if isinstance(entry, list):
-                entry = {"prototype": entry, "real": entry}
-                states[name] = entry
-            entry[side] = steps
+            sides.setdefault(name, {})[side] = steps
+    states: dict[str, Any] = {}
+    for name in sorted(set(bases) | set(sides)):
+        side_map = sides.get(name)
+        if side_map is None:
+            states[name] = bases[name]
+        else:
+            base = bases.get(name, [])
+            states[name] = {side: side_map.get(side, base) for side in SIDES}
     return {"states": states, "sources": sources, "stems": stems}
 
 
@@ -165,6 +180,15 @@ def shared_prefix(a: list[Any], b: list[Any]) -> int:
             break
         count += 1
     return count
+
+
+def unique_fragment_name(states: dict[str, Any], base_name: str) -> str:
+    if base_name not in states:
+        return base_name
+    index = 2
+    while f"{base_name}-{index}" in states:
+        index += 1
+    return f"{base_name}-{index}"
 
 
 def extract_fragments(states: dict[str, Any]) -> list[str]:
@@ -178,11 +202,18 @@ def extract_fragments(states: dict[str, Any]) -> list[str]:
             length = shared_prefix(states[longer], states[shorter])
             if length < MIN_SHARED_PREFIX or any("use" in step for step in states[longer][:length]):
                 continue
-            fragment = f"{longer}-{length}"
-            states[fragment] = list(states[longer][:length])
-            for name in (longer, shorter):
+            base_name = f"{longer}-{length}"
+            fragment = unique_fragment_name(states, base_name)
+            fragment_steps = list(states[longer][:length])
+            states[fragment] = fragment_steps
+            applied = [
+                name for name in names
+                if name != fragment and isinstance(states[name], list) and states[name][:length] == fragment_steps
+            ]
+            for name in applied:
                 states[name] = [{"use": fragment}] + states[name][length:]
-            report.append(f"fragment {fragment}: {length} shared steps from {longer} and {shorter}")
+            label = f"fragment {fragment}" if fragment == base_name else f'fragment {fragment} ("{base_name}" already used)'
+            report.append(f"{label}: {length} shared steps from {', '.join(applied)}")
     return report
 
 
@@ -214,4 +245,3 @@ def migrate_actions(map_path: Path) -> list[str]:
     report.append(f"rewrote {rewrite_map_references(map_path, read['stems'])} references in {map_path}")
     report.append(f"{folder} left in place; delete it after check passes")
     return report
-    return problems, warnings
