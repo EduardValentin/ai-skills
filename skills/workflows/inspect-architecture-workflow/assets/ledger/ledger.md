@@ -12,8 +12,9 @@
 
 ## Findings
 
-`Target` is one inventory row ID: a unit `U<n>`, an edge `E<n>`, a boundary `B<n>`, or a component
-`C<n>`. One finding per target and rule; IDs are stable across runs.
+`Target` is a unit path, an edge written `from -> to` as paths, a port written `path:symbol`, or a
+component ID `C<n>`. One finding per target and rule; a target keeps its finding ID while the
+same path and rule match.
 
 | ID | Workflow | Target | Rule | Verdict | Severity | Evidence | Change | Protects | Run |
 |---|---|---|---|---|---|---|---|---|---|

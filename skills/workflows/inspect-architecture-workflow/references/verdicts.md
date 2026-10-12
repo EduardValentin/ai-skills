@@ -4,14 +4,13 @@ Shared by every mode. The coordinator applies it after merging the evaluation sl
 
 ## Targets and rows
 
-A target is the one inventory row a finding is about, named by ID: a unit (`U<n>`), an edge
-(`E<n>`), a boundary (`B<n>`), or a component (`C<n>`). Each finding row points at exactly one
-target and one rule; that pair identifies the finding across runs. Two rows with the same target
-and rule are duplicates, and a finding keeps its ID while both still match.
+A target is a unit path, an edge written `from -> to` as paths, a port written `path:symbol`, or
+a component ID (`C<n>`). Each finding points at exactly one target and one rule; that pair
+identifies the finding across runs. Two findings with the same target and rule are duplicates,
+and a finding keeps its ID while both still match.
 
 Ledger finding IDs and run numbers are transitory: they never appear in the committed record or
-any other committed file. The record names a finding by the target's path and symbol and the
-rule number.
+any other committed file. The record names a finding by the target and the rule number.
 
 ## Row verdicts
 
