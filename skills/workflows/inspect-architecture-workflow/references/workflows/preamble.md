@@ -19,7 +19,7 @@ exception, never as `SHOULD_CHANGE`. Exceptions are read at component and ring l
 with no `decisions.md` has none.
 
 Every `SHOULD_CHANGE` row carries a base severity. The coordinator may raise it by the escalation
-rules in the skill body (policy target, path of a named upcoming change, fan-in of three or more,
+rules in `references/verdicts.md` (policy target, path of a named upcoming change, fan-in of three or more,
 cycle); nothing lowers it. One scale: `blocker` when the violated rule is a dependency-direction
 or cycle rule whose breach couples policy to detail; `major` when the breach couples two units
 that change for different reasons or leaves a relied-upon boundary unenforced; `minor` when the

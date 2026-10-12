@@ -12,8 +12,8 @@ a hard model problem, or a tooling error (a language with no adapter, tooling th
 `arch uncovered` returns 1 whenever it lists at least one module; that is its normal job, not a
 failure.
 
-`--json` and `--force` are switches: they never take a value, so an argument after them stays
-positional. Every other flag takes the next argument as its value.
+`--json`, `--force`, and `--with-neighbors` are switches: they never take a value, so an
+argument after them stays positional. Every other flag takes the next argument as its value.
 
 ## Tooling
 
@@ -48,6 +48,11 @@ Export counts come from a statement-level scan, so three shapes are counted coar
 exported function counts as one export, and a barrel's `export * from` counts once, at the
 barrel. The skill's own tests exercise this scan only where `typescript` is installed; it is
 otherwise untested.
+
+The `ports` query lists an implementer only for a class that declares `implements <Symbol>`.
+A structural implementation (an object literal, an intersection type, a `satisfies` check) is not
+detected, so its Implementers cell stays empty and the implementer is settled through a fact slice
+(`slicing.md`).
 
 ## `graph`
 
@@ -108,7 +113,7 @@ and an untracked path never appears in the diff.
 | `[args]` | The named query's own positional arguments and flags |
 | `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
 | `--exports-json <file>` | Read export data from `<file>` instead of running the tooling |
-| `--json` | Print the result as a JSON object of columns and rows instead of a markdown table |
+| `--json` | Print the result as a JSON object of columns and rows instead of a markdown table; `touched --with-neighbors` prints `{ "touched": ..., "neighbors": ... }`, each a columns-and-rows object |
 
 "Read by" collects, from `references/workflows/w1.md` through `w8.md`, every workflow whose
 `Reads:` line names the query; those `Reads:` lines are authoritative. A mode step that runs a
@@ -127,18 +132,24 @@ hand match of the plan's or diff's file list against the globs in
 | `fan-in` | `<path>` | Importer, Component, Kind | W7, severity escalation rule 3 |
 | `edges` | `<path>` (required) | Direction, Other, Kind, Ring direction | plan review step 1 |
 | `units` | `[--component <id>] [--kind <k>] [--ring <r>]` | Path, Kind, Ring, Actors, Abstract, Concrete | W2, W3, W4, W7 |
-| `touched` | `--base <ref>` (required) | Path, Component, Kind, Ring, Change, Neighbors | change review |
+| `components` | none | Component, Name, Enforcement, Release unit, Entry points, Units | W8 |
+| `touched` | `--base <ref>` (required), `[--with-neighbors]` | Path, Component, Kind, Ring, Change, Neighbors; with `--with-neighbors` a second table: Path, Component, Kind, Ring, Actors, Abstract, Concrete | change review |
 | `ports` | none | Port, Owner, Humble side, Implementers, Consumers (by component) | W1, W3, W4, W5, W7 |
 | `entry-points` | none | Path, Component, Constructs | W1, W7 |
 | `externals` | `[--tag vendor\|framework\|runtime]` | Name, Tag, Importing components, Importing modules | W5, W8 |
 | `volatility` | `--since <ref>` (required) | Component, Commits, Modules touched | W1, W2, W5, W6 |
 
 `edges` lists the module's outgoing internal edges (`out`) and then its incoming ones (`in`),
-with the ring direction of each edge. `entry-points` expands each component's entry-point globs
+with the ring direction of each edge. `ring-crossings` filters every internal edge whose two
+rings are known by its direction: `outward` and `inward` list edges that cross rings, `same` lists
+edges whose two ends sit in the same ring. `components` prints the component record from
+`docs/architecture/model/components.json` with each component's unit count in the graph.
+`entry-points` expands each component's entry-point globs
 against the graph's units and prints one row per matching unit. `touched` reads `git diff
 --name-status` against the base plus untracked files: a copy or an untracked unit is `added`, a
 type change is `modified`, and a deleted path is listed only when it was a unit in the base
-graph.
+graph. With `--with-neighbors`, a second table follows the first: the full unit row of every
+unit one edge away from a touched unit that is not itself touched, sorted by path.
 
 `touched`, `volatility`, and `edges` exit with a usage message when their required argument is
 missing. In a markdown table a missing value renders as an empty cell, except the I, A, and D

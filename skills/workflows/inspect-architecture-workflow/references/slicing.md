@@ -48,7 +48,8 @@ its workflow file (inputs, procedure, decision table with base severities) and i
 both named after the workflow (`references/workflows/w1.md` and `references/rules/w1.md` for
 W1, and so on); `references/metrics.md` for W6 only; the output of the queries the workflow's
 `Reads:` line names, run by the coordinator with `--json` off so the packet carries markdown
-tables; the baseline's `decisions.md`; in change or plan review, the rows marked `proposed` or
+tables, each written to `.architecture/slices/packet/<nn>-<query>.md` and named in the packet by
+absolute path (no query output longer than a screen is pasted inline); the baseline's `decisions.md`; in change or plan review, the rows marked `proposed` or
 `changed`, with the instruction to evaluate only those targets and the edges touching them.
 
 Fan-out follows the graph size. An audit dispatches one evaluator per workflow, W1 to W8, in
@@ -56,9 +57,10 @@ parallel, each over the full graph. Change and plan review dispatch **one** eval
 runs every applicable workflow in order over the small changed set; eight sessions over a
 handful of rows is this skill's single largest avoidable cost. A workflow is applicable when a
 changed or proposed row falls in a section it reads (a diff touching no tests skips W7; one
-adding no component edges skips W6); skipped workflows carry their previous ledger rows forward
+adding no component edges skips W6, except in the base-without-model fallback of
+`change-review.md`, Map step 4, where W6 always runs); skipped workflows carry their previous ledger rows forward
 and the run log names them. The review packet carries the changed rows, their direct neighbors
-(units one edge away), and a component-level summary of the whole graph (components, component
+(units one edge away, the second table of `arch query touched --base <base> --with-neighbors`), and a component-level summary of the whole graph (components, component
 edges, metrics) instead of every unit row; W6, when applicable, receives the full component
 graph, since cycles and stability are properties of the whole.
 
@@ -91,7 +93,7 @@ workflow rows the questions came from.
    `ACCEPTED`; one whose target now satisfies the rule becomes `RESOLVED`.
 2. **Changes.** Cluster `SHOULD_CHANGE` rows whose `change` descriptions name the same move
    (same port, same split, same extraction) into one `CH-<letter>`; write the description once.
-3. **Severity.** Apply the escalation rules from the skill body after merging, so escalation sees
+3. **Severity.** Apply the escalation rules in `references/verdicts.md` after merging, so escalation sees
    fan-in and upcoming changes across the whole graph.
 
 ## Dispatch guidance

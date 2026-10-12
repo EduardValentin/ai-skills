@@ -4,8 +4,11 @@ Shared by every mode. The coordinator applies it after merging the evaluation sl
 
 ## Targets and rows
 
-A target is a unit path, an edge written `from -> to` as paths, a port written `path:symbol`, or
-a component ID (`C<n>`). Each finding points at exactly one target and one rule; that pair
+A target is a unit path, an edge written `from -> to` as paths, a port written `path:symbol`, a
+component ID (`C<n>`), or a cycle. A cycle's target is its sorted member list joined by ` -> `:
+component IDs for a component cycle (`C17 -> C18 -> C22 -> C23`), paths for a module cycle. A
+cycle is one finding, never one per member. Each finding points at exactly one target and one
+rule; that pair
 identifies the finding across runs. Two findings with the same target and rule are duplicates,
 and a finding keeps its ID while both still match.
 
@@ -18,6 +21,15 @@ any other committed file. The record names a finding by the target and the rule 
 the commit), `ACCEPTED` (the user explicitly accepted the finding), or, in plan review only,
 `UNDERSPECIFIED` (the plan is not concrete enough to derive a fact the review needs; a
 clarification request to the planner, carrying no rule or severity).
+
+### Introduced or left in place
+
+In a change review a `SHOULD_CHANGE` row is *introduced* when its target is a unit or edge that
+`arch diff` reports as added. In the base-without-model fallback (`change-review.md`, Map step 4)
+it is introduced when its target is a unit that `arch query touched` marks `added`, or an edge
+whose `from` or `to` is such a unit. Every other row is *left in place*. The coordinator sets the
+mark after merging and writes it in the ledger's `Origin` column as `introduced` or `left`. An
+audit or a plan review marks every row `introduced`.
 
 ## Accepting a finding
 
@@ -68,19 +80,26 @@ the rows, never written independently of them.
 
 ## Run verdict
 
-`OK` when no open `SHOULD_CHANGE` row is `blocker` or `major`; otherwise `SHOULD_CHANGE`. In
+`OK` when no counted open `SHOULD_CHANGE` row is `blocker` or `major`; otherwise
+`SHOULD_CHANGE`. Every introduced row counts. A left-in-place row counts only when escalation
+rule 2 lifted its severity (fixing it first makes the named change cheaper). The other
+left-in-place rows never block: the return contract reports them under `Pre-existing` with their
+severities. In
 plan review a `SHOULD_CHANGE` verdict, or any open `UNDERSPECIFIED` row, blocks plan approval
 until each blocker and major row is resolved in the plan or `ACCEPTED` by the user and each
 clarification is answered.
 
 ## Return contract
 
-No report file: the ledger is for agents, the committed record for people. Reply to the caller
+No report file: the ledger is for agents, the committed record for people. The Verdict line
+counts the rows the run verdict counts; the Pre-existing line counts the left-in-place rows it
+does not, and reads `0 blocker, 0 major, 0 minor` outside a change review. Reply to the caller
 with:
 
 ```markdown
 # Architecture <audit | change review | plan review> — <scope>
 Verdict: <OK | SHOULD_CHANGE> — <n> blocker, <n> major, <n> minor open; <n> targets OK; <n> changes named
+Pre-existing: <n> blocker, <n> major, <n> minor (not blocking)
 Escalation: <n> rows lifted by rule 1, <n> by rule 2, <n> by rule 3, <n> by rule 4
 Baseline: <docs/architecture at commit, or "created this run, commit with the PR">
 Direction:
@@ -89,6 +108,6 @@ Direction:
 3. ...
 Clarifications: <n> UNDERSPECIFIED rows, plan review only, or none
 Record: <files under docs/architecture edited this run, or none> | Pending record updates: <n> rows waiting on open findings
-Ledger: <path> | Agents: <n> dispatched (<n> mapping, <n> history, <n> evaluation) | Tokens: <per-agent totals when the harness reports them, else "not reported">
+Ledger: <path> | Agents: <n> dispatched (<n> mapping, <n> fact, <n> evaluation) | Tokens: <per-agent totals when the harness reports them, else "not reported">
 Out of scope: <one line of non-structural observations for other reviewers, or None>
 ```
