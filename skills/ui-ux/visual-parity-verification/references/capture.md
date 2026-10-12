@@ -171,11 +171,14 @@ order after the first readiness wait, each with the `--timeout` budget:
 Each step is an object with exactly one key. A malformed file, an unknown
 kind or a value of the wrong shape is a usage error naming the file (or the
 manifest row and key) and the step index, raised before the browser
-launches.
+launches. `use` steps never reach this command: `parity_map.py manifest`
+expands them from `parity-states.json` (`map.md`, "States file"). Because
+the readiness wait runs before and after the steps, steps never wait for the
+root or sleep for the page to settle.
 
 After the last step — and also when the side has no steps — the pointer is
 parked at `0,0` and the page waits for `networkidle`, so hover styling from
-the pointer's resting place never leaks into a capture and a hover recipe
+the pointer's resting place never leaks into a capture and a hover state
 must move the pointer onto its target itself. A failing step prints
 `<side> <WxH> step <i> <kind>: <error>` and counts as a failed capture.
 

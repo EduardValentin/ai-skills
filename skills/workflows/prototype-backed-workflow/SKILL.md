@@ -45,7 +45,7 @@ Do not load this workflow for work that touches no user-visible surface.
   every prototype-backed application and is the last gate before the PR.
   Screenshots, unit tests, type checks and code inspection do not substitute.
 - Parity has three committed files, `.parity/parity-map.md`,
-  `.parity/parity-pairings.json` and `.parity/parity-actions/`, and
+  `.parity/parity-pairings.json` and `.parity/parity-states.json`, and
   per-session records under the gitignored `.parity/sessions/` that are never
   committed or copied into design documentation.
 
@@ -93,7 +93,7 @@ and validates the app.
 ## Implementation Rules
 
 When building or changing a surface from the prototype, write its parity
-hooks with it:
+hooks and states with it:
 
 - Put `data-parity-root="<ComponentName>"` on the real app element that
   renders the prototype component, and use that value as the map row's
@@ -107,6 +107,11 @@ hooks with it:
 - Names are unique within a root and identical across apps. Never hook one
   side only; a one-sided hook anchors nothing and comes back as a hook
   suggestion.
+- A state is a named entry in `.parity/parity-states.json`: short, without
+  readiness steps, and composed with `use` when it extends another state.
+- A hover, focus, pressed or similar style that belongs to a shared
+  primitive is verified once, on the primitive's own map row; other rows do
+  not repeat it.
 
 ## Parity Artifacts
 
@@ -119,13 +124,14 @@ is disposable and never committed:
   component name and the real app element that renders the same surface,
   given as a CSS selector or as the value of a `data-parity-root`
   attribute. Each row carries a stable `C<n>` id, a route per side, its
-  `States` (each optionally naming a recipe), a `Viewports` subset,
-  `Ignore` entries and a `Confidence`. Ids are never reused; a new pair
-  takes the next free id.
+  `States` (each optionally naming a states-file entry), a `Viewports`
+  subset, `Ignore` entries and a `Confidence`. Ids are never reused; a new
+  pair takes the next free id.
 - `.parity/parity-pairings.json`: manual pairings the verifier confirmed,
   keyed by map id.
-- `.parity/parity-actions/<name>.json`: optional action recipes that reach a
-  state on both sides, named from the map's `States` column.
+- `.parity/parity-states.json`: named step lists that reach a state, shared
+  by both sides or split into `prototype` and `real` when the apps differ,
+  composable with `use`, and named from the map's `States` column.
 - `.parity/sessions/<session>/`: one folder per session holding only
   `ledger.md`, created from `assets/ledger.md`, and the `snapshots/` and
   `diffs/` the verifier writes.
@@ -153,13 +159,13 @@ read beyond native semantics; Implementation Rules say where to write them.
 The implementer maintains the map and the ledger as the work progresses:
 add a map row for a new root pair, derived from the two apps and confirmed
 when it is not an obvious name match; edit `States`, `Viewports` or `Ignore`
-for touched rows; add a ledger row when an element is added or modified and
-a design-change row when a design decision is made; commit the map with the
-code. Run the parity skill's `parity_map.py check .parity/parity-map.md`
-before the parity step. Do not wait for the parity step to reconstruct any of
-it. The verifier writes only `.parity/parity-pairings.json` and the ledger;
-it never edits `.parity/parity-map.md` and reports the `Ignore` entries it
-proposes for the implementer to add.
+for touched rows and the states-file entries they name; add a ledger row
+when an element is added or modified and a design-change row when a design
+decision is made; commit the map and states file with the code. Run the
+parity skill's `parity_map.py check .parity/parity-map.md` before the parity
+step. Do not wait for the parity step to reconstruct any of it. The verifier writes only `.parity/parity-pairings.json` and the ledger;
+it never edits `.parity/parity-map.md` or `.parity/parity-states.json` and
+reports the `Ignore` entries it proposes for the implementer to add.
 
 ## Parity Step
 
@@ -189,7 +195,8 @@ without the user's explicit decision.
    capture manifest and captures with the bundled capture command when
    Playwright is available, otherwise drives the browser directly, then
    runs the bundled diff, writes a verdict and evidence into every row and
-   returns its report.
+   returns its report. Its gap check also flags rows that repeat a shared
+   primitive's interaction state.
 4. Read the ledger. For every row that is not `MATCH` or `EXPECTED`, the
    implementer fixes the production side, or the prototype side when the
    design change was made there and production is the source of the row's
@@ -212,7 +219,7 @@ without the user's explicit decision.
 7. Hand the ledger path and the final parity report to PR readiness as the
    parity evidence. PR readiness accepts `EXPECTED` rows with their reasons
    and names them in the PR; the changed `.parity/parity-map.md`,
-   `.parity/parity-pairings.json` and `.parity/parity-actions/` files are
+   `.parity/parity-pairings.json` and `.parity/parity-states.json` files are
    part of the PR.
 
 If `parity-verifier` is unavailable, run `visual-parity-verification` from a
@@ -236,7 +243,9 @@ verification belongs to the inner implementation workflow.
   folder.
 - Committing anything under `.parity/sessions/`, or copying its state into
   design documentation; only `.parity/parity-map.md`,
-  `.parity/parity-pairings.json` and `.parity/parity-actions/` are committed.
+  `.parity/parity-pairings.json` and `.parity/parity-states.json` are
+  committed.
+- Writing readiness steps (`waitFor` on the root, fixed sleeps) into a state.
 - Editing `.parity/parity-map.md` from the verifier role.
 - Rebuilding the ledger from memory at the end instead of maintaining it
   during the work.
