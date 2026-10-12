@@ -15,15 +15,15 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 
 ## Map
 
-1. When `docs/architecture/model/` is missing, create it from the templates and write
+1. When `docs/architecture/model` is missing, create it from the templates and write
    `components.json` from the repository's package and folder layout (one component per
    workspace package and per top-level app folder) and `rules.json` from the project's
    conventions document when one exists. When the project runs a code formatter over JSON (for
    example a `prettier` config or a `format:check` script), add `docs/architecture/model` to its
    ignore file so the canonical model files are not reformatted.
 2. Run `arch graph`; fix every hard model problem it reports. When it stops with the
-   unsupported-language escalation or a missing-tooling error, return that error to the caller
-   instead of mapping by hand; never write an extractor.
+   unsupported-language escalation or a missing-tooling error, return the escalation to the
+   caller instead of mapping by hand; never write an extractor.
 3. Run `arch uncovered`; when it lists modules, dispatch mapping slices per `slicing.md`, apply
    their proposals, and rerun until empty.
 4. Run `arch model validate`.

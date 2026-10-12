@@ -2,7 +2,7 @@
 name: multi-ticket-workflow
 description: Use when coordinating the implementation and delivery of two or more related tickets or Epic children that share dependencies, implementation sequencing, or PR handoffs. Do not use for exploratory work only.
 compatibility: >-
-  Intended operation uses native architecture-code-auditor, architecture-coordinator, and implementation-coordinator agents, the `raising-a-pull-request` skill for every ticket PR, and the `prototype-backed-workflow` skill for visual tickets in prototype-backed repositories. If an agent is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
+  Intended operation uses native code-mapper, architecture-coordinator, and implementation-coordinator agents, the `raising-a-pull-request` skill for every ticket PR, and the `prototype-backed-workflow` skill for visual tickets in prototype-backed repositories. If an agent is unavailable, use the most capable generic subagent; when delegation is unavailable or unsafe, execute inline and state why.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -51,7 +51,7 @@ For delegation requests, prefer a native available subagent when one is defined 
 
 ## Inspect current code
 
-Before brainstorming, dispatch one read-only code mapping pass per affected ticket to the native `architecture-code-auditor` agent. This mapping is a planning action and is not gated by spec/design or coordination-plan approval. It is the only pre-approval delegation permitted and does not authorize edits or implementation dispatch. Do not postpone this scoping until after brainstorming or approval.
+Before brainstorming, dispatch one read-only code mapping pass per affected ticket to the native `code-mapper` agent. This mapping is a planning action and is not gated by spec/design or coordination-plan approval. It is the only pre-approval delegation permitted and does not authorize edits or implementation dispatch. Do not postpone this scoping until after brainstorming or approval.
 
 Ask each mapper to return affected files/surfaces, entry points, shared contracts, dependencies, analogous implementations, tests, risks, and verification surfaces with locators.
 
