@@ -1,0 +1,1 @@
+module.exports = { options: { doNotFollow: { path: "node_modules" }, tsPreCompilationDeps: "specify", enhancedResolveOptions: { exportsFields: ["exports"], conditionNames: ["import", "require", "node", "default", "types"], extensions: [".ts", ".tsx", ".js", ".mjs", ".cjs", ".json"] } } };
