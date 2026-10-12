@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Delayed fibers</title></head>
+<body>
+<div id="app">
+  <section aria-label="Order summary" data-parity-root="OrderSummary"><h2>Order summary</h2><p>late fibers</p></section>
+</div>
+<script>
+  function App() {}
+  function OrderSummary() {}
+  document.getElementById("app").__reactFiber$x = { type: "div", return: { type: App, return: null } };
+  setTimeout(() => {
+    document.querySelector("section").__reactFiber$x = { type: "section", return: { type: OrderSummary, return: null } };
+  }, 1200);
+</script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -442,9 +443,52 @@ class CaptureBrowserTests(unittest.TestCase):
             out = Path(work) / "out"
             row = manifest_row("R1", "R1", ["800x600"], protoComponent="OrderSummary")
             manifest_path = write_json(Path(work) / "manifest.json", manifest([row], ["800x600"]))
+            started = time.monotonic()
             completed = self.capture(["--manifest", str(manifest_path), "--out", str(out), "--timeout", "2000"])
+            elapsed = time.monotonic() - started
             self.assertEqual(completed.returncode, 1)
             self.assertIn('no roots found for component "OrderSummary" within 2000 ms (row R1)', completed.stderr)
+            self.assertGreaterEqual(elapsed, 0.8 * 2.0)
+
+    def test_component_whose_fibers_attach_late_is_captured(self) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            completed = self.capture(
+                [
+                    "--prototype-url", (FIXTURE.parent / "delayed-fibers.html").as_uri(),
+                    "--prototype-component", "OrderSummary",
+                    "--viewport", "800x600",
+                    "--out", work,
+                ],
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn('root=section region "Order summary"', completed.stdout)
+
+    def test_root_that_is_not_a_timeout_reports_the_real_cause(self) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            completed = self.capture(
+                [
+                    "--real-url", FIXTURE_URL,
+                    "--real-root", "Order\nSummary",
+                    "--timeout", "2000",
+                    "--viewport", "800x600",
+                    "--out", work,
+                ],
+            )
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            self.assertTrue(completed.stderr.startswith("real 800x600: "), completed.stderr)
+            self.assertNotIn("did not appear within", completed.stderr)
+            self.assertNotIn('root "Order', completed.stderr)
+
+    def test_manifest_step_that_fails_names_step_and_row(self) -> None:
+        with tempfile.TemporaryDirectory() as work:
+            out = Path(work) / "out"
+            row = manifest_row("R1", "R1", ["800x600"], realSteps=[{"click": "#no-such-element"}])
+            manifest_path = write_json(Path(work) / "manifest.json", manifest([row], ["800x600"]))
+            completed = self.capture(["--manifest", str(manifest_path), "--out", str(out), "--timeout", "500"])
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            self.assertIn("real 800x600 step 0 click: ", completed.stderr)
+            self.assertTrue(completed.stderr.rstrip().endswith(" (row R1)"), completed.stderr)
+            self.assertFalse((out / "R1" / "real-800x600.json").exists())
 
 
 if __name__ == "__main__":

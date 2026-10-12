@@ -87,10 +87,12 @@ and evaluate `paritySnapshot(root)`, then write the result as compact JSON.
 Readiness means, in order: the page reaches `networkidle`; the root is
 present — a selector root (or `data-parity-root` value) is attached to the
 DOM, or a component name has at least one root through
-`parityFindReactRoots`, polled every 100 ms while the page has no React
-fibers yet; `document.fonts.ready` settles; and two animation frames pass.
-Each wait has the `--timeout` budget. A root that never appears fails the
-capture with one of:
+`parityFindReactRoots`, both polled every 100 ms, so a page without React
+fibers yet or a component that mounts late is retried until `--timeout`;
+`document.fonts.ready` settles (skipped when the page has no
+`document.fonts`); and two animation frames pass. Each wait has the
+`--timeout` budget. A root that never appears fails the capture with one
+of:
 
 ```
 <side> <WxH>: root "<selector>" did not appear within <timeout> ms
@@ -98,7 +100,9 @@ capture with one of:
 ```
 
 Root resolution errors — more than one root for the named component (every
-candidate selector is printed) — a readiness timeout, a `paritySnapshot`
+candidate selector is printed) — a readiness timeout, any other readiness
+failure (such as a root that is not a valid selector, printed as the
+browser reported it), a `paritySnapshot`
 error result, a load timeout or a failed step are reported as one line on
 stderr per failed capture; the command keeps going with the rest and exits
 1 at the end.

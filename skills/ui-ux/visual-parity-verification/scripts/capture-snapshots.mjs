@@ -415,37 +415,56 @@ function rootIsAttached(root) {
   return document.querySelector(`[data-parity-root="${escaped}"]`) !== null;
 }
 
-function componentRootsOrPending(name) {
-  const result = globalThis.parityFindReactRoots([name]);
-  return result.error === "no-react-fibers" ? false : result;
+function componentHasRoots(name) {
+  if (typeof globalThis.parityFindReactRoots !== "function") return false;
+  const roots = globalThis.parityFindReactRoots([name]).roots;
+  return Boolean(roots && roots[name] && roots[name].length > 0);
+}
+
+function readinessTimeout(message) {
+  return (error) => {
+    if (error && error.name === "TimeoutError") throw new CaptureError(message);
+    throw error;
+  };
 }
 
 async function awaitComponent(page, job, runtime) {
   const { timeout } = runtime.options;
   await page.addScriptTag({ path: runtime.rootFinderPath });
-  const found = await page.waitForFunction(componentRootsOrPending, job.component, { timeout, polling: 100 })
-    .then((handle) => handle.jsonValue())
-    .catch(() => null);
-  const roots = found && found.roots && found.roots[job.component];
-  if (!roots || roots.length === 0) {
-    throw new CaptureError(`no roots found for component "${job.component}" within ${timeout} ms`);
-  }
+  await page.waitForFunction(componentHasRoots, job.component, { timeout, polling: 100 })
+    .catch(readinessTimeout(`no roots found for component "${job.component}" within ${timeout} ms`));
 }
 
 async function awaitRoot(page, job, runtime) {
   const { timeout } = runtime.options;
-  await page.waitForFunction(rootIsAttached, job.root, { timeout, polling: 100 }).catch(() => {
-    throw new CaptureError(`root "${job.root}" did not appear within ${timeout} ms`);
+  await page.waitForFunction(rootIsAttached, job.root, { timeout, polling: 100 })
+    .catch(readinessTimeout(`root "${job.root}" did not appear within ${timeout} ms`));
+}
+
+function fontsAndTwoFrames() {
+  const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
+  return fontsReady.then(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+}
+
+async function awaitPaint(page, timeout) {
+  let timer;
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new CaptureError(`fonts and paint did not settle within ${timeout} ms`)), timeout);
   });
+  try {
+    await Promise.race([page.evaluate(fontsAndTwoFrames), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function awaitReady(page, job, runtime) {
   await page.waitForLoadState("networkidle", { timeout: runtime.options.timeout });
   if (job.component) await awaitComponent(page, job, runtime);
   else await awaitRoot(page, job, runtime);
-  await page.evaluate(() => document.fonts.ready.then(() => new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(resolve));
-  })));
+  await awaitPaint(page, runtime.options.timeout);
 }
 
 async function resolvePrototypeRoot(page, job, rootFinderPath) {
