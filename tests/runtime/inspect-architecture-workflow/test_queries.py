@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import FIXTURE_FLAGS, copy_fixture, git, init_repo, run_arch
+from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
 
 def q(root: Path, *args: str) -> dict:
@@ -14,7 +14,7 @@ def test_metrics_table(tmp_path: Path):
     out = q(copy_fixture("payroll", tmp_path / "p"), "metrics")
     assert out["columns"] == ["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"]
     c1 = next(r for r in out["rows"] if r[0] == "C1 domain")
-    assert c1[1:] == [4, 3, 0, 0, 0.5, 0.5, None]
+    assert c1[1:] == [4, 3, 0, 0, 0.5, 0.5, "none"]
 
 
 def test_ring_crossings_outward_is_empty_and_inward_lists_edges(tmp_path: Path):
@@ -102,4 +102,15 @@ def test_markdown_rendering(tmp_path: Path):
     lines = result.stdout.splitlines()
     assert lines[0] == "| Component | Units | Fan-in | Fan-out | I | A | D | Zone |"
     assert lines[1] == "|---|---|---|---|---|---|---|---|"
-    assert any(l.startswith("| C1 domain | 4 | 3 | 0 | 0 | 0.5 | 0.5 | undefined |") for l in lines)
+    assert any(l.startswith("| C1 domain | 4 | 3 | 0 | 0 | 0.5 | 0.5 | none |") for l in lines)
+
+
+def test_component_graph_sorts_component_ids_numerically():
+    queries = (SKILL_DIR / "scripts" / "lib" / "queries.mjs").as_posix()
+    script = (f"import {{ QUERIES }} from '{queries}';"
+              "const graph = {componentEdges: [{from:'C10',to:'C2',modules:1},{from:'C3',to:'C10',modules:1},{from:'C3',to:'C2',modules:1}]};"
+              "const r = await QUERIES['component-graph'](graph, {}, {positional:[], flags:{}});"
+              "process.stdout.write(JSON.stringify(r.rows));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [["C3", "C2", 1], ["C3", "C10", 1], ["C10", "C2", 1]]

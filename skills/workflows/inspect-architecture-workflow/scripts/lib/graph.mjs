@@ -34,14 +34,14 @@ export function metricsFor(units, edges, components) {
   return components.map((component) => {
     const inside = units.filter((u) => u.component === component.id);
     const insidePaths = new Set(inside.map((u) => u.path));
-    const importers = new Set(); const imported = new Set();
+    const importers = new Set(); const exporters = new Set();
     for (const e of edges) {
       if (!e.to) continue;
       const fromIn = insidePaths.has(e.from), toIn = insidePaths.has(e.to);
       if (!fromIn && toIn && unitByPath.get(e.from)?.component) importers.add(e.from);
-      if (fromIn && !toIn && unitByPath.get(e.to)?.component) imported.add(e.to);
+      if (fromIn && !toIn && unitByPath.get(e.to)?.component) exporters.add(e.from);
     }
-    const fanIn = importers.size, fanOut = imported.size;
+    const fanIn = importers.size, fanOut = exporters.size;
     const abstractExports = inside.reduce((n, u) => n + u.exports.abstract, 0);
     const totalExports = inside.reduce((n, u) => n + u.exports.abstract + u.exports.concrete, 0);
     const instability = fanIn + fanOut === 0 ? null : fanOut / (fanIn + fanOut);
@@ -84,7 +84,8 @@ export function buildGraph({ model, extracted, commit }) {
     if (!compEdgeMap.has(key)) compEdgeMap.set(key, { from: a, to: b, modules: new Set() });
     compEdgeMap.get(key).modules.add(e.from);
   }
-  const componentEdges = [...compEdgeMap.values()].map((x) => ({ from: x.from, to: x.to, modules: x.modules.size })).sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+  const componentEdges = [...compEdgeMap.values()].map((x) => ({ from: x.from, to: x.to, modules: x.modules.size }))
+    .sort((a, b) => a.from.localeCompare(b.from, undefined, { numeric: true }) || a.to.localeCompare(b.to, undefined, { numeric: true }));
   const cycles = {
     modules: stronglyConnected(units.map((u) => u.path), edges.map((e) => [e.from, e.to])),
     components: stronglyConnected(model.components.components.map((c) => c.id), componentEdges.map((e) => [e.from, e.to])),

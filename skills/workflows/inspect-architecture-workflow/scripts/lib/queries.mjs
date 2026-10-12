@@ -6,12 +6,14 @@ function unitsByPath(graph) {
 }
 
 function metrics(graph) {
-  const rows = graph.components.map((c) => [`${c.id} ${c.name}`, c.units, c.fanIn, c.fanOut, c.instability, c.abstractness, c.distance, c.inZone]);
+  const rows = graph.components.map((c) => [`${c.id} ${c.name}`, c.units, c.fanIn, c.fanOut, c.instability, c.abstractness, c.distance, c.inZone ?? "none"]);
   return { columns: ["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"], rows };
 }
 
 function componentGraph(graph) {
-  const rows = graph.componentEdges.map((e) => [e.from, e.to, e.modules]);
+  const rows = [...graph.componentEdges]
+    .sort((a, b) => a.from.localeCompare(b.from, undefined, { numeric: true }) || a.to.localeCompare(b.to, undefined, { numeric: true }))
+    .map((e) => [e.from, e.to, e.modules]);
   return { columns: ["From", "To", "Importing modules"], rows };
 }
 

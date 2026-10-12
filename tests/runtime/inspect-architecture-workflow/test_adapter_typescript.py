@@ -74,3 +74,39 @@ def test_missing_typescript_is_a_clear_error(tmp_path: Path):
               "try { await a.extract({roots:['src'], cruiseJsonPath: process.cwd()+'/cruise.json'}); } catch (e) { process.stdout.write(e.message); }")
     result = run_node(script, root)
     assert "typescript is not installed in /nonexistent-root" in result.stdout
+
+
+def _locate(root: Path) -> "subprocess.CompletedProcess[str]":
+    script = (f"import {{ locateCruiserBin }} from '{ADAPTER.as_posix()}';"
+              f"try {{ process.stdout.write(await locateCruiserBin({json.dumps(str(root))})); }}"
+              "catch (e) { process.stderr.write('ERR:' + e.message); }")
+    return run_node(script, root)
+
+
+def test_locate_cruiser_bin_prefers_the_bin_shim(tmp_path: Path):
+    shim = tmp_path / "node_modules/.bin/depcruise"
+    shim.parent.mkdir(parents=True)
+    shim.write_text("")
+    result = _locate(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == str(shim)
+
+
+def test_locate_cruiser_bin_walks_up_from_the_resolved_main_entry(tmp_path: Path):
+    pkg_dir = tmp_path / "node_modules/dependency-cruiser"
+    (pkg_dir / "src/main").mkdir(parents=True)
+    (pkg_dir / "src/main/index.mjs").write_text("")
+    (pkg_dir / "package.json").write_text(json.dumps({
+        "name": "dependency-cruiser",
+        "exports": {".": "./src/main/index.mjs"},
+        "bin": {"dependency-cruise": "bin/dependency-cruise.mjs"},
+    }))
+    result = _locate(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == str(pkg_dir / "bin/dependency-cruise.mjs")
+
+
+def test_locate_cruiser_bin_missing_is_a_clear_error(tmp_path: Path):
+    result = _locate(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == f"ERR:dependency-cruiser is not installed in {tmp_path}; the TypeScript adapter needs it"

@@ -87,19 +87,41 @@ async function resolveConfig(root, tooling) {
   return DEFAULT_CONFIG;
 }
 
-function cruiserBin(root) {
-  const require = createRequire(path.join(root, "package.json"));
-  let pkgPath;
-  try { pkgPath = require.resolve("dependency-cruiser/package.json"); }
-  catch { throw new Error(`dependency-cruiser is not installed in ${root}; the TypeScript adapter needs it`); }
-  const pkg = JSON.parse(require("node:fs").readFileSync(pkgPath, "utf8"));
-  const bin = pkg.bin["dependency-cruise"] ?? pkg.bin.depcruise;
-  return path.join(path.dirname(pkgPath), bin);
+async function findDependencyCruiserPackage(startDir) {
+  let dir = startDir;
+  while (true) {
+    const candidate = path.join(dir, "package.json");
+    if (await exists(candidate)) {
+      const pkg = JSON.parse(await readFile(candidate, "utf8"));
+      if (pkg.name === "dependency-cruiser") return { dir, pkg };
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
 }
 
-function runCruise(root, config, roots) {
+export async function locateCruiserBin(root) {
+  const binShim = path.join(root, "node_modules", ".bin", "depcruise");
+  if (await exists(binShim)) return binShim;
+  let mainEntry = null;
+  try { mainEntry = createRequire(path.join(root, "package.json")).resolve("dependency-cruiser"); }
+  catch { mainEntry = null; }
+  if (mainEntry) {
+    const found = await findDependencyCruiserPackage(path.dirname(mainEntry));
+    const bin = found?.pkg.bin?.["dependency-cruise"] ?? found?.pkg.bin?.depcruise;
+    if (found && bin) return path.join(found.dir, bin);
+  }
+  throw new Error(`dependency-cruiser is not installed in ${root}; the TypeScript adapter needs it`);
+}
+
+async function runCruise(root, config, roots) {
+  const bin = await locateCruiserBin(root);
+  const isBinShim = path.basename(path.dirname(bin)) === ".bin";
+  const command = isBinShim ? bin : process.execPath;
+  const args = isBinShim ? ["--output-type", "json", "--config", config, ...roots] : [bin, "--output-type", "json", "--config", config, ...roots];
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [cruiserBin(root), "--output-type", "json", "--config", config, ...roots], { cwd: root });
+    const child = spawn(command, args, { cwd: root });
     let stdout = "", stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });

@@ -31,8 +31,8 @@ def test_metrics_match_hand_computation(tmp_path: Path):
     assert c["C1"]["fanIn"] == 3 and c["C1"]["fanOut"] == 0 and c["C1"]["instability"] == 0
     # C1 exports: Employee (concrete), Clock (abstract), PayrollUseCase (concrete), PayrollRepository (abstract) -> A = 0.5, D = |0.5+0-1| = 0.5
     assert c["C1"]["abstractness"] == 0.5 and c["C1"]["distance"] == 0.5
-    # C3 web: fanIn 0, fanOut = domain/payroll-use-case + adapters/pg-payroll-repository + adapters/system-clock = 3 -> I = 1, A = 0 -> D = 0
-    assert c["C3"]["fanIn"] == 0 and c["C3"]["fanOut"] == 3 and c["C3"]["instability"] == 1 and c["C3"]["distance"] == 0
+    # C3 web: fanIn 0, fanOut = modules inside C3 that import outside it: only payroll-controller.ts -> 1 -> I = 1, A = 0 -> D = 0
+    assert c["C3"]["fanIn"] == 0 and c["C3"]["fanOut"] == 1 and c["C3"]["instability"] == 1 and c["C3"]["distance"] == 0
     assert {(e["from"], e["to"], e["modules"]) for e in g["componentEdges"]} == {("C2", "C1", 2), ("C3", "C1", 1), ("C3", "C2", 1)}
 
 
@@ -76,6 +76,33 @@ def test_graph_is_written_to_cache_and_summary_printed(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("graph: 8 units,")
     assert (root / ".architecture/graph/working-tree.json").exists()
+
+
+def test_component_edges_sort_numerically_by_component_id():
+    model = {
+        "components": {"components": [{"id": "C2", "paths": ["c2/**"]}, {"id": "C3", "paths": ["c3/**"]}, {"id": "C10", "paths": ["c10/**"]}]},
+        "rules": {"rings": ["entities", "use-cases", "adapters", "frameworks"], "rules": [], "frameworks": []},
+        "overrides": {"overrides": []},
+    }
+    extracted = {
+        "modules": [
+            {"path": "c2/x.ts", "exports": {"abstract": 0, "concrete": 1}, "implements": []},
+            {"path": "c3/x.ts", "exports": {"abstract": 0, "concrete": 1}, "implements": []},
+            {"path": "c10/x.ts", "exports": {"abstract": 0, "concrete": 1}, "implements": []},
+        ],
+        "edges": [
+            {"from": "c10/x.ts", "to": "c2/x.ts", "kind": "import"},
+            {"from": "c3/x.ts", "to": "c10/x.ts", "kind": "import"},
+            {"from": "c3/x.ts", "to": "c2/x.ts", "kind": "import"},
+        ],
+        "warnings": [],
+    }
+    script = (f"import {{ buildGraph }} from '{GRAPH.as_posix()}';"
+              f"const g = buildGraph({{model:{json.dumps(model)}, extracted:{json.dumps(extracted)}, commit:'t'}});"
+              "process.stdout.write(JSON.stringify(g.componentEdges.map(e => [e.from, e.to, e.modules])));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [["C3", "C2", 1], ["C3", "C10", 1], ["C10", "C2", 1]]
 
 
 def test_tarjan_finds_nested_cycles():

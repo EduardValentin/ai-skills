@@ -56,3 +56,43 @@ def test_validate_reports_ok(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["model", "validate", *FIXTURE_FLAGS], root)
     assert result.returncode == 0 and result.stdout.strip() == "model: ok"
+
+
+def test_remove_rule_removes_exactly_one_and_keeps_order(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    rules_path = root / "docs/architecture/model/rules.json"
+    before = [r["match"] for r in json.loads(rules_path.read_text())["rules"]]
+    result = run_arch(["model", "remove-rule", "match=src/domain/clock.ts"], root)
+    assert result.returncode == 0, result.stderr
+    after = [r["match"] for r in json.loads(rules_path.read_text())["rules"]]
+    before.remove("src/domain/clock.ts")
+    assert after == before
+
+
+def test_remove_rule_missing(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    result = run_arch(["model", "remove-rule", "match=src/nope/**"], root)
+    assert result.returncode == 1 and "no rule matching src/nope/**" in result.stderr
+
+
+def test_remove_component_refuses_while_referenced_then_succeeds_once_unreferenced(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    components_path = root / "docs/architecture/model/components.json"
+    assert run_arch(["model", "add-component", "C9", "throwaway", "paths=src/throwaway/**"], root).returncode == 0
+
+    result = run_arch(["model", "remove-component", "C1"], root)
+    assert result.returncode == 1
+    assert "component C1 is referenced by" in result.stderr
+    ids = [c["id"] for c in json.loads(components_path.read_text())["components"]]
+    assert "C1" in ids
+
+    result = run_arch(["model", "remove-component", "C9"], root)
+    assert result.returncode == 0, result.stderr
+    ids = [c["id"] for c in json.loads(components_path.read_text())["components"]]
+    assert "C9" not in ids and "C1" in ids
+
+
+def test_remove_component_missing(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    result = run_arch(["model", "remove-component", "C9"], root)
+    assert result.returncode == 1 and "no component C9" in result.stderr

@@ -108,4 +108,4 @@ def test_diff_reports_base_only_component_with_null_head_metrics(tmp_path: Path)
     components_path.write_text(json.dumps(components))
     out = json.loads(run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root).stdout)
     c3 = next(c for c in out["components"] if c["id"] == "C3")
-    assert c3["fanOut"] == [3, None]
+    assert c3["fanOut"] == [1, None]

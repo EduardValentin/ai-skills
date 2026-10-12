@@ -118,13 +118,41 @@ function addRule(model, kv) {
   return refuseOrWrite(model, "rules", model.rules);
 }
 
+function removeRule(model, kv) {
+  const rules = model.rules.rules;
+  const index = rules.findIndex((rule) => rule.match === kv.match);
+  if (index < 0) { console.error(`no rule matching ${kv.match}`); return 1; }
+  rules.splice(index, 1);
+  return refuseOrWrite(model, "rules", model.rules);
+}
+
+function componentReferences(model, id) {
+  const references = [];
+  for (const port of model.boundaries.ports) if (port.owner === id) references.push(`port ${port.path}:${port.symbol}`);
+  for (const shape of model.boundaries.shapes) if (shape.owner === id || (shape.components ?? []).includes(id)) references.push(`shape ${shape.name}`);
+  return references;
+}
+
+function removeComponent(model, plain) {
+  const [id] = plain;
+  const components = model.components.components;
+  const index = components.findIndex((c) => c.id === id);
+  if (index < 0) { console.error(`no component ${id}`); return 1; }
+  const references = componentReferences(model, id);
+  if (references.length) { console.error(`component ${id} is referenced by ${references.join(", ")}`); return 1; }
+  components.splice(index, 1);
+  return refuseOrWrite(model, "components", model.components);
+}
+
 const EDITS = {
   "add-override": addOverride,
   "remove-override": removeOverride,
   "add-port": addPort,
   "remove-port": removePort,
   "add-component": addComponent,
+  "remove-component": removeComponent,
   "add-rule": (model, plain, kv) => addRule(model, kv),
+  "remove-rule": (model, plain, kv) => removeRule(model, kv),
 };
 
 export async function run(args, ctx) {
