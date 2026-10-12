@@ -86,8 +86,10 @@ coverage is visible.
 
 ## Dispatch guidance
 
-Dispatch all mapping slices and the history slice in parallel, then the evaluation slice or
-slices in parallel; evaluation waits for the merged inventory. Merge returns in memory and write
+Run `arch graph` (or `arch diff <base>` in review modes) and `arch uncovered` first; dispatch
+mapping slices only for uncovered modules, in parallel, and apply their proposals before
+evaluation; run `arch query volatility` and the other queries each applicable workflow reads;
+then dispatch the evaluation slice or slices in parallel. Merge returns in memory and write
 them to `slices/` once; do not re-read what was just written. Give slices enough time for real
 inspection. A slice that returns prose instead of rows is re-dispatched once with the row format
 restated; a second failure is recorded as an open question with the slice's paths.

@@ -75,21 +75,26 @@ and an untracked path never appears in the diff.
 |---|---|
 | `<name>` | The query to run; see the table below |
 | `[args]` | The named query's own positional arguments and flags |
+| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
+| `--exports-json <file>` | Read export data from `<file>` instead of running the tooling |
 | `--json` | Print the result as a JSON object of columns and rows instead of a markdown table |
+
+"Read by" collects, from `references/workflows/w1.md` through `w8.md`, every workflow whose
+`Reads:` line names the query; those `Reads:` lines are authoritative.
 
 | Query | Arguments | Columns | Read by |
 |---|---|---|---|
-| `metrics` | none | Component, Units, Fan-in, Fan-out, I, A, D, Zone | W6 |
-| `component-graph` | none | From, To, Importing modules | W6 |
+| `metrics` | none | Component, Units, Fan-in, Fan-out, I, A, D, Zone | W5, W6 |
+| `component-graph` | none | From, To, Importing modules | W6, W8 |
 | `cycles` | none | Level, Members | W6 |
-| `ring-crossings` | `[--direction outward\|inward\|same]` (default `outward`) | From, From ring, To, To ring, Kind | W1, W3, W4 |
-| `fan-in` | `<path>` | Importer, Component, Kind | severity escalation rule 3 |
+| `ring-crossings` | `[--direction outward\|inward\|same]` (default `outward`) | From, From ring, To, To ring, Kind | W1, W2, W3, W4 |
+| `fan-in` | `<path>` | Importer, Component, Kind | W7, severity escalation rule 3 |
 | `units` | `[--component <id>] [--kind <k>] [--ring <r>]` | Path, Kind, Ring, Actors, Abstract, Concrete | W2, W3, W4, W7 |
 | `touched` | `--base <ref>` (required) | Path, Component, Kind, Ring, Change, Neighbors | change review, the caller precheck |
-| `ports` | none | Port, Owner, Humble side, Implementers, Consumers (by component) | W1, W4, W5 |
-| `entry-points` | none | Path, Component, Constructs | W1, W8 |
+| `ports` | none | Port, Owner, Humble side, Implementers, Consumers (by component) | W1, W3, W4, W5, W7 |
+| `entry-points` | none | Path, Component, Constructs | W1, W7 |
 | `externals` | `[--tag vendor\|framework\|runtime]` | Name, Tag, Importing components, Importing modules | W5, W8 |
-| `volatility` | `--since <ref>` (required) | Component, Commits, Modules touched | W1, W2, W6 |
+| `volatility` | `--since <ref>` (required) | Component, Commits, Modules touched | W1, W2, W5, W6 |
 
 `touched` and `volatility` exit with a usage message when their required flag is missing. A
 missing value renders as `undefined` in a table cell; a query over an empty graph section renders

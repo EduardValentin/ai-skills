@@ -51,16 +51,15 @@ pointing down, an arrow that points up is a violation.
 
 ## Abstractness
 
-    A = abstract types / total types
+    A = abstract exports / total exports
 
 Range 0 to 1. A = 1: nothing but interfaces and abstract types. A = 0: all concrete. A stable
 component (low I) should be abstract (high A) so it can be extended without being edited; an
 unstable one (high I) should be concrete (low A) so it stays cheap to change. An interface-only
 component has A = 1 and, once implemented, I = 0.
 
-In dynamically or structurally typed languages, count as abstract the types that exist only to be
-implemented: protocols, port types, abstract base classes. If the language has no such
-declarations, A is undefined; use the qualitative form of R31.
+Abstract exports are a component's exported interfaces, type aliases, and abstract classes; A is
+undefined when C has no exports.
 
 ## The balanced line and distance
 
