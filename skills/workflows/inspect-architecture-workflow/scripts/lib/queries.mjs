@@ -50,6 +50,7 @@ function units(graph, model, { flags }) {
 }
 
 async function touched(graph, model, { flags }, root) {
+  if (!flags.base || flags.base === true) throw new Error("usage: arch query touched --base <ref>");
   const changes = await nameStatus(root, flags.base);
   const byPath = unitsByPath(graph);
   const neighborsOf = new Map();
@@ -117,6 +118,7 @@ function externals(graph, model, { flags }) {
 }
 
 async function volatility(graph, model, { flags }, root) {
+  if (!flags.since || flags.since === true) throw new Error("usage: arch query volatility --since <ref>");
   const commits = await logNames(root, `${flags.since}..HEAD`);
   const commitsByComponent = new Map();
   const modulesByComponent = new Map();

@@ -23,7 +23,7 @@ export async function listTracked(root) {
 }
 
 export async function nameStatus(root, ref) {
-  const stdout = await git(root, ["diff", "--name-status", "-M", ref]);
+  const stdout = await git(root, ["diff", "--name-status", "-M", "--relative", ref]);
   return stdout.split("\n").filter(Boolean).map((line) => {
     const [code, ...paths] = line.split("\t");
     const status = code[0];
@@ -33,7 +33,7 @@ export async function nameStatus(root, ref) {
 }
 
 export async function logNames(root, ref) {
-  const stdout = await git(root, ["log", "--name-only", "--format=%H", ref]);
+  const stdout = await git(root, ["log", "--name-only", "--format=%H", "--relative", ref]);
   const commits = [];
   let current = null;
   for (const line of stdout.split("\n")) {

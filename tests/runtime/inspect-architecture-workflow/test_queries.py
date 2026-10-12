@@ -71,6 +71,31 @@ def test_uncovered_exit_code(tmp_path: Path):
     assert result.returncode == 1 and result.stdout.strip() == "src/scripts/seed.ts"
 
 
+def test_touched_from_a_subdirectory_root_uses_relative_paths(tmp_path: Path):
+    repo = tmp_path / "repo"
+    sub = repo / "sub"
+    copy_fixture("payroll", sub)
+    init_repo(repo)
+    (sub / "src/domain/employee.ts").write_text("export class Employee { name = 'x'; }\n")
+    out = q(sub, "touched", "--base", "HEAD")
+    row = next(r for r in out["rows"] if r[0] == "src/domain/employee.ts")
+    assert row[4] == "modified"
+
+
+def test_touched_without_base_prints_usage(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    result = run_arch(["query", "touched", *FIXTURE_FLAGS], root)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "usage: arch query touched --base <ref>"
+
+
+def test_volatility_without_since_prints_usage(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    result = run_arch(["query", "volatility", *FIXTURE_FLAGS], root)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "usage: arch query volatility --since <ref>"
+
+
 def test_markdown_rendering(tmp_path: Path):
     result = run_arch(["query", "metrics", *FIXTURE_FLAGS], copy_fixture("payroll", tmp_path / "p"))
     assert result.returncode == 0
