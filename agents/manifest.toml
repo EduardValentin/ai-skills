@@ -3,7 +3,7 @@ version = 1
 [[agent]]
 id = "architecture-code-auditor"
 source = "architecture-code-auditor.md"
-description = "Read-only mapping specialist that returns architecture inventory rows for one slice of a codebase: units, dependency edges, ports, entry points, and change history. Dispatched by the architecture-coordinator; also usable as the read-only code mapping pass for planning."
+description = "Read-only classifier that reads modules the architecture model leaves uncovered and returns proposed model rules, overrides, or components with behavioral reasons. Dispatched by the architecture-coordinator."
 groups = ["ticket-workflow", "multi-ticket-workflow", "inspect-architecture-workflow"]
 
 [agent.codex]
