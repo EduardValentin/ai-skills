@@ -89,7 +89,8 @@ its ID and gets its new path; a unit or edge that no longer exists loses its
 row; its ID is retired, never reused. The ledger is derived state: start one
 when none exists; only the committed record is a required baseline. Ledger
 IDs and run numbers are transitory and never appear in a committed file; the
-record refers to a finding only by the target's path and symbol and the rule.
+record names a finding only by its target (a unit path, an edge as paths, a
+port as path:symbol, or a component ID) and the rule number.
 
 ## Shared references
 
