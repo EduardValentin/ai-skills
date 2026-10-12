@@ -111,13 +111,14 @@ Write an implementation plan grounded in the approved spec/design, ticket
 context, relevant repository evidence, and verification surfaces. Do not edit
 product code or tests.
 
-Before dispatching, run the structural precheck at no agent cost: list the files
-the plan creates or edits and place each in a component of the committed
-record's `docs/architecture/components.md` by path. Dispatch only when the
-files fall in two or more components, or the plan adds a package, a port, an
-import between components, or an external dependency, or no committed record
-exists. Otherwise record `architecture plan review: skipped, single-component
-plan` in the handoff and present the plan without it.
+Before dispatching, run the structural precheck at no agent cost: list the
+files the plan creates or edits and place each in components by matching
+paths against the globs in `docs/architecture/model/components.json`.
+Dispatch only when the files fall in two or more components, or the plan adds
+a package, a port, an import between components, or an external dependency,
+or no committed record exists. Otherwise record `architecture plan review:
+skipped, single-component plan` in the handoff and present the plan without
+it.
 
 When the reviewer selection includes architecture plan review and the precheck
 passes, dispatch the

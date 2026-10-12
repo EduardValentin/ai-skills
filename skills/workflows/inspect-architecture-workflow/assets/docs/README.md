@@ -14,12 +14,17 @@ the composition root is.>
 <Paragraph 3: how boundaries are enforced (visibility, exports, build units, import rules),
 and which boundaries are drawn but not enforced.>
 
+## Current shape (generated)
+
+<!-- arch:summary -->
+<!-- /arch:summary -->
+
 ## Reading this folder
 
-- `components.md`: the enforced units and what each publishes.
-- `units.md`: classes, modules, functions, interfaces, and data structures, with their kind and ring.
-- `dependencies.md`: every source dependency, the forbidden edges, the ports, entry points, and shared data shapes.
-- `metrics.md`: stability and abstractness per component.
+- `model/components.json`: the enforced components and the path globs that belong to each.
+- `model/rules.json`: the rings and the glob rules that classify a path's ring, kind, and actors.
+- `model/overrides.json`: per-path exceptions to the rules, by exact path.
+- `model/boundaries.json`: the ports rules declare, their owners and humble sides, and shared data shapes.
 - `decisions.md`: deferred decisions, accepted trade-offs, intended exceptions, accepted findings.
 
 Terms: a *unit* is a class, module, function, interface, or data structure. A *component* is a

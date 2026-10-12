@@ -3,8 +3,8 @@ version = 1
 [[agent]]
 id = "architecture-code-auditor"
 source = "architecture-code-auditor.md"
-description = "Read-only mapping specialist that returns architecture inventory rows for one slice of a codebase: units, dependency edges, ports, entry points, and change history. Dispatched by the architecture-coordinator; also usable as the read-only code mapping pass for planning."
-groups = ["ticket-workflow", "multi-ticket-workflow", "inspect-architecture-workflow"]
+description = "Read-only code reader that classifies modules the architecture model leaves uncovered, proposing model rules, overrides, or components with behavioral reasons, and answers evaluator fact questions with evidence lines. Dispatched by the architecture-coordinator."
+groups = ["inspect-architecture-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "medium"
@@ -55,7 +55,7 @@ color = "cyan"
 [[agent]]
 id = "architecture-evaluator"
 source = "architecture-evaluator.md"
-description = "Read-only specialist that runs architecture evaluation workflows over a merged inventory, judging rows without opening project files, and returns assessment rows with base severities. Dispatched by the architecture-coordinator: one instance per workflow in an audit, one for every applicable workflow in a change or plan review."
+description = "Read-only specialist that runs architecture evaluation workflows over query output from the arch command, judging rows without opening project files, and returns assessment rows with base severities. Dispatched by the architecture-coordinator: one instance per workflow in an audit, one for every applicable workflow in a change or plan review."
 groups = ["inspect-architecture-workflow"]
 
 [agent.codex]

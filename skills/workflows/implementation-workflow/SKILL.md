@@ -134,12 +134,13 @@ by the delta since the previous round.
    `code-cleanliness-reviewer`, `security-reviewer`, `performance-reviewer`,
    `design-system-reviewer`, and `architecture-coordinator` in change-review
    mode over the frozen diff. Change review runs only when the structural
-   precheck passes: place the diff's files in components of the committed
-   record's `docs/architecture/components.md` by path, and dispatch when they
-   fall in two or more components, or the diff adds a package, a port, an
-   import between components, or an external dependency, or no committed
-   record exists; otherwise record `architecture change review: skipped,
-   single-component diff` and run the other selected reviewers. When the packet carries no selection, ask the
+   precheck passes: place the diff's files in components by matching paths
+   against the globs in `docs/architecture/model/components.json`, and
+   dispatch when they fall in two or more components, or the diff adds a
+   package, a port, an import between components, or an external dependency,
+   or no committed record exists; otherwise record `architecture change
+   review: skipped, single-component diff` and run the other selected
+   reviewers. When the packet carries no selection, ask the
    user once with these defaults: `acceptance-criteria-reviewer` and
    `code-cleanliness-reviewer` selected; `design-system-reviewer` selected
    when the diff touches styles, tokens, or UI primitives in a design-system

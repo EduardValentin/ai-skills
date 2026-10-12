@@ -20,7 +20,7 @@ committed record or the plan.
 
 No mapping or history slices run; the plan has not changed the code.
 
-The plan overlay is the inventory this mode evaluates: the committed record's rows for every
+The plan overlay is the graph slice this mode evaluates: the graph's rows for every
 unit the plan touches, with the plan's edits applied, plus one new row per unit the plan
 creates, so it shows what the record would contain if the plan were implemented as written.
 The coordinator writes it to `.architecture/slices/plan-overlay.md` so the evaluators read a
@@ -28,7 +28,7 @@ file. Nothing in this mode writes to the committed record.
 
 | Step | Reads | Writes |
 |---|---|---|
-| 1. Join the plan to the baseline | The plan; `docs/architecture/units.md`, `dependencies.md`, `components.md`, `decisions.md` | The rows of every unit the plan creates, deletes, or edits, copied unchanged into `slices/plan-overlay.md`, with their component, ring, actors, edges, ports and owners, enforcement, and deferred decisions |
+| 1. Join the plan to the baseline | The plan; `arch query touched` is not applicable (no code changed), so run `arch query units --component <id>` for each component the plan names, `arch query edges <path>` for each file it edits or deletes, and `arch query fan-in <path>` for each of those files | The rows of every unit the plan creates, deletes, or edits, built from that output into `slices/plan-overlay.md`, with their component, ring, actors, edges (from `query edges`), ports and owners, enforcement, and deferred decisions |
 | 2. Apply the plan's edits | The plan's snippets and prose; the current source of any named file whose dependencies the plan does not describe | Those overlay rows updated with the imports, implemented interfaces, constructed details, signature types, data shapes, and tests the plan adds, removes, or redirects, and marked `changed`; where current imports are assumed kept, that assumption written on the row |
 | 3. Add new units | The plan's snippets; the ticket | One overlay row per unit the plan creates, marked `proposed`, with kind, ring, component, and edges derived from the snippet and from what the plan says calls it; actors from the ticket and from the touched units' recorded actors |
 | 4. Ask for what cannot be derived | The overlay | A row in `.architecture/ledger.md` with verdict `UNDERSPECIFIED`, naming the plan task and the missing fact (a new unit's imports, callers, or component; an ambiguous target type); no rule, no severity; a clarification request to the planner, not a finding |
@@ -55,7 +55,7 @@ the evaluation packet as facts.
 
 ## Record
 
-Append the run to `ledger.md` with targets set to the proposed row IDs; write `slices/`,
+Append the run to `ledger.md` with targets set to the proposed row paths; write `slices/`,
 including `slices/plan-overlay.md`. Do not touch `change-history.md` or the committed record;
 the change review after implementation updates the record from real code.
 

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "rings": [ "entities", "use-cases", "adapters", "frameworks" ],
+  "frameworks": [],
+  "rules": [
+    { "match": "src/domain/**/*-use-case.ts", "ring": "use-cases", "kind": "use-case", "actors": [] },
+    { "match": "src/domain/**/*-repository.ts", "ring": "entities", "kind": "port", "actors": [] },
+    { "match": "src/domain/clock.ts", "ring": "entities", "kind": "port", "actors": [] },
+    { "match": "src/domain/**", "ring": "entities", "kind": "entity", "actors": [] },
+    { "match": "src/adapters/**", "ring": "adapters", "kind": "adapter", "actors": [] },
+    { "match": "src/web/main.ts", "ring": "frameworks", "kind": "composition-root", "actors": [] },
+    { "match": "src/web/**", "ring": "adapters", "kind": "controller", "actors": [] }
+  ]
+}

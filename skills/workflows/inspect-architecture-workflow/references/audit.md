@@ -15,32 +15,34 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 
 ## Map
 
-1. Slice by component, or by top-level source folder when the code declares no enforced
-   components. A scope of fifteen source files or fewer is one slice.
-2. Dispatch in parallel one `architecture-code-auditor` per slice with the mapping packet and
-   one history slice over the whole scope and the full window. Packets are defined in
-   `slicing.md`, classification rules in `mapping.md`.
-3. Merge: resolve edges whose target lies in another slice; reuse IDs where path and symbol match
-   the existing record or a slice's `moved from` tag, assign new ones otherwise, delete vanished
-   rows; attach history
-   rows to units by path; decide component boundaries from the slices' published-surface and
-   enforcement observations; compute metrics per `metrics.md` when there are more than five
-   components.
+1. When `docs/architecture/model` is missing, create it from the templates and write
+   `components.json` from the repository's package and folder layout (one component per
+   workspace package and per top-level app folder), with `tooling.roots` listing one entry per
+   source root in that layout and `tooling.tsConfig` naming the TypeScript config that declares
+   the project's path aliases when it uses any; write `rules.json` from the project's
+   conventions document when one exists. When the project runs a code formatter over JSON (for
+   example a `prettier` config or a `format:check` script), add `docs/architecture/model` to its
+   ignore file so the canonical model files are not reformatted.
+2. Run `arch graph`; fix every hard model problem it reports. When it stops with the
+   unsupported-language escalation or a missing-tooling error, return the escalation to the
+   caller instead of mapping by hand; never write an extractor.
+3. Run `arch uncovered`; when it lists modules, dispatch mapping slices per `slicing.md`, apply
+   their proposals, and rerun until empty.
+4. Run `arch model validate`.
 
 ## Evaluate
 
 1. Dispatch one `architecture-evaluator` per workflow W1 to W8, in parallel, each with the
-   evaluation packet from `slicing.md` over the full inventory. Evaluators judge rows and open
-   no project file.
+   evaluation packet from `slicing.md`; each receives the query output its `Reads:` line names.
+   Evaluators judge rows and open no project file.
 2. Merge per `slicing.md`: drop duplicate target-and-rule pairs, match rows to existing ledger
    IDs, and settle each previous `SHOULD_CHANGE` row as resolved, still open, or removed.
 3. Apply severity escalation, group changes, and build the improvement map per `verdicts.md`.
 
 ## Record
 
-1. Write every committed file from the templates (`assets/docs/README.md` and its five
-   siblings), refreshing the README's shape paragraphs and setting both parts of every header
-   (last audit and last update) to this run.
+1. Write `decisions.md` from its template when missing; run `arch readme-summary`; commit the
+   model, decisions, and README with the audit.
 2. Write `ledger.md` (new run in the run log), `change-history.md`, and `slices/`.
 
 ## Return

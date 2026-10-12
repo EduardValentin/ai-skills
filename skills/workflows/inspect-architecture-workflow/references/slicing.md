@@ -20,51 +20,17 @@ into a packet is coordinator output spent for nothing.
 
 ## Mapping slice
 
-Agent: `architecture-code-auditor`, or a general-purpose agent with the same packet. One slice
-per component; with no enforced components, one per top-level source folder; a folder above
-roughly forty source files is split by subfolder, and the packet says so.
-
-Packet adds: the slice's paths; every other slice's paths, so cross-slice edges can be named by
-path; the absolute path of `references/mapping.md`; with a baseline, the committed record files
-holding this slice's existing rows, so IDs and prior classifications are reused.
-
-Returns, as markdown tables in the template row formats:
-
-- Units in the slice (path and symbol, kind, ring, visibility, actors), each tagged `new`,
-  `changed`, `moved from <old path>`, or `unchanged` against the baseline rows in the packet.
-  The tag drives the merge and never reaches the record.
-- Edges leaving the slice's units, targets named by path and symbol even outside the slice;
-  `external:` targets tagged framework, vendor, runtime, or standard library.
-- Boundaries whose port is declared in the slice.
-- Entry points and construction sites in the slice.
-- Component candidates: the published surface and enforcement mode observed for the slice.
-- Open questions: anything the slice could not classify.
-
-Mapping slices do not read version control; that is the history slice's job.
+Agent: `architecture-code-auditor`. Dispatched only when `arch uncovered` lists modules, one
+slice per component the uncovered modules fall in (or one slice when fewer than fifteen). Packet
+adds: the uncovered paths; the absolute path of `references/mapping.md`; the current
+`model/rules.json` and `model/overrides.json` contents; the component list. Returns: one proposed
+`model add-rule`, `model add-override`, or `model add-component` invocation per module or group,
+each with a one-sentence behavioral reason, and open questions for modules it could not classify.
+The coordinator applies the invocations and reruns `arch uncovered`.
 
 ## History slice
 
-Agent: a general-purpose subagent on the smallest model the harness offers (`haiku` in Claude
-Code); the work is reading a log. Exactly one per run, in parallel with the mapping slices, over
-the whole scope, so the log is walked once rather than once per mapping slice.
-
-Packet adds: the scope paths; the window (default the last ten commits touching the scope, or the
-commits the ticket or branch names); the ticket or brief, to tie commit messages to actors; the
-change-history row format.
-
-Procedure: list the window's commits with the files each touched; for every touched file in
-scope, write one row per commit: the reason in one phrase from the commit message and diff, the
-actor served (finance, HR, platform, a vendor, unknown), and whether the reason is policy or
-detail. When the scope has no history of its own, return an empty table and say so; the
-coordinator records that W1, W2, and W6 ran without volatility evidence.
-
-Returns: change-history rows keyed by file path (the coordinator maps paths to unit IDs), plus
-an Open questions list for commits whose reason or actor could not be determined.
-
-Per mode: an audit walks the full window for every file in scope. A change review covers only
-the files the diff touches, over the same window, and names the commits the ledger already holds
-rows for, so only the missing ones return; the coordinator appends them. A plan review dispatches
-no history slice and reuses the ledger's rows unchanged: the plan has not changed the code.
+`arch query volatility --since <base>`, run by the coordinator; no agent.
 
 ## Evaluation slice
 
@@ -72,47 +38,51 @@ Agent: `architecture-evaluator`, or a general-purpose agent with the same packet
 rules R1 to R3 are not a slice; the coordinator applies them during severity escalation and
 ordering.
 
-Evaluators judge rows. The merged inventory in the packet is the evidence; an evaluator opens
-only the skill files the packet names, never a project file. A fact the inventory lacks comes
-back as an open question, which the coordinator settles from the mapping slice's return or a
-targeted re-map of that path, never by letting the evaluator read code.
+Evaluators judge rows. The query output in the packet is the evidence; an evaluator opens only
+the skill files the packet names, never a project file. A fact the graph lacks comes back as an
+open question, which the coordinator settles through the fact slice below, never by letting the
+evaluator read code.
 
 Packet adds: the absolute paths of `references/workflows/preamble.md` and, per workflow to run,
 its workflow file (inputs, procedure, decision table with base severities) and its rule file,
 both named after the workflow (`references/workflows/w1.md` and `references/rules/w1.md` for
-W1, and so on); `references/metrics.md` for W6 only; the merged inventory sections the workflows
-read; the baseline's `decisions.md`; in change or plan review, the rows marked `proposed` or
+W1, and so on); `references/metrics.md` for W6 only; the output of the queries the workflow's
+`Reads:` line names, run by the coordinator with `--json` off so the packet carries markdown
+tables, each written to `.architecture/slices/packet/<nn>-<query>.md` and named in the packet by
+absolute path (no query output longer than a screen is pasted inline); the baseline's `decisions.md`; in change or plan review, the rows marked `proposed` or
 `changed`, with the instruction to evaluate only those targets and the edges touching them.
 
-Fan-out follows the inventory size. An audit dispatches one evaluator per workflow, W1 to W8, in
-parallel, each over the full inventory. Change and plan review dispatch **one** evaluator that
+Fan-out follows the graph size. An audit dispatches one evaluator per workflow, W1 to W8, in
+parallel, each over the full graph. Change and plan review dispatch **one** evaluator that
 runs every applicable workflow in order over the small changed set; eight sessions over a
 handful of rows is this skill's single largest avoidable cost. A workflow is applicable when a
 changed or proposed row falls in a section it reads (a diff touching no tests skips W7; one
-adding no component edges skips W6); skipped workflows carry their previous ledger rows forward
+adding no component edges skips W6, except in the base-without-model fallback of
+`change-review.md`, Map step 4, where W6 always runs); skipped workflows carry their previous ledger rows forward
 and the run log names them. The review packet carries the changed rows, their direct neighbors
-(units one edge away), and a component-level summary of the whole graph (components, component
+(units one edge away, the second table of `arch query touched --base <base> --with-neighbors`), and a component-level summary of the whole graph (components, component
 edges, metrics) instead of every unit row; W6, when applicable, receives the full component
 graph, since cycles and stability are properties of the whole.
 
 Returns: assessment rows in the ledger row format: `verdict`, base `severity` from the table,
-`evidence` as paths and inventory IDs, `change` as a description (the coordinator assigns `CH-`
-names), `protects` when the packet's upcoming changes make it determinable, and `checked` counts
-per rule so `OK` coverage is visible.
+`evidence` as a target (a unit path, an edge as paths, a port as path:symbol, or a component ID)
+and the rule, `change` as a description (the coordinator assigns `CH-` names), `protects` when
+the packet's upcoming changes make it determinable, and `checked` counts per rule so `OK`
+coverage is visible.
+
+## Fact slice
+
+Agent: `architecture-code-auditor`. Dispatched when an evaluator returns an open question the
+graph cannot answer: where a concrete detail is constructed, the types in a port's signature,
+the shape of data crossing a boundary, or a power only tests use. One slice per affected
+component. Packet adds: the paths in question and the exact question for each, copied from the
+evaluator's return. Returns: one row per fact (path, fact, evidence line as `path:line`) and
+nothing else. The coordinator appends those rows to the evaluation packet and re-runs only the
+workflow rows the questions came from.
 
 ## Merge rules
 
-1. **Units and edges.** Key units by path and symbol; key edges by from, to, and kind. Reuse the
-   baseline ID when the key matches, and when a slice tags a unit `moved from` a baseline path,
-   so the unit keeps its ID under the new path; assign the next free ID otherwise. Baseline rows
-   with no match are deleted (audit), held as a candidate deletion (change review), or left
-   untouched (plan review). Slice tags and the reason for a change are merge input only; the
-   record row that results holds the current fact and nothing about how it got there.
-2. **Cross-slice edges.** An edge returned with a path target is resolved to the unit ID from the
-   slice that owns that path; an unresolved target becomes an open question, never a silent drop.
-3. **Components and metrics.** The coordinator decides component boundaries from the slices'
-   published-surface and enforcement observations, then computes metrics from the merged edges.
-4. **Findings.** Key by target and rule. Drop duplicates, keeping the row with the fuller
+1. **Findings.** Key by target and rule. Drop duplicates, keeping the row with the fuller
    evidence. Match to the previous ledger by key to keep IDs. For each previous `SHOULD_CHANGE`
    row: if this run evaluated the same target under the same rule and found it compliant, set
    `RESOLVED` with this run's commit; if it found the violation again, keep the row and its ID,
@@ -121,15 +91,18 @@ per rule so `OK` coverage is visible.
    or its workflow was skipped), carry the row forward unchanged. Not being evaluated never
    counts as being fixed. A previous `ACCEPTED` row whose target and rule match again stays
    `ACCEPTED`; one whose target now satisfies the rule becomes `RESOLVED`.
-5. **Changes.** Cluster `SHOULD_CHANGE` rows whose `change` descriptions name the same move
+2. **Changes.** Cluster `SHOULD_CHANGE` rows whose `change` descriptions name the same move
    (same port, same split, same extraction) into one `CH-<letter>`; write the description once.
-6. **Severity.** Apply the escalation rules from the skill body after merging, so escalation sees
+3. **Severity.** Apply the escalation rules in `references/verdicts.md` after merging, so escalation sees
    fan-in and upcoming changes across the whole graph.
 
 ## Dispatch guidance
 
-Dispatch all mapping slices and the history slice in parallel, then the evaluation slice or
-slices in parallel; evaluation waits for the merged inventory. Merge returns in memory and write
+Run `arch graph` (or `arch diff <base>` in review modes) and `arch uncovered` first; dispatch
+mapping slices only for uncovered modules, in parallel, and apply their proposals before
+evaluation; run `arch query volatility` and the other queries each applicable workflow reads;
+then dispatch the evaluation slice or slices in parallel, and a fact slice for any open question
+they return. Merge returns in memory and write
 them to `slices/` once; do not re-read what was just written. Give slices enough time for real
 inspection. A slice that returns prose instead of rows is re-dispatched once with the row format
 restated; a second failure is recorded as an open question with the slice's paths.

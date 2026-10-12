@@ -1,0 +1,39 @@
+function edgeKey(e) { return `${e.from}\u0000${e.to}\u0000${e.kind}`; }
+function mapPath(renames, p) { return renames.get(p) ?? p; }
+
+export function diffGraphs(base, head, renames) {
+  const basePaths = new Set(base.units.map((u) => mapPath(renames, u.path)));
+  const headPaths = new Set(head.units.map((u) => u.path));
+  const moved = [...renames].filter(([from, to]) => base.units.some((u) => u.path === from) && headPaths.has(to)).map(([from, to]) => ({ from, to }));
+  const movedFromPaths = new Set(moved.map((m) => m.from));
+  const added = [...headPaths].filter((p) => !basePaths.has(p)).sort();
+  const removed = base.units.map((u) => u.path).filter((p) => !movedFromPaths.has(p) && !headPaths.has(p)).sort();
+  const baseByPath = new Map(base.units.map((u) => [mapPath(renames, u.path), u]));
+  const modifiedClassification = head.units.filter((u) => { const b = baseByPath.get(u.path); return b && (b.ring !== u.ring || b.kind !== u.kind); })
+    .map((u) => { const b = baseByPath.get(u.path); return { path: u.path, from: { ring: b.ring, kind: b.kind }, to: { ring: u.ring, kind: u.kind } }; });
+  const baseEdges = new Map(base.edges.map((e) => [edgeKey({ ...e, from: mapPath(renames, e.from), to: mapPath(renames, e.to) }), e]));
+  const headEdges = new Map(head.edges.map((e) => [edgeKey(e), e]));
+  const pick = (e) => ({ from: e.from, to: e.to, kind: e.kind, direction: e.direction, crossesComponent: e.crossesComponent });
+  const edgesAdded = [...headEdges].filter(([k]) => !baseEdges.has(k)).map(([, e]) => pick(e));
+  const edgesRemoved = [...baseEdges].filter(([k]) => !headEdges.has(k)).map(([, e]) => pick({ ...e, from: mapPath(renames, e.from), to: mapPath(renames, e.to) }));
+  const baseComp = new Map(base.components.map((c) => [c.id, c]));
+  const headComp = new Map(head.components.map((c) => [c.id, c]));
+  const baseOnlyIds = base.components.map((c) => c.id).filter((id) => !headComp.has(id));
+  const componentIds = [...head.components.map((c) => c.id), ...baseOnlyIds];
+  const components = componentIds.map((id) => {
+    const b = baseComp.get(id) ?? {};
+    const c = headComp.get(id) ?? {};
+    const pair = (k) => [b[k] ?? null, c[k] ?? null];
+    const [d0, d1] = pair("distance");
+    return { id, fanIn: pair("fanIn"), fanOut: pair("fanOut"), instability: pair("instability"), abstractness: pair("abstractness"), distance: pair("distance"), movedPastThreshold: d0 !== null && d1 !== null && Math.round(Math.abs(d1 - d0) * 100) >= 10 };
+  });
+  const moduleCycles = (cycles) => cycles.map((members) => members.map((p) => mapPath(renames, p)).sort());
+  return { base: base.commit, head: head.commit, units: { added, removed, moved, modifiedClassification }, edges: { added: edgesAdded, removed: edgesRemoved }, components,
+    cycles: { ...cycleChanges(base.cycles.components, head.cycles.components), modules: cycleChanges(moduleCycles(base.cycles.modules), head.cycles.modules) } };
+}
+
+function cycleChanges(baseCycles, headCycles) {
+  const key = (c) => c.join(",");
+  const baseKeys = new Set(baseCycles.map(key)), headKeys = new Set(headCycles.map(key));
+  return { new: headCycles.filter((c) => !baseKeys.has(key(c))), gone: baseCycles.filter((c) => !headKeys.has(key(c))) };
+}

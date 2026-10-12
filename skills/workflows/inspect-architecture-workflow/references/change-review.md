@@ -9,8 +9,9 @@ as accepted structure.
 
 1. Read the project's agent instructions for artifact paths and named boundaries.
 2. Fix the scope: the diff or changed-file list, frozen.
-3. Check the committed record covers the diff's paths; if not, run `audit.md` on the affected
-   scope first and note in the return that the record was created.
+3. Check the committed record covers the diff's paths: `docs/architecture/model/components.json`
+   exists at HEAD and `arch uncovered` lists none of the diff's files. When the model is missing,
+   run `audit.md` on the affected scope first and note in the return that the record was created.
 4. Confirm the ledger root is ignored. Load the ledger to match finding IDs; when none exists,
    start one. A missing ledger is never a blocker.
 5. Build the upcoming-changes list from the ticket, the baseline's `decisions.md`, and anything
@@ -18,15 +19,21 @@ as accepted structure.
 
 ## Map
 
-1. Slices: the units the diff touches, every unit they import or that imports them, and every
-   edge the diff adds, removes, or redirects. Group by component; a small diff is one slice.
-2. Dispatch in parallel one `architecture-code-auditor` per slice and one history slice limited
-   to the diff's files, told which commits the ledger already holds rows for so it returns only
-   the missing ones.
-3. Merge as in the audit, marking every row the diff added, removed, or altered `changed`.
-   Recompute metrics only for touched components; mark the rest carried over.
-4. Hold the additions, removals, and alterations as candidate record updates until evaluation
-   decides which may be written.
+1. `arch diff <base>`: the units added, removed, moved, or reclassified and the edges added or
+   removed are the changed set.
+2. `arch uncovered`; dispatch mapping slices only for what it lists.
+3. `arch query touched --base <base> --with-neighbors` gives the changed units and the unit
+   rows of their neighbors for the packets.
+4. When the base commit predates the model (no `docs/architecture/model/components.json` at
+   that commit), `arch diff` exits 1. Evaluate the working tree instead:
+   1. Run `arch graph` on the working tree.
+   2. Run `arch query touched --base <base> --with-neighbors`.
+   3. The scope is the touched units plus every edge touching them, taken from `arch query edges
+      <path>` per touched unit, or from the `edges` of `arch graph --json`.
+   4. W6 is always applicable, since added component edges cannot be told apart from old ones.
+   5. Every finding is left in place unless its target is an `added` unit or an edge touching one
+      ("Introduced or left in place" in `verdicts.md`).
+   6. The run log states "base <base> predates the model; evaluated the working-tree graph".
 
 ## Evaluate
 
@@ -36,20 +43,16 @@ as accepted structure.
    evaluation packet from `slicing.md` (the full component graph when W6 is applicable). It
    judges only changed targets and the edges touching them, from rows and never from code, and
    phrases findings as "the diff introduces" or "the diff leaves in place".
-3. Merge, escalate, group changes, and build the improvement map per `verdicts.md`. A row the
+3. Merge, escalate, mark each row introduced or left in place, group changes, and build the
+   improvement map per `verdicts.md`. A row the
    plan review of this ticket set to `ACCEPTED` keeps that verdict while its target and rule
    still match; it is not raised again.
 
 ## Record
 
 1. Append the run to `ledger.md` and new rows to `change-history.md`; write `slices/`.
-2. Update `docs/architecture/` directly, in the diff's branch, only for candidate rows whose
-   target has no open `SHOULD_CHANGE` finding in this run. Write each row as the current fact:
-   a moved unit gets its new path under its old ID, a deleted one loses its row, and no cell
-   gains a note about the ticket, plan step, or commit that caused the change; the ledger's
-   change history holds that. Refresh the metrics rows of touched
-   components. In every record file written, replace the header's last-update part (date,
-   commit, mode) in place and leave the last-audit part; never add a header line.
+2. Apply model edits through the subcommands only for changes no open finding disputes; run
+   `arch readme-summary`; the implementer commits `docs/architecture/` with the code.
 3. Candidate rows implicated in an open finding are not written. List them in the ledger under
    "Pending record updates", keyed to the finding ID. The run that changes the verdict writes
    them: when the finding becomes `RESOLVED` (a later round or run finds the code fixed) or
