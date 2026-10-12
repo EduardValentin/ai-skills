@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { classify, loadModel, validateModel, DEFAULT_RINGS, HARD_PROBLEM } from "./model.mjs";
+import { classify, loadModel, validateModel, DEFAULT_RINGS, HARD_PROBLEM, MODEL_DIR } from "./model.mjs";
 import { selectAdapter } from "./adapters/index.mjs";
 import { git, headCommit, isClean, withBaseWorktree } from "./git.mjs";
 
@@ -133,7 +133,13 @@ async function buildIn(buildRoot, { cruiseJsonPath, exportsJsonPath, commit }) {
   return graph;
 }
 
+export async function modelExistsAt(root, ref) {
+  try { await git(root, ["cat-file", "-e", `${ref}:./${MODEL_DIR}/components.json`]); return true; }
+  catch { return false; }
+}
+
 export async function loadOrBuildGraph(root, { commit, cruiseJsonPath, exportsJsonPath, force } = {}) {
+  if (commit && !(await modelExistsAt(root, commit))) throw new Error(`no architecture model at ${commit}`);
   const key = commit ? await resolveCommitKey(root, commit) : await resolveWorkingTreeKey(root);
   const file = graphPath(root, key);
   const useCache = !force && !cruiseJsonPath && !exportsJsonPath && key !== "working-tree";

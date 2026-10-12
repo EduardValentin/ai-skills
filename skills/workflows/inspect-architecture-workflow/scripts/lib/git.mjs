@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm, stat, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readlink, rm, stat, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -59,14 +59,30 @@ async function findNodeModules(absDir, relDir, depth, results) {
   }
 }
 
-async function linkNodeModules(root, worktreeSubdir) {
-  const found = [];
-  await findNodeModules(root, "", 0, found);
-  for (const rel of found) {
-    const dest = path.join(worktreeSubdir, rel);
-    await mkdir(path.dirname(dest), { recursive: true });
-    try { await symlink(path.join(root, rel), dest, "dir"); }
-    catch (error) { if (error.code !== "EEXIST") throw error; }
+async function linkEntry(sourceEntry, destEntry, top) {
+  let target = sourceEntry;
+  try {
+    const link = await readlink(sourceEntry);
+    const resolved = path.resolve(path.dirname(sourceEntry), link);
+    target = !path.isAbsolute(link) && resolved.startsWith(`${top}${path.sep}`) ? link : resolved;
+  } catch (error) {
+    if (error.code !== "EINVAL") throw error;
+  }
+  try { await symlink(target, destEntry); }
+  catch (error) { if (error.code !== "EEXIST") throw error; }
+}
+
+export async function mirrorNodeModules(source, dest, top) {
+  await mkdir(dest, { recursive: true });
+  for (const entry of await readdir(source, { withFileTypes: true })) {
+    const sourceEntry = path.join(source, entry.name);
+    const destEntry = path.join(dest, entry.name);
+    if (entry.name.startsWith("@") && entry.isDirectory()) {
+      await mkdir(destEntry, { recursive: true });
+      for (const scoped of await readdir(sourceEntry)) await linkEntry(path.join(sourceEntry, scoped), path.join(destEntry, scoped), top);
+      continue;
+    }
+    await linkEntry(sourceEntry, destEntry, top);
   }
 }
 
@@ -74,22 +90,22 @@ async function showPrefix(root) {
   return (await git(root, ["rev-parse", "--show-prefix"])).trim();
 }
 
-async function linkAncestorNodeModules(root, prefix, worktreeTop) {
-  const segments = prefix.split("/").filter(Boolean);
-  for (let depth = 0; depth < segments.length; depth += 1) {
-    const rel = segments.slice(0, depth).join("/");
-    const source = path.join(path.resolve(root, ...segments.slice(depth).map(() => "..")), "node_modules");
-    if (!(await isDirectory(source))) continue;
-    const dest = path.join(worktreeTop, rel, "node_modules");
-    await mkdir(path.dirname(dest), { recursive: true });
-    try { await symlink(source, dest, "dir"); }
-    catch (error) { if (error.code !== "EEXIST") throw error; }
-  }
-}
-
 async function isDirectory(file) {
   try { return (await stat(file)).isDirectory(); }
   catch { return false; }
+}
+
+async function linkAllNodeModules(root, prefix, worktreeTop) {
+  const segments = prefix.split("/").filter(Boolean);
+  const top = path.resolve(root, ...segments.map(() => ".."));
+  const found = [];
+  await findNodeModules(root, "", 0, found);
+  for (const rel of found) await mirrorNodeModules(path.join(root, rel), path.join(worktreeTop, prefix, rel), top);
+  for (let depth = 0; depth < segments.length; depth += 1) {
+    const rel = segments.slice(0, depth).join("/");
+    const source = path.join(top, rel, "node_modules");
+    if (await isDirectory(source)) await mirrorNodeModules(source, path.join(worktreeTop, rel, "node_modules"), top);
+  }
 }
 
 export async function withBaseWorktree(root, ref, fn) {
@@ -97,9 +113,8 @@ export async function withBaseWorktree(root, ref, fn) {
   try {
     await git(root, ["worktree", "add", "--detach", dir, ref]);
     const prefix = await showPrefix(root);
+    await linkAllNodeModules(root, prefix, dir);
     const subdir = path.join(dir, prefix);
-    await linkNodeModules(root, subdir);
-    await linkAncestorNodeModules(root, prefix, dir);
     return await fn(subdir);
   } finally {
     try { await git(root, ["worktree", "remove", "--force", dir]); }

@@ -1,8 +1,7 @@
 import { parseFlags } from "../args.mjs";
 import { diffGraphs } from "../diff.mjs";
-import { git, renames } from "../git.mjs";
-import { loadOrBuildGraph } from "../graph.mjs";
-import { MODEL_DIR } from "../model.mjs";
+import { renames } from "../git.mjs";
+import { loadOrBuildGraph, modelExistsAt } from "../graph.mjs";
 import { renderMarkdown as renderTable, renderValue } from "../queries.mjs";
 
 const METRIC_PAIRS = ["instability", "abstractness", "distance"];
@@ -36,11 +35,6 @@ function renderMarkdown(diff) {
   return lines.join("\n");
 }
 
-async function hasModel(root, base) {
-  try { await git(root, ["cat-file", "-e", `${base}:./${MODEL_DIR}/components.json`]); return true; }
-  catch { return false; }
-}
-
 export async function run(args, ctx) {
   const { positional, flags } = parseFlags(args);
   const [base] = positional;
@@ -48,7 +42,7 @@ export async function run(args, ctx) {
     console.error("usage: arch diff <base> [--cruise-json <file>] [--exports-json <file>] [--json]");
     return 1;
   }
-  if (!(await hasModel(ctx.root, base))) {
+  if (!(await modelExistsAt(ctx.root, base))) {
     console.error(`no architecture model at ${base}; evaluate the working tree with "arch query touched --base ${base}" (change-review.md, Map step 4)`);
     return 1;
   }

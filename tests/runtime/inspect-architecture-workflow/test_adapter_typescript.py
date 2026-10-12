@@ -180,3 +180,14 @@ def test_locate_cruiser_bin_skips_a_malformed_package_json(tmp_path: Path):
     result = _locate(tmp_path)
     assert result.returncode == 0, result.stderr
     assert result.stdout == str(pkg_dir / "bin/dependency-cruise.mjs")
+
+
+def test_package_resolved_outside_the_root_keeps_its_package_name():
+    cruise = {"modules": [
+        {"source": "src/a.ts", "dependencies": [
+            {"module": "react", "resolved": "../../main/node_modules/.pnpm/react@19/node_modules/react/index.js", "dependencyTypes": ["npm"], "couldNotResolve": False},
+        ]},
+    ]}
+    out = _normalize(cruise)
+    assert out["edges"] == [{"from": "src/a.ts", "external": {"name": "react", "tag": "vendor"}}]
+    assert out["warnings"] == []

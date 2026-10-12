@@ -45,16 +45,16 @@ export function normalizeCruise(cruise, frameworks = []) {
     for (const d of m.dependencies ?? []) {
       const types = d.dependencyTypes ?? [];
       if (d.couldNotResolve) { warnings.add(`unresolved import ${d.module} in ${m.source}`); continue; }
-      const outsideName = outsideRootName(d.resolved ?? "");
-      if (outsideName !== null) {
-        warnOutside(d.resolved);
-        edges.push({ from: m.source, external: { name: outsideName, tag: "vendor" } });
-        continue;
-      }
       if (isExternalEntry(d)) {
         const name = packageName(d.module);
         const tag = types.includes("core") ? "runtime" : frameworks.includes(name) ? "framework" : "vendor";
         edges.push({ from: m.source, external: { name, tag } });
+        continue;
+      }
+      const outsideName = outsideRootName(d.resolved ?? "");
+      if (outsideName !== null) {
+        warnOutside(d.resolved);
+        edges.push({ from: m.source, external: { name: outsideName, tag: "vendor" } });
         continue;
       }
       const kind = types.includes("type-only") ? "type-import" : d.dynamic ? "dynamic" : "import";
