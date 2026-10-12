@@ -1,7 +1,7 @@
 import { parseFlags } from "../args.mjs";
 import { loadOrBuildGraph } from "../graph.mjs";
 import { loadModel } from "../model.mjs";
-import { QUERIES, renderMarkdown } from "../queries.mjs";
+import { QUERIES, renderJson, renderMarkdown } from "../queries.mjs";
 
 export async function run(args, ctx) {
   const { positional, flags } = parseFlags(args);
@@ -13,7 +13,7 @@ export async function run(args, ctx) {
   }
   const graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"] });
   const model = await loadModel(ctx.root);
-  const table = await query(graph, model, { positional: rest, flags }, ctx.root);
-  console.log(flags.json ? JSON.stringify({ columns: table.columns, rows: table.rows }) : renderMarkdown(table));
+  const result = await query(graph, model, { positional: rest, flags }, ctx.root);
+  console.log(flags.json ? renderJson(result) : renderMarkdown(result));
   return 0;
 }

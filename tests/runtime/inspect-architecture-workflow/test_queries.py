@@ -220,3 +220,39 @@ def test_touched_lists_a_deleted_unit(tmp_path: Path):
     (root / "cruise.json").write_text(json.dumps(cruise))
     rows = q(root, "touched", "--base", "HEAD")["rows"]
     assert ["src/web/main.ts", "C3", "composition-root", "frameworks", "deleted", ""] in rows
+
+
+def test_ring_crossings_same_lists_edges_within_one_ring(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    rows = q(root, "ring-crossings", "--direction", "same")["rows"]
+    assert sorted(rows) == [
+        ["src/web/payroll-controller.ts", "adapters", "src/adapters/pg-payroll-repository.ts", "adapters", "import"],
+        ["src/web/payroll-controller.ts", "adapters", "src/adapters/system-clock.ts", "adapters", "import"],
+    ]
+    inward = q(root, "ring-crossings", "--direction", "inward")["rows"]
+    assert all(r[1] != r[3] for r in inward)
+
+
+def test_touched_with_neighbors_adds_untouched_neighbor_unit_rows(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    init_repo(root)
+    (root / "src/domain/employee.ts").write_text("export class Employee { name = 'x'; }\n")
+    out = q(root, "touched", "--base", "HEAD", "--with-neighbors")
+    assert set(out) == {"touched", "neighbors"}
+    assert [r[0] for r in out["touched"]["rows"]] == ["src/domain/employee.ts"]
+    assert out["neighbors"]["columns"] == ["Path", "Component", "Kind", "Ring", "Actors", "Abstract", "Concrete"]
+    assert [r[0] for r in out["neighbors"]["rows"]] == ["src/adapters/pg-payroll-repository.ts", "src/domain/payroll-use-case.ts"]
+    assert out["neighbors"]["rows"][1][1:4] == ["C1", "use-case", "use-cases"]
+    markdown = run_arch(["query", "touched", "--base", "HEAD", "--with-neighbors", *FIXTURE_FLAGS], root).stdout
+    assert "| Path | Component | Kind | Ring | Change | Neighbors |" in markdown
+    assert "| Path | Component | Kind | Ring | Actors | Abstract | Concrete |" in markdown
+
+
+def test_components_query_lists_the_component_record(tmp_path: Path):
+    out = q(copy_fixture("payroll", tmp_path / "p"), "components")
+    assert out["columns"] == ["Component", "Name", "Enforcement", "Release unit", "Entry points", "Units"]
+    assert out["rows"] == [
+        ["C1", "domain", "none", "", [], 4],
+        ["C2", "adapters", "none", "", [], 2],
+        ["C3", "web", "none", "", ["src/web/main.ts"], 2],
+    ]

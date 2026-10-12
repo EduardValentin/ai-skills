@@ -31,7 +31,7 @@ function ringCrossings(graph, model, { flags }) {
   const direction = flags.direction ?? "outward";
   const byPath = unitsByPath(graph);
   const rows = graph.edges
-    .filter((e) => e.crossesRing && e.direction === direction)
+    .filter((e) => e.direction === direction)
     .map((e) => [e.from, byPath.get(e.from)?.ring ?? null, e.to, byPath.get(e.to)?.ring ?? null, e.kind]);
   return { columns: ["From", "From ring", "To", "To ring", "Kind"], rows };
 }
@@ -59,6 +59,25 @@ function units(graph, model, { flags }) {
     .filter((u) => (!component || u.component === component) && (!kind || u.kind === kind) && (!ring || u.ring === ring))
     .map((u) => [u.path, u.kind, u.ring, u.actors, u.exports.abstract, u.exports.concrete]);
   return { columns: ["Path", "Kind", "Ring", "Actors", "Abstract", "Concrete"], rows };
+}
+
+function components(graph, model) {
+  const unitCounts = new Map(graph.components.map((c) => [c.id, c.units]));
+  const rows = model.components.components.map((c) => [c.id, c.name, c.enforcement ?? null, c.releaseUnit ?? null, c.entryPoints ?? [], unitCounts.get(c.id) ?? 0]);
+  return { columns: ["Component", "Name", "Enforcement", "Release unit", "Entry points", "Units"], rows };
+}
+
+function neighborUnitRows(graph, touchedPaths, neighborsOf) {
+  const byPath = unitsByPath(graph);
+  const neighborPaths = new Set();
+  for (const touchedPath of touchedPaths) {
+    for (const neighbor of neighborsOf.get(touchedPath) ?? []) if (!touchedPaths.has(neighbor) && byPath.has(neighbor)) neighborPaths.add(neighbor);
+  }
+  const rows = [...neighborPaths].sort().map((p) => {
+    const u = byPath.get(p);
+    return [u.path, u.component, u.kind, u.ring, u.actors, u.exports.abstract, u.exports.concrete];
+  });
+  return { columns: ["Path", "Component", "Kind", "Ring", "Actors", "Abstract", "Concrete"], rows };
 }
 
 const CHANGE_LABELS = { A: "added", C: "added", M: "modified", T: "modified", D: "deleted" };
@@ -97,7 +116,10 @@ async function touched(graph, model, { flags }, root) {
     const neighbors = deleted ? [] : [...(neighborsOf.get(change.path) ?? [])].sort();
     rows.push([change.path, info.component, info.kind, info.ring, label, neighbors.join(", ")]);
   }
-  return { columns: ["Path", "Component", "Kind", "Ring", "Change", "Neighbors"], rows };
+  const touchedTable = { columns: ["Path", "Component", "Kind", "Ring", "Change", "Neighbors"], rows };
+  if (!flags["with-neighbors"]) return touchedTable;
+  const touchedPaths = new Set(rows.map((row) => row[0]));
+  return { sections: { touched: touchedTable, neighbors: neighborUnitRows(graph, touchedPaths, neighborsOf) } };
 }
 
 function ports(graph, model) {
@@ -180,6 +202,7 @@ export const QUERIES = {
   "fan-in": fanIn,
   edges,
   units,
+  components,
   touched,
   ports,
   "entry-points": entryPoints,
@@ -193,10 +216,24 @@ export function renderValue(value, missing = "") {
   return String(value);
 }
 
-export function renderMarkdown({ columns, rows, undefinedColumns = [] }) {
+function renderMarkdownTable({ columns, rows, undefinedColumns = [] }) {
   const missing = columns.map((column) => (undefinedColumns.includes(column) ? "undefined" : ""));
   const header = `| ${columns.join(" | ")} |`;
   const separator = `|${columns.map(() => "---").join("|")}|`;
   const body = rows.map((row) => `| ${row.map((value, i) => renderValue(value, missing[i])).join(" | ")} |`);
   return [header, separator, ...body].join("\n");
+}
+
+export function renderMarkdown(result) {
+  if (!result.sections) return renderMarkdownTable(result);
+  return Object.values(result.sections).map(renderMarkdownTable).join("\n\n");
+}
+
+function tableJson({ columns, rows }) {
+  return { columns, rows };
+}
+
+export function renderJson(result) {
+  if (!result.sections) return JSON.stringify(tableJson(result));
+  return JSON.stringify(Object.fromEntries(Object.entries(result.sections).map(([name, table]) => [name, tableJson(table)])));
 }
