@@ -1,4 +1,4 @@
-import { parseFlags } from "../args.mjs";
+import { parseFlags, savedInputs } from "../args.mjs";
 import { listTracked } from "../git.mjs";
 import { loadOrBuildGraph } from "../graph.mjs";
 import { HARD_PROBLEM, loadModel, validateModel, writeModelFile } from "../model.mjs";
@@ -43,7 +43,7 @@ function refuseOrWrite(model, name, data, existingPaths) {
 async function validate(flags, ctx) {
   let graph;
   try {
-    graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"], force: true });
+    graph = await loadOrBuildGraph(ctx.root, { ...savedInputs(flags), force: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!message.startsWith("model is invalid")) console.error(message);

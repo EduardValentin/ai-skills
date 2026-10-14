@@ -14,7 +14,7 @@ def test_metrics_table(tmp_path: Path):
     out = q(copy_fixture("payroll", tmp_path / "p"), "metrics")
     assert out["columns"] == ["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"]
     c1 = next(r for r in out["rows"] if r[0] == "C1 domain")
-    assert c1[1:] == [4, 3, 0, 0, 0.5, 0.5, "none"]
+    assert c1[1:] == [4, 4, 0, 0, 0.5, 0.5, "none"]
 
 
 def test_ring_crossings_outward_is_empty_and_inward_lists_edges(tmp_path: Path):
@@ -102,7 +102,7 @@ def test_markdown_rendering(tmp_path: Path):
     lines = result.stdout.splitlines()
     assert lines[0] == "| Component | Units | Fan-in | Fan-out | I | A | D | Zone |"
     assert lines[1] == "|---|---|---|---|---|---|---|---|"
-    assert any(l.startswith("| C1 domain | 4 | 3 | 0 | 0 | 0.5 | 0.5 | none |") for l in lines)
+    assert any(l.startswith("| C1 domain | 4 | 4 | 0 | 0 | 0.5 | 0.5 | none |") for l in lines)
 
 
 def test_component_graph_sorts_component_ids_numerically():
@@ -202,9 +202,9 @@ def test_touched_lists_untracked_units_and_skips_deleted_non_units(tmp_path: Pat
     cruise = json.loads((root / "cruise.json").read_text())
     cruise["modules"].append({"source": "src/domain/payslip.ts", "dependencies": []})
     (root / "cruise.json").write_text(json.dumps(cruise))
-    exports = json.loads((root / "exports.json").read_text())
-    exports["src/domain/payslip.ts"] = {"exports": {"abstract": 0, "concrete": 1}, "implements": []}
-    (root / "exports.json").write_text(json.dumps(exports))
+    facts = json.loads((root / "facts.json").read_text())
+    facts["modules"]["src/domain/payslip.ts"] = {"exports": {"abstract": 0, "concrete": 1}, "implements": [], "constructs": [], "signatures": []}
+    (root / "facts.json").write_text(json.dumps(facts))
     rows = q(root, "touched", "--base", "HEAD")["rows"]
     paths = {r[0]: r[4] for r in rows}
     assert paths.get("src/domain/payslip.ts") == "added"
@@ -226,7 +226,9 @@ def test_ring_crossings_same_lists_edges_within_one_ring(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     rows = q(root, "ring-crossings", "--direction", "same")["rows"]
     assert sorted(rows) == [
+        ["src/web/payroll-controller.ts", "adapters", "src/adapters/pg-payroll-repository.ts", "adapters", "constructs"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/pg-payroll-repository.ts", "adapters", "import"],
+        ["src/web/payroll-controller.ts", "adapters", "src/adapters/system-clock.ts", "adapters", "constructs"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/system-clock.ts", "adapters", "import"],
     ]
     inward = q(root, "ring-crossings", "--direction", "inward")["rows"]
@@ -241,8 +243,8 @@ def test_touched_with_neighbors_adds_untouched_neighbor_unit_rows(tmp_path: Path
     assert set(out) == {"touched", "neighbors"}
     assert [r[0] for r in out["touched"]["rows"]] == ["src/domain/employee.ts"]
     assert out["neighbors"]["columns"] == ["Path", "Component", "Kind", "Ring", "Actors", "Abstract", "Concrete"]
-    assert [r[0] for r in out["neighbors"]["rows"]] == ["src/adapters/pg-payroll-repository.ts", "src/domain/payroll-use-case.ts"]
-    assert out["neighbors"]["rows"][1][1:4] == ["C1", "use-case", "use-cases"]
+    assert [r[0] for r in out["neighbors"]["rows"]] == ["src/adapters/memory-payroll-repository.ts", "src/adapters/pg-payroll-repository.ts", "src/domain/payroll-use-case.ts"]
+    assert out["neighbors"]["rows"][2][1:4] == ["C1", "use-case", "use-cases"]
     markdown = run_arch(["query", "touched", "--base", "HEAD", "--with-neighbors", *FIXTURE_FLAGS], root).stdout
     assert "| Path | Component | Kind | Ring | Change | Neighbors |" in markdown
     assert "| Path | Component | Kind | Ring | Actors | Abstract | Concrete |" in markdown
@@ -253,6 +255,6 @@ def test_components_query_lists_the_component_record(tmp_path: Path):
     assert out["columns"] == ["Component", "Name", "Enforcement", "Release unit", "Entry points", "Units"]
     assert out["rows"] == [
         ["C1", "domain", "none", "", [], 4],
-        ["C2", "adapters", "none", "", [], 2],
+        ["C2", "adapters", "none", "", [], 3],
         ["C3", "web", "none", "", ["src/web/main.ts"], 2],
     ]

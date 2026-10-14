@@ -1,0 +1,14 @@
+{
+  "capabilities": { "exports": true, "implements": true, "constructs": true, "signatures": true },
+  "modules": {
+    "src/domain/clock.ts": { "exports": { "abstract": 1, "concrete": 0 }, "implements": [], "constructs": [], "signatures": [{ "symbol": "Clock", "types": [] }] },
+    "src/domain/employee.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [], "constructs": [], "signatures": [{ "symbol": "Employee", "types": [] }] },
+    "src/domain/payroll-repository.ts": { "exports": { "abstract": 1, "concrete": 0 }, "implements": [], "constructs": [], "signatures": [{ "symbol": "PayrollRepository", "types": [{ "symbol": "Employee", "path": "src/domain/employee.ts" }] }] },
+    "src/domain/payroll-use-case.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [], "constructs": [], "signatures": [{ "symbol": "PayrollUseCase", "types": [{ "symbol": "PayrollRepository", "path": "src/domain/payroll-repository.ts" }, { "symbol": "Clock", "path": "src/domain/clock.ts" }] }] },
+    "src/adapters/pg-payroll-repository.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": ["PayrollRepository"], "constructs": [], "signatures": [{ "symbol": "PgPayrollRepository", "types": [{ "symbol": "Employee", "path": "src/domain/employee.ts" }] }] },
+    "src/adapters/memory-payroll-repository.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": ["PayrollRepository"], "constructs": [], "signatures": [{ "symbol": "memoryPayrollRepository", "types": [{ "symbol": "Employee", "path": "src/domain/employee.ts" }] }] },
+    "src/adapters/system-clock.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": ["Clock"], "constructs": [], "signatures": [{ "symbol": "SystemClock", "types": [] }] },
+    "src/web/payroll-controller.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [], "constructs": [{ "symbol": "PgPayrollRepository", "path": "src/adapters/pg-payroll-repository.ts" }, { "symbol": "SystemClock", "path": "src/adapters/system-clock.ts" }, { "symbol": "PayrollUseCase", "path": "src/domain/payroll-use-case.ts" }], "signatures": [{ "symbol": "payrollController", "types": [] }] },
+    "src/web/main.ts": { "exports": { "abstract": 0, "concrete": 0 }, "implements": [], "constructs": [], "signatures": [] }
+  }
+}

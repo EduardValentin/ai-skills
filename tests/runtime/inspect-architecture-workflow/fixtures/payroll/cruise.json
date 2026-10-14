@@ -1,6 +1,45 @@
 {
   "modules": [
     {
+      "source": "src/adapters/memory-payroll-repository.ts",
+      "dependencies": [
+        {
+          "dynamic": false,
+          "module": "../domain/employee",
+          "moduleSystem": "es6",
+          "exoticallyRequired": false,
+          "dependencyTypes": [
+            "local",
+            "type-only",
+            "import",
+            "pre-compilation-only"
+          ],
+          "preCompilationOnly": true,
+          "resolved": "src/domain/employee.ts",
+          "coreModule": false,
+          "followable": true,
+          "couldNotResolve": false,
+          "matchesDoNotFollow": false,
+          "circular": false,
+          "valid": true
+        }
+      ],
+      "dependents": [],
+      "orphan": false,
+      "valid": true
+    },
+    {
+      "source": "src/domain/employee.ts",
+      "dependencies": [],
+      "dependents": [
+        "src/adapters/memory-payroll-repository.ts",
+        "src/adapters/pg-payroll-repository.ts",
+        "src/domain/payroll-use-case.ts"
+      ],
+      "orphan": false,
+      "valid": true
+    },
+    {
       "source": "src/adapters/pg-payroll-repository.ts",
       "dependencies": [
         {
@@ -82,16 +121,6 @@
       "dependencies": [],
       "dependents": [
         "src/adapters/pg-payroll-repository.ts"
-      ],
-      "orphan": false,
-      "valid": true
-    },
-    {
-      "source": "src/domain/employee.ts",
-      "dependencies": [],
-      "dependents": [
-        "src/adapters/pg-payroll-repository.ts",
-        "src/domain/payroll-use-case.ts"
       ],
       "orphan": false,
       "valid": true
@@ -249,10 +278,9 @@
           "exoticallyRequired": false,
           "dependencyTypes": [
             "local",
-            "import",
-            "pre-compilation-only"
+            "import"
           ],
-          "preCompilationOnly": true,
+          "preCompilationOnly": false,
           "resolved": "src/adapters/pg-payroll-repository.ts",
           "coreModule": false,
           "followable": true,
@@ -268,10 +296,9 @@
           "exoticallyRequired": false,
           "dependencyTypes": [
             "local",
-            "import",
-            "pre-compilation-only"
+            "import"
           ],
-          "preCompilationOnly": true,
+          "preCompilationOnly": false,
           "resolved": "src/adapters/system-clock.ts",
           "coreModule": false,
           "followable": true,
@@ -287,10 +314,9 @@
           "exoticallyRequired": false,
           "dependencyTypes": [
             "local",
-            "import",
-            "pre-compilation-only"
+            "import"
           ],
-          "preCompilationOnly": true,
+          "preCompilationOnly": false,
           "resolved": "src/domain/payroll-use-case.ts",
           "coreModule": false,
           "followable": true,
@@ -349,8 +375,8 @@
     "info": 0,
     "ignore": 0,
     "advisedExitCode": 0,
-    "totalCruised": 10,
-    "totalDependenciesCruised": 12,
+    "totalCruised": 11,
+    "totalDependenciesCruised": 13,
     "ruleSetUsed": {
       "forbidden": []
     }

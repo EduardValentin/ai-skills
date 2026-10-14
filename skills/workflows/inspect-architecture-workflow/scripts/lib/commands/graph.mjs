@@ -1,12 +1,11 @@
-import { parseFlags } from "../args.mjs";
+import { parseFlags, savedInputs } from "../args.mjs";
 import { GRAPH_DIR, loadOrBuildGraph } from "../graph.mjs";
 
 export async function run(args, ctx) {
   const { flags } = parseFlags(args);
   const graph = await loadOrBuildGraph(ctx.root, {
     commit: typeof flags.commit === "string" ? flags.commit : undefined,
-    cruiseJsonPath: flags["cruise-json"],
-    exportsJsonPath: flags["exports-json"],
+    ...savedInputs(flags),
     force: Boolean(flags.force),
   });
   for (const warning of graph.warnings) console.error(warning);

@@ -1,9 +1,9 @@
-import { parseFlags } from "../args.mjs";
+import { parseFlags, savedInputs } from "../args.mjs";
 import { loadOrBuildGraph } from "../graph.mjs";
 
 export async function run(args, ctx) {
   const { flags } = parseFlags(args);
-  const graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"] });
+  const graph = await loadOrBuildGraph(ctx.root, savedInputs(flags));
   if (flags.json) {
     console.log(JSON.stringify(graph.uncovered));
   } else {

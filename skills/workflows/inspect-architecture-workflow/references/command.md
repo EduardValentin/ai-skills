@@ -29,12 +29,55 @@ The TypeScript adapter reads these `tooling` settings from `components.json`:
 | `language` | The adapter to use; `typescript` covers JavaScript too |
 | `roots` | The source roots dependency-cruiser walks; missing or empty means the project root |
 | `dependencyCruiserConfig` | The project's own cruiser config; otherwise a `.dependency-cruiser.*` file at the root, otherwise the bundled default |
-| `tsConfig` | The TypeScript config that resolves path aliases, passed to the cruiser with `--ts-config` only when the bundled default config runs; a project's own config carries its own. When unset, `tsconfig.json` at the root is passed if it exists |
+| `tsConfig` | The TypeScript config that resolves path aliases, passed to the cruiser with `--ts-config` only when the bundled default config runs; a project's own config carries its own. When unset, `tsconfig.json` at the root is passed if it exists. The same file supplies the compiler options of the program the adapter builds for its facts; with neither, the program uses default options |
+
+The TypeScript adapter provides all four facts (see Adapter facts). It builds one TypeScript
+program over the module set so the checker resolves imported types, and tests each exported value
+of a module for assignability to every port declared in `boundaries.json` whose module is in the
+set; a match adds the port's symbol to `implements` next to the nominal `implements` clauses, once.
+When the program cannot be built, it falls back to parsing each file alone, provides `exports` and
+nominal `implements` only, sets `constructs` and `signatures` to false, and warns
+`cannot build a TypeScript program (<reason>); constructs and signatures are not provided`.
 
 An import the cruiser cannot resolve is never an edge: it is reported as the warning
 `unresolved import <specifier> in <module>`. A module or dependency resolved outside the project
 root (a path starting with `../`) is an external tagged `vendor`, named after its first path
 segment, with the warning `module outside the root: <path>`.
+
+## Adapter facts
+
+Beside the edges, the adapter supplies up to four optional facts per module and declares which it
+provides; the graph records them as `capabilities`, each true or false.
+
+| Fact | In the graph | Absent means |
+|---|---|---|
+| `exports` | `units[].exports`: abstract and concrete exported declarations | `exports` is `null`; A and D are `undefined` and no zone is assigned |
+| `implements` | `units[].implements`: the port symbols a unit implements, nominally or by assignability to a declared port | `implements` is `null`; the `ports` Implementers cell reads `not provided by the adapter` |
+| `constructs` | edges of kind `constructs`: from a unit to the unit whose type it instantiates | no `constructs` edges |
+| `signatures` | `units[].signatures`: for each exported symbol, the types from other units named in its public interface, as `{ symbol, types: [{ symbol, path }] }` | `signatures` is `null`; `query signatures` prints `not provided by the adapter` |
+
+A query that needs an absent fact prints `not provided by the adapter` and exits 0; with `--json`
+it prints `{"notProvided": "<fact>", "message": "not provided by the adapter"}`. Nothing that
+depends on an absent fact is left silently empty; the workflow settles it through a fact slice
+(`slicing.md`).
+
+A `constructs` edge gets its crossings and ring direction like an import edge and counts toward
+fan-in, fan-out, component edges, and cycles like one. It usually runs parallel to an import edge
+between the same two units, so it adds an edge but never a new importer.
+
+`--facts-json <file>` feeds saved facts instead of asking the adapter:
+
+```json
+{ "capabilities": { "exports": true, "implements": true, "constructs": true, "signatures": true },
+  "modules": { "<path>": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [],
+                           "constructs": [{ "symbol": "<Symbol>", "path": "<path>" }],
+                           "signatures": [{ "symbol": "<Symbol>", "types": [{ "symbol": "<Symbol>", "path": "<path>" }] }] } } }
+```
+
+A capability left out is false, and a fact whose capability is false is ignored. A module with no
+entry gets empty facts and the warning `no facts entry for <path>`. `--exports-json <file>` is an
+alias of `--facts-json`; it also reads the older per-module `{ exports, implements }` map, which
+provides `exports` and `implements` only.
 
 ## Known limits
 
@@ -46,18 +89,20 @@ scope was narrowed.
 Export counts come from a statement-level scan, so three shapes are counted coarsely: an
 `export type { ... }` re-export counts its names as concrete, each overload signature of an
 exported function counts as one export, and a barrel's `export * from` counts once, at the
-barrel. The skill's own tests exercise this scan only where `typescript` is installed; it is
-otherwise untested.
+barrel. The skill's own tests exercise the program-built facts only where `typescript` is
+installed; otherwise they cover only the fallback to per-file parsing.
 
-The `ports` query lists an implementer only for a class that declares `implements <Symbol>`.
-A structural implementation (an object literal, an intersection type, a `satisfies` check) is not
-detected, so its Implementers cell stays empty and the implementer is settled through a fact slice
-(`slicing.md`).
+The `ports` query lists the implementers the `implements` fact names. Assignability is tested only
+against declared ports and only for a module's own exported values, so a re-export, a value typed
+`any`, or a port with no members never counts as a structural implementer; a port that is not yet
+declared has only nominal implementers. An implementer the fact misses is settled through a fact
+slice (`slicing.md`).
 
 ## `graph`
 
-Builds `.architecture/graph/<commit>.json`: units with component, ring, kind, actors, and export
-counts; edges with direction and crossings; externals; component metrics; component edges;
+Builds `.architecture/graph/<commit>.json`: the adapter's `capabilities`; units with component,
+ring, kind, actors, and the adapter facts; edges of kind `import`, `type-import`, `dynamic`, and
+`constructs`, with direction and crossings; externals; component metrics; component edges;
 cycles; uncovered modules. Deterministic from a commit; rebuilt when the cache is missing, when
 the cached file's `version` differs from the command's graph format version, when `--force` is
 given, or when either saved-output flag is given. A commit with no
@@ -67,7 +112,7 @@ given, or when either saved-output flag is given. A commit with no
 |---|---|
 | `--commit <ref>` | Build the graph for `<ref>` instead of the working tree |
 | `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
-| `--exports-json <file>` | Read export data from `<file>` instead of running the tooling |
+| `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--force` | Rebuild even when a cached graph file already exists |
 | `--json` | Print the full graph as JSON instead of the summary line |
 
@@ -78,7 +123,7 @@ globs, an unknown ring or kind, a duplicate component ID, a port or shape owner 
 component, or fewer than two distinct rings in `rules.json`, stops the run and exits 1 before any
 graph is written.
 
-`--cruise-json` and `--exports-json` feed saved adapter output instead of running the project's
+`--cruise-json` and `--facts-json` feed saved adapter output instead of running the project's
 tooling. They exist for tests and for projects whose tooling cannot run in the current
 environment; passing either always rebuilds, bypassing the cache.
 
@@ -88,7 +133,7 @@ environment; passing either always rebuilds, bypassing the cache.
 |---|---|
 | `<base>` | The commit or ref to diff the working tree against (required) |
 | `--cruise-json <file>` | Read dependency-cruiser output from `<file>` for both sides instead of running it |
-| `--exports-json <file>` | Read export data from `<file>` for both sides instead of running the tooling |
+| `--facts-json <file>` | Read the adapter facts from `<file>` for both sides instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the diff as JSON instead of the markdown sections |
 
 Compares `<base>` against the working tree and prints four sections: Units (added, removed,
@@ -112,7 +157,7 @@ and an untracked path never appears in the diff.
 | `<name>` | The query to run; see the table below |
 | `[args]` | The named query's own positional arguments and flags |
 | `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
-| `--exports-json <file>` | Read export data from `<file>` instead of running the tooling |
+| `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the result as a JSON object of columns and rows instead of a markdown table; `touched --with-neighbors` prints `{ "touched": ..., "neighbors": ... }`, each a columns-and-rows object |
 
 "Read by" collects, from `references/workflows/w1.md` through `w8.md`, every workflow whose
@@ -136,22 +181,28 @@ hand match of the plan's or diff's file list against the globs in
 | `touched` | `--base <ref>` (required), `[--with-neighbors]` | Path, Component, Kind, Ring, Change, Neighbors; with `--with-neighbors` a second table: Path, Component, Kind, Ring, Actors, Abstract, Concrete | change review |
 | `ports` | none | Port, Owner, Humble side, Implementers, Consumers (by component) | W1, W3, W4, W5, W7 |
 | `entry-points` | none | Path, Component, Constructs | W1, W7 |
+| `signatures` | `<path>` (required) | Symbol, Type, From | none yet |
 | `externals` | `[--tag vendor\|framework\|runtime]` | Name, Tag, Importing components, Importing modules | W5, W8 |
 | `volatility` | `--since <ref>` (required) | Component, Commits, Modules touched | W1, W2, W5, W6 |
 
 `edges` lists the module's outgoing internal edges (`out`) and then its incoming ones (`in`),
-with the ring direction of each edge. `ring-crossings` filters every internal edge whose two
+with the kind and ring direction of each edge; a `constructs` edge is listed next to the import
+edge it parallels. `fan-in` lists every edge into the module, so an importer that also constructs
+the module's type appears once per kind. `signatures` prints one row per type from another unit
+that an exported symbol of the module names in its public interface; a symbol whose interface
+names none has no row. `ring-crossings` filters every internal edge whose two
 rings are known by its direction: `outward` and `inward` list edges that cross rings, `same` lists
 edges whose two ends sit in the same ring. `components` prints the component record from
 `docs/architecture/model/components.json` with each component's unit count in the graph.
 `entry-points` expands each component's entry-point globs
-against the graph's units and prints one row per matching unit. `touched` reads `git diff
+against the graph's units and prints one row per matching unit, its Constructs cell listing every
+unit the entry point has an edge to, once. `touched` reads `git diff
 --name-status` against the base plus untracked files: a copy or an untracked unit is `added`, a
 type change is `modified`, and a deleted path is listed only when it was a unit in the base
 graph. With `--with-neighbors`, a second table follows the first: the full unit row of every
 unit one edge away from a touched unit that is not itself touched, sorted by path.
 
-`touched`, `volatility`, and `edges` exit with a usage message when their required argument is
+`touched`, `volatility`, `edges`, and `signatures` exit with a usage message when their required argument is
 missing. In a markdown table a missing value renders as an empty cell, except the I, A, and D
 columns of `metrics`, which render `undefined`; with `--json` it is `null`. A query over an empty
 graph section renders no rows.
@@ -161,7 +212,7 @@ graph section renders no rows.
 | Flag or argument | Meaning |
 |---|---|
 | `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
-| `--exports-json <file>` | Read export data from `<file>` instead of running the tooling |
+| `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the uncovered paths as a JSON array instead of one path per line |
 
 Lists every module no component glob covers or no rule classifies. Exits 1 while the list is
@@ -186,7 +237,7 @@ error and exits 1 without touching the files.
 | `add-rule match=<glob> ring=<r> kind=<k> [actors=a,b] [before=<glob>]` | Insert a classification rule, before the existing rule whose `match` equals `before` when given, otherwise at the end |
 | `remove-rule match=<glob>` | Remove the rule whose `match` glob equals `<glob>` |
 
-`validate` also accepts `--cruise-json <file>` and `--exports-json <file>` to feed saved adapter
+`validate` also accepts `--cruise-json <file>` and `--facts-json <file>` to feed saved adapter
 output instead of running the tooling.
 
 `arch model` with no subcommand prints `usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule>`
@@ -201,7 +252,7 @@ existing component.
 | Flag or argument | Meaning |
 |---|---|
 | `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
-| `--exports-json <file>` | Read export data from `<file>` instead of running the tooling |
+| `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 
 Rewrites the block between the `<!-- arch:summary -->` and `<!-- /arch:summary -->` markers in
 `docs/architecture/README.md` with the components, units, edges, component cycles, and uncovered

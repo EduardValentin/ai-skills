@@ -1,10 +1,17 @@
+import { savedInputs } from "./args.mjs";
 import { matchesAny } from "./glob.mjs";
 import { classify, componentOf } from "./model.mjs";
 import { listUntracked, logNames, nameStatus } from "./git.mjs";
 import { loadOrBuildGraph } from "./graph.mjs";
 
+export const NOT_PROVIDED = "not provided by the adapter";
+
 function unitsByPath(graph) {
   return new Map(graph.units.map((u) => [u.path, u]));
+}
+
+function provides(graph, fact) {
+  return Boolean(graph.capabilities?.[fact]);
 }
 
 function metrics(graph) {
@@ -57,7 +64,7 @@ function units(graph, model, { flags }) {
   const { component, kind, ring } = flags;
   const rows = graph.units
     .filter((u) => (!component || u.component === component) && (!kind || u.kind === kind) && (!ring || u.ring === ring))
-    .map((u) => [u.path, u.kind, u.ring, u.actors, u.exports.abstract, u.exports.concrete]);
+    .map((u) => [u.path, u.kind, u.ring, u.actors, u.exports?.abstract ?? null, u.exports?.concrete ?? null]);
   return { columns: ["Path", "Kind", "Ring", "Actors", "Abstract", "Concrete"], rows };
 }
 
@@ -75,7 +82,7 @@ function neighborUnitRows(graph, touchedPaths, neighborsOf) {
   }
   const rows = [...neighborPaths].sort().map((p) => {
     const u = byPath.get(p);
-    return [u.path, u.component, u.kind, u.ring, u.actors, u.exports.abstract, u.exports.concrete];
+    return [u.path, u.component, u.kind, u.ring, u.actors, u.exports?.abstract ?? null, u.exports?.concrete ?? null];
   });
   return { columns: ["Path", "Component", "Kind", "Ring", "Actors", "Abstract", "Concrete"], rows };
 }
@@ -84,7 +91,7 @@ const CHANGE_LABELS = { A: "added", C: "added", M: "modified", T: "modified", D:
 
 async function baseUnitPaths(root, flags) {
   try {
-    const base = await loadOrBuildGraph(root, { commit: flags.base, cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"] });
+    const base = await loadOrBuildGraph(root, { commit: flags.base, ...savedInputs(flags) });
     return new Set(base.units.map((u) => u.path));
   } catch {
     return null;
@@ -122,10 +129,14 @@ async function touched(graph, model, { flags }, root) {
   return { sections: { touched: touchedTable, neighbors: neighborUnitRows(graph, touchedPaths, neighborsOf) } };
 }
 
+function implementersOf(graph, symbol) {
+  if (!provides(graph, "implements")) return NOT_PROVIDED;
+  return graph.units.filter((u) => (u.implements ?? []).includes(symbol)).map((u) => u.path).sort().join(", ");
+}
+
 function ports(graph, model) {
   const byPath = unitsByPath(graph);
   const rows = model.boundaries.ports.map((port) => {
-    const implementers = graph.units.filter((u) => (u.implements ?? []).includes(port.symbol)).map((u) => u.path).sort();
     const consumerCounts = new Map();
     for (const e of graph.edges) {
       if (e.to !== port.path) continue;
@@ -138,7 +149,7 @@ function ports(graph, model) {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([id, modules]) => `${id} (${modules.size})`)
       .join(", ");
-    return [`${port.path}:${port.symbol}`, port.owner, port.humbleSide ?? null, implementers.join(", "), consumers];
+    return [`${port.path}:${port.symbol}`, port.owner, port.humbleSide ?? null, implementersOf(graph, port.symbol), consumers];
   });
   return { columns: ["Port", "Owner", "Humble side", "Implementers", "Consumers (by component)"], rows };
 }
@@ -149,11 +160,20 @@ function entryPoints(graph, model) {
     const globs = component.entryPoints ?? [];
     if (globs.length === 0) continue;
     for (const unit of graph.units.filter((u) => matchesAny(u.path, globs))) {
-      const constructs = graph.edges.filter((e) => e.from === unit.path).map((e) => e.to).sort();
+      const constructs = [...new Set(graph.edges.filter((e) => e.from === unit.path).map((e) => e.to))].sort();
       rows.push([unit.path, component.id, constructs]);
     }
   }
   return { columns: ["Path", "Component", "Constructs"], rows };
+}
+
+function signatures(graph, model, { positional }) {
+  const [target] = positional;
+  if (!target) throw new Error("usage: arch query signatures <path>");
+  if (!provides(graph, "signatures")) return { notProvided: "signatures" };
+  const unit = graph.units.find((u) => u.path === target);
+  const rows = (unit?.signatures ?? []).flatMap((s) => s.types.map((type) => [s.symbol, type.symbol, type.path]));
+  return { columns: ["Symbol", "Type", "From"], rows };
 }
 
 function externals(graph, model, { flags }) {
@@ -206,6 +226,7 @@ export const QUERIES = {
   touched,
   ports,
   "entry-points": entryPoints,
+  signatures,
   externals,
   volatility,
 };
@@ -225,6 +246,7 @@ function renderMarkdownTable({ columns, rows, undefinedColumns = [] }) {
 }
 
 export function renderMarkdown(result) {
+  if (result.notProvided) return NOT_PROVIDED;
   if (!result.sections) return renderMarkdownTable(result);
   return Object.values(result.sections).map(renderMarkdownTable).join("\n\n");
 }
@@ -234,6 +256,7 @@ function tableJson({ columns, rows }) {
 }
 
 export function renderJson(result) {
+  if (result.notProvided) return JSON.stringify({ notProvided: result.notProvided, message: NOT_PROVIDED });
   if (!result.sections) return JSON.stringify(tableJson(result));
   return JSON.stringify(Object.fromEntries(Object.entries(result.sections).map(([name, table]) => [name, tableJson(table)])));
 }

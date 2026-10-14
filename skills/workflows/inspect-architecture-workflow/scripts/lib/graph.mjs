@@ -5,7 +5,7 @@ import { selectAdapter } from "./adapters/index.mjs";
 import { git, headCommit, isClean, withBaseWorktree } from "./git.mjs";
 
 export const GRAPH_DIR = ".architecture/graph";
-export const GRAPH_VERSION = 2;
+export const GRAPH_VERSION = 3;
 export function graphPath(root, commit) { return path.join(root, GRAPH_DIR, `${commit}.json`); }
 
 export function stronglyConnected(nodes, edges) {
@@ -43,10 +43,11 @@ export function metricsFor(units, edges, components) {
       if (fromIn && !toIn && unitByPath.get(e.to)?.component) exporters.add(e.from);
     }
     const fanIn = importers.size, fanOut = exporters.size;
-    const abstractExports = inside.reduce((n, u) => n + u.exports.abstract, 0);
-    const totalExports = inside.reduce((n, u) => n + u.exports.abstract + u.exports.concrete, 0);
+    const exportsKnown = inside.every((u) => u.exports);
+    const abstractExports = exportsKnown ? inside.reduce((n, u) => n + u.exports.abstract, 0) : null;
+    const totalExports = exportsKnown ? inside.reduce((n, u) => n + u.exports.abstract + u.exports.concrete, 0) : null;
     const instability = fanIn + fanOut === 0 ? null : fanOut / (fanIn + fanOut);
-    const abstractness = totalExports === 0 ? null : abstractExports / totalExports;
+    const abstractness = !totalExports ? null : abstractExports / totalExports;
     const distance = instability === null || abstractness === null ? null : Math.abs(abstractness + instability - 1);
     let inZone = null;
     if (distance !== null && instability <= 0.2 && abstractness <= 0.2 && fanIn >= 3) inZone = "pain";
@@ -55,14 +56,30 @@ export function metricsFor(units, edges, components) {
   });
 }
 
+export const CAPABILITIES = ["exports", "implements", "constructs", "signatures"];
+
+function providedFact(capabilities, module, fact) {
+  return capabilities[fact] ? module[fact] ?? null : null;
+}
+
+function constructsEdges(extracted, capabilities) {
+  if (!capabilities.constructs) return [];
+  const modulePaths = new Set(extracted.modules.map((m) => m.path));
+  return extracted.modules.flatMap((m) => [...new Set((m.constructs ?? []).map((c) => c.path))]
+    .filter((target) => modulePaths.has(target))
+    .map((target) => ({ from: m.path, to: target, kind: "constructs" })));
+}
+
 export function buildGraph({ model, extracted, commit }) {
   const rings = model.rules.rings ?? DEFAULT_RINGS;
   const ringIndex = (ring) => (ring === null ? null : rings.indexOf(ring));
-  const units = extracted.modules.map((m) => ({ path: m.path, ...classify(model, m.path), exports: m.exports, implements: m.implements }))
+  const capabilities = Object.fromEntries(CAPABILITIES.map((fact) => [fact, Boolean(extracted.capabilities?.[fact])]));
+  const units = extracted.modules.map((m) => ({ path: m.path, ...classify(model, m.path), module: m }))
     .sort((a, b) => a.path.localeCompare(b.path))
-    .map((u, i) => ({ id: `U${i + 1}`, path: u.path, component: u.component, ring: u.ring, kind: u.kind, actors: u.actors, exports: u.exports, implements: u.implements }));
+    .map((u, i) => ({ id: `U${i + 1}`, path: u.path, component: u.component, ring: u.ring, kind: u.kind, actors: u.actors,
+      exports: providedFact(capabilities, u.module, "exports"), implements: providedFact(capabilities, u.module, "implements"), signatures: providedFact(capabilities, u.module, "signatures") }));
   const byPath = new Map(units.map((u) => [u.path, u]));
-  const edges = extracted.edges.filter((e) => e.to).map((e) => {
+  const edges = [...extracted.edges.filter((e) => e.to), ...constructsEdges(extracted, capabilities)].map((e) => {
     const from = byPath.get(e.from), to = byPath.get(e.to);
     const fi = ringIndex(from?.ring ?? null), ti = ringIndex(to?.ring ?? null);
     const direction = fi === null || ti === null || fi < 0 || ti < 0 ? "unknown" : ti < fi ? "inward" : ti > fi ? "outward" : "same";
@@ -92,7 +109,7 @@ export function buildGraph({ model, extracted, commit }) {
     components: stronglyConnected(model.components.components.map((c) => c.id), componentEdges.map((e) => [e.from, e.to])),
   };
   const uncovered = units.filter((u) => u.component === null || u.ring === null).map((u) => u.path);
-  return { version: GRAPH_VERSION, commit, language: extracted.language ?? "typescript", generatedAt: new Date().toISOString(), rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
+  return { version: GRAPH_VERSION, commit, language: extracted.language ?? "typescript", generatedAt: new Date().toISOString(), capabilities, rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
 }
 
 async function resolveWorkingTreeKey(root) {
@@ -117,10 +134,11 @@ async function readCachedGraph(file) {
   } catch { return null; }
 }
 
-async function buildIn(buildRoot, { cruiseJsonPath, exportsJsonPath, commit }) {
+async function buildIn(buildRoot, { cruiseJsonPath, factsJsonPath, commit }) {
   const model = await loadModel(buildRoot);
   const adapter = await selectAdapter(model, buildRoot);
-  const extracted = await adapter.extract({ roots: sourceRoots(model), cruiseJsonPath, exportsJsonPath, frameworks: model.rules.frameworks ?? [] });
+  const ports = model.boundaries.ports.map((port) => ({ path: port.path, symbol: port.symbol }));
+  const extracted = await adapter.extract({ roots: sourceRoots(model), cruiseJsonPath, factsJsonPath, frameworks: model.rules.frameworks ?? [], ports });
   extracted.language = adapter.language;
   const problems = validateModel(model, new Set(extracted.modules.map((m) => m.path)));
   const hard = problems.filter((p) => HARD_PROBLEM.test(p));
@@ -138,17 +156,17 @@ export async function modelExistsAt(root, ref) {
   catch { return false; }
 }
 
-export async function loadOrBuildGraph(root, { commit, cruiseJsonPath, exportsJsonPath, force } = {}) {
+export async function loadOrBuildGraph(root, { commit, cruiseJsonPath, factsJsonPath, force } = {}) {
   if (commit && !(await modelExistsAt(root, commit))) throw new Error(`no architecture model at ${commit}`);
   const key = commit ? await resolveCommitKey(root, commit) : await resolveWorkingTreeKey(root);
   const file = graphPath(root, key);
-  const useCache = !force && !cruiseJsonPath && !exportsJsonPath && key !== "working-tree";
+  const useCache = !force && !cruiseJsonPath && !factsJsonPath && key !== "working-tree";
   const cached = useCache ? await readCachedGraph(file) : null;
   if (cached) return cached;
   const needsWorktree = Boolean(commit) && (key !== (await headCommit(root)) || !(await isClean(root)));
   const graph = needsWorktree
-    ? await withBaseWorktree(root, commit, (dir) => buildIn(dir, { cruiseJsonPath, exportsJsonPath, commit: key }))
-    : await buildIn(root, { cruiseJsonPath, exportsJsonPath, commit: key });
+    ? await withBaseWorktree(root, commit, (dir) => buildIn(dir, { cruiseJsonPath, factsJsonPath, commit: key }))
+    : await buildIn(root, { cruiseJsonPath, factsJsonPath, commit: key });
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(graph, null, 2)}\n`, "utf8");
   return graph;

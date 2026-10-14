@@ -14,3 +14,7 @@ export function parseFlags(args) {
   }
   return { positional, flags };
 }
+
+export function savedInputs(flags) {
+  return { cruiseJsonPath: flags["cruise-json"], factsJsonPath: flags["facts-json"] ?? flags["exports-json"] };
+}
