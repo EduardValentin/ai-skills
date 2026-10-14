@@ -26,8 +26,10 @@ clarification request to the planner, carrying no rule or severity).
 
 In a change review a `SHOULD_CHANGE` row is *introduced* when its target is a unit or edge that
 `arch diff` reports as added. In the base-without-model fallback (`change-review.md`, Map step 4)
-it is introduced when its target is a unit that `arch query touched` marks `added`, or an edge
-whose `from` or `to` is such a unit. `arch assess --base <base>` sets the mark on its own rows
+it is introduced when its target is a unit that `arch query touched` marks `added`, an edge
+whose `from` or `to` is such a unit, or a cohesion row (R27, R28), which describes the change
+itself; `arch assess --base <base>` marks its own rows that way in the fallback. With a model at
+the base, `arch assess --base <base>` sets the mark on its own rows
 the same way, matching an edge by its `from -> to` pair, and also marks *introduced* a cycle
 with an edge between its members that is new since the base (a cycle the change only shrinks
 stays left), a component edge or component absent at the base, and a cohesion row (R27, R28),
@@ -76,15 +78,17 @@ Escalation, in order; nothing lowers a severity:
    even if it has not been crossed yet.
 4. A cycle: `blocker` regardless of table.
 
-`arch assess` applies rule 3 to its own rows, using the fan-in of the target's component (for an
-edge, the component of its `to` unit), and names it in the row's Escalation cell only when it
-lifted the severity; the coordinator applies rule 3 to the evaluator rows and rules 1, 2, and 4
-to every row.
+Rule 3 applies to the evaluator rows: the coordinator applies it to them, and rules 1, 2, and 4
+to every row. No assessed row has a base below `major` today, so rule 3 lifts none of them; should
+a future one qualify, `arch assess` records the lift itself, from the fan-in of the target's
+component (for an edge, the component of its `to` unit), in its Severity and Escalation cells.
 
 Keep the base severity beside the escalated one in the ledger: the Severity cell reads
 `<severity>` when no rule lifted the row and `<severity> (base <severity>)` when one did, as in
-`major (base minor)`; the first word is the severity every count and ordering uses. Report how
-many rows each rule lifted, so a distribution dominated by one rule is visible.
+`major (base minor)`; the first word is the severity every count and ordering uses. A row with a
+`[rule <n>]` mark and no base in its Severity cell is refused by `arch ledger add-run`, so write
+the base on every lifted row. Report how many rows each rule lifted, so a distribution dominated
+by one rule is visible.
 
 ## Changes and the improvement map
 

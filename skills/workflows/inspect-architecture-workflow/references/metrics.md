@@ -8,8 +8,8 @@ a finding on its own: every flagged value is explained in words before it become
 ## What is counted
 
 The unit of counting is the module (file). A dependency is any source reference the adapter
-resolves: import, implements, extends, construct, or a type used in a signature. Externals (npm
-packages, runtime modules) and modules with no component are excluded from both fan-in and
+resolves: import, implements, extends, construct, or a type used in a signature. Externals (package
+dependencies, runtime modules) and modules with no component are excluded from both fan-in and
 fan-out.
 
 For a component C:

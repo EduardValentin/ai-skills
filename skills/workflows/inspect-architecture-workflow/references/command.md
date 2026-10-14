@@ -34,7 +34,11 @@ The TypeScript adapter reads these `tooling` settings from `components.json`:
 | `tsConfig` | The TypeScript config that resolves path aliases, passed to the cruiser with `--ts-config` only when the bundled default config runs; a project's own config carries its own. When unset, `tsconfig.json` at the root is passed if it exists. The same file supplies the compiler options of the program the adapter builds for its facts; with neither, the program uses default options |
 
 The TypeScript adapter provides all four facts (see Adapter facts). It builds one TypeScript
-program over the module set so the checker resolves imported types, and tests each exported value
+program over the module set, JavaScript modules included (`allowJs` on, `checkJs` off), so the
+checker resolves imported types. A script module the program still lacks gets `exports` and
+nominal `implements` from a per-file scan and empty `constructs` and `signatures`, with the
+warning `facts for <path> come from the per-file scan`; a module that is not a script (a
+stylesheet, markup, an image, JSON) gets empty facts and no warning. It tests each exported value
 of a module for assignability to every port declared in `boundaries.json` whose module is in the
 set; a match adds the port's symbol to `implements` next to the nominal `implements` clauses, once.
 When the program cannot be built, it falls back to parsing each file alone, provides `exports` and
@@ -100,17 +104,23 @@ configuration excludes test files, `arch query units --kind test` returns only t
 configuration does include, W7 evaluates that narrower set, and the run log records that the
 scope was narrowed.
 
-Export counts come from a statement-level scan, so three shapes are counted coarsely: an
-`export type { ... }` re-export counts its names as concrete, each overload signature of an
-exported function counts as one export, and a barrel's `export * from` counts once, at the
-barrel.
+The `ports` query lists the implementers the `implements` fact names. An implementer the fact
+misses is settled through a fact slice (`slicing.md`).
 
-The `ports` query lists the implementers the `implements` fact names. Assignability is tested only
-against declared ports and only for a module's own exported values, so a re-export, a value of an
-unchecked type, or a port with no members never counts as a structural implementer; a port that is
-not yet declared has only nominal implementers. A port whose members are all optional matches
-structurally in any module that exports an object. An implementer the fact misses is settled through a fact
-slice (`slicing.md`).
+<!-- adapters -->
+The TypeScript adapter counts exports with a statement-level scan, so three shapes are counted
+coarsely: an `export type { ... }` re-export counts its names as concrete, each overload
+signature of an exported function counts as one export, and a barrel's `export * from` counts
+once, at the barrel.
+
+It tests assignability only against declared ports and only for a module's own exported values,
+so a re-export, a value of an unchecked type, or a port with no members never counts as a
+structural implementer; a port that is not yet declared has only nominal implementers. A port
+whose members are all optional matches structurally in any module that exports an object.
+Structural matching also accepts single-method ports too easily: an ID or token port with one
+method matches many unrelated objects. An implementer produced by a factory (an object a
+function returns) or written as an inline literal is not detected.
+<!-- /adapters -->
 
 ## `graph`
 
@@ -125,7 +135,7 @@ given, or when either saved-output flag is given. A commit with no
 | Flag or argument | Meaning |
 |---|---|
 | `--commit <ref>` | Build the graph for `<ref>` instead of the working tree |
-| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
+| `--dependencies-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it; `--cruise-json` is an alias |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--force` | Rebuild even when a cached graph file already exists |
 | `--json` | Print the full graph as JSON instead of the summary line |
@@ -137,7 +147,7 @@ globs, an unknown ring or kind, a duplicate component ID, a port or shape owner 
 component, or fewer than two distinct rings in `rules.json`, stops the run and exits 1 before any
 graph is written.
 
-`--cruise-json` and `--facts-json` feed saved adapter output instead of running the project's
+`--dependencies-json` and `--facts-json` feed saved adapter output instead of running the project's
 tooling. They exist for tests and for projects whose tooling cannot run in the current
 environment; passing either always rebuilds, bypassing the cache.
 
@@ -146,7 +156,7 @@ environment; passing either always rebuilds, bypassing the cache.
 | Flag or argument | Meaning |
 |---|---|
 | `<base>` | The commit or ref to diff the working tree against (required) |
-| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` for both sides instead of running it |
+| `--dependencies-json <file>` | Read the project's dependency tooling output from `<file>` for both sides instead of running it; `--cruise-json` is an alias |
 | `--facts-json <file>` | Read the adapter facts from `<file>` for both sides instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the diff as JSON instead of the markdown sections |
 
@@ -169,7 +179,7 @@ and an untracked path never appears in the diff.
 | Flag or argument | Meaning |
 |---|---|
 | `--base <ref>` | Compare against `<ref>`: set Origin from `arch diff <ref>`, read the touched units and components from `arch query touched --base <ref>`, and emit only the rows inside the change |
-| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
+| `--dependencies-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it; `--cruise-json` is an alias |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print `{ "rows": [...], "notProvided": [...] }` instead of a markdown table; each row is `{ workflow, target, rule, origin, verdict, severity, evidence, change, escalation }` |
 
@@ -187,7 +197,7 @@ It exits 0 whether or not it prints rows: an assessment is not a verdict.
 |---|---|---|---|---|
 | Edge from a policy unit (entity, use-case, port, boundary-data) to a detail unit (controller, presenter, gateway, adapter, composition-root, entry-point, test, config, ui) or to an external of any tag | W1 | R4 | blocker | the edge; `external:<name>` for an external |
 | Edge crossing rings outward, for any other unit | W1 | R4 | blocker | the edge |
-| `constructs` edge from a unit whose kind is not `composition-root` to a unit whose kind is not a policy kind (entity, use-case, port, boundary-data); needs the `constructs` fact | W1 | R7 | blocker | the edge |
+| `constructs` edge from a unit whose kind is not `test`, `config`, or `composition-root` to a unit of a detail kind: every allowed kind except the policy kinds (entity, use-case, port, boundary-data), `test`, `config`, `composition-root`, and `mixed`; needs the `constructs` fact | W1 | R7 | blocker | the edge |
 | Cycle in the component graph | W6 | R30 | blocker | the cycle's component IDs, sorted numerically |
 | Cycle among modules | W6 | R30 | blocker | the cycle's paths, sorted numerically |
 | Component edge whose source has a lower I than its target (from more stable to less stable) | W6 | R31 | major | the component edge `C<a> -> C<b>` |
@@ -229,16 +239,25 @@ with an edge between its members whose pair is absent at the base, a component c
 component edge between its members absent at the base, a component edge or component absent at
 the base, or a cohesion row (R27, R28), which describes the change itself; every other row is
 `left`, so a cycle the change only shrinks stays `left`. When `<ref>` has no
-`docs/architecture/model/components.json`, every row is `left` and stderr reads `no architecture
-model at <ref>; every assessed row is marked left; set Origin from "arch query touched --base
-<ref>" (verdicts.md)`.
+`docs/architecture/model/components.json`, a cohesion row (R27, R28) and an edge or external
+import from or to a unit `arch query touched --base <ref>` marks `added` are `introduced`, every
+other row is `left`, and stderr reads `no architecture model at <ref>; Origin is introduced only
+for cohesion rows and for edges from or to a unit "arch query touched --base <ref>" marks added;
+every other row is left (verdicts.md)`.
 
-Escalation rule 3 of `verdicts.md` is applied here: when the target's component (for an edge,
-the component of its `to` unit; for a component edge, its target component) has a fan-in of 3 or
-more and the base severity is below `major`, the severity is lifted to `major` and Escalation
-reads `rule 3`; a row rule 3 does not lift has an empty Escalation cell. Cycle rows are
-`blocker` by their table and rule 4. The coordinator applies the other escalation rules after
-merging.
+Escalation rule 3 of `verdicts.md` lifts a row only when its base severity is below `major`, and
+no assessed row has such a base today (the two `minor` rows, R28 and an abstract component with
+fan-in 0, have no target component with dependents), so rule 3 is the coordinator's to apply to
+the evaluator rows. Should a future assessed row qualify, the command records the lift itself: when the target's
+component (for an edge, the component of its `to` unit; for a component edge, its target
+component) has a fan-in of 3 or more, Severity reads `major (base <base>)` and Escalation reads
+`rule 3`. A row rule 3 does not lift has an empty Escalation cell. Cycle rows are `blocker` by
+their table and rule 4. The coordinator applies the other escalation rules after merging.
+
+Each assessed row's Change names what it moves, so `ledger map` clusters rows by the real move:
+the R4 rows into one unit share one Change naming that unit, the R7 rows of one constructing unit
+share one naming the constructing unit, a cycle or component edge row names its target, and the
+R27 rows of one change share one naming every touched component.
 
 ## `query`
 
@@ -246,7 +265,7 @@ merging.
 |---|---|
 | `<name>` | The query to run; see the table below |
 | `[args]` | The named query's own positional arguments and flags |
-| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
+| `--dependencies-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it; `--cruise-json` is an alias |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the result as a JSON object of columns and rows instead of a markdown table; `touched --with-neighbors` prints `{ "touched": ..., "neighbors": ... }`, each a columns-and-rows object |
 
@@ -304,7 +323,7 @@ graph section renders no rows.
 
 | Flag or argument | Meaning |
 |---|---|
-| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
+| `--dependencies-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it; `--cruise-json` is an alias |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the uncovered paths as a JSON array instead of one path per line |
 
@@ -332,8 +351,8 @@ error and exits 1 without touching the files.
 | `add-group <name> components=<C,...> absorbs=<text>` | Add or replace the cohesion group named `<name>` |
 | `remove-group <name>` | Remove the cohesion group named `<name>` |
 
-`validate` also accepts `--cruise-json <file>` and `--facts-json <file>` to feed saved adapter
-output instead of running the tooling.
+`validate` also accepts `--dependencies-json <file>` and `--facts-json <file>` to feed saved
+adapter output instead of running the tooling.
 
 `arch model` with no subcommand prints `usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule|add-group|remove-group>`
 and exits 1. `add-override` without a path, `add-rule` without `match=`, `add-component`
@@ -370,17 +389,25 @@ be concatenated as separate tables. A literal `|` inside a cell is written `\|`.
 markers at the end of the Evidence cell; the coordinator writes `[rule 1]`, `[rule 2]`, or
 `[rule 4]` the same way when it lifts a row, since the escalation counts and the run verdict read
 those markers. The Severity cell is `<severity>`, or `<severity> (base <severity>)` for a lifted
-row (`verdicts.md`, Severity); a row carrying only `[rule 1]` or `[rule 3]` marks at `major` with
-no base written is stored as `major (base minor)`, since those rules lift to `major` and only
-from below it. Every count and ordering reads the first word. Two rows with the same target and
+row (`verdicts.md`, Severity). A row carrying an escalation mark (a `[rule <n>]` marker or an
+Escalation cell) with no `(base <severity>)` in its Severity cell is refused: the command prints
+`row <target> <rule>: an escalation mark needs a base severity`, exits 1, and writes nothing.
+Every count and ordering reads the first word. Two rows with the same target and
 rule merge into one: the highest severity with its base (at equal severity, the cell that
 carries a base), the union of the `[rule <n>]` marks, and
 the longer evidence.
 
 `--evaluated` and `--removed` name files listing targets one per line; blank lines and lines
 starting with `#` are ignored. A listed unit path covers the edges, ports, and cycles that name
-it; a line `*` in `--evaluated` covers every target, for an audit of the whole repository. Every
-target of an incoming row counts as evaluated.
+it; a line `*` in `--evaluated` covers every target. Every target of an incoming row counts as
+evaluated. Each mode writes the evaluated file this way, so an assessed row that vanishes is
+resolved rather than carried:
+
+| Mode | `--evaluated` file |
+|---|---|
+| audit | one line `*`: an audit evaluates everything |
+| change-review | the touched unit paths and touched component IDs from `arch query touched --base <base>`, plus every component cycle and every component edge target among the assessed rows |
+| plan-review | the targets the plan overlay marks `proposed` or `changed` |
 
 ### `add-run`
 
@@ -394,8 +421,9 @@ evaluated this run becomes `RESOLVED` with `resolved at <commit>` appended; any 
 carried forward unchanged. A carried-forward finding keeps its Run.
 
 `--scope` is free text for people. The run's identity for the fix loop is its Key: the short
-commit `--base <ref>` resolves to in a change review, the `--plan <path>` as given in a plan
-review, and `audit` in an audit. `--base` is required in a change review and `--plan` in a plan
+commit `--base <ref>` resolves to in a change review, the `--plan <path>` relative to the project
+root with forward slashes in a plan review (so `./docs/p.md`, `docs/p.md`, and its absolute path
+share one Key), and `audit` in an audit. `--base` is required in a change review and `--plan` in a plan
 review; without it the command prints its usage and exits 1.
 
 The run log row records the mode, the scope (with `; skipped W1, W6` when workflows were
@@ -450,7 +478,7 @@ Direction lists the first three changes of the map. Agents totals the `--agents`
 
 | Flag or argument | Meaning |
 |---|---|
-| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
+| `--dependencies-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it; `--cruise-json` is an alias |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 
 Rewrites the block between the `<!-- arch:summary -->` and `<!-- /arch:summary -->` markers in
