@@ -134,14 +134,31 @@ export function parseRows(text) {
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function findingKey(row) { return `${row.target}\u0000${row.rule}`; }
-function severityOf(row) { return SEVERITIES.find((s) => String(row.severity).toLowerCase().includes(s)) ?? null; }
-function severityRank(severity) { return SEVERITIES.indexOf(severity); }
-function liftedBy(row, rule) { return String(row.evidence).includes(`[rule ${rule}]`); }
+const SEVERITY_CELL = /^\s*(blocker|major|minor)\b(?:\s*\(base (blocker|major|minor)\))?/i;
+const MARK = /\s*\[rule (\d+)\]/g;
+const BASE_IMPLIED_RULES = new Set(["1", "3"]);
 
-function withEscalationMarkers(evidence, escalation) {
-  const rules = String(escalation ?? "").match(/\d+/g) ?? [];
-  const missing = rules.filter((rule) => !evidence.includes(`[rule ${rule}]`));
-  return [evidence, ...missing.map((rule) => `[rule ${rule}]`)].filter(Boolean).join(" ");
+function severityOf(row) { return String(row.severity).match(SEVERITY_CELL)?.[1]?.toLowerCase() ?? null; }
+function baseSeverityOf(row) { return String(row.severity).match(SEVERITY_CELL)?.[2]?.toLowerCase() ?? null; }
+function severityCell(severity, base) { return base && base !== severity ? `${severity} (base ${base})` : severity ?? ""; }
+function marksOf(evidence) { return [...String(evidence).matchAll(MARK)].map((m) => m[1]); }
+function withoutMarks(evidence) { return String(evidence).replace(MARK, "").trim(); }
+function withMarks(evidence, marks) {
+  const sorted = [...new Set(marks)].sort((a, b) => Number(a) - Number(b));
+  return [withoutMarks(evidence), ...sorted.map((rule) => `[rule ${rule}]`)].filter(Boolean).join(" ");
+}
+function severityRank(severity) { return SEVERITIES.indexOf(severity); }
+function liftedBy(row, rule) { return marksOf(row.evidence).includes(String(rule)); }
+
+function impliedBase(severity, marks) {
+  const onlyAtLeastMajor = marks.length > 0 && marks.every((rule) => BASE_IMPLIED_RULES.has(rule));
+  return severity === "major" && onlyAtLeastMajor ? "minor" : null;
+}
+
+function incomingSeverity(row, marks) {
+  const severity = severityOf(row);
+  if (!severity) return String(row.severity ?? "").trim().toLowerCase();
+  return severityCell(severity, baseSeverityOf(row) ?? impliedBase(severity, marks));
 }
 
 function normalizeIncoming(row, mode) {
@@ -149,18 +166,25 @@ function normalizeIncoming(row, mode) {
   if (!INCOMING_VERDICTS.has(verdict)) throw new Error(`row ${row.target} ${row.rule}: verdict must be OK, SHOULD_CHANGE, or UNDERSPECIFIED, got "${row.verdict}"`);
   const origin = row.origin || (mode === "change-review" ? "" : "introduced");
   if (verdict !== "OK" && !["introduced", "left"].includes(origin)) throw new Error(`row ${row.target} ${row.rule}: Origin must be introduced or left in a change review`);
+  const marks = [...marksOf(row.evidence), ...(String(row.escalation ?? "").match(/\d+/g) ?? [])];
   return {
     workflow: row.workflow, target: row.target, rule: row.rule, origin, verdict,
-    severity: String(row.severity).toLowerCase(), evidence: withEscalationMarkers(row.evidence, row.escalation),
+    severity: incomingSeverity(row, marks), evidence: withMarks(row.evidence, marks),
     change: row.change, protects: row.protects ?? "",
   };
+}
+
+function mergeDuplicates(kept, row) {
+  const higher = severityRank(severityOf(row)) > severityRank(severityOf(kept)) ? row : kept;
+  const fuller = withoutMarks(row.evidence).length > withoutMarks(kept.evidence).length ? row : kept;
+  return { ...fuller, severity: higher.severity, evidence: withMarks(fuller.evidence, [...marksOf(kept.evidence), ...marksOf(row.evidence)]) };
 }
 
 function dedupe(rows) {
   const byKey = new Map();
   for (const row of rows) {
     const kept = byKey.get(findingKey(row));
-    if (!kept || row.evidence.length > kept.evidence.length) byKey.set(findingKey(row), row);
+    byKey.set(findingKey(row), kept ? mergeDuplicates(kept, row) : row);
   }
   return [...byKey.values()];
 }
@@ -238,9 +262,19 @@ export function refreshRunLog(ledger, run) {
 
 function emptyCounts() { return Object.fromEntries(SEVERITIES.map((s) => [s, 0])); }
 
+function scopeOf(runRow) { return String(runRow.scope).replace(/; skipped .*$/, ""); }
+
+function sameScopeRuns(ledger, run) {
+  const current = ledger.runs.find((r) => r.run === run);
+  if (!current) return new Set([run]);
+  return new Set(ledger.runs.filter((r) => r.mode === current.mode && scopeOf(r) === scopeOf(current)).map((r) => r.run));
+}
+
 export function runVerdict(ledger, run) {
-  const rows = ledger.findings.filter((f) => f.run === run);
-  const open = rows.filter((f) => f.verdict === "SHOULD_CHANGE");
+  const scopeRuns = sameScopeRuns(ledger, run);
+  const isOpen = (f) => f.verdict === "SHOULD_CHANGE";
+  const rows = ledger.findings.filter((f) => f.run === run || (isOpen(f) && scopeRuns.has(f.run)));
+  const open = rows.filter(isOpen);
   const counts = emptyCounts();
   const preExisting = emptyCounts();
   let blocking = false;
@@ -256,6 +290,7 @@ export function runVerdict(ledger, run) {
   return {
     verdict: blocking ? "SHOULD_CHANGE" : "OK",
     counts, preExisting, escalation,
+    carried: ledger.findings.filter((f) => isOpen(f) && !scopeRuns.has(f.run)).length,
     ok: rows.filter((f) => f.verdict === "OK").length,
     underspecified: rows.filter((f) => f.verdict === "UNDERSPECIFIED").length,
     changes: ledger.changes.length,
@@ -310,6 +345,7 @@ export function contractLines(ledger, run, agents) {
   return [
     `Verdict: ${result.verdict} ${DASH} ${counts.blocker} blocker, ${counts.major} major, ${counts.minor} minor open; ${result.ok} targets OK; ${result.changes} changes named`,
     `Pre-existing: ${preExisting.blocker} blocker, ${preExisting.major} major, ${preExisting.minor} minor (not blocking)`,
+    `Carried: ${result.carried} open from earlier scopes (not blocking)`,
     `Escalation: ${escalation[1]} rows lifted by rule 1, ${escalation[2]} by rule 2, ${escalation[3]} by rule 3, ${escalation[4]} by rule 4`,
     "Direction:",
     ...(direction.length > 0 ? direction : ["none"]),
@@ -319,20 +355,31 @@ export function contractLines(ledger, run, agents) {
 
 function quoted(text) { return `"${String(text).replace(/(["\\$`])/g, "\\$1")}"`; }
 
-function groupPromotion(finding, reason) {
-  const outside = String(finding.evidence).match(/(\S+) is outside group (\S+) \(([^)]*)\)/);
-  if (outside) {
-    const [, id, group, members] = outside;
-    const components = [...new Set([...members.split(",").map((m) => m.trim()).filter(Boolean), id])].join(",");
+function touchedComponents(finding) {
+  const listed = String(finding.evidence).match(/touches (.+?)(?:;| and the model records no cohesion groups)/)?.[1] ?? "";
+  return listed.split(",").map((id) => id.trim()).filter(Boolean);
+}
+
+function hostGroup(groups, finding) {
+  const others = touchedComponents(finding).filter((id) => id !== finding.target);
+  const overlap = (group) => others.filter((id) => (group.components ?? []).includes(id)).length;
+  return groups.reduce((best, group) => (overlap(group) > (best ? overlap(best) : 0) ? group : best), null);
+}
+
+function groupPromotion(finding, { reason, groups }) {
+  const host = finding.rule.includes("R27") ? hostGroup(groups ?? [], finding) : null;
+  const paragraph = `Then write the group's paragraph under "Cohesion groups" in decisions.md.`;
+  if (host) {
+    const components = [...new Set([...(host.components ?? []), finding.target])].join(",");
     return {
-      promoted: `model/boundaries.json group ${group}; decisions.md Cohesion groups`,
-      instruction: `arch model add-group ${group} components=${components} absorbs=${quoted(reason)}\nThen write the group's paragraph under "Cohesion groups" in decisions.md.`,
+      promoted: `model/boundaries.json group ${host.name}; decisions.md Cohesion groups`,
+      instruction: `arch model add-group ${host.name} components=${components} absorbs=${quoted(host.absorbs || reason)}\n${paragraph}`,
     };
   }
-  const touched = String(finding.evidence).match(/touches (.+?) and the model records no cohesion groups/)?.[1] ?? finding.target;
+  const members = [...new Set([...touchedComponents(finding), ...(finding.rule.includes("R27") ? [finding.target] : [])])];
   return {
     promoted: "model/boundaries.json group <name>; decisions.md Cohesion groups",
-    instruction: `arch model add-group <name> components=${touched.replace(/\s+/g, "")} absorbs=${quoted(reason)}\nThen write the group's paragraph under "Cohesion groups" in decisions.md.`,
+    instruction: `arch model add-group <name> components=${members.join(",")} absorbs=${quoted(reason)}\n${paragraph}`,
   };
 }
 
@@ -345,7 +392,7 @@ function exceptionPromotion(finding, { by, reason, date, componentOf }) {
 }
 
 function standingPromotion(finding, options) {
-  if (/\bR2[78]\b/.test(finding.rule)) return groupPromotion(finding, options.reason);
+  if (/\bR2[78]\b/.test(finding.rule)) return groupPromotion(finding, options);
   if (finding.target.split(" -> ").length === 2) return exceptionPromotion(finding, options);
   return {
     promoted: "decisions.md",
@@ -353,16 +400,19 @@ function standingPromotion(finding, options) {
   };
 }
 
-export function accept(ledger, id, { kind, by, reason, date = today(), componentOf = null }) {
+export function accept(ledger, id, { kind, by, reason, date = today(), componentOf = null, groups = [] }) {
   const finding = ledger.findings.find((f) => f.id === id);
   if (!finding) throw new Error(`no finding ${id}`);
   if (finding.verdict !== "SHOULD_CHANGE" && finding.verdict !== "ACCEPTED") throw new Error(`${id} is ${finding.verdict}; only a SHOULD_CHANGE finding can be accepted`);
-  const promotion = kind === "standing" ? standingPromotion(finding, { by, reason, date, componentOf }) : null;
+  const promotion = kind === "standing" ? standingPromotion(finding, { by, reason, date, componentOf, groups }) : null;
+  const acceptance = { finding: id, kind, reason, by, date, promoted: promotion?.promoted ?? "none" };
+  const index = ledger.acceptances.findIndex((a) => a.finding === id);
+  const acceptances = index === -1 ? [...ledger.acceptances, acceptance] : ledger.acceptances.map((a, i) => (i === index ? acceptance : a));
   return {
     ledger: {
       ...ledger,
       findings: ledger.findings.map((f) => (f.id === id ? { ...f, verdict: "ACCEPTED" } : f)),
-      acceptances: [...ledger.acceptances, { finding: id, kind, reason, by, date, promoted: promotion?.promoted ?? "" }],
+      acceptances,
     },
     suggestion: promotion?.instruction ?? null,
   };

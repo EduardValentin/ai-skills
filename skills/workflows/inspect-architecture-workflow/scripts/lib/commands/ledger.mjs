@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseFlags } from "../args.mjs";
 import { GRAPH_DIR, resolveWorkingTreeKey } from "../graph.mjs";
+import { loadModel } from "../model.mjs";
 import {
   LEDGER_PATH, MODES, accept, addRun, buildMap, contractLines, lastRun, parseLedger, parseRows, refreshRunLog, renderRunLogRow, templateText, writeLedger,
 } from "../ledger.mjs";
@@ -61,12 +62,19 @@ async function componentsByPath(root) {
   }
 }
 
+async function cohesionGroups(root) {
+  try { return (await loadModel(root)).boundaries?.groups ?? []; }
+  catch { return []; }
+}
+
 async function acceptCommand(root, positional, flags) {
   const kind = flags["one-off"] === true ? "one-off" : flags.standing === true ? "standing" : null;
   const valid = positional.length === 1 && kind && typeof flags.by === "string" && typeof flags.reason === "string" && !(flags["one-off"] && flags.standing);
   if (!valid) { console.error(SUB_USAGE.accept); return 1; }
   const { ledger, suggestion } = accept(await loadLedger(root), positional[0], {
-    kind, by: flags.by, reason: flags.reason, componentOf: kind === "standing" ? await componentsByPath(root) : null,
+    kind, by: flags.by, reason: flags.reason,
+    componentOf: kind === "standing" ? await componentsByPath(root) : null,
+    groups: kind === "standing" ? await cohesionGroups(root) : [],
   });
   await saveLedger(root, ledger);
   console.log(`${positional[0]} ACCEPTED (${kind})`);

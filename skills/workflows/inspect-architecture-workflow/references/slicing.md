@@ -90,8 +90,8 @@ Rules 1 to 3 are what `arch ledger add-run` and `arch ledger map` do (`reference
 the ledger's tables.
 
 1. **Findings.** Run `arch ledger add-run` with the run's rows, the skipped workflows, the
-   evaluated targets, and the removed targets. Rows are keyed by target and rule, a duplicate
-   keeping the fuller evidence. A matched finding keeps its ID. A previous `SHOULD_CHANGE` row
+   evaluated targets, and the removed targets. Rows are keyed by target and rule; duplicates
+   merge into one row with the highest severity, every escalation mark, and the fuller evidence. A matched finding keeps its ID. A previous `SHOULD_CHANGE` row
    whose target this run evaluated and found compliant becomes `RESOLVED` with this run's commit.
    A row found again keeps its ID with this run's evidence. A row whose target no longer exists
    becomes `RESOLVED` with a note that the target was removed. A row this run did not evaluate,

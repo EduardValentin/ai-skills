@@ -336,7 +336,9 @@ component.
 Keeps `.architecture/ledger.md`, the uncommitted ledger, so the coordinator never edits its
 tables by hand. A missing ledger starts from `assets/ledger/ledger.md`. Every table keeps the
 template's columns and every line of prose is kept as written. The run's commit is the short head
-commit, or `working-tree` when the tree has uncommitted changes, as `graph` keys it.
+commit, or `working-tree` when the tree has uncommitted changes, as `graph` keys it. A finding
+resolved `at working-tree` was judged on uncommitted code; the next run on a clean tree confirms
+it, and a finding found again there reopens with its ID.
 
 | Subcommand | Meaning |
 |---|---|
@@ -354,8 +356,12 @@ be concatenated as separate tables. A literal `|` inside a cell is written `\|`.
 `introduced` in the other modes. An Escalation cell naming rules (`rule 3`) is kept as `[rule 3]`
 markers at the end of the Evidence cell; the coordinator writes `[rule 1]`, `[rule 2]`, or
 `[rule 4]` the same way when it lifts a row, since the escalation counts and the run verdict read
-those markers. Two rows with the same target and rule are one row, the one with the longer
-evidence.
+those markers. The Severity cell is `<severity>`, or `<severity> (base <severity>)` for a lifted
+row (`verdicts.md`, Severity); a row carrying only `[rule 1]` or `[rule 3]` marks at `major` with
+no base written is stored as `major (base minor)`, since those rules lift to `major` and only
+from below it. Every count and ordering reads the first word. Two rows with the same target and
+rule merge into one: the highest severity with its base, the union of the `[rule <n>]` marks, and
+the longer evidence.
 
 `--evaluated` and `--removed` name files listing targets one per line; blank lines and lines
 starting with `#` are ignored. A listed unit path covers the edges, ports, and cycles that name
@@ -381,13 +387,15 @@ verdict and counts described under `map`. Prints the run log row:
 
 ### `accept`
 
-Sets the finding to `ACCEPTED` and appends the Acceptances row (Finding, One-off or standing,
-Reason, Accepted by, today's date, Promoted to). Prints `<F-id> ACCEPTED (<kind>)`. With
+Sets the finding to `ACCEPTED` and writes its Acceptances row (Finding, One-off or standing,
+Reason, Accepted by, today's date, Promoted to; `none` for a one-off). Accepting a finding again
+replaces its row. Prints `<F-id> ACCEPTED (<kind>)`. With
 `--standing` it also prints the record edit for the coordinator to make, and Promoted to names it:
 
 | Finding | Printed record edit |
 |---|---|
-| R27 or R28 | `arch model add-group <group> components=<C,...> absorbs="<reason>"`, widening the group the Evidence names to hold the target, then the group's paragraph in `decisions.md` |
+| R27 | `arch model add-group <group> components=<C,...> absorbs="<absorbs>"`, read from the current `docs/architecture/model/boundaries.json`: the group holding the most of the other components the Evidence names, with its members and `absorbs` plus the target, so successive acceptances accumulate once each printed command runs; when no group holds any of them, `add-group <name>` with the Evidence's components and the reason. Then the group's paragraph in `decisions.md` |
+| R28 | `arch model add-group <name> components=<the Evidence's components> absorbs="<reason>"`, then the group's paragraph in `decisions.md` |
 | An edge `from -> to` | An Intended exceptions row for `decisions.md`, with each path replaced by its component when the graph of the current commit is saved under `.architecture/graph/` |
 | Anything else | A deferred decision or cohesion position to record in `decisions.md` |
 
@@ -402,11 +410,14 @@ Improvement map (Order, Change, Severity, Rows as a count, Protects as the rows'
 and the `CH-` name into each clustered finding's Change cell; a later `map` reads the names back
 through the Changes table. It refreshes the last run log row, since an acceptance changes the
 counts, and prints, for the last run, the return contract lines of `verdicts.md` in its
-wording: Verdict, Pre-existing, Escalation, Direction (one numbered line per change, naming the
+wording: Verdict, Pre-existing, Carried, Escalation, Direction (one numbered line per change, naming the
 `CH-` name, the rules, the change, and `protects <upcoming changes>` or `protects none`), and
 Agents.
 
-The run's rows are the findings whose Run is the last run. Verdict counts its open
+The run's rows are the findings whose Run is the last run, plus the open `SHOULD_CHANGE`
+findings whose Run is an earlier run of the same mode and scope (the scope without its skipped
+note): a fix loop keeps counting what it has not yet re-evaluated. Carried counts the open
+`SHOULD_CHANGE` findings of every other scope. Verdict counts the run's open
 `SHOULD_CHANGE` rows that are `introduced` or carry `[rule 2]`, and is `SHOULD_CHANGE` when one of
 them is `blocker` or `major`; Pre-existing counts its other open rows; targets OK counts its `OK`
 rows; Escalation counts its `SHOULD_CHANGE` and `ACCEPTED` rows per `[rule <n>]` marker;

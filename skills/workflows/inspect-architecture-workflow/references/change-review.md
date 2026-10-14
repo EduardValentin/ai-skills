@@ -49,8 +49,9 @@ as accepted structure.
    assess output file as decided rows. It judges only changed targets and the edges touching
    them, from rows and never from code, and phrases findings as "the diff introduces" or "the
    diff leaves in place".
-4. Merge the evaluator rows with the assessed rows, escalate, mark each evaluator row introduced
-   or left in place, group changes, and build the improvement map per `verdicts.md`. A row the
+4. Merge the evaluator rows with the assessed rows into one row file, escalate, and mark each
+   evaluator row introduced or left in place per `verdicts.md`; `arch ledger add-run` and `arch
+   ledger map` in Record keep existing IDs, group changes, and build the improvement map. A row the
    plan review of this ticket set to `ACCEPTED` keeps that verdict while its target and rule
    still match; it is not raised again.
 

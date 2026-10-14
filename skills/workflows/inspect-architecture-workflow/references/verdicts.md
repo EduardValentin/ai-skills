@@ -77,8 +77,10 @@ edge, the component of its `to` unit), and names it in the row's Escalation cell
 lifted the severity; the coordinator applies rule 3 to the evaluator rows and rules 1, 2, and 4
 to every row.
 
-Keep the base severity beside the escalated one in the ledger, and report how many rows each
-rule lifted, so a distribution dominated by one rule is visible.
+Keep the base severity beside the escalated one in the ledger: the Severity cell reads
+`<severity>` when no rule lifted the row and `<severity> (base <severity>)` when one did, as in
+`major (base minor)`; the first word is the severity every count and ordering uses. Report how
+many rows each rule lifted, so a distribution dominated by one rule is visible.
 
 ## Changes and the improvement map
 
@@ -93,7 +95,11 @@ the rows, never written independently of them.
 `SHOULD_CHANGE`. Every introduced row counts. A left-in-place row counts only when escalation
 rule 2 lifted its severity (fixing it first makes the named change cheaper). The other
 left-in-place rows never block: the return contract reports them under `Pre-existing` with their
-severities. In
+severities. A
+re-run of the same mode and scope (the plan review fix loop, a second round of a change review)
+counts its own rows and the open rows the earlier runs of that scope carried forward, so a
+finding the re-run did not evaluate still blocks. Open rows from other scopes never block; the
+return contract reports them on the `Carried` line so they never vanish. In
 plan review a `SHOULD_CHANGE` verdict, or any open `UNDERSPECIFIED` row, blocks plan approval
 until each blocker and major row is resolved in the plan or `ACCEPTED` by the user and each
 clarification is answered.
@@ -101,7 +107,7 @@ clarification is answered.
 ## Return contract
 
 No report file: the ledger is for agents, the committed record for people. `arch ledger map`
-prints the Verdict, Pre-existing, Escalation, Direction, and Agents lines from the ledger
+prints the Verdict, Pre-existing, Carried, Escalation, Direction, and Agents lines from the ledger
 (`references/command.md`, `ledger`); the coordinator fills in the rest. The Verdict line
 counts the rows the run verdict counts; the Pre-existing line counts the left-in-place rows it
 does not, and reads `0 blocker, 0 major, 0 minor` outside a change review. Reply to the caller
@@ -111,6 +117,7 @@ with:
 # Architecture <audit | change review | plan review> — <scope>
 Verdict: <OK | SHOULD_CHANGE> — <n> blocker, <n> major, <n> minor open; <n> targets OK; <n> changes named
 Pre-existing: <n> blocker, <n> major, <n> minor (not blocking)
+Carried: <n> open from earlier scopes (not blocking)
 Escalation: <n> rows lifted by rule 1, <n> by rule 2, <n> by rule 3, <n> by rule 4
 Baseline: <docs/architecture at commit, or "created this run, commit with the PR">
 Direction:
