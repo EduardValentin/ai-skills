@@ -175,14 +175,14 @@ It exits 0 whether or not it prints rows: an assessment is not a verdict.
 |---|---|---|---|---|
 | Edge from a policy unit (entity, use-case, port, boundary-data) to a detail unit (controller, presenter, gateway, adapter, composition-root, entry-point, test, config, ui) or to an external of any tag | W1 | R4 | blocker | the edge; `external:<name>` for an external |
 | Edge crossing rings outward, for any other unit | W1 | R4 | blocker | the edge |
-| `constructs` edge from a unit whose kind is not `composition-root` to a unit in one of the two outermost rings (`adapters` and `frameworks` by default); needs the `constructs` fact | W1 | R7 | blocker | the edge |
+| `constructs` edge from a unit whose kind is not `composition-root` to a unit whose kind is not a policy kind (entity, use-case, port, boundary-data); needs the `constructs` fact | W1 | R7 | blocker | the edge |
 | Cycle in the component graph | W6 | R30 | blocker | the cycle's component IDs, sorted numerically |
 | Cycle among modules | W6 | R30 | blocker | the cycle's paths, sorted numerically |
 | Component edge whose source has a lower I than its target (from more stable to less stable) | W6 | R31 | major | the component edge `C<a> -> C<b>` |
 | Component in the zone of pain (`metrics.md`) that the change touches; with `--base` only; needs the `exports` fact | W6 | R31, R32 | major | the component |
 | Component with abstract exports and a fan-in of 0 (no consumer outside at all); needs the `exports` fact | W6 | R31, R32 | minor | the component |
 | Change touches two or more components and the model records no groups; with `--base` only | W6 | R28 | minor | `docs/architecture/model/boundaries.json` |
-| Change touches a component that no recorded group holds together with every other touched component; with `--base` only | W6 | R27 | major | each such touched component |
+| Change touches a component that shares no recorded group with at least one other touched component; with `--base` only | W6 | R27 | major | each such touched component |
 
 Every other decision-table condition, including any that mentions behavior, intent, naming, or a
 document, stays with the evaluator, as does the rest of a condition only partly listed here
@@ -190,10 +190,11 @@ document, stays with the evaluator, as does the rest of a condition only partly 
 An edge that both R4 rows match is one row: the first matching condition decides, as in every
 decision table.
 
-R27 reads overlapping groups this way: a touched component is a row unless one recorded group
-holds it and every other touched component. So when no single group holds every touched
-component, each touched component is a row, even one that shares a group with some of the
-others; when one group holds them all, none is.
+R27 reads overlapping groups this way: a touched component is a row when at least one other
+touched component shares no recorded group with it. With groups {C1, C2} and {C2, C3} and C1,
+C2, and C3 touched, C1 and C3 are rows and C2 is not. The row's Evidence has a fixed form that
+`ledger accept --standing` parses: `<X> shares no recorded group with <Y[, Z]>; groups holding
+<X>: <G1[, G2]>`, with `none` in place of the group list when no group holds X.
 
 With `--base`, rows outside the change are not emitted. A row is inside the change when its
 target is a touched unit, an edge or external import from or to a touched unit, a module cycle
@@ -394,7 +395,7 @@ replaces its row. Prints `<F-id> ACCEPTED (<kind>)`. With
 
 | Finding | Printed record edit |
 |---|---|
-| R27 | `arch model add-group <group> components=<C,...> absorbs="<absorbs>"`, read from the current `docs/architecture/model/boundaries.json`: the group holding the most of the other components the Evidence names, with its members and `absorbs` plus the target, so successive acceptances accumulate once each printed command runs; when no group holds any of them, `add-group <name>` with the Evidence's components and the reason. Then the group's paragraph in `decisions.md` |
+| R27 | Read from the Evidence and the current `docs/architecture/model/boundaries.json`: for each group the Evidence names as holding the target, `arch model add-group <group> components=<its current members plus the partners the Evidence names> absorbs="<its absorbs>"`, so successive acceptances accumulate once each printed command runs; when the Evidence says `none`, `arch model add-group <name> components=<the target and the partners> absorbs="<to be stated>"`. Then the group's paragraph in `decisions.md` |
 | R28 | `arch model add-group <name> components=<the Evidence's components> absorbs="<reason>"`, then the group's paragraph in `decisions.md` |
 | An edge `from -> to` | An Intended exceptions row for `decisions.md`, with each path replaced by its component when the graph of the current commit is saved under `.architecture/graph/` |
 | Anything else | A deferred decision or cohesion position to record in `decisions.md` |

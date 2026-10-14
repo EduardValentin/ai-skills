@@ -190,7 +190,7 @@ def test_accepted_row_resolves_once_the_target_complies(tmp_path: Path):
     assert findings(root)["F1"]["verdict"] == "RESOLVED"
 
 
-R27_EVIDENCE = "the change touches C1, C2, C3; no recorded group holds {0} together with every other touched component"
+R27_EVIDENCE = "{0} shares no recorded group with {1}; groups holding {0}: {2}"
 
 
 def payroll_project(tmp_path: Path) -> Path:
@@ -206,31 +206,40 @@ def run_printed_model_command(root: Path, stdout: str) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_accept_standing_creates_a_group_from_the_evidence_when_none_holds_the_others(tmp_path: Path):
+def test_accept_standing_creates_a_group_from_the_evidence_when_none_holds_the_target(tmp_path: Path):
     root = project(tmp_path)
-    add_run(root, [row(workflow="W6", target="C3", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C3"), change="Split the change")])
+    add_run(root, [row(workflow="W6", target="C3", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C3", "C1, C2", "none"), change="Split the change")])
     result = run_arch(["ledger", "accept", "F1", "--standing", "--by", "Eduard", "--reason", "invoices change with billing"], root)
     assert result.returncode == 0, result.stderr
-    assert 'arch model add-group <name> components=C1,C2,C3 absorbs="invoices change with billing"' in result.stdout
+    assert 'arch model add-group <name> components=C1,C2,C3 absorbs="<to be stated>"' in result.stdout
     acceptance = parsed(root)["acceptances"][0]
     assert acceptance["kind"] == "standing" and "group" in acceptance["promoted"]
 
 
-def test_successive_standing_acceptances_accumulate_in_the_current_group(tmp_path: Path):
+def test_accept_standing_widens_every_group_the_evidence_names(tmp_path: Path):
+    root = payroll_project(tmp_path)
+    assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=core rules"], root).returncode == 0
+    assert run_arch(["model", "add-group", "side", "components=C1", "absorbs=side rules"], root).returncode == 0
+    add_run(root, [row(workflow="W6", target="C1", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C1", "C3", "core, side"), change="Split the change")])
+    result = run_arch(["ledger", "accept", "F1", "--standing", "--by", "Eduard", "--reason", "web moves with the domain"], root)
+    assert result.returncode == 0, result.stderr
+    assert 'arch model add-group core components=C1,C2,C3 absorbs="core rules"' in result.stdout
+    assert 'arch model add-group side components=C1,C3 absorbs="side rules"' in result.stdout
+    assert parsed(root)["acceptances"][0]["promoted"] == "model/boundaries.json groups core, side; decisions.md Cohesion groups"
+
+
+def test_the_printed_widening_command_widens_the_current_group(tmp_path: Path):
     root = payroll_project(tmp_path)
     assert run_arch(["model", "add-group", "billing", "components=C1", "absorbs=billing rules"], root).returncode == 0
     add_run(root, [
-        row(workflow="W6", target="C2", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C2"), change="Split the change"),
-        row(workflow="W6", target="C3", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C3"), change="Split the change"),
+        row(workflow="W6", target="C1", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C1", "C2", "billing"), change="Split the change"),
     ])
     first = run_arch(["ledger", "accept", "F1", "--standing", "--by", "Eduard", "--reason", "payroll moves with billing"], root)
     assert first.returncode == 0, first.stderr
     assert 'arch model add-group billing components=C1,C2 absorbs="billing rules"' in first.stdout
     run_printed_model_command(root, first.stdout)
-    second = run_arch(["ledger", "accept", "F2", "--standing", "--by", "Eduard", "--reason", "web moves with billing"], root)
-    assert second.returncode == 0, second.stderr
-    assert 'arch model add-group billing components=C1,C2,C3 absorbs="billing rules"' in second.stdout
-    assert parsed(root)["acceptances"][1]["promoted"] == "model/boundaries.json group billing; decisions.md Cohesion groups"
+    groups = json.loads((root / "docs/architecture/model/boundaries.json").read_text())["groups"]
+    assert next(g for g in groups if g["name"] == "billing")["components"] == ["C1", "C2"]
 
 
 def test_accepting_again_updates_the_acceptance_row(tmp_path: Path):

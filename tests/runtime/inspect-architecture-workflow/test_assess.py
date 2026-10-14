@@ -107,12 +107,25 @@ def test_change_across_components_without_groups_asks_for_them_until_a_group_cov
     assert assess_rows(root, "--base", "HEAD") == []
 
 
-def test_every_touched_component_sharing_no_group_with_all_the_others_is_an_r27_row(tmp_path: Path):
+def test_r27_rows_are_the_touched_components_that_share_no_group_with_some_other_touched_component(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    touch(root, "src/domain/employee.ts", "src/adapters/system-clock.ts", "src/web/main.ts")
+    assert run_arch(["model", "add-group", "storage", "components=C1,C2", "absorbs=storage"], root).returncode == 0
+    assert run_arch(["model", "add-group", "delivery", "components=C2,C3", "absorbs=delivery"], root).returncode == 0
+    rows = [r for r in assess_rows(root, "--base", "HEAD") if r["rule"] == "R27"]
+    assert keys(rows) == [("C1", "R27"), ("C3", "R27")]
+    assert rows[0]["evidence"] == "C1 shares no recorded group with C3; groups holding C1: storage"
+    assert rows[1]["evidence"] == "C3 shares no recorded group with C1; groups holding C3: delivery"
+    assert {r["severity"] for r in rows} == {"major"}
+
+
+def test_r27_evidence_says_none_when_no_group_holds_the_component(tmp_path: Path):
     root = two_component_change(tmp_path)
     assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=storage"], root).returncode == 0
     rows = assess_rows(root, "--base", "HEAD")
     assert keys(rows) == [("C1", "R27"), ("C3", "R27")]
-    assert {r["severity"] for r in rows} == {"major"}
+    assert rows[1]["evidence"] == "C3 shares no recorded group with C1; groups holding C3: none"
 
 
 def test_edge_origin_follows_the_pair_against_the_base(tmp_path: Path):
@@ -227,3 +240,18 @@ def test_cycle_targets_sort_members_numerically(tmp_path: Path):
     graph = empty_graph([component("C2", 1, 1, 0.5, None, None), component("C10", 1, 1, 0.5, None, None)])
     graph["cycles"]["components"] = [["C2", "C10"]]
     assert keys(run_assess(tmp_path, graph, None)["rows"]) == [("C2 -> C10", "R30")]
+
+
+def test_construction_of_a_policy_kind_is_not_a_row_under_custom_rings(tmp_path: Path):
+    graph = empty_graph([])
+    graph["rings"] = ["entities", "use-cases", "adapters"]
+    graph["units"] = [
+        {"path": "web/controller.ts", "component": None, "ring": "adapters", "kind": "controller"},
+        {"path": "app/use-case.ts", "component": None, "ring": "use-cases", "kind": "use-case"},
+        {"path": "db/gateway.ts", "component": None, "ring": "adapters", "kind": "gateway"},
+    ]
+    graph["edges"] = [
+        {"from": "web/controller.ts", "to": "app/use-case.ts", "kind": "constructs", "direction": "inward"},
+        {"from": "web/controller.ts", "to": "db/gateway.ts", "kind": "constructs", "direction": "same"},
+    ]
+    assert keys(run_assess(tmp_path, graph, None)["rows"]) == [("web/controller.ts -> db/gateway.ts", "R7")]

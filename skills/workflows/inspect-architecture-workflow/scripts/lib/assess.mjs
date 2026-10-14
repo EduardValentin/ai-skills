@@ -10,7 +10,6 @@ export const NOT_PROVIDED_LINES = {
 
 const POLICY_KINDS = new Set(["entity", "use-case", "port", "boundary-data"]);
 const DETAIL_KINDS = new Set(["controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui"]);
-const DETAIL_RING_COUNT = 2;
 const SEVERITY_ORDER = ["minor", "major", "blocker"];
 const ESCALATION_FAN_IN = 3;
 const GROUPS_TARGET = `${MODEL_DIR}/boundaries.json`;
@@ -68,10 +67,9 @@ function ringFindings(graph, byPath) {
 }
 
 function constructionFindings(graph, byPath) {
-  const detailRings = new Set((graph.rings ?? []).slice(-DETAIL_RING_COUNT));
   return graph.edges.filter((e) => e.kind === "constructs").flatMap((edge) => {
     const from = byPath.get(edge.from), to = byPath.get(edge.to);
-    if (!from || !to || from.kind === "composition-root" || !detailRings.has(to.ring)) return [];
+    if (!from || !to || from.kind === "composition-root" || POLICY_KINDS.has(to.kind)) return [];
     return [{
       workflow: "W1", target: edgeTarget(edge.from, edge.to), rule: "R7", severity: "blocker",
       evidence: `concrete detail constructed outside a composition root: ${describeUnit(from)} constructs ${describeUnit(to)}`,
@@ -147,9 +145,15 @@ function cohesionFindings(model, touched) {
     return [{ ...base, target: GROUPS_TARGET, rule: "R28", severity: "minor", escalationComponent: null, change: CHANGES.groups,
       evidence: `the change touches ${components.join(", ")} and the model records no cohesion groups` }];
   }
-  if (groups.some((g) => components.every((id) => (g.components ?? []).includes(id)))) return [];
-  return components.map((id) => ({ ...base, target: id, rule: "R27", severity: "major", escalationComponent: id, change: CHANGES.spread,
-    evidence: `the change touches ${components.join(", ")}; no recorded group holds ${id} together with every other touched component` }));
+  const groupsHolding = (id) => groups.filter((g) => (g.components ?? []).includes(id)).map((g) => g.name);
+  const shareGroup = (a, b) => groups.some((g) => (g.components ?? []).includes(a) && (g.components ?? []).includes(b));
+  return components.flatMap((id) => {
+    const partners = components.filter((other) => other !== id && !shareGroup(id, other));
+    if (partners.length === 0) return [];
+    const holding = groupsHolding(id);
+    return [{ ...base, target: id, rule: "R27", severity: "major", escalationComponent: id, change: CHANGES.spread,
+      evidence: `${id} shares no recorded group with ${partners.join(", ")}; groups holding ${id}: ${holding.length > 0 ? holding.join(", ") : "none"}` }];
+  });
 }
 
 function originResolver({ graph, baseGraph, diff, touched }) {

@@ -355,32 +355,50 @@ export function contractLines(ledger, run, agents) {
 
 function quoted(text) { return `"${String(text).replace(/(["\\$`])/g, "\\$1")}"`; }
 
+function listed(text) { return text.split(",").map((id) => id.trim()).filter(Boolean); }
+
 function touchedComponents(finding) {
-  const listed = String(finding.evidence).match(/touches (.+?)(?:;| and the model records no cohesion groups)/)?.[1] ?? "";
-  return listed.split(",").map((id) => id.trim()).filter(Boolean);
+  return listed(String(finding.evidence).match(/touches (.+?) and the model records no cohesion groups/)?.[1] ?? "");
 }
 
-function hostGroup(groups, finding) {
-  const others = touchedComponents(finding).filter((id) => id !== finding.target);
-  const overlap = (group) => others.filter((id) => (group.components ?? []).includes(id)).length;
-  return groups.reduce((best, group) => (overlap(group) > (best ? overlap(best) : 0) ? group : best), null);
+const R27_EVIDENCE = /^(\S+) shares no recorded group with (.+?); groups holding \S+: (.+)$/;
+
+function spreadEvidence(finding) {
+  const match = String(finding.evidence).match(R27_EVIDENCE);
+  if (!match) return { partners: [], holding: [] };
+  const holding = match[3].trim() === "none" ? [] : listed(match[3]);
+  return { partners: listed(match[2]), holding };
 }
 
-function groupPromotion(finding, { reason, groups }) {
-  const host = finding.rule.includes("R27") ? hostGroup(groups ?? [], finding) : null;
-  const paragraph = `Then write the group's paragraph under "Cohesion groups" in decisions.md.`;
-  if (host) {
-    const components = [...new Set([...(host.components ?? []), finding.target])].join(",");
-    return {
-      promoted: `model/boundaries.json group ${host.name}; decisions.md Cohesion groups`,
-      instruction: `arch model add-group ${host.name} components=${components} absorbs=${quoted(host.absorbs || reason)}\n${paragraph}`,
-    };
-  }
-  const members = [...new Set([...touchedComponents(finding), ...(finding.rule.includes("R27") ? [finding.target] : [])])];
+function naturalSorted(ids) { return [...new Set(ids)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })); }
+
+const GROUP_PARAGRAPH = `Then write the group's paragraph under "Cohesion groups" in decisions.md.`;
+
+function newGroupPromotion(members, absorbs) {
   return {
     promoted: "model/boundaries.json group <name>; decisions.md Cohesion groups",
-    instruction: `arch model add-group <name> components=${members.join(",")} absorbs=${quoted(reason)}\n${paragraph}`,
+    instruction: `arch model add-group <name> components=${naturalSorted(members).join(",")} absorbs=${quoted(absorbs)}\n${GROUP_PARAGRAPH}`,
   };
+}
+
+function spreadPromotion(finding, { reason, groups }) {
+  const { partners, holding } = spreadEvidence(finding);
+  if (holding.length === 0) return newGroupPromotion([finding.target, ...partners], "<to be stated>");
+  const commands = holding.map((name) => {
+    const current = (groups ?? []).find((g) => g.name === name);
+    const members = naturalSorted([...(current?.components ?? [finding.target]), ...partners]);
+    return `arch model add-group ${name} components=${members.join(",")} absorbs=${quoted(current?.absorbs || reason)}`;
+  });
+  const noun = holding.length === 1 ? "group" : "groups";
+  return {
+    promoted: `model/boundaries.json ${noun} ${holding.join(", ")}; decisions.md Cohesion groups`,
+    instruction: `${commands.join("\n")}\n${GROUP_PARAGRAPH}`,
+  };
+}
+
+function groupPromotion(finding, options) {
+  if (finding.rule.includes("R27")) return spreadPromotion(finding, options);
+  return newGroupPromotion(touchedComponents(finding), options.reason);
 }
 
 function exceptionPromotion(finding, { by, reason, date, componentOf }) {
