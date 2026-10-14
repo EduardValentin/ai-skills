@@ -49,7 +49,10 @@ both named after the workflow (`references/workflows/w1.md` and `references/rule
 W1, and so on); `references/metrics.md` for W6 only; the output of the queries the workflow's
 `Reads:` line names, run by the coordinator with `--json` off so the packet carries markdown
 tables, each written to `.architecture/slices/packet/<nn>-<query>.md` and named in the packet by
-absolute path (no query output longer than a screen is pasted inline); the baseline's `decisions.md`; in change or plan review, the rows marked `proposed` or
+absolute path (no query output longer than a screen is pasted inline); the `arch assess` output,
+written to `.architecture/slices/packet/00-assess.md` and named in the packet as "decided rows: do
+not re-derive them", so the evaluator judges only the conditions its workflow files leave
+unmarked; the baseline's `decisions.md`; in change or plan review, the rows marked `proposed` or
 `changed`, with the instruction to evaluate only those targets and the edges touching them.
 
 Fan-out follows the graph size. An audit dispatches one evaluator per workflow, W1 to W8, in
@@ -93,7 +96,10 @@ workflow rows the questions came from.
    `ACCEPTED`; one whose target now satisfies the rule becomes `RESOLVED`.
 2. **Changes.** Cluster `SHOULD_CHANGE` rows whose `change` descriptions name the same move
    (same port, same split, same extraction) into one `CH-<letter>`; write the description once.
-3. **Severity.** Apply the escalation rules in `references/verdicts.md` after merging, so escalation sees
+3. **Decided rows.** Merge the `arch assess` rows with the evaluator rows as rows of the same
+   run. An assessed row whose edge, component pair, or ring pair a recorded intended exception
+   in `decisions.md` covers is written `OK` naming the exception.
+4. **Severity.** Apply the escalation rules in `references/verdicts.md` after merging, so escalation sees
    fan-in and upcoming changes across the whole graph.
 
 ## Dispatch guidance

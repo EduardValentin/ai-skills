@@ -10,7 +10,7 @@ itself.
 0 when the subcommand succeeds. 1 on a usage error (a missing subcommand or required argument),
 a hard model problem, or a tooling error (a language with no adapter, tooling that cannot run).
 `arch uncovered` returns 1 whenever it lists at least one module; that is its normal job, not a
-failure.
+failure. `arch assess` returns 0 whenever it succeeds, rows or not.
 
 `--json`, `--force`, and `--with-neighbors` are switches: they never take a value, so an
 argument after them stays positional. Every other flag takes the next argument as its value.
@@ -152,6 +152,56 @@ Renames are detected from `git diff -M` against the working tree, so a moved fil
 only after `git add`: before the add, git sees a deleted tracked path and an untracked new path,
 and an untracked path never appears in the diff.
 
+## `assess`
+
+| Flag or argument | Meaning |
+|---|---|
+| `--base <ref>` | Compare against `<ref>`: set Origin from `arch diff <ref>` and read the touched components from `arch query touched --base <ref>` |
+| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
+| `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
+| `--json` | Print the rows as a JSON array of `{ workflow, target, rule, origin, verdict, severity, evidence, change, escalation }` instead of a markdown table |
+
+Decides every decision-table condition that is a function of edges, rings, unit kinds,
+components, metrics, cycles, cohesion groups, and, with `--base`, the change. It prints one
+`SHOULD_CHANGE` row per finding, as the ledger's findings table without the ID, Protects, and
+Run columns:
+
+| Workflow | Target | Rule | Origin | Verdict | Severity | Evidence | Change | Escalation |
+|---|---|---|---|---|---|---|---|---|
+
+It exits 0 whether or not it prints rows: an assessment is not a verdict.
+
+| Condition | Workflow | Rule | Base severity | Target |
+|---|---|---|---|---|
+| Edge from a policy unit (entity, use-case, port, boundary-data) to a detail unit (controller, presenter, gateway, adapter, composition-root, entry-point, test, config, ui) or to an external of any tag | W1 | R4 | blocker | the edge; `external:<name>` for an external |
+| Edge crossing rings outward, for any other unit | W1 | R4 | blocker | the edge |
+| Cycle in the component graph | W6 | R30 | blocker | the cycle's sorted component IDs |
+| Cycle among modules | W6 | R30 | blocker | the cycle's sorted paths |
+| Component edge whose source has a lower I than its target (from more stable to less stable) | W6 | R31 | major | the component edge `C<a> -> C<b>` |
+| Component in the zone of pain (`metrics.md`) that the change touches; with `--base` only | W6 | R31, R32 | major | the component |
+| Component with abstract exports and a fan-in of 0 (abstract types with no consumer outside) | W6 | R31, R32 | minor | the component |
+| Change touches two or more components and the model records no groups; with `--base` only | W6 | R28 | minor | `docs/architecture/model/boundaries.json` |
+| Change touches components that no single recorded group holds; with `--base` only | W6 | R27 | major | each touched component outside the group holding the most touched components |
+
+Every other decision-table condition, including any that mentions behavior, intent, naming, or a
+document, stays with the evaluator, as does the other half of a condition only partly listed here
+(abstract types with no implementor). An edge that both rows of W1 match is one row: the first
+matching condition decides, as in every decision table.
+
+Origin without `--base` is `introduced` on every row (audit). With `--base`, a row is
+`introduced` when its target is an edge or external import absent at the base, a cycle `arch
+diff` reports as new, a component edge or component absent at the base, or a cohesion row (R27,
+R28), which describes the change itself; every other row is `left`. When `<ref>` has no
+`docs/architecture/model/components.json`, every row is `left` and stderr reads `no architecture
+model at <ref>; every assessed row is marked left; set Origin from "arch query touched --base
+<ref>" (verdicts.md)`.
+
+Escalation rule 3 of `verdicts.md` is applied here: when the target's component (for an edge,
+the component of its `to` unit; for a component edge, its target component) has a fan-in of 3 or
+more, the severity is lifted to at least `major` and Escalation reads `rule 3`. Cycle rows are
+`blocker` by their table and rule 4. The coordinator applies the other escalation rules after
+merging.
+
 ## `query`
 
 | Flag or argument | Meaning |
@@ -177,7 +227,7 @@ hand match of the plan's or diff's file list against the globs in
 | `cycles` | none | Level, Members | W6 |
 | `ring-crossings` | `[--direction outward\|inward\|same]` (default `outward`) | From, From ring, To, To ring, Kind | W1, W2, W3, W4 |
 | `fan-in` | `<path>` | Importer, Component, Kind | W7, severity escalation rule 3 |
-| `edges` | `<path>` (required) | Direction, Other, Kind, Ring direction | plan review step 1 |
+| `edges` | `<path>` (required) | Direction, Other, Kind, Ring direction | W1, plan review step 1 |
 | `units` | `[--component <id>] [--kind <k>] [--ring <r>]` | Path, Kind, Ring, Actors, Abstract, Concrete | W2, W3, W4, W7 |
 | `components` | none | Component, Name, Enforcement, Release unit, Entry points, Units | W8 |
 | `groups` | none | Group, Components, Absorbs | W6 |

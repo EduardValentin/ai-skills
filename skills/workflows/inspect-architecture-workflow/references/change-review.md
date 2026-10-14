@@ -39,12 +39,17 @@ as accepted structure.
 
 1. A workflow W1 to W8 is applicable when a `changed` row falls in a section it reads. Carry the
    others' previous rows forward and name them in the run log.
-2. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
-   evaluation packet from `slicing.md` (the full component graph when W6 is applicable). It
-   judges only changed targets and the edges touching them, from rows and never from code, and
-   phrases findings as "the diff introduces" or "the diff leaves in place".
-3. Merge, escalate, mark each row introduced or left in place, group changes, and build the
-   improvement map per `verdicts.md`. A row the
+2. Run `arch assess --base <base>` and write its output to
+   `.architecture/slices/packet/00-assess.md`. Its rows keep the Origin it sets; in the
+   base-without-model fallback (Map step 4) it marks every row `left` and warns, and the
+   coordinator re-marks each row from `arch query touched` as that step says.
+3. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
+   evaluation packet from `slicing.md` (the full component graph when W6 is applicable) and the
+   assess output file as decided rows. It judges only changed targets and the edges touching
+   them, from rows and never from code, and phrases findings as "the diff introduces" or "the
+   diff leaves in place".
+4. Merge the evaluator rows with the assessed rows, escalate, mark each evaluator row introduced
+   or left in place, group changes, and build the improvement map per `verdicts.md`. A row the
    plan review of this ticket set to `ACCEPTED` keeps that verdict while its target and rule
    still match; it is not raised again.
 

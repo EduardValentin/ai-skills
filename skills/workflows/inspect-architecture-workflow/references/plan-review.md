@@ -43,15 +43,20 @@ the evaluation packet as facts.
 
 1. A workflow W1 to W8 is applicable when a `proposed` row falls in a section it reads. Carry
    the others forward and name them in the run log.
-2. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
-   evaluation packet from `slicing.md` (the full component graph when W6 is applicable).
-   Evidence cites the plan's section where the code does not exist yet.
-3. Walk the plan's smallest realistic follow-up (from the upcoming changes) through the proposed
+2. Run `arch assess` on the baseline and write its output to
+   `.architecture/slices/packet/00-assess.md`; keep the rows whose target is a unit, an edge,
+   or a component the overlay marks `changed`. The graph holds no `proposed` row yet, so the
+   evaluator applies the assessed conditions to those itself.
+3. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
+   evaluation packet from `slicing.md` (the full component graph when W6 is applicable) and the
+   assess output file as decided rows. Evidence cites the plan's section where the code does not
+   exist yet.
+4. Walk the plan's smallest realistic follow-up (from the upcoming changes) through the proposed
    graph, count the units edited, and record the count in the R1 row.
-4. Phrase every finding in the plan's own terms: the task number, the file, and the concrete
+5. Phrase every finding in the plan's own terms: the task number, the file, and the concrete
    edit ("task 3 has `PayrollService` construct `PgClient`"), never in terms of a heading the
    plan lacks.
-5. Merge, escalate, group changes, and build the improvement map per `verdicts.md`.
+6. Merge, escalate, group changes, and build the improvement map per `verdicts.md`.
 
 ## Record
 

@@ -32,12 +32,13 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 
 ## Evaluate
 
-1. Dispatch one `architecture-evaluator` per workflow W1 to W8, in parallel, each with the
-   evaluation packet from `slicing.md`; each receives the query output its `Reads:` line names.
-   Evaluators judge rows and open no project file.
-2. Merge per `slicing.md`: drop duplicate target-and-rule pairs, match rows to existing ledger
-   IDs, and settle each previous `SHOULD_CHANGE` row as resolved, still open, or removed.
-3. Apply severity escalation, group changes, and build the improvement map per `verdicts.md`.
+1. Run `arch assess` and write its output to `.architecture/slices/packet/00-assess.md`.
+2. Dispatch one `architecture-evaluator` per workflow W1 to W8, in parallel, each with the
+   evaluation packet from `slicing.md`; each receives the query output its `Reads:` line names
+   and the assess output file as decided rows. Evaluators judge rows and open no project file.
+3. Merge per `slicing.md`, the assessed rows included: drop duplicate target-and-rule pairs,
+   match rows to existing ledger IDs, and settle each previous `SHOULD_CHANGE` row as resolved, still open, or removed.
+4. Apply severity escalation, group changes, and build the improvement map per `verdicts.md`.
 
 ## Record
 

@@ -27,7 +27,10 @@ clarification request to the planner, carrying no rule or severity).
 In a change review a `SHOULD_CHANGE` row is *introduced* when its target is a unit or edge that
 `arch diff` reports as added. In the base-without-model fallback (`change-review.md`, Map step 4)
 it is introduced when its target is a unit that `arch query touched` marks `added`, or an edge
-whose `from` or `to` is such a unit. Every other row is *left in place*. The coordinator sets the
+whose `from` or `to` is such a unit. `arch assess --base <base>` sets the mark on its own rows
+the same way, and also marks *introduced* a cycle `arch diff` reports as new, a component edge
+or component absent at the base, and a cohesion row (R27, R28), which describes the change
+itself (`command.md`, `assess`). Every other row is *left in place*. The coordinator sets the
 mark after merging and writes it in the ledger's `Origin` column as `introduced` or `left`. An
 audit or a plan review marks every row `introduced`.
 
@@ -67,6 +70,10 @@ Escalation, in order; nothing lowers a severity:
    export list, build unit, or build-failing import rule stops a crossing): at least `major`,
    even if it has not been crossed yet.
 4. A cycle: `blocker` regardless of table.
+
+`arch assess` applies rule 3 to its own rows, using the fan-in of the target's component (for an
+edge, the component of its `to` unit), and names it in the row's Escalation cell; the coordinator
+applies rule 3 to the evaluator rows and rules 1, 2, and 4 to every row.
 
 Keep the base severity beside the escalated one in the ledger, and report how many rows each
 rule lifted, so a distribution dominated by one rule is visible.
