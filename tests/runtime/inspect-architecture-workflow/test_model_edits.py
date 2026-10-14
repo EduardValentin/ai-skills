@@ -38,6 +38,40 @@ def test_add_port_assigns_next_id(tmp_path: Path):
     assert ports[-1] == {"id": "B3", "path": "src/domain/employee.ts", "symbol": "Employees", "owner": "C1", "humbleSide": "adapters"}
 
 
+def groups(root: Path) -> list:
+    return json.loads((root / "docs/architecture/model/boundaries.json").read_text())["groups"]
+
+
+def test_add_group_writes_canonically_and_upserts(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=domain rule changes"], root).returncode == 0
+    assert groups(root) == [{"name": "core", "components": ["C1", "C2"], "absorbs": "domain rule changes"}]
+    assert run_arch(["model", "add-group", "core", "components=C1", "absorbs=narrower reason"], root).returncode == 0
+    assert groups(root) == [{"name": "core", "components": ["C1"], "absorbs": "narrower reason"}]
+
+
+def test_remove_group_missing(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    result = run_arch(["model", "remove-group", "nope"], root)
+    assert result.returncode == 1 and "no group nope" in result.stderr
+
+
+def test_remove_group_removes_it(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    assert run_arch(["model", "add-group", "core", "components=C1", "absorbs=domain rule changes"], root).returncode == 0
+    assert run_arch(["model", "remove-group", "core"], root).returncode == 0
+    assert groups(root) == []
+
+
+def test_add_group_rejects_unknown_component(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    boundaries_path = root / "docs/architecture/model/boundaries.json"
+    before = boundaries_path.read_bytes()
+    result = run_arch(["model", "add-group", "core", "components=C1,C9", "absorbs=domain rule changes"], root)
+    assert result.returncode == 1 and "group core: not a component: C9" in result.stderr
+    assert boundaries_path.read_bytes() == before
+
+
 def test_add_component_rejects_duplicate(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["model", "add-component", "C1", "again", "paths=src/x/**"], root)
@@ -134,7 +168,7 @@ def test_kinds_come_from_rules_json_when_listed(tmp_path: Path):
 def test_model_without_subcommand_prints_usage(tmp_path: Path):
     result = run_arch(["model"], copy_fixture("payroll", tmp_path / "p"))
     assert result.returncode == 1
-    assert result.stderr.strip() == "usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule>"
+    assert result.stderr.strip() == "usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule|add-group|remove-group>"
 
 
 def test_edits_check_required_arguments(tmp_path: Path):
@@ -146,6 +180,9 @@ def test_edits_check_required_arguments(tmp_path: Path):
         (["add-override", "ring=entities", "kind=entity"], "usage: arch model add-override <path> ring=<r> kind=<k> [actors=a,b] [reason=<text>]"),
         (["add-component", "C9", "nine"], "usage: arch model add-component <id> <name> paths=<glob,...> [enforcement=<text>] [release=<text>] [entry=<glob,...>]"),
         (["add-component", "paths=src/x/**"], "usage: arch model add-component <id> <name> paths=<glob,...> [enforcement=<text>] [release=<text>] [entry=<glob,...>]"),
+        (["add-group", "components=C1", "absorbs=domain rule changes"], "usage: arch model add-group <name> components=<C,...> absorbs=<text>"),
+        (["add-group", "core", "absorbs=domain rule changes"], "usage: arch model add-group <name> components=<C,...> absorbs=<text>"),
+        (["add-group", "core", "components=C1"], "usage: arch model add-group <name> components=<C,...> absorbs=<text>"),
     ]
     for args, usage in cases:
         result = run_arch(["model", *args], root)

@@ -3,14 +3,15 @@ import { listTracked } from "../git.mjs";
 import { loadOrBuildGraph } from "../graph.mjs";
 import { HARD_PROBLEM, loadModel, validateModel, writeModelFile } from "../model.mjs";
 
-const USAGE = "usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule>";
+const USAGE = "usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule|add-group|remove-group>";
 const EDIT_USAGE = {
   "add-override": "usage: arch model add-override <path> ring=<r> kind=<k> [actors=a,b] [reason=<text>]",
   "add-component": "usage: arch model add-component <id> <name> paths=<glob,...> [enforcement=<text>] [release=<text>] [entry=<glob,...>]",
   "add-rule": "usage: arch model add-rule match=<glob> ring=<r> kind=<k> [actors=a,b] [before=<glob>]",
+  "add-group": "usage: arch model add-group <name> components=<C,...> absorbs=<text>",
 };
 
-const LIST_KEYS = new Set(["actors", "paths", "entry"]);
+const LIST_KEYS = new Set(["actors", "paths", "entry", "components"]);
 
 function splitArgs(args) {
   const kv = {};
@@ -157,6 +158,23 @@ function removeComponent(model, plain) {
   return refuseOrWrite(model, "components", model.components);
 }
 
+function addGroup(model, plain, kv) {
+  const [name] = plain;
+  const groups = model.boundaries.groups ?? (model.boundaries.groups = []);
+  const entry = { name, components: kv.components ?? [], absorbs: kv.absorbs ?? "" };
+  upsert(groups, (g) => g.name === name, entry);
+  return refuseOrWrite(model, "boundaries", model.boundaries);
+}
+
+function removeGroup(model, plain) {
+  const [name] = plain;
+  const groups = model.boundaries.groups ?? [];
+  const index = groups.findIndex((g) => g.name === name);
+  if (index < 0) { console.error(`no group ${name}`); return 1; }
+  groups.splice(index, 1);
+  return refuseOrWrite(model, "boundaries", model.boundaries);
+}
+
 const EDITS = {
   "add-override": addOverride,
   "remove-override": removeOverride,
@@ -166,12 +184,15 @@ const EDITS = {
   "remove-component": removeComponent,
   "add-rule": (model, plain, kv) => addRule(model, kv),
   "remove-rule": (model, plain, kv) => removeRule(model, kv),
+  "add-group": addGroup,
+  "remove-group": removeGroup,
 };
 
 const REQUIRED = {
   "add-override": ({ plain }) => plain.length >= 1,
   "add-component": ({ plain, kv }) => plain.length >= 2 && kv.paths !== undefined && kv.paths.length > 0,
   "add-rule": ({ kv }) => Boolean(kv.match),
+  "add-group": ({ plain, kv }) => plain.length >= 1 && kv.components !== undefined && kv.components.length > 0 && Boolean(kv.absorbs),
 };
 
 export async function run(args, ctx) {

@@ -74,6 +74,11 @@ function components(graph, model) {
   return { columns: ["Component", "Name", "Enforcement", "Release unit", "Entry points", "Units"], rows };
 }
 
+function groups(graph, model) {
+  const rows = (model.boundaries.groups ?? []).map((g) => [g.name, g.components ?? [], g.absorbs ?? ""]);
+  return { columns: ["Group", "Components", "Absorbs"], rows };
+}
+
 function neighborUnitRows(graph, touchedPaths, neighborsOf) {
   const byPath = unitsByPath(graph);
   const neighborPaths = new Set();
@@ -223,6 +228,7 @@ export const QUERIES = {
   edges,
   units,
   components,
+  groups,
   touched,
   ports,
   "entry-points": entryPoints,

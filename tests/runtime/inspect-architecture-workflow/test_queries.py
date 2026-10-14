@@ -251,6 +251,15 @@ def test_touched_with_neighbors_adds_untouched_neighbor_unit_rows(tmp_path: Path
     assert "| Path | Component | Kind | Ring | Actors | Abstract | Concrete |" in markdown
 
 
+def test_groups_query_lists_groups_added_to_the_model(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    assert q(root, "groups")["rows"] == []
+    assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=domain rule changes"], root).returncode == 0
+    out = q(root, "groups")
+    assert out["columns"] == ["Group", "Components", "Absorbs"]
+    assert out["rows"] == [["core", ["C1", "C2"], "domain rule changes"]]
+
+
 def test_components_query_lists_the_component_record(tmp_path: Path):
     out = q(copy_fixture("payroll", tmp_path / "p"), "components")
     assert out["columns"] == ["Component", "Name", "Enforcement", "Release unit", "Entry points", "Units"]

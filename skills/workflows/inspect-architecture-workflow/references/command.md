@@ -180,6 +180,7 @@ hand match of the plan's or diff's file list against the globs in
 | `edges` | `<path>` (required) | Direction, Other, Kind, Ring direction | plan review step 1 |
 | `units` | `[--component <id>] [--kind <k>] [--ring <r>]` | Path, Kind, Ring, Actors, Abstract, Concrete | W2, W3, W4, W7 |
 | `components` | none | Component, Name, Enforcement, Release unit, Entry points, Units | W8 |
+| `groups` | none | Group, Components, Absorbs | W6 |
 | `touched` | `--base <ref>` (required), `[--with-neighbors]` | Path, Component, Kind, Ring, Change, Neighbors; with `--with-neighbors` a second table: Path, Component, Kind, Ring, Actors, Abstract, Concrete | change review |
 | `ports` | none | Port, Owner, Humble side, Implementers, Consumers (by component) | W1, W3, W4, W5, W7 |
 | `entry-points` | none | Path, Component, Constructs | W1, W7 |
@@ -196,6 +197,7 @@ names none has no row. `ring-crossings` filters every internal edge whose two
 rings are known by its direction: `outward` and `inward` list edges that cross rings, `same` lists
 edges whose two ends sit in the same ring. `components` prints the component record from
 `docs/architecture/model/components.json` with each component's unit count in the graph.
+`groups` prints the cohesion groups from `docs/architecture/model/boundaries.json`.
 `entry-points` expands each component's entry-point globs
 against the graph's units and prints one row per matching unit, its Constructs cell listing every
 unit the entry point has an edge to, once. `touched` reads `git diff
@@ -238,16 +240,20 @@ error and exits 1 without touching the files.
 | `remove-component <id>` | Remove a component that no port or shape still references |
 | `add-rule match=<glob> ring=<r> kind=<k> [actors=a,b] [before=<glob>]` | Insert a classification rule, before the existing rule whose `match` equals `before` when given, otherwise at the end |
 | `remove-rule match=<glob>` | Remove the rule whose `match` glob equals `<glob>` |
+| `add-group <name> components=<C,...> absorbs=<text>` | Add or replace the cohesion group named `<name>` |
+| `remove-group <name>` | Remove the cohesion group named `<name>` |
 
 `validate` also accepts `--cruise-json <file>` and `--facts-json <file>` to feed saved adapter
 output instead of running the tooling.
 
-`arch model` with no subcommand prints `usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule>`
-and exits 1. `add-override` without a path, `add-rule` without `match=`, and `add-component`
-without an ID, a name, and `paths=` print that subcommand's usage line and exit 1. A kind must
+`arch model` with no subcommand prints `usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule|add-group|remove-group>`
+and exits 1. `add-override` without a path, `add-rule` without `match=`, `add-component`
+without an ID, a name, and `paths=`, and `add-group` without a name, `components=`, and
+`absorbs=` print that subcommand's usage line and exit 1. A kind must
 be one of the `kinds` listed in `rules.json`, or of the default kinds in `mapping.md` when the
 list is absent. `add-component` also refuses globs that share a git-tracked path with an
-existing component.
+existing component. `add-group` also refuses a group whose `components` name an unknown
+component.
 
 ## `readme-summary`
 
