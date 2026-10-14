@@ -74,7 +74,7 @@ def test_graph_is_written_to_cache_and_summary_printed(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["graph", *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("graph: 9 units, 14 edges,")
+    assert result.stdout.startswith("graph: 9 units, 15 edges,")
     assert (root / ".architecture/graph/working-tree.json").exists()
 
 

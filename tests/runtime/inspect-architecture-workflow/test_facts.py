@@ -58,6 +58,7 @@ def test_signatures_query_lists_one_row_per_imported_type(tmp_path: Path):
     assert out["rows"] == [
         ["PayrollUseCase", "PayrollRepository", "src/domain/payroll-repository.ts"],
         ["PayrollUseCase", "Clock", "src/domain/clock.ts"],
+        ["PayrollUseCase", "Employee", "src/domain/employee.ts"],
     ]
 
 
@@ -116,6 +117,8 @@ def test_exports_json_is_an_alias_without_constructs_or_signatures(tmp_path: Pat
     g = graph(root, ["--cruise-json", "cruise.json", "--exports-json", "exports.json"])
     assert g["capabilities"] == {"exports": True, "implements": True, "constructs": False, "signatures": False}
     assert not any(e["kind"] == "constructs" for e in g["edges"])
+    c1 = next(c for c in g["components"] if c["id"] == "C1")
+    assert (c1["units"], c1["fanIn"], c1["abstractness"], c1["distance"]) == (4, 4, 0.5, 0.5)
     result = run_arch(["query", "signatures", "src/domain/payroll-use-case.ts", "--cruise-json", "cruise.json", "--exports-json", "exports.json"], root)
     assert result.returncode == 0 and result.stdout.strip() == "not provided by the adapter"
 
@@ -139,25 +142,16 @@ def test_adapter_without_a_program_falls_back_to_per_file_facts(tmp_path: Path):
     assert all("constructs" not in m and "signatures" not in m for m in out["modules"])
 
 
-def test_adapter_reads_constructs_signatures_and_structural_implementers(tmp_path: Path):
+def test_adapter_output_equals_the_saved_facts(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     has_ts = run_node("import {createRequire} from 'node:module';try{createRequire(process.cwd()+'/x.js').resolve('typescript');process.stdout.write('yes')}catch{process.stdout.write('no')}", root).stdout == "yes"
     if not has_ts:
         pytest.skip("typescript not resolvable from the fixture")
+    saved = json.loads((root / "facts.json").read_text())
     out = _extract(root)
-    assert out["capabilities"] == {"exports": True, "implements": True, "constructs": True, "signatures": True}
-    by_path = {m["path"]: m for m in out["modules"]}
-    assert by_path["src/adapters/memory-payroll-repository.ts"]["implements"] == ["PayrollRepository"]
-    assert by_path["src/adapters/pg-payroll-repository.ts"]["implements"] == ["PayrollRepository"]
-    assert by_path["src/adapters/system-clock.ts"]["implements"] == ["Clock"]
-    assert by_path["src/web/payroll-controller.ts"]["constructs"] == [
-        {"symbol": "PgPayrollRepository", "path": "src/adapters/pg-payroll-repository.ts"},
-        {"symbol": "SystemClock", "path": "src/adapters/system-clock.ts"},
-        {"symbol": "PayrollUseCase", "path": "src/domain/payroll-use-case.ts"},
-    ]
-    use_case_types = by_path["src/domain/payroll-use-case.ts"]["signatures"][0]["types"]
-    assert {"symbol": "PayrollRepository", "path": "src/domain/payroll-repository.ts"} in use_case_types
-    assert {"symbol": "Clock", "path": "src/domain/clock.ts"} in use_case_types
-    assert by_path["src/adapters/pg-payroll-repository.ts"]["signatures"] == [
-        {"symbol": "PgPayrollRepository", "types": [{"symbol": "Employee", "path": "src/domain/employee.ts"}]},
-    ]
+    assert out["capabilities"] == saved["capabilities"]
+    assert sorted(m["path"] for m in out["modules"]) == sorted(saved["modules"])
+    for module in out["modules"]:
+        expected = saved["modules"][module["path"]]
+        for field in ("exports", "implements", "constructs", "signatures"):
+            assert module[field] == expected[field], (module["path"], field)

@@ -226,6 +226,7 @@ def test_ring_crossings_same_lists_edges_within_one_ring(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     rows = q(root, "ring-crossings", "--direction", "same")["rows"]
     assert sorted(rows) == [
+        ["src/domain/payroll-repository.ts", "entities", "src/domain/employee.ts", "entities", "type-import"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/pg-payroll-repository.ts", "adapters", "constructs"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/pg-payroll-repository.ts", "adapters", "import"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/system-clock.ts", "adapters", "constructs"],
@@ -243,8 +244,8 @@ def test_touched_with_neighbors_adds_untouched_neighbor_unit_rows(tmp_path: Path
     assert set(out) == {"touched", "neighbors"}
     assert [r[0] for r in out["touched"]["rows"]] == ["src/domain/employee.ts"]
     assert out["neighbors"]["columns"] == ["Path", "Component", "Kind", "Ring", "Actors", "Abstract", "Concrete"]
-    assert [r[0] for r in out["neighbors"]["rows"]] == ["src/adapters/memory-payroll-repository.ts", "src/adapters/pg-payroll-repository.ts", "src/domain/payroll-use-case.ts"]
-    assert out["neighbors"]["rows"][2][1:4] == ["C1", "use-case", "use-cases"]
+    assert [r[0] for r in out["neighbors"]["rows"]] == ["src/adapters/memory-payroll-repository.ts", "src/adapters/pg-payroll-repository.ts", "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts"]
+    assert out["neighbors"]["rows"][3][1:4] == ["C1", "use-case", "use-cases"]
     markdown = run_arch(["query", "touched", "--base", "HEAD", "--with-neighbors", *FIXTURE_FLAGS], root).stdout
     assert "| Path | Component | Kind | Ring | Change | Neighbors |" in markdown
     assert "| Path | Component | Kind | Ring | Actors | Abstract | Concrete |" in markdown

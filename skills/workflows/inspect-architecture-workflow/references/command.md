@@ -37,7 +37,9 @@ of a module for assignability to every port declared in `boundaries.json` whose 
 set; a match adds the port's symbol to `implements` next to the nominal `implements` clauses, once.
 When the program cannot be built, it falls back to parsing each file alone, provides `exports` and
 nominal `implements` only, sets `constructs` and `signatures` to false, and warns
-`cannot build a TypeScript program (<reason>); constructs and signatures are not provided`.
+`cannot build a TypeScript program (<reason>); constructs and signatures are not provided`. The
+skill's own tests exercise the program-built facts only where `typescript` is installed; otherwise
+they cover only the fallback to per-file parsing.
 
 An import the cruiser cannot resolve is never an edge: it is reported as the warning
 `unresolved import <specifier> in <module>`. A module or dependency resolved outside the project
@@ -89,13 +91,13 @@ scope was narrowed.
 Export counts come from a statement-level scan, so three shapes are counted coarsely: an
 `export type { ... }` re-export counts its names as concrete, each overload signature of an
 exported function counts as one export, and a barrel's `export * from` counts once, at the
-barrel. The skill's own tests exercise the program-built facts only where `typescript` is
-installed; otherwise they cover only the fallback to per-file parsing.
+barrel.
 
 The `ports` query lists the implementers the `implements` fact names. Assignability is tested only
-against declared ports and only for a module's own exported values, so a re-export, a value typed
-`any`, or a port with no members never counts as a structural implementer; a port that is not yet
-declared has only nominal implementers. An implementer the fact misses is settled through a fact
+against declared ports and only for a module's own exported values, so a re-export, a value of an
+unchecked type, or a port with no members never counts as a structural implementer; a port that is
+not yet declared has only nominal implementers. A port whose members are all optional matches
+structurally in any module that exports an object. An implementer the fact misses is settled through a fact
 slice (`slicing.md`).
 
 ## `graph`
@@ -181,7 +183,7 @@ hand match of the plan's or diff's file list against the globs in
 | `touched` | `--base <ref>` (required), `[--with-neighbors]` | Path, Component, Kind, Ring, Change, Neighbors; with `--with-neighbors` a second table: Path, Component, Kind, Ring, Actors, Abstract, Concrete | change review |
 | `ports` | none | Port, Owner, Humble side, Implementers, Consumers (by component) | W1, W3, W4, W5, W7 |
 | `entry-points` | none | Path, Component, Constructs | W1, W7 |
-| `signatures` | `<path>` (required) | Symbol, Type, From | none yet |
+| `signatures` | `<path>` (required) | Symbol, Type, From | W1, W3 |
 | `externals` | `[--tag vendor\|framework\|runtime]` | Name, Tag, Importing components, Importing modules | W5, W8 |
 | `volatility` | `--since <ref>` (required) | Component, Commits, Modules touched | W1, W2, W5, W6 |
 

@@ -182,10 +182,10 @@ def test_diff_reports_module_cycles(tmp_path: Path):
     result = run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root)
     assert result.returncode == 0, result.stderr
     out = json.loads(result.stdout)
-    assert out["cycles"]["modules"] == {"new": [["src/domain/employee.ts", "src/domain/payroll-use-case.ts"]], "gone": []}
+    assert out["cycles"]["modules"] == {"new": [["src/domain/employee.ts", "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts"]], "gone": []}
     assert out["cycles"]["new"] == []
     markdown = run_arch(["diff", base, *FIXTURE_FLAGS], root).stdout
-    assert "+ src/domain/employee.ts -> src/domain/payroll-use-case.ts" in markdown.split("## Cycles")[1]
+    assert "+ src/domain/employee.ts -> src/domain/payroll-repository.ts -> src/domain/payroll-use-case.ts" in markdown.split("## Cycles")[1]
 
 
 def test_diff_against_head_on_a_dirty_tree(tmp_path: Path):
