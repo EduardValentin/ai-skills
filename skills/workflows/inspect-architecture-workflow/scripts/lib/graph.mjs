@@ -112,7 +112,7 @@ export function buildGraph({ model, extracted, commit }) {
   return { version: GRAPH_VERSION, commit, language: extracted.language ?? "typescript", generatedAt: new Date().toISOString(), capabilities, rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
 }
 
-async function resolveWorkingTreeKey(root) {
+export async function resolveWorkingTreeKey(root) {
   if (!(await isClean(root))) return "working-tree";
   try { return await headCommit(root); }
   catch { return "working-tree"; }

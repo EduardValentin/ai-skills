@@ -44,7 +44,9 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 
 1. Write `decisions.md` from its template when missing; run `arch readme-summary`; commit the
    model, decisions, and README with the audit.
-2. Write `ledger.md` (new run in the run log), `change-history.md`, and `slices/`.
+2. Write the ledger through its subcommands, in this order: `arch ledger add-run --mode audit`
+   with the merged rows; `arch ledger accept` once per finding the user accepts; `arch ledger
+   map`. Then write `change-history.md` and `slices/`.
 
 ## Return
 

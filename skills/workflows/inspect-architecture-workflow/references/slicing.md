@@ -85,22 +85,30 @@ workflow rows the questions came from.
 
 ## Merge rules
 
-1. **Findings.** Key by target and rule. Drop duplicates, keeping the row with the fuller
-   evidence. Match to the previous ledger by key to keep IDs. For each previous `SHOULD_CHANGE`
-   row: if this run evaluated the same target under the same rule and found it compliant, set
-   `RESOLVED` with this run's commit; if it found the violation again, keep the row and its ID,
-   updating run and evidence; if the target no longer exists in the code, set `RESOLVED` with a
-   note that the target was removed; if this run did not evaluate that target (outside the diff,
-   or its workflow was skipped), carry the row forward unchanged. Not being evaluated never
-   counts as being fixed. A previous `ACCEPTED` row whose target and rule match again stays
-   `ACCEPTED`; one whose target now satisfies the rule becomes `RESOLVED`.
-2. **Changes.** Cluster `SHOULD_CHANGE` rows whose `change` descriptions name the same move
-   (same port, same split, same extraction) into one `CH-<letter>`; write the description once.
-3. **Decided rows.** Merge the `arch assess` rows with the evaluator rows as rows of the same
-   run. An assessed row whose edge, component pair, or ring pair a recorded intended exception
-   in `decisions.md` covers is written `OK` naming the exception.
-4. **Severity.** Apply the escalation rules in `references/verdicts.md` after merging, so escalation sees
-   fan-in and upcoming changes across the whole graph.
+Rules 1 to 3 are what `arch ledger add-run` and `arch ledger map` do (`references/command.md`,
+`ledger`); the coordinator writes the merged rows to a row file and runs them instead of editing
+the ledger's tables.
+
+1. **Findings.** Run `arch ledger add-run` with the run's rows, the skipped workflows, the
+   evaluated targets, and the removed targets. Rows are keyed by target and rule, a duplicate
+   keeping the fuller evidence. A matched finding keeps its ID. A previous `SHOULD_CHANGE` row
+   whose target this run evaluated and found compliant becomes `RESOLVED` with this run's commit.
+   A row found again keeps its ID with this run's evidence. A row whose target no longer exists
+   becomes `RESOLVED` with a note that the target was removed. A row this run did not evaluate,
+   outside the diff or of a skipped workflow, is carried forward unchanged: not being evaluated
+   never counts as being fixed. A previous `ACCEPTED` row stays `ACCEPTED` while its target and
+   rule match again, and becomes `RESOLVED` once the target satisfies the rule.
+2. **Changes.** Run `arch ledger map` after the last acceptance of the run. Open `SHOULD_CHANGE`
+   rows whose `change` descriptions name the same move (same port, same split, same extraction)
+   form one `CH-<letter>`, described once; the coordinator words such rows' descriptions
+   identically, since the command clusters identical text.
+3. **Decided rows.** Concatenate the `arch assess` rows and the evaluator rows into the row file
+   as rows of the same run. An assessed row whose edge, component pair, or ring pair a recorded
+   intended exception in `decisions.md` covers is written `OK` naming the exception.
+4. **Severity.** Apply the escalation rules in `references/verdicts.md` to the merged rows before
+   `arch ledger add-run`, so escalation sees fan-in and upcoming changes across the whole graph;
+   mark each lift `[rule <n>]` in the row's Evidence, since the run verdict and the escalation
+   counts read those marks.
 
 ## Dispatch guidance
 

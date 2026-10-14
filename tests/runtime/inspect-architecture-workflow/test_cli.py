@@ -12,4 +12,4 @@ def test_unknown_subcommand_exits_one(tmp_path: Path):
 def test_no_subcommand_prints_usage(tmp_path: Path):
     result = run_arch([], tmp_path)
     assert result.returncode == 1
-    assert "usage: arch <graph|diff|query|assess|uncovered|model|readme-summary>" in result.stderr
+    assert "usage: arch <graph|diff|query|assess|uncovered|model|ledger|readme-summary>" in result.stderr

@@ -98,7 +98,9 @@ clarification is answered.
 
 ## Return contract
 
-No report file: the ledger is for agents, the committed record for people. The Verdict line
+No report file: the ledger is for agents, the committed record for people. `arch ledger map`
+prints the Verdict, Pre-existing, Escalation, Direction, and Agents lines from the ledger
+(`references/command.md`, `ledger`); the coordinator fills in the rest. The Verdict line
 counts the rows the run verdict counts; the Pre-existing line counts the left-in-place rows it
 does not, and reads `0 blocker, 0 major, 0 minor` outside a change review. Reply to the caller
 with:

@@ -12,8 +12,8 @@ a hard model problem, or a tooling error (a language with no adapter, tooling th
 `arch uncovered` returns 1 whenever it lists at least one module; that is its normal job, not a
 failure. `arch assess` returns 0 whenever it succeeds, rows or not.
 
-`--json`, `--force`, and `--with-neighbors` are switches: they never take a value, so an
-argument after them stays positional. Every other flag takes the next argument as its value.
+`--json`, `--force`, `--with-neighbors`, `--one-off`, and `--standing` are switches: they never
+take a value, so an argument after them stays positional. Every other flag takes the next argument as its value.
 
 ## Tooling
 
@@ -304,6 +304,88 @@ be one of the `kinds` listed in `rules.json`, or of the default kinds in `mappin
 list is absent. `add-component` also refuses globs that share a git-tracked path with an
 existing component. `add-group` also refuses a group whose `components` name an unknown
 component.
+
+## `ledger`
+
+Keeps `.architecture/ledger.md`, the uncommitted ledger, so the coordinator never edits its
+tables by hand. A missing ledger starts from `assets/ledger/ledger.md`. Every table keeps the
+template's columns and every line of prose is kept as written. The run's commit is the short head
+commit, or `working-tree` when the tree has uncommitted changes, as `graph` keys it.
+
+| Subcommand | Meaning |
+|---|---|
+| `add-run --mode <audit\|change-review\|plan-review> --scope <text> --rows <file> [--skipped W1,W6] [--evaluated <file>] [--removed <file>]` | Merge this run's rows into the findings and append the run log row |
+| `accept <F-id> --one-off\|--standing --by <who> --reason <text>` | Accept a finding and write its Acceptances row |
+| `map [--agents "<n> mapping, <n> fact, <n> evaluation"]` | Rewrite the Changes and Improvement map tables and print the return contract lines |
+
+### Row file
+
+`--rows` names a markdown file holding one or more tables in the `assess` column set, `Workflow |
+Target | Rule | Origin | Verdict | Severity | Evidence | Change | Escalation`, optionally with a
+`Protects` column; columns are read by header, so the `assess` output and the evaluator rows can
+be concatenated as separate tables. A literal `|` inside a cell is written `\|`. Verdict is `OK`,
+`SHOULD_CHANGE`, or `UNDERSPECIFIED`. Origin is required in a change review and defaults to
+`introduced` in the other modes. An Escalation cell naming rules (`rule 3`) is kept as `[rule 3]`
+markers at the end of the Evidence cell; the coordinator writes `[rule 1]`, `[rule 2]`, or
+`[rule 4]` the same way when it lifts a row, since the escalation counts and the run verdict read
+those markers. Two rows with the same target and rule are one row, the one with the longer
+evidence.
+
+`--evaluated` and `--removed` name files listing targets one per line; blank lines and lines
+starting with `#` are ignored. A listed unit path covers the edges, ports, and cycles that name
+it; a line `*` in `--evaluated` covers every target, for an audit of the whole repository. Every
+target of an incoming row counts as evaluated.
+
+### `add-run`
+
+Matches each incoming row to the existing finding with the same target and rule, keeping its ID;
+an unmatched row gets the next free `F<n>`. A matched `ACCEPTED` finding stays `ACCEPTED`; an
+incoming `OK` row resolves a matched open finding. Each previous `SHOULD_CHANGE`, `ACCEPTED`, or
+`UNDERSPECIFIED` finding absent from the incoming rows is settled in this order: a target listed
+in `--removed` becomes `RESOLVED` with `resolved at <commit>: target removed` appended to its
+Evidence; a finding of a workflow named in `--skipped` is carried forward unchanged; a target
+evaluated this run becomes `RESOLVED` with `resolved at <commit>` appended; any other finding is
+carried forward unchanged. A carried-forward finding keeps its Run. The run log row records the
+mode, the scope (with `; skipped W1, W6` when workflows were skipped), the commit, and the run
+verdict and counts described under `map`. Prints the run log row:
+
+```markdown
+| 2 | 2026-10-14 | 1a2b3c4d | change-review | diff main | SHOULD_CHANGE | 0 | 1 | 0 | 3 |
+```
+
+### `accept`
+
+Sets the finding to `ACCEPTED` and appends the Acceptances row (Finding, One-off or standing,
+Reason, Accepted by, today's date, Promoted to). Prints `<F-id> ACCEPTED (<kind>)`. With
+`--standing` it also prints the record edit for the coordinator to make, and Promoted to names it:
+
+| Finding | Printed record edit |
+|---|---|
+| R27 or R28 | `arch model add-group <group> components=<C,...> absorbs="<reason>"`, widening the group the Evidence names to hold the target, then the group's paragraph in `decisions.md` |
+| An edge `from -> to` | An Intended exceptions row for `decisions.md`, with each path replaced by its component when the graph of the current commit is saved under `.architecture/graph/` |
+| Anything else | A deferred decision or cohesion position to record in `decisions.md` |
+
+Fails with `no finding <F-id>` for an unknown ID and refuses a `RESOLVED` or `OK` finding.
+
+### `map`
+
+Clusters the open `SHOULD_CHANGE` findings by identical Change text into `CH-A`, `CH-B`, and so
+on, ordered by the highest severity each change resolves, then by the number of rows, then by
+description. It writes the Changes table (Change, Description, Resolves as finding IDs), the
+Improvement map (Order, Change, Severity, Rows as a count, Protects as the rows' upcoming changes),
+and the `CH-` name into each clustered finding's Change cell; a later `map` reads the names back
+through the Changes table. It refreshes the last run log row, since an acceptance changes the
+counts, and prints, for the last run, the return contract lines of `verdicts.md` in its
+wording: Verdict, Pre-existing, Escalation, Direction (one numbered line per change, naming the
+`CH-` name, the rules, the change, and `protects <upcoming changes>` or `protects none`), and
+Agents.
+
+The run's rows are the findings whose Run is the last run. Verdict counts its open
+`SHOULD_CHANGE` rows that are `introduced` or carry `[rule 2]`, and is `SHOULD_CHANGE` when one of
+them is `blocker` or `major`; Pre-existing counts its other open rows; targets OK counts its `OK`
+rows; Escalation counts its `SHOULD_CHANGE` and `ACCEPTED` rows per `[rule <n>]` marker;
+Direction lists the first three changes of the map. Agents totals the `--agents` counts, or reads
+`Agents: <n> dispatched (<n> mapping, <n> fact, <n> evaluation)` without the flag. Fails when the ledger has no run.
 
 ## `readme-summary`
 
