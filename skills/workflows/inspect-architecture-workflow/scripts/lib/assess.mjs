@@ -1,5 +1,5 @@
 import { naturalOrder } from "./graph.mjs";
-import { MODEL_DIR } from "./model.mjs";
+import { allowedKinds, MODEL_DIR } from "./model.mjs";
 
 export const ASSESS_COLUMNS = ["Workflow", "Target", "Rule", "Origin", "Verdict", "Severity", "Evidence", "Change", "Escalation"];
 
@@ -10,19 +10,22 @@ export const NOT_PROVIDED_LINES = {
 
 const POLICY_KINDS = new Set(["entity", "use-case", "port", "boundary-data"]);
 const DETAIL_KINDS = new Set(["controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui"]);
+const WIRING_KINDS = new Set(["test", "config", "composition-root"]);
+const UNDECIDED_KINDS = new Set(["mixed"]);
 const SEVERITY_ORDER = ["minor", "major", "blocker"];
 const ESCALATION_FAN_IN = 3;
 const GROUPS_TARGET = `${MODEL_DIR}/boundaries.json`;
 
 const CHANGES = {
-  ring: "Invert the dependency: declare a port in the inner ring that the outer unit implements, or move the code to the ring it belongs to",
-  construction: "Construct the detail in a composition root and hand it in through the port its user declares",
-  cycle: "Break the cycle: define the needed interface in the side that needs it and have the other implement it, or extract a cohesive leaf both depend on",
-  stability: "Reverse the dependency through a port the stable component owns, or move what it needs into a component at least as stable",
-  pain: "Shield the dependents behind a port the component owns, or move them onto an interface-only component",
-  unused: "Delete the unused abstractions or fold them into their one consumer",
+  ring: (to) => `Route the dependency on ${to} through a port declared in the inner ring and implemented by ${to}, or move ${to} to the ring it belongs to`,
+  external: (name) => `Route the dependency on external:${name} through a port the policy ring owns, implemented outside it`,
+  construction: (from) => `Move the construction in ${from} into a composition root and hand the details in through ports ${from} declares`,
+  cycle: (target) => `Break the cycle ${target}: define the needed interface in the side that needs it and have the other implement it, or extract a cohesive leaf both depend on`,
+  stability: (from, to) => `Reverse the dependency ${from} -> ${to} through a port ${from} owns, or move what ${from} needs into a component at least as stable`,
+  pain: (id) => `Shield the dependents of ${id} behind a port ${id} owns, or move them onto an interface-only component`,
+  unused: (id) => `Delete the unused abstractions of ${id} or fold them into their one consumer`,
   groups: "Record the cohesion groups with model add-group, proposed from the change history",
-  spread: "Split the change along the recorded groups, or record a group covering these components if they change together",
+  spread: (components) => `Split the change along the recorded groups, or record a group covering ${components.join(", ")} if they change together`,
 };
 
 function edgeTarget(from, to) { return `${from} -> ${to}`; }
@@ -49,7 +52,7 @@ function ringFindings(graph, byPath) {
     findings.push({
       workflow: "W1", target: edgeTarget(pair.from, pair.to), rule: "R4", severity: "blocker",
       evidence: `${reason}: ${describeUnit(from)} -> ${describeUnit(to)} by ${pair.kinds.join(", ")}`,
-      change: CHANGES.ring, origin: { edge: pair }, scope: { units: [pair.from, pair.to] }, escalationComponent: to?.component ?? null,
+      change: CHANGES.ring(pair.to), origin: { edge: pair }, scope: { units: [pair.from, pair.to] }, escalationComponent: to?.component ?? null,
     });
   }
   for (const external of graph.externals ?? []) {
@@ -59,21 +62,26 @@ function ringFindings(graph, byPath) {
       findings.push({
         workflow: "W1", target: edgeTarget(importer, `external:${external.name}`), rule: "R4", severity: "blocker",
         evidence: `policy unit depends on a ${external.tag} external: ${describeUnit(from)} imports ${external.name}`,
-        change: CHANGES.ring, origin: { external: { from: importer, name: external.name } }, scope: { units: [importer] }, escalationComponent: null,
+        change: CHANGES.external(external.name), origin: { external: { from: importer, name: external.name } }, scope: { units: [importer] }, escalationComponent: null,
       });
     }
   }
   return findings;
 }
 
-function constructionFindings(graph, byPath) {
+function constructedDetailKinds(model) {
+  return new Set(allowedKinds(model).filter((kind) => !POLICY_KINDS.has(kind) && !WIRING_KINDS.has(kind) && !UNDECIDED_KINDS.has(kind)));
+}
+
+function constructionFindings(graph, byPath, model) {
+  const detailKinds = constructedDetailKinds(model);
   return graph.edges.filter((e) => e.kind === "constructs").flatMap((edge) => {
     const from = byPath.get(edge.from), to = byPath.get(edge.to);
-    if (!from || !to || from.kind === "composition-root" || POLICY_KINDS.has(to.kind)) return [];
+    if (!from || !to || WIRING_KINDS.has(from.kind) || !detailKinds.has(to.kind)) return [];
     return [{
       workflow: "W1", target: edgeTarget(edge.from, edge.to), rule: "R7", severity: "blocker",
       evidence: `concrete detail constructed outside a composition root: ${describeUnit(from)} constructs ${describeUnit(to)}`,
-      change: CHANGES.construction, origin: { edge }, scope: { units: [edge.from, edge.to] }, escalationComponent: to.component ?? null,
+      change: CHANGES.construction(edge.from), origin: { edge }, scope: { units: [edge.from, edge.to] }, escalationComponent: to.component ?? null,
     }];
   });
 }
@@ -90,7 +98,7 @@ function cycleFindings(graph, byPath) {
     return {
       workflow: "W6", target: cycleTarget(members), rule: "R30", severity: "blocker",
       evidence: `component cycle through ${crossing.join(", ")}`,
-      change: CHANGES.cycle, origin: { componentCycle: members }, scope: { components: members }, escalationComponent: null,
+      change: CHANGES.cycle(cycleTarget(members)), origin: { componentCycle: members }, scope: { components: members }, escalationComponent: null,
     };
   });
   const moduleCycles = graph.cycles.modules.map((members) => {
@@ -99,7 +107,7 @@ function cycleFindings(graph, byPath) {
     return {
       workflow: "W6", target: cycleTarget(members), rule: "R30", severity: "blocker",
       evidence: `module cycle through ${inside.join(", ")}`,
-      change: CHANGES.cycle, origin: { moduleCycle: members }, scope: { units: members }, escalationComponent: null,
+      change: CHANGES.cycle(cycleTarget(members)), origin: { moduleCycle: members }, scope: { units: members }, escalationComponent: null,
     };
   });
   return [...componentCycles, ...moduleCycles];
@@ -115,7 +123,7 @@ function stabilityFindings(graph, byPath) {
     return [{
       workflow: "W6", target: edgeTarget(edge.from, edge.to), rule: "R31", severity: "major",
       evidence: `I(${edge.from}) ${from.instability} < I(${edge.to}) ${to.instability}: ${importers.join(", ")}`,
-      change: CHANGES.stability, origin: { componentEdge: edge }, scope: { components: [edge.from, edge.to] }, escalationComponent: edge.to,
+      change: CHANGES.stability(edge.from, edge.to), origin: { componentEdge: edge }, scope: { components: [edge.from, edge.to] }, escalationComponent: edge.to,
     }];
   });
 }
@@ -125,11 +133,11 @@ function positionFindings(graph, touched) {
   return graph.components.flatMap((c) => {
     const base = { workflow: "W6", target: c.id, rule: "R31, R32", origin: { component: c.id }, scope: { components: [c.id] }, escalationComponent: c.id };
     if (c.inZone === "pain" && touchedComponents.has(c.id)) {
-      return [{ ...base, severity: "major", change: CHANGES.pain,
+      return [{ ...base, severity: "major", change: CHANGES.pain(c.id),
         evidence: `zone of pain and changed by this change: concrete (A ${c.abstractness}), depended on by ${c.fanIn} modules (I ${c.instability})` }];
     }
     if (c.abstractExports > 0 && c.fanIn === 0) {
-      return [{ ...base, severity: "minor", change: CHANGES.unused,
+      return [{ ...base, severity: "minor", change: CHANGES.unused(c.id),
         evidence: `${c.abstractExports} abstract exports and no consumer outside the component (fan-in 0)` }];
     }
     return [];
@@ -151,13 +159,27 @@ function cohesionFindings(model, touched) {
     const partners = components.filter((other) => other !== id && !shareGroup(id, other));
     if (partners.length === 0) return [];
     const holding = groupsHolding(id);
-    return [{ ...base, target: id, rule: "R27", severity: "major", escalationComponent: id, change: CHANGES.spread,
+    return [{ ...base, target: id, rule: "R27", severity: "major", escalationComponent: id, change: CHANGES.spread(components),
       evidence: `${id} shares no recorded group with ${partners.join(", ")}; groups holding ${id}: ${holding.length > 0 ? holding.join(", ") : "none"}` }];
   });
 }
 
+function fallbackOriginResolver(touched) {
+  const added = new Set(touched.added ?? []);
+  const tests = {
+    edge: (e) => added.has(e.from) || added.has(e.to),
+    external: (x) => added.has(x.from),
+    change: () => true,
+  };
+  return (origin) => {
+    const [kind, value] = Object.entries(origin)[0];
+    return tests[kind]?.(value) ? "introduced" : "left";
+  };
+}
+
 function originResolver({ graph, baseGraph, diff, touched }) {
-  if (!diff) return () => (touched ? "left" : "introduced");
+  if (!diff && !touched) return () => "introduced";
+  if (!diff) return fallbackOriginResolver(touched);
   const movedTo = new Map(diff.units.moved.map((m) => [m.from, m.to]));
   const mapped = (p) => movedTo.get(p) ?? p;
   const basePairs = new Set(baseGraph.edges.map((e) => edgeTarget(mapped(e.from), mapped(e.to))));
@@ -190,7 +212,7 @@ function inScope(finding, touched) {
 function escalate(finding, fanInOf) {
   const fanIn = finding.escalationComponent ? fanInOf.get(finding.escalationComponent) ?? 0 : 0;
   const lifts = fanIn >= ESCALATION_FAN_IN && SEVERITY_ORDER.indexOf(finding.severity) < SEVERITY_ORDER.indexOf("major");
-  return lifts ? { severity: "major", escalation: ["rule 3"] } : { severity: finding.severity, escalation: [] };
+  return lifts ? { severity: `major (base ${finding.severity})`, escalation: ["rule 3"] } : { severity: finding.severity, escalation: [] };
 }
 
 function ruleNumber(rule) { return Number(rule.match(/\d+/)[0]); }
@@ -203,7 +225,7 @@ export function assess({ graph, model, baseGraph = null, diff = null, touched = 
   const fanInOf = new Map(graph.components.map((c) => [c.id, c.fanIn]));
   const findings = [
     ...ringFindings(graph, byPath),
-    ...(provides("constructs") ? constructionFindings(graph, byPath) : []),
+    ...(provides("constructs") ? constructionFindings(graph, byPath, model) : []),
     ...cycleFindings(graph, byPath),
     ...stabilityFindings(graph, byPath),
     ...(provides("exports") ? positionFindings(graph, touched) : []),

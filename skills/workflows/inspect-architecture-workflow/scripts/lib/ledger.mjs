@@ -136,7 +136,6 @@ function today() { return new Date().toISOString().slice(0, 10); }
 function findingKey(row) { return `${row.target}\u0000${row.rule}`; }
 const SEVERITY_CELL = /^\s*(blocker|major|minor)\b(?:\s*\(base (blocker|major|minor)\))?/i;
 const MARK = /\s*\[rule (\d+)\]/g;
-const BASE_IMPLIED_RULES = new Set(["1", "3"]);
 
 function severityOf(row) { return String(row.severity).match(SEVERITY_CELL)?.[1]?.toLowerCase() ?? null; }
 function baseSeverityOf(row) { return String(row.severity).match(SEVERITY_CELL)?.[2]?.toLowerCase() ?? null; }
@@ -150,15 +149,11 @@ function withMarks(evidence, marks) {
 function severityRank(severity) { return SEVERITIES.indexOf(severity); }
 function liftedBy(row, rule) { return marksOf(row.evidence).includes(String(rule)); }
 
-function impliedBase(severity, marks) {
-  const onlyAtLeastMajor = marks.length > 0 && marks.every((rule) => BASE_IMPLIED_RULES.has(rule));
-  return severity === "major" && onlyAtLeastMajor ? "minor" : null;
-}
-
 function incomingSeverity(row, marks) {
   const severity = severityOf(row);
+  if (marks.length > 0 && !baseSeverityOf(row)) throw new Error(`row ${row.target} ${row.rule}: an escalation mark needs a base severity`);
   if (!severity) return String(row.severity ?? "").trim().toLowerCase();
-  return severityCell(severity, baseSeverityOf(row) ?? impliedBase(severity, marks));
+  return severityCell(severity, baseSeverityOf(row));
 }
 
 function normalizeIncoming(row, mode) {
@@ -360,13 +355,13 @@ function quoted(text) { return `"${String(text).replace(/(["\\$`])/g, "\\$1")}"`
 function listed(text) { return text.split(",").map((id) => id.trim()).filter(Boolean); }
 
 function touchedComponents(finding) {
-  return listed(String(finding.evidence).match(/touches (.+?) and the model records no cohesion groups/)?.[1] ?? "");
+  return listed(withoutMarks(finding.evidence).match(/touches (.+?) and the model records no cohesion groups/)?.[1] ?? "");
 }
 
 const R27_EVIDENCE = /^(\S+) shares no recorded group with (.+?); groups holding \S+: (.+)$/;
 
 function spreadEvidence(finding) {
-  const match = String(finding.evidence).match(R27_EVIDENCE);
+  const match = withoutMarks(finding.evidence).match(R27_EVIDENCE);
   if (!match) return { partners: [], holding: [] };
   const holding = match[3].trim() === "none" ? [] : listed(match[3]);
   return { partners: listed(match[2]), holding };

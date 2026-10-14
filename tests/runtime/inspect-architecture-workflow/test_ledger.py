@@ -300,7 +300,7 @@ def test_map_orders_changes_by_severity_then_rows_and_names_them(tmp_path: Path)
 
 def test_map_prints_the_return_contract_lines(tmp_path: Path):
     root = project(tmp_path)
-    add_run(root, [row(severity="major", escalation="rule 3"), row(target="src/q.ts", rule="R9", verdict="OK", severity="", change="")])
+    add_run(root, [row(severity="major (base minor)", escalation="rule 3"), row(target="src/q.ts", rule="R9", verdict="OK", severity="", change="")])
     result = run_arch(["ledger", "map", "--agents", "1 mapping, 0 fact, 1 evaluation"], root)
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
@@ -318,9 +318,9 @@ def test_run_verdict_counts_introduced_rows_and_rule_2_lifts_only(tmp_path: Path
     assert result.stdout.splitlines()[0].startswith("Verdict: OK — 0 blocker, 0 major, 0 minor open")
     assert result.stdout.splitlines()[1] == "Pre-existing: 0 blocker, 1 major, 0 minor (not blocking)"
 
-    add_run(root, [row(origin="left", severity="major", evidence="fixing it first shrinks UC-1 [rule 2]")], mode="change-review", scope="diff main")
+    add_run(root, [row(origin="left", severity="blocker (base major)", evidence="fixing it first shrinks UC-1 [rule 2]")], mode="change-review", scope="diff main")
     lifted = run_arch(["ledger", "map"], root).stdout.splitlines()
-    assert lifted[0].startswith("Verdict: SHOULD_CHANGE — 0 blocker, 1 major")
+    assert lifted[0].startswith("Verdict: SHOULD_CHANGE — 1 blocker, 0 major")
     assert lifted[3].startswith("Escalation: 0 rows lifted by rule 1, 1 by rule 2")
 
     add_run(root, [row(origin="introduced", severity="major")], mode="change-review", scope="diff main")
@@ -338,7 +338,7 @@ def test_severity_cell_keeps_the_base_and_reads_the_first_word(tmp_path: Path):
     root = project(tmp_path)
     add_run(root, [
         row(target="src/a.ts -> src/x.ts", severity="major (base minor)", change="Lifted change"),
-        row(target="src/b.ts -> src/x.ts", severity="major", escalation="rule 3", change="Assessed change"),
+        row(target="src/b.ts -> src/x.ts", severity="major (base minor)", escalation="rule 3", change="Assessed change"),
         row(target="src/c.ts -> src/x.ts", severity="minor", change="A minor change"),
     ])
     by_target = {f["target"]: f for f in parsed(root)["findings"]}
@@ -354,13 +354,13 @@ def test_severity_cell_keeps_the_base_and_reads_the_first_word(tmp_path: Path):
 def test_duplicate_rows_keep_the_highest_severity_and_every_mark(tmp_path: Path):
     root = project(tmp_path)
     add_run(root, [
-        row(severity="blocker", escalation="rule 3", evidence="short"),
-        row(severity="minor", evidence="the evaluator's longer evidence [rule 1]"),
+        row(severity="blocker (base major)", escalation="rule 2", evidence="short"),
+        row(severity="major (base minor)", evidence="the evaluator's longer evidence [rule 1]"),
     ])
     found = findings(root)
     assert list(found) == ["F1"]
-    assert found["F1"]["severity"] == "blocker"
-    assert found["F1"]["evidence"] == "the evaluator's longer evidence [rule 1] [rule 3]"
+    assert found["F1"]["severity"] == "blocker (base major)"
+    assert found["F1"]["evidence"] == "the evaluator's longer evidence [rule 1] [rule 2]"
 
 
 def test_fix_loop_keeps_counting_open_rows_of_the_same_key(tmp_path: Path):
@@ -409,3 +409,44 @@ def test_duplicates_of_equal_severity_keep_the_base(tmp_path: Path):
     found = findings(root)
     assert found["F1"]["severity"] == "major (base minor)" and found["F1"]["evidence"] == "the longer evidence"
     assert found["F2"]["severity"] == "major (base minor)" and found["F2"]["evidence"] == "the longer evidence"
+
+
+def test_an_audit_that_evaluates_everything_resolves_a_vanished_assessed_row(tmp_path: Path):
+    root = project(tmp_path)
+    everything = write_lines(root, "evaluated.txt", ["*"])
+    add_run(root, [row(evidence="policy unit depends on a detail unit")], "--evaluated", str(everything))
+    assert run_arch(["ledger", "map"], root).stdout.startswith("Verdict: SHOULD_CHANGE")
+    add_run(root, [], "--evaluated", str(everything))
+    f1 = findings(root)["F1"]
+    assert f1["verdict"] == "RESOLVED" and f1["evidence"].endswith(f"resolved at {head(root)}")
+    assert run_arch(["ledger", "map"], root).stdout.startswith("Verdict: OK")
+
+
+def test_standing_acceptance_of_a_lifted_r27_row_reads_the_group_without_the_mark(tmp_path: Path):
+    root = payroll_project(tmp_path)
+    assert run_arch(["model", "add-group", "billing", "components=C1,C2", "absorbs=billing rules"], root).returncode == 0
+    evidence = R27_EVIDENCE.format("C1", "C3", "billing") + " [rule 2]"
+    add_run(root, [row(workflow="W6", target="C1", rule="R27", severity="blocker (base major)", evidence=evidence, change="Split the change")])
+    result = run_arch(["ledger", "accept", "F1", "--standing", "--by", "Eduard", "--reason", "web moves with billing"], root)
+    assert result.returncode == 0, result.stderr
+    assert 'arch model add-group billing components=C1,C2,C3 absorbs="billing rules"' in result.stdout
+    assert parsed(root)["acceptances"][0]["promoted"] == "model/boundaries.json group billing; decisions.md Cohesion groups"
+
+
+def test_plan_keys_are_normalized_relative_to_the_root(tmp_path: Path):
+    root = project(tmp_path)
+    add_run(root, [row(severity="major")], "--plan", "./docs/p.md", mode="plan-review")
+    add_run(root, [], "--plan", "docs/p.md", mode="plan-review")
+    add_run(root, [], "--plan", str(root / "docs" / "p.md"), mode="plan-review")
+    assert {r["key"] for r in parsed(root)["runs"]} == {"docs/p.md"}
+    assert run_arch(["ledger", "map"], root).stdout.startswith("Verdict: SHOULD_CHANGE")
+
+
+def test_an_escalation_mark_without_a_base_severity_is_refused(tmp_path: Path):
+    root = project(tmp_path)
+    for marked in (row(severity="major", escalation="rule 3"), row(severity="blocker", evidence="fixing it first shrinks UC-1 [rule 2]")):
+        rows_file = write_lines(root, "rows.md", table([marked]).splitlines())
+        result = run_arch(["ledger", "add-run", "--mode", "audit", "--scope", "x", "--rows", str(rows_file)], root)
+        assert result.returncode == 1
+        assert f"row {EDGE} R4: an escalation mark needs a base severity" in result.stderr
+    assert not (root / ".architecture" / "ledger.md").exists()

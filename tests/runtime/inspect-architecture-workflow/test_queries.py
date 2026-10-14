@@ -227,6 +227,7 @@ def test_ring_crossings_same_lists_edges_within_one_ring(tmp_path: Path):
     rows = q(root, "ring-crossings", "--direction", "same")["rows"]
     assert sorted(rows) == [
         ["src/domain/payroll-repository.ts", "entities", "src/domain/employee.ts", "entities", "type-import"],
+        ["src/web/legacy-router.js", "adapters", "src/web/payroll-controller.ts", "adapters", "import"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/pg-payroll-repository.ts", "adapters", "constructs"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/pg-payroll-repository.ts", "adapters", "import"],
         ["src/web/payroll-controller.ts", "adapters", "src/adapters/system-clock.ts", "adapters", "constructs"],
@@ -266,7 +267,7 @@ def test_components_query_lists_the_component_record(tmp_path: Path):
     assert out["rows"] == [
         ["C1", "domain", "none", "", [], 4],
         ["C2", "adapters", "none", "", [], 3],
-        ["C3", "web", "none", "", ["src/web/main.ts"], 2],
+        ["C3", "web", "none", "", ["src/web/main.ts"], 3],
     ]
 
 

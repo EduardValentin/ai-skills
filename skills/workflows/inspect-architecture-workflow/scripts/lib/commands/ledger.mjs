@@ -40,7 +40,7 @@ const KEY_FLAG = { audit: null, "change-review": "base", "plan-review": "plan" }
 
 async function runKey(root, mode, flags) {
   if (mode === "change-review") return (await git(root, ["rev-parse", "--short=8", flags.base])).trim();
-  if (mode === "plan-review") return flags.plan;
+  if (mode === "plan-review") return path.relative(root, path.resolve(root, flags.plan)).split(path.sep).join("/");
   return "audit";
 }
 

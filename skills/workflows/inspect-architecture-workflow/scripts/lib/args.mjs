@@ -16,5 +16,5 @@ export function parseFlags(args) {
 }
 
 export function savedInputs(flags) {
-  return { cruiseJsonPath: flags["cruise-json"], factsJsonPath: flags["facts-json"] ?? flags["exports-json"] };
+  return { dependenciesJsonPath: flags["dependencies-json"] ?? flags["cruise-json"], factsJsonPath: flags["facts-json"] ?? flags["exports-json"] };
 }

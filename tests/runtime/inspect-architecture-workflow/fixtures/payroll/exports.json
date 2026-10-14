@@ -5,6 +5,7 @@
   "src/domain/payroll-use-case.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [] },
   "src/adapters/pg-payroll-repository.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": ["PayrollRepository"] },
   "src/adapters/system-clock.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": ["Clock"] },
+  "src/web/legacy-router.js": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [] },
   "src/web/payroll-controller.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [] },
   "src/web/main.ts": { "exports": { "abstract": 0, "concrete": 0 }, "implements": [] }
 }

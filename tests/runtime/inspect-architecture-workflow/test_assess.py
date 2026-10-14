@@ -174,7 +174,7 @@ def test_rows_outside_the_change_are_not_emitted_with_a_base(tmp_path: Path):
     assert ("src/adapters/system-clock.ts -> src/web/main.ts", "R4") in keys(assess_rows(root, "--base", "HEAD"))
 
 
-def test_base_without_a_model_marks_every_row_left_and_warns(tmp_path: Path):
+def test_base_without_a_model_marks_rows_left_except_the_change_and_warns(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     model = tmp_path / "model"
     shutil.move(root / "docs", model)
@@ -185,7 +185,7 @@ def test_base_without_a_model_marks_every_row_left_and_warns(tmp_path: Path):
     result = run_arch(["assess", "--base", "HEAD", *FIXTURE_FLAGS, "--json"], root)
     assert result.returncode == 0, result.stderr
     rows = json.loads(result.stdout)["rows"]
-    assert rows and {r["origin"] for r in rows} == {"left"}
+    assert {(r["rule"], r["origin"]) for r in rows} == {("R4", "left"), ("R30", "left"), ("R31", "left"), ("R28", "introduced")}
     assert "no architecture model at HEAD" in result.stderr
 
 
@@ -255,3 +255,54 @@ def test_construction_of_a_policy_kind_is_not_a_row_under_custom_rings(tmp_path:
         {"from": "web/controller.ts", "to": "db/gateway.ts", "kind": "constructs", "direction": "same"},
     ]
     assert keys(run_assess(tmp_path, graph, None)["rows"]) == [("web/controller.ts -> db/gateway.ts", "R7")]
+
+
+def construction_graph(constructing_kind: str, constructed_kind: str) -> dict:
+    graph = empty_graph([])
+    graph["units"] = [
+        {"path": "src/a.ts", "component": None, "ring": "adapters", "kind": constructing_kind},
+        {"path": "src/b.ts", "component": None, "ring": "adapters", "kind": constructed_kind},
+    ]
+    graph["edges"] = [{"from": "src/a.ts", "to": "src/b.ts", "kind": "constructs", "direction": "same"}]
+    return graph
+
+
+def test_construction_by_a_test_config_or_composition_root_is_not_a_row(tmp_path: Path):
+    for kind in ("test", "config", "composition-root"):
+        assert run_assess(tmp_path, construction_graph(kind, "adapter"), None)["rows"] == [], kind
+
+
+def test_construction_of_a_unit_that_is_not_a_detail_kind_is_not_a_row(tmp_path: Path):
+    for kind in ("mixed", "test", "config", "composition-root", "entity"):
+        assert run_assess(tmp_path, construction_graph("controller", kind), None)["rows"] == [], kind
+    assert keys(run_assess(tmp_path, construction_graph("controller", "gateway"), None)["rows"]) == [("src/a.ts -> src/b.ts", "R7")]
+
+
+def test_assessed_change_text_names_the_move(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    seed_edge(root, "src/domain/employee.ts", "src/adapters/system-clock.ts")
+    seed_edge(root, "src/domain/clock.ts", "src/adapters/system-clock.ts")
+    rows = assess_rows(root)
+    ring_changes = {r["change"] for r in rows if r["rule"] == "R4" and r["target"].endswith("-> src/adapters/system-clock.ts")}
+    assert len(ring_changes) == 1 and "src/adapters/system-clock.ts" in ring_changes.pop()
+    construction_changes = {r["change"] for r in rows if r["rule"] == "R7"}
+    assert len(construction_changes) == 1 and CONTROLLER in construction_changes.pop()
+
+
+def test_base_without_a_model_marks_cohesion_rows_and_edges_of_added_units_introduced(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    model = tmp_path / "model"
+    shutil.move(root / "docs", model)
+    init_repo(root)
+    shutil.move(model, root / "docs")
+    (root / "src/domain/bonus.ts").write_text("export const bonus = 1;\n")
+    cruise = json.loads((root / "cruise.json").read_text())
+    cruise["modules"].append({"source": "src/domain/bonus.ts", "dependencies": []})
+    (root / "cruise.json").write_text(json.dumps(cruise))
+    seed_edge(root, "src/domain/bonus.ts", "src/web/main.ts")
+    seed_edge(root, "src/adapters/system-clock.ts", "src/web/main.ts")
+    touch(root, "src/web/main.ts", "src/adapters/system-clock.ts")
+    rows = assess_rows(root, "--base", "HEAD")
+    assert find(rows, "src/domain/bonus.ts -> src/web/main.ts", "R4")["origin"] == "introduced"
+    assert find(rows, "src/adapters/system-clock.ts -> src/web/main.ts", "R4")["origin"] == "left"
+    assert find(rows, "docs/architecture/model/boundaries.json", "R28")["origin"] == "introduced"

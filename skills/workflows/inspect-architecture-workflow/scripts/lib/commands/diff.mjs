@@ -39,7 +39,7 @@ export async function run(args, ctx) {
   const { positional, flags } = parseFlags(args);
   const [base] = positional;
   if (!base) {
-    console.error("usage: arch diff <base> [--cruise-json <file>] [--facts-json <file>] [--json]");
+    console.error("usage: arch diff <base> [--dependencies-json <file>] [--facts-json <file>] [--json]");
     return 1;
   }
   if (!(await modelExistsAt(ctx.root, base))) {

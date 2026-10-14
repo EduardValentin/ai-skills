@@ -11,7 +11,7 @@ def test_readme_summary_is_replaced_between_markers(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     text = readme.read_text()
     assert "old" not in text
-    assert "Components: 3, units: 9, edges: 15," in text
+    assert "Components: 3, units: 10, edges: 16," in text
     assert "| C1 domain | 4 | 4 | 0 |" in text
     assert text.endswith("<!-- /arch:summary -->\n\ntail\n")
     # idempotent

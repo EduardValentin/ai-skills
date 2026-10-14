@@ -75,6 +75,9 @@ const ALL_CAPABILITIES = { exports: true, implements: true, constructs: true, si
 const PER_FILE_CAPABILITIES = { exports: true, implements: true, constructs: false, signatures: false };
 const EMPTY_EXPORTS = { abstract: 0, concrete: 0 };
 const EMPTY_FACTS = { exports: EMPTY_EXPORTS, implements: [], constructs: [], signatures: [] };
+const SCRIPT_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
+
+function isScript(modulePath) { return SCRIPT_EXTENSIONS.has(path.extname(modulePath).toLowerCase()); }
 
 function hasModifier(ts, node, kind) {
   return (ts.canHaveModifiers(node) ? ts.getModifiers(node) ?? [] : []).some((mod) => mod.kind === kind);
@@ -335,21 +338,29 @@ async function compilerOptions(ts, root, tooling) {
 }
 
 async function createAnalysis(ts, root, tooling, modulePaths) {
-  const options = { ...(await compilerOptions(ts, root, tooling)), noEmit: true };
+  const options = { ...(await compilerOptions(ts, root, tooling)), allowJs: true, checkJs: false, noEmit: true };
   const resolvedRoot = await realpath(root);
   const program = ts.createProgram(modulePaths.map((p) => path.resolve(resolvedRoot, p)), options);
   return { ts, program, checker: program.getTypeChecker(), root: resolvedRoot, modules: new Set(modulePaths) };
 }
 
+async function scanFile(ts, root, modulePath, warnings) {
+  if (!isScript(modulePath)) return { exports: EMPTY_EXPORTS, implements: [] };
+  let text;
+  try { text = await readFile(path.join(root, modulePath), "utf8"); }
+  catch { warnings.push(`cannot read ${modulePath}`); return { exports: EMPTY_EXPORTS, implements: [] }; }
+  return scanDeclarations(ts, ts.createSourceFile(modulePath, text, ts.ScriptTarget.Latest, true));
+}
+
 async function extractPerFile(ts, root, modulePaths, warnings) {
   const modules = [];
-  for (const modulePath of modulePaths) {
-    let text;
-    try { text = await readFile(path.join(root, modulePath), "utf8"); }
-    catch { warnings.push(`cannot read ${modulePath}`); modules.push({ path: modulePath, exports: EMPTY_EXPORTS, implements: [] }); continue; }
-    modules.push({ path: modulePath, ...scanDeclarations(ts, ts.createSourceFile(modulePath, text, ts.ScriptTarget.Latest, true)) });
-  }
+  for (const modulePath of modulePaths) modules.push({ path: modulePath, ...(await scanFile(ts, root, modulePath, warnings)) });
   return { capabilities: PER_FILE_CAPABILITIES, modules };
+}
+
+async function factsOutsideTheProgram(ts, root, modulePath, warnings) {
+  if (isScript(modulePath)) warnings.push(`facts for ${modulePath} come from the per-file scan`);
+  return { ...EMPTY_FACTS, ...(await scanFile(ts, root, modulePath, warnings)) };
 }
 
 async function extractFromTypescript(root, tooling, normalized, ports) {
@@ -365,20 +376,20 @@ async function extractFromTypescript(root, tooling, normalized, ports) {
   const structural = typeof analysis.checker.isTypeAssignableTo === "function";
   if (!structural && ports.length > 0) normalized.warnings.push("this TypeScript version cannot test assignability; implements lists nominal implementations only");
   analysis.portTypes = structural ? resolvePortTypes(analysis, ports) : [];
-  const modules = modulePaths.map((modulePath) => {
-    const facts = scanFacts(analysis, modulePath);
-    if (!facts) normalized.warnings.push(`cannot read ${modulePath}`);
-    return { path: modulePath, ...(facts ?? EMPTY_FACTS) };
-  });
+  const modules = [];
+  for (const modulePath of modulePaths) {
+    const facts = scanFacts(analysis, modulePath) ?? (await factsOutsideTheProgram(ts, root, modulePath, normalized.warnings));
+    modules.push({ path: modulePath, ...facts });
+  }
   return { capabilities: ALL_CAPABILITIES, modules };
 }
 
 export function createTypescriptAdapter({ root, tooling }) {
   return {
     language: "typescript",
-    async extract({ roots, cruiseJsonPath, factsJsonPath, exportsJsonPath, frameworks = [], ports = [] }) {
-      const cruise = cruiseJsonPath
-        ? JSON.parse(await readFile(path.resolve(root, cruiseJsonPath), "utf8"))
+    async extract({ roots, dependenciesJsonPath, factsJsonPath, exportsJsonPath, frameworks = [], ports = [] }) {
+      const cruise = dependenciesJsonPath
+        ? JSON.parse(await readFile(path.resolve(root, dependenciesJsonPath), "utf8"))
         : await runCruise(root, tooling, roots);
       const normalized = normalizeCruise(cruise, frameworks);
       const savedFacts = factsJsonPath ?? exportsJsonPath;

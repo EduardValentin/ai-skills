@@ -110,7 +110,7 @@ export function buildGraph({ model, extracted, commit }) {
     components: stronglyConnected(model.components.components.map((c) => c.id), componentEdges.map((e) => [e.from, e.to])),
   };
   const uncovered = units.filter((u) => u.component === null || u.ring === null).map((u) => u.path);
-  return { version: GRAPH_VERSION, commit, language: extracted.language ?? "typescript", generatedAt: new Date().toISOString(), capabilities, rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
+  return { version: GRAPH_VERSION, commit, language: extracted.language, generatedAt: new Date().toISOString(), capabilities, rings, units, edges, externals, components, componentEdges, cycles, uncovered, warnings: [...extracted.warnings] };
 }
 
 export async function resolveWorkingTreeKey(root) {
@@ -135,11 +135,11 @@ async function readCachedGraph(file) {
   } catch { return null; }
 }
 
-async function buildIn(buildRoot, { cruiseJsonPath, factsJsonPath, commit }) {
+async function buildIn(buildRoot, { dependenciesJsonPath, factsJsonPath, commit }) {
   const model = await loadModel(buildRoot);
   const adapter = await selectAdapter(model, buildRoot);
   const ports = model.boundaries.ports.map((port) => ({ path: port.path, symbol: port.symbol }));
-  const extracted = await adapter.extract({ roots: sourceRoots(model), cruiseJsonPath, factsJsonPath, frameworks: model.rules.frameworks ?? [], ports });
+  const extracted = await adapter.extract({ roots: sourceRoots(model), dependenciesJsonPath, factsJsonPath, frameworks: model.rules.frameworks ?? [], ports });
   extracted.language = adapter.language;
   const problems = validateModel(model, new Set(extracted.modules.map((m) => m.path)));
   const hard = problems.filter((p) => HARD_PROBLEM.test(p));
@@ -157,17 +157,17 @@ export async function modelExistsAt(root, ref) {
   catch { return false; }
 }
 
-export async function loadOrBuildGraph(root, { commit, cruiseJsonPath, factsJsonPath, force } = {}) {
+export async function loadOrBuildGraph(root, { commit, dependenciesJsonPath, factsJsonPath, force } = {}) {
   if (commit && !(await modelExistsAt(root, commit))) throw new Error(`no architecture model at ${commit}`);
   const key = commit ? await resolveCommitKey(root, commit) : await resolveWorkingTreeKey(root);
   const file = graphPath(root, key);
-  const useCache = !force && !cruiseJsonPath && !factsJsonPath && key !== "working-tree";
+  const useCache = !force && !dependenciesJsonPath && !factsJsonPath && key !== "working-tree";
   const cached = useCache ? await readCachedGraph(file) : null;
   if (cached) return cached;
   const needsWorktree = Boolean(commit) && (key !== (await headCommit(root)) || !(await isClean(root)));
   const graph = needsWorktree
-    ? await withBaseWorktree(root, commit, (dir) => buildIn(dir, { cruiseJsonPath, factsJsonPath, commit: key }))
-    : await buildIn(root, { cruiseJsonPath, factsJsonPath, commit: key });
+    ? await withBaseWorktree(root, commit, (dir) => buildIn(dir, { dependenciesJsonPath, factsJsonPath, commit: key }))
+    : await buildIn(root, { dependenciesJsonPath, factsJsonPath, commit: key });
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(graph, null, 2)}\n`, "utf8");
   return graph;

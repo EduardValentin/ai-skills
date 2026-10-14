@@ -74,7 +74,7 @@ def test_graph_is_written_to_cache_and_summary_printed(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["graph", *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("graph: 9 units, 15 edges,")
+    assert result.stdout.startswith("graph: 10 units, 16 edges,")
     assert (root / ".architecture/graph/working-tree.json").exists()
 
 
@@ -132,7 +132,7 @@ def test_empty_roots_fall_back_to_the_project_root(tmp_path: Path):
     data = json.loads(comp.read_text())
     data["tooling"]["roots"] = []
     comp.write_text(json.dumps(data))
-    assert len(build(root)["units"]) == 9
+    assert len(build(root)["units"]) == 10
 
 
 def _clean_repo_with_tooling(tmp_path: Path) -> tuple[Path, str]:

@@ -126,7 +126,7 @@ def test_exports_json_is_an_alias_without_constructs_or_signatures(tmp_path: Pat
 def _extract(root: Path) -> dict:
     script = (f"import {{ createTypescriptAdapter }} from '{ADAPTER.as_posix()}';"
               "const a = createTypescriptAdapter({root: process.cwd(), tooling: {language:'typescript', roots:['src']}});"
-              f"const r = await a.extract({{roots:['src'], cruiseJsonPath:'cruise.json', ports:{json.dumps(PORTS)}}});"
+              f"const r = await a.extract({{roots:['src'], dependenciesJsonPath:'cruise.json', ports:{json.dumps(PORTS)}}});"
               "process.stdout.write(JSON.stringify(r));")
     result = run_node(script, root)
     assert result.returncode == 0, result.stderr
@@ -155,3 +155,66 @@ def test_adapter_output_equals_the_saved_facts(tmp_path: Path):
         expected = saved["modules"][module["path"]]
         for field in ("exports", "implements", "constructs", "signatures"):
             assert module[field] == expected[field], (module["path"], field)
+
+
+FAKE_PROGRAM_TYPESCRIPT = """module.exports = {
+  ScriptTarget: { Latest: 99 },
+  SyntaxKind: {},
+  createSourceFile: () => ({ statements: [] }),
+  sys: { readFile: () => "{}" },
+  readConfigFile: () => ({ config: {} }),
+  parseJsonConfigFileContent: () => ({ options: {} }),
+  createProgram: (files, options) => {
+    if (options.allowJs !== true || options.checkJs !== false) throw new Error("scripts are not in the program");
+    return { getSourceFile: () => undefined, getTypeChecker: () => ({ isTypeAssignableTo: () => false }) };
+  },
+};
+"""
+
+
+def install_program_without_source_files(root: Path) -> None:
+    install_fake_tooling(root)
+    (root / "node_modules/typescript/index.js").write_text(FAKE_PROGRAM_TYPESCRIPT)
+
+
+def add_cruised_module(root: Path, source: str) -> None:
+    cruise = json.loads((root / "cruise.json").read_text())
+    cruise["modules"].append({"source": source, "dependencies": [], "dependents": [], "orphan": True, "valid": True})
+    (root / "cruise.json").write_text(json.dumps(cruise))
+
+
+def test_a_script_the_program_lacks_comes_from_the_per_file_scan(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    install_program_without_source_files(root)
+    out = _extract(root)
+    assert out["capabilities"] == {"exports": True, "implements": True, "constructs": True, "signatures": True}
+    assert "facts for src/web/legacy-router.js come from the per-file scan" in out["warnings"]
+    assert not any(w.startswith("cannot read") for w in out["warnings"])
+    router = next(m for m in out["modules"] if m["path"] == "src/web/legacy-router.js")
+    assert (router["constructs"], router["signatures"]) == ([], [])
+
+
+def test_a_module_that_is_not_a_script_gets_empty_facts_without_a_warning(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    (root / "src/web/payroll.css").write_text("body { color: black; }\n")
+    add_cruised_module(root, "src/web/payroll.css")
+    install_program_without_source_files(root)
+    out = _extract(root)
+    assert not any("payroll.css" in w for w in out["warnings"])
+    stylesheet = next(m for m in out["modules"] if m["path"] == "src/web/payroll.css")
+    assert stylesheet == {"path": "src/web/payroll.css", "exports": {"abstract": 0, "concrete": 0}, "implements": [], "constructs": [], "signatures": []}
+
+
+def test_the_script_module_is_in_the_graph_with_its_saved_facts(tmp_path: Path):
+    g = graph(copy_fixture("payroll", tmp_path / "p"))
+    router = next(u for u in g["units"] if u["path"] == "src/web/legacy-router.js")
+    assert router["exports"] == {"abstract": 0, "concrete": 1}
+    assert ("src/web/legacy-router.js", "src/web/payroll-controller.ts", "import") in {(e["from"], e["to"], e["kind"]) for e in g["edges"]}
+    assert not any("legacy-router" in w for w in g["warnings"])
+
+
+def test_the_generic_saved_output_flag_and_the_older_one_build_the_same_graph(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    generic = graph(root, ["--dependencies-json", "cruise.json", "--facts-json", "facts.json"])
+    older = graph(root, ["--cruise-json", "cruise.json", "--facts-json", "facts.json"])
+    assert generic["edges"] == older["edges"] and generic["units"] == older["units"]

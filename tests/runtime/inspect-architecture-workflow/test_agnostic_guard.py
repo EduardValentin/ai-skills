@@ -29,6 +29,10 @@ COMMAND_MD = SKILL_DIR / "references" / "command.md"
 START_MARKER = "<!-- adapters -->"
 END_MARKER = "<!-- /adapters -->"
 
+GENERIC_SCRIPTS = [
+    SKILL_DIR / "scripts" / "lib" / name for name in ("graph.mjs", "queries.mjs", "assess.mjs", "ledger.mjs")
+]
+
 AGENT_FILES = [
     REPO_ROOT / "agents" / "architecture-coordinator.md",
     REPO_ROOT / "agents" / "architecture-evaluator.md",
@@ -62,13 +66,23 @@ def _md_files() -> list:
     return files + AGENT_FILES
 
 
-def test_generic_text_names_no_tool_or_language():
+def _violations(paths) -> list[str]:
     violations = []
-    for path in _md_files():
+    for path in paths:
         allowed = _allowed_line_numbers(path)
         for index, line in enumerate(path.read_text().splitlines(), start=1):
             if index in allowed:
                 continue
             if WORD_PATTERN.search(line):
                 violations.append(f"{path.relative_to(REPO_ROOT)}:{index}: {line.strip()}")
+    return violations
+
+
+def test_generic_text_names_no_tool_or_language():
+    violations = _violations(_md_files())
     assert not violations, "tool or language name outside the adapter markers:\n" + "\n".join(violations)
+
+
+def test_generic_scripts_name_no_tool_or_language():
+    violations = _violations(GENERIC_SCRIPTS)
+    assert not violations, "tool or language name in a generic script:\n" + "\n".join(violations)

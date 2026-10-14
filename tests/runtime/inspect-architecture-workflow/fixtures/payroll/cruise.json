@@ -265,7 +265,7 @@
       "valid": true
     },
     {
-      "source": "src/web/main.ts",
+      "source": "src/web/legacy-router.js",
       "dependencies": [
         {
           "dynamic": false,
@@ -367,6 +367,7 @@
         }
       ],
       "dependents": [
+        "src/web/legacy-router.js",
         "src/web/main.ts"
       ],
       "orphan": false,
@@ -388,6 +389,32 @@
       ],
       "orphan": false,
       "valid": true
+    },
+    {
+      "source": "src/web/main.ts",
+      "dependencies": [
+        {
+          "dynamic": false,
+          "module": "./payroll-controller",
+          "moduleSystem": "es6",
+          "exoticallyRequired": false,
+          "dependencyTypes": [
+            "local",
+            "import"
+          ],
+          "preCompilationOnly": false,
+          "resolved": "src/web/payroll-controller.ts",
+          "coreModule": false,
+          "followable": true,
+          "couldNotResolve": false,
+          "matchesDoNotFollow": false,
+          "circular": false,
+          "valid": true
+        }
+      ],
+      "dependents": [],
+      "orphan": false,
+      "valid": true
     }
   ],
   "summary": {
@@ -397,8 +424,8 @@
     "info": 0,
     "ignore": 0,
     "advisedExitCode": 0,
-    "totalCruised": 11,
-    "totalDependenciesCruised": 14,
+    "totalCruised": 12,
+    "totalDependenciesCruised": 15,
     "ruleSetUsed": {
       "forbidden": []
     }

@@ -20,7 +20,7 @@ export async function loadModel(root) {
 }
 
 export function allowedKinds(model) {
-  return model.rules.kinds ?? KINDS;
+  return model.rules?.kinds ?? KINDS;
 }
 
 export function componentOf(model, filePath) {

@@ -6,20 +6,21 @@ import { loadOrBuildGraph, modelExistsAt } from "../graph.mjs";
 import { loadModel } from "../model.mjs";
 import { QUERIES, renderMarkdown } from "../queries.mjs";
 
-const USAGE = "usage: arch assess [--base <ref>] [--cruise-json <file>] [--facts-json <file>] [--json]";
+const USAGE = "usage: arch assess [--base <ref>] [--dependencies-json <file>] [--facts-json <file>] [--json]";
 
 async function touchedScope(graph, model, flags, root) {
   const table = await QUERIES.touched(graph, model, { positional: [], flags: { ...flags, "with-neighbors": false } }, root);
   const column = (name) => table.columns.indexOf(name);
   return {
     units: table.rows.map((row) => row[column("Path")]),
+    added: table.rows.filter((row) => row[column("Change")] === "added").map((row) => row[column("Path")]),
     components: [...new Set(table.rows.map((row) => row[column("Component")]).filter(Boolean))],
   };
 }
 
 async function baseComparison(root, base, graph, inputs) {
   if (!(await modelExistsAt(root, base))) {
-    console.error(`no architecture model at ${base}; every assessed row is marked left; set Origin from "arch query touched --base ${base}" (verdicts.md)`);
+    console.error(`no architecture model at ${base}; Origin is introduced only for cohesion rows and for edges from or to a unit "arch query touched --base ${base}" marks added; every other row is left (verdicts.md)`);
     return { baseGraph: null, diff: null };
   }
   const baseGraph = await loadOrBuildGraph(root, { commit: base, ...inputs });

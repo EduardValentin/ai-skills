@@ -65,7 +65,7 @@ def test_graph_at_commit_uses_a_worktree_and_caches(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     cached = root / f".architecture/graph/{base}.json"
     assert cached.exists()
-    assert len(json.loads(cached.read_text())["units"]) == 9
+    assert len(json.loads(cached.read_text())["units"]) == 10
     assert git(["worktree", "list"], root).stdout.count("\n") == 1
 
 
