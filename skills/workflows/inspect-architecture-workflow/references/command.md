@@ -156,10 +156,10 @@ and an untracked path never appears in the diff.
 
 | Flag or argument | Meaning |
 |---|---|
-| `--base <ref>` | Compare against `<ref>`: set Origin from `arch diff <ref>` and read the touched components from `arch query touched --base <ref>` |
+| `--base <ref>` | Compare against `<ref>`: set Origin from `arch diff <ref>`, read the touched units and components from `arch query touched --base <ref>`, and emit only the rows inside the change |
 | `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
-| `--json` | Print the rows as a JSON array of `{ workflow, target, rule, origin, verdict, severity, evidence, change, escalation }` instead of a markdown table |
+| `--json` | Print `{ "rows": [...], "notProvided": [...] }` instead of a markdown table; each row is `{ workflow, target, rule, origin, verdict, severity, evidence, change, escalation }` |
 
 Decides every decision-table condition that is a function of edges, rings, unit kinds,
 components, metrics, cycles, cohesion groups, and, with `--base`, the change. It prints one
@@ -175,30 +175,55 @@ It exits 0 whether or not it prints rows: an assessment is not a verdict.
 |---|---|---|---|---|
 | Edge from a policy unit (entity, use-case, port, boundary-data) to a detail unit (controller, presenter, gateway, adapter, composition-root, entry-point, test, config, ui) or to an external of any tag | W1 | R4 | blocker | the edge; `external:<name>` for an external |
 | Edge crossing rings outward, for any other unit | W1 | R4 | blocker | the edge |
-| Cycle in the component graph | W6 | R30 | blocker | the cycle's sorted component IDs |
-| Cycle among modules | W6 | R30 | blocker | the cycle's sorted paths |
+| `constructs` edge from a unit whose kind is not `composition-root` to a unit in one of the two outermost rings (`adapters` and `frameworks` by default); needs the `constructs` fact | W1 | R7 | blocker | the edge |
+| Cycle in the component graph | W6 | R30 | blocker | the cycle's component IDs, sorted numerically |
+| Cycle among modules | W6 | R30 | blocker | the cycle's paths, sorted numerically |
 | Component edge whose source has a lower I than its target (from more stable to less stable) | W6 | R31 | major | the component edge `C<a> -> C<b>` |
-| Component in the zone of pain (`metrics.md`) that the change touches; with `--base` only | W6 | R31, R32 | major | the component |
-| Component with abstract exports and a fan-in of 0 (abstract types with no consumer outside) | W6 | R31, R32 | minor | the component |
+| Component in the zone of pain (`metrics.md`) that the change touches; with `--base` only; needs the `exports` fact | W6 | R31, R32 | major | the component |
+| Component with abstract exports and a fan-in of 0 (no consumer outside at all); needs the `exports` fact | W6 | R31, R32 | minor | the component |
 | Change touches two or more components and the model records no groups; with `--base` only | W6 | R28 | minor | `docs/architecture/model/boundaries.json` |
-| Change touches components that no single recorded group holds; with `--base` only | W6 | R27 | major | each touched component outside the group holding the most touched components |
+| Change touches a component that no recorded group holds together with every other touched component; with `--base` only | W6 | R27 | major | each such touched component |
 
 Every other decision-table condition, including any that mentions behavior, intent, naming, or a
-document, stays with the evaluator, as does the other half of a condition only partly listed here
-(abstract types with no implementor). An edge that both rows of W1 match is one row: the first
-matching condition decides, as in every decision table.
+document, stays with the evaluator, as does the rest of a condition only partly listed here
+(abstract types with no implementor, consumers that use none of a component's abstract types).
+An edge that both R4 rows match is one row: the first matching condition decides, as in every
+decision table.
+
+R27 reads overlapping groups this way: a touched component is a row unless one recorded group
+holds it and every other touched component. So when no single group holds every touched
+component, each touched component is a row, even one that shares a group with some of the
+others; when one group holds them all, none is.
+
+With `--base`, rows outside the change are not emitted. A row is inside the change when its
+target is a touched unit, an edge or external import from or to a touched unit, a module cycle
+containing a touched unit, a component cycle, component edge, or component touching a touched
+component, or a cohesion row (R27, R28).
+
+A row that needs an adapter fact the adapter does not provide is never silently missing: for
+each absent fact one line goes to stderr and its name to `notProvided`, and the workflow settles
+those conditions through a fact slice (`slicing.md`):
+
+| Absent fact | `notProvided` | stderr line |
+|---|---|---|
+| `exports` | `abstractness` | `abstractness rows not provided by the adapter; evaluate R31 and R32 from a fact slice` |
+| `constructs` | `constructs` | `construction rows not provided by the adapter; evaluate R7 from a fact slice` |
 
 Origin without `--base` is `introduced` on every row (audit). With `--base`, a row is
-`introduced` when its target is an edge or external import absent at the base, a cycle `arch
-diff` reports as new, a component edge or component absent at the base, or a cohesion row (R27,
-R28), which describes the change itself; every other row is `left`. When `<ref>` has no
+`introduced` when its target is an edge whose `from -> to` pair is absent at the base (a pair
+that only gained another kind is `left`), an external import absent at the base, a module cycle
+with an edge between its members whose pair is absent at the base, a component cycle with a
+component edge between its members absent at the base, a component edge or component absent at
+the base, or a cohesion row (R27, R28), which describes the change itself; every other row is
+`left`, so a cycle the change only shrinks stays `left`. When `<ref>` has no
 `docs/architecture/model/components.json`, every row is `left` and stderr reads `no architecture
 model at <ref>; every assessed row is marked left; set Origin from "arch query touched --base
 <ref>" (verdicts.md)`.
 
 Escalation rule 3 of `verdicts.md` is applied here: when the target's component (for an edge,
 the component of its `to` unit; for a component edge, its target component) has a fan-in of 3 or
-more, the severity is lifted to at least `major` and Escalation reads `rule 3`. Cycle rows are
+more and the base severity is below `major`, the severity is lifted to `major` and Escalation
+reads `rule 3`; a row rule 3 does not lift has an empty Escalation cell. Cycle rows are
 `blocker` by their table and rule 4. The coordinator applies the other escalation rules after
 merging.
 
@@ -227,7 +252,7 @@ hand match of the plan's or diff's file list against the globs in
 | `cycles` | none | Level, Members | W6 |
 | `ring-crossings` | `[--direction outward\|inward\|same]` (default `outward`) | From, From ring, To, To ring, Kind | W1, W2, W3, W4 |
 | `fan-in` | `<path>` | Importer, Component, Kind | W7, severity escalation rule 3 |
-| `edges` | `<path>` (required) | Direction, Other, Kind, Ring direction | W1, plan review step 1 |
+| `edges` | `<path>`, `--kind <kind>`, or both (one is required) | Direction, Other, Kind, Ring direction; with `--kind` and no path: From, To, Kind, Ring direction | W1, plan review step 1 |
 | `units` | `[--component <id>] [--kind <k>] [--ring <r>]` | Path, Kind, Ring, Actors, Abstract, Concrete | W2, W3, W4, W7 |
 | `components` | none | Component, Name, Enforcement, Release unit, Entry points, Units | W8 |
 | `groups` | none | Group, Components, Absorbs | W6 |
@@ -238,8 +263,9 @@ hand match of the plan's or diff's file list against the globs in
 | `externals` | `[--tag vendor\|framework\|runtime]` | Name, Tag, Importing components, Importing modules | W5, W8 |
 | `volatility` | `--since <ref>` (required) | Component, Commits, Modules touched | W1, W2, W5, W6 |
 
-`edges` lists the module's outgoing internal edges (`out`) and then its incoming ones (`in`),
-with the kind and ring direction of each edge; a `constructs` edge is listed next to the import
+`edges --kind <kind>` with no path lists every edge of that kind in the graph; with a path,
+`--kind` keeps only that kind. `edges <path>` lists the module's outgoing internal edges (`out`)
+and then its incoming ones (`in`), with the kind and ring direction of each edge; a `constructs` edge is listed next to the import
 edge it parallels. `fan-in` lists every edge into the module, so an importer that also constructs
 the module's type appears once per kind. `signatures` prints one row per type from another unit
 that an exported symbol of the module names in its public interface; a symbol whose interface
@@ -256,8 +282,8 @@ type change is `modified`, and a deleted path is listed only when it was a unit 
 graph. With `--with-neighbors`, a second table follows the first: the full unit row of every
 unit one edge away from a touched unit that is not itself touched, sorted by path.
 
-`touched`, `volatility`, `edges`, and `signatures` exit with a usage message when their required argument is
-missing. In a markdown table a missing value renders as an empty cell, except the I, A, and D
+`touched`, `volatility`, `edges` (given neither a path nor `--kind`), and `signatures` exit with
+a usage message when their required argument is missing. In a markdown table a missing value renders as an empty cell, except the I, A, and D
 columns of `metrics`, which render `undefined`; with `--json` it is `null`. A query over an empty
 graph section renders no rows.
 

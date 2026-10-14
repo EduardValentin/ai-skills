@@ -52,11 +52,14 @@ function fanIn(graph, model, { positional }) {
   return { columns: ["Importer", "Component", "Kind"], rows };
 }
 
-function edges(graph, model, { positional }) {
+function edges(graph, model, { positional, flags }) {
   const [target] = positional;
-  if (!target) throw new Error("usage: arch query edges <path>");
-  const outgoing = graph.edges.filter((e) => e.from === target).map((e) => ["out", e.to, e.kind, e.direction]);
-  const incoming = graph.edges.filter((e) => e.to === target).map((e) => ["in", e.from, e.kind, e.direction]);
+  const kind = flags.kind === true ? undefined : flags.kind;
+  if (!target && !kind) throw new Error("usage: arch query edges <path> | --kind <kind>");
+  const ofKind = graph.edges.filter((e) => !kind || e.kind === kind);
+  if (!target) return { columns: ["From", "To", "Kind", "Ring direction"], rows: ofKind.map((e) => [e.from, e.to, e.kind, e.direction]) };
+  const outgoing = ofKind.filter((e) => e.from === target).map((e) => ["out", e.to, e.kind, e.direction]);
+  const incoming = ofKind.filter((e) => e.to === target).map((e) => ["in", e.from, e.kind, e.direction]);
   return { columns: ["Direction", "Other", "Kind", "Ring direction"], rows: [...outgoing, ...incoming] };
 }
 

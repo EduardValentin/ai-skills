@@ -1,5 +1,5 @@
 import { parseFlags, savedInputs } from "../args.mjs";
-import { assess, assessTable } from "../assess.mjs";
+import { assess, assessTable, NOT_PROVIDED_LINES } from "../assess.mjs";
 import { diffGraphs } from "../diff.mjs";
 import { renames } from "../git.mjs";
 import { loadOrBuildGraph, modelExistsAt } from "../graph.mjs";
@@ -8,10 +8,13 @@ import { QUERIES, renderMarkdown } from "../queries.mjs";
 
 const USAGE = "usage: arch assess [--base <ref>] [--cruise-json <file>] [--facts-json <file>] [--json]";
 
-async function touchedComponents(graph, model, flags, root) {
+async function touchedScope(graph, model, flags, root) {
   const table = await QUERIES.touched(graph, model, { positional: [], flags: { ...flags, "with-neighbors": false } }, root);
-  const componentColumn = table.columns.indexOf("Component");
-  return table.rows.map((row) => row[componentColumn]).filter(Boolean);
+  const column = (name) => table.columns.indexOf(name);
+  return {
+    units: table.rows.map((row) => row[column("Path")]),
+    components: [...new Set(table.rows.map((row) => row[column("Component")]).filter(Boolean))],
+  };
 }
 
 async function baseComparison(root, base, graph, inputs) {
@@ -30,9 +33,10 @@ export async function run(args, ctx) {
   const graph = await loadOrBuildGraph(ctx.root, { ...inputs, force: Boolean(flags.base) });
   const model = await loadModel(ctx.root);
   const comparison = flags.base
-    ? { ...(await baseComparison(ctx.root, flags.base, graph, inputs)), touchedComponents: await touchedComponents(graph, model, flags, ctx.root) }
+    ? { ...(await baseComparison(ctx.root, flags.base, graph, inputs)), touched: await touchedScope(graph, model, flags, ctx.root) }
     : {};
-  const rows = assess({ graph, model, ...comparison });
-  console.log(flags.json ? JSON.stringify(rows, null, 2) : renderMarkdown(assessTable(rows)));
+  const { rows, notProvided } = assess({ graph, model, ...comparison });
+  for (const fact of notProvided) console.error(NOT_PROVIDED_LINES[fact]);
+  console.log(flags.json ? JSON.stringify({ rows, notProvided }, null, 2) : renderMarkdown(assessTable(rows)));
   return 0;
 }

@@ -113,6 +113,14 @@ def test_tarjan_finds_nested_cycles():
     assert json.loads(result.stdout) == [["a", "b"]]
 
 
+def test_cycle_members_sort_numerically():
+    script = (f"import {{ stronglyConnected }} from '{GRAPH.as_posix()}';"
+              "process.stdout.write(JSON.stringify(stronglyConnected(['C10','C2','C3'], [['C10','C2'],['C2','C10'],['C3','C2'],['C2','C3']])));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [["C2", "C3", "C10"]]
+
+
 def test_empty_roots_fall_back_to_the_project_root(tmp_path: Path):
     script = (f"import {{ sourceRoots }} from '{GRAPH.as_posix()}';"
               "process.stdout.write(JSON.stringify([sourceRoots({components:{tooling:{roots:[]}}}), sourceRoots({components:{}}), sourceRoots({components:{tooling:{roots:['src']}}})]));")
@@ -157,8 +165,8 @@ def test_cached_graph_of_an_older_version_is_rebuilt(tmp_path: Path):
     result = run_arch(["graph", "--json"], root)
     assert result.returncode == 0, result.stderr
     rebuilt = json.loads(result.stdout)
-    assert rebuilt["version"] == 3 and rebuilt["generatedAt"] != "2000-01-01T00:00:00.000Z"
-    assert json.loads(cached.read_text())["version"] == 3
+    assert rebuilt["version"] == 4 and rebuilt["generatedAt"] != "2000-01-01T00:00:00.000Z"
+    assert json.loads(cached.read_text())["version"] == 4
 
 
 def _zone_of(abstract: int, concrete: int, importers: int, imports_out: int) -> str | None:

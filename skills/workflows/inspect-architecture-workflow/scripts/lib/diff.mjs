@@ -1,3 +1,5 @@
+import { naturalOrder } from "./graph.mjs";
+
 function edgeKey(e) { return `${e.from}\u0000${e.to}\u0000${e.kind}`; }
 function mapPath(renames, p) { return renames.get(p) ?? p; }
 
@@ -27,7 +29,7 @@ export function diffGraphs(base, head, renames) {
     const [d0, d1] = pair("distance");
     return { id, fanIn: pair("fanIn"), fanOut: pair("fanOut"), instability: pair("instability"), abstractness: pair("abstractness"), distance: pair("distance"), movedPastThreshold: d0 !== null && d1 !== null && Math.round(Math.abs(d1 - d0) * 100) >= 10 };
   });
-  const moduleCycles = (cycles) => cycles.map((members) => members.map((p) => mapPath(renames, p)).sort());
+  const moduleCycles = (cycles) => cycles.map((members) => members.map((p) => mapPath(renames, p)).sort(naturalOrder));
   return { base: base.commit, head: head.commit, units: { added, removed, moved, modifiedClassification }, edges: { added: edgesAdded, removed: edgesRemoved }, components,
     cycles: { ...cycleChanges(base.cycles.components, head.cycles.components), modules: cycleChanges(moduleCycles(base.cycles.modules), head.cycles.modules) } };
 }

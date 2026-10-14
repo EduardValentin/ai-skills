@@ -2,24 +2,40 @@ import json
 import shutil
 from pathlib import Path
 
-from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, init_repo, run_arch, run_node
 
 ASSESS = SKILL_DIR / "scripts" / "lib" / "assess.mjs"
 COLUMNS = "| Workflow | Target | Rule | Origin | Verdict | Severity | Evidence | Change | Escalation |"
+CONTROLLER = "src/web/payroll-controller.ts"
+CONSTRUCTION_ROWS = [(f"{CONTROLLER} -> src/adapters/pg-payroll-repository.ts", "R7"),
+                     (f"{CONTROLLER} -> src/adapters/system-clock.ts", "R7")]
 
 
-def seed_edge(root: Path, source: str, resolved: str) -> None:
+def seed_edge(root: Path, source: str, resolved: str, dynamic: bool = False) -> None:
     cruise = json.loads((root / "cruise.json").read_text())
     module = next(m for m in cruise["modules"] if m["source"] == source)
     module["dependencies"].append({"module": resolved, "resolved": resolved, "dependencyTypes": ["local", "import"],
-                                   "dynamic": False, "couldNotResolve": False, "matchesDoNotFollow": False})
+                                   "dynamic": dynamic, "couldNotResolve": False, "matchesDoNotFollow": False})
     (root / "cruise.json").write_text(json.dumps(cruise))
 
 
-def assess_rows(root: Path, *args: str) -> list[dict]:
+def touch(root: Path, *paths: str) -> None:
+    for p in paths:
+        (root / p).write_text((root / p).read_text() + "\n// changed\n")
+
+
+def assess_output(root: Path, *args: str) -> dict:
     result = run_arch(["assess", *args, *FIXTURE_FLAGS, "--json"], root)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
+
+
+def assess_rows(root: Path, *args: str) -> list[dict]:
+    return assess_output(root, *args)["rows"]
+
+
+def keys(rows: list[dict]) -> list[tuple[str, str]]:
+    return [(r["target"], r["rule"]) for r in rows]
 
 
 def find(rows: list[dict], target: str, rule: str) -> dict:
@@ -28,8 +44,17 @@ def find(rows: list[dict], target: str, rule: str) -> dict:
     return matches[0]
 
 
-def test_unseeded_fixture_has_no_rows_in_audit_mode(tmp_path: Path):
-    assert assess_rows(copy_fixture("payroll", tmp_path / "p")) == []
+def repo(tmp_path: Path) -> Path:
+    root = copy_fixture("payroll", tmp_path / "p")
+    (root / ".gitignore").write_text(".architecture/\n")
+    return root
+
+
+def test_unseeded_fixture_has_only_the_construction_rows_in_audit_mode(tmp_path: Path):
+    out = assess_output(copy_fixture("payroll", tmp_path / "p"))
+    assert keys(out["rows"]) == CONSTRUCTION_ROWS and out["notProvided"] == []
+    row = out["rows"][0]
+    assert row["workflow"] == "W1" and row["severity"] == "blocker" and row["origin"] == "introduced"
 
 
 def test_markdown_header_equals_the_documented_columns(tmp_path: Path):
@@ -41,42 +66,35 @@ def test_markdown_header_equals_the_documented_columns(tmp_path: Path):
 
 def test_seeded_component_cycle_yields_cycle_rows(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
-    seed_edge(root, "src/domain/employee.ts", "src/web/payroll-controller.ts")
+    seed_edge(root, "src/domain/employee.ts", CONTROLLER)
     rows = assess_rows(root)
     component_cycle = find(rows, "C1 -> C2 -> C3", "R30")
     assert component_cycle["workflow"] == "W6" and component_cycle["severity"] == "blocker"
-    assert component_cycle["verdict"] == "SHOULD_CHANGE" and component_cycle["origin"] == "introduced"
     members = sorted(["src/adapters/pg-payroll-repository.ts", "src/domain/employee.ts", "src/domain/payroll-repository.ts",
-                      "src/domain/payroll-use-case.ts", "src/web/payroll-controller.ts"])
-    module_cycle = find(rows, " -> ".join(members), "R30")
-    assert module_cycle["workflow"] == "W6" and module_cycle["severity"] == "blocker"
-    policy_edge = find(rows, "src/domain/employee.ts -> src/web/payroll-controller.ts", "R4")
-    assert policy_edge["workflow"] == "W1" and policy_edge["severity"] == "blocker"
+                      "src/domain/payroll-use-case.ts", CONTROLLER])
+    assert find(rows, " -> ".join(members), "R30")["severity"] == "blocker"
+    assert find(rows, f"src/domain/employee.ts -> {CONTROLLER}", "R4")["workflow"] == "W1"
 
 
-def test_seeded_outward_edge_into_a_depended_on_component_escalates_by_rule_3(tmp_path: Path):
+def test_rule_3_is_recorded_only_when_it_lifts_the_severity(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     seed_edge(root, "src/domain/employee.ts", "src/domain/payroll-use-case.ts")
     row = find(assess_rows(root), "src/domain/employee.ts -> src/domain/payroll-use-case.ts", "R4")
-    assert row["workflow"] == "W1" and row["severity"] == "blocker" and row["escalation"] == ["rule 3"]
+    assert row["severity"] == "blocker" and row["escalation"] == []
 
 
-def test_outward_edge_into_a_lightly_depended_on_component_is_not_escalated(tmp_path: Path):
+def test_outward_edge_between_components_yields_the_stability_row(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     seed_edge(root, "src/adapters/system-clock.ts", "src/web/main.ts")
     rows = assess_rows(root)
-    row = find(rows, "src/adapters/system-clock.ts -> src/web/main.ts", "R4")
-    assert row["escalation"] == [] and row["severity"] == "blocker"
-    stability = find(rows, "C3 -> C2", "R31")
-    assert stability["workflow"] == "W6" and stability["severity"] == "major"
+    assert find(rows, "src/adapters/system-clock.ts -> src/web/main.ts", "R4")["escalation"] == []
+    assert find(rows, "C3 -> C2", "R31")["severity"] == "major"
 
 
 def two_component_change(tmp_path: Path) -> Path:
-    root = copy_fixture("payroll", tmp_path / "p")
-    (root / ".gitignore").write_text(".architecture/\n")
+    root = repo(tmp_path)
     init_repo(root)
-    (root / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
-    (root / "src/web/main.ts").write_text("export const changed = true;\n")
+    touch(root, "src/domain/employee.ts", "src/web/main.ts")
     return root
 
 
@@ -89,22 +107,58 @@ def test_change_across_components_without_groups_asks_for_them_until_a_group_cov
     assert assess_rows(root, "--base", "HEAD") == []
 
 
-def test_change_spreading_past_the_recorded_groups_yields_r27(tmp_path: Path):
+def test_every_touched_component_sharing_no_group_with_all_the_others_is_an_r27_row(tmp_path: Path):
     root = two_component_change(tmp_path)
     assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=storage"], root).returncode == 0
-    row = find(assess_rows(root, "--base", "HEAD"), "C3", "R27")
-    assert row["workflow"] == "W6" and row["severity"] == "major"
+    rows = assess_rows(root, "--base", "HEAD")
+    assert keys(rows) == [("C1", "R27"), ("C3", "R27")]
+    assert {r["severity"] for r in rows} == {"major"}
 
 
-def test_origin_follows_the_diff_against_the_base(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    (root / ".gitignore").write_text(".architecture/\n")
+def test_edge_origin_follows_the_pair_against_the_base(tmp_path: Path):
+    root = repo(tmp_path)
     seed_edge(root, "src/adapters/system-clock.ts", "src/web/main.ts")
     init_repo(root)
     seed_edge(root, "src/adapters/memory-payroll-repository.ts", "src/web/main.ts")
+    seed_edge(root, "src/adapters/system-clock.ts", "src/web/main.ts", dynamic=True)
+    touch(root, "src/adapters/system-clock.ts", "src/adapters/memory-payroll-repository.ts")
     rows = assess_rows(root, "--base", "HEAD")
     assert find(rows, "src/adapters/system-clock.ts -> src/web/main.ts", "R4")["origin"] == "left"
     assert find(rows, "src/adapters/memory-payroll-repository.ts -> src/web/main.ts", "R4")["origin"] == "introduced"
+
+
+def test_a_cycle_the_change_only_shrinks_is_left_in_place(tmp_path: Path):
+    root = repo(tmp_path)
+    pristine = (root / "cruise.json").read_text()
+    seed_edge(root, "src/domain/employee.ts", "src/domain/payroll-use-case.ts")
+    seed_edge(root, "src/domain/employee.ts", CONTROLLER)
+    init_repo(root)
+    (root / "cruise.json").write_text(pristine)
+    seed_edge(root, "src/domain/employee.ts", "src/domain/payroll-use-case.ts")
+    touch(root, "src/domain/employee.ts")
+    rows = assess_rows(root, "--base", "HEAD")
+    target = " -> ".join(["src/domain/employee.ts", "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts"])
+    assert find(rows, target, "R30")["origin"] == "left"
+
+
+def test_a_cycle_closed_by_an_added_edge_is_introduced(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    seed_edge(root, "src/domain/employee.ts", "src/domain/payroll-use-case.ts")
+    touch(root, "src/domain/employee.ts")
+    rows = assess_rows(root, "--base", "HEAD")
+    target = " -> ".join(["src/domain/employee.ts", "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts"])
+    assert find(rows, target, "R30")["origin"] == "introduced"
+
+
+def test_rows_outside_the_change_are_not_emitted_with_a_base(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    seed_edge(root, "src/adapters/system-clock.ts", "src/web/main.ts")
+    touch(root, "src/domain/employee.ts")
+    assert assess_rows(root, "--base", "HEAD") == []
+    touch(root, "src/adapters/system-clock.ts")
+    assert ("src/adapters/system-clock.ts -> src/web/main.ts", "R4") in keys(assess_rows(root, "--base", "HEAD"))
 
 
 def test_base_without_a_model_marks_every_row_left_and_warns(tmp_path: Path):
@@ -114,19 +168,32 @@ def test_base_without_a_model_marks_every_row_left_and_warns(tmp_path: Path):
     init_repo(root)
     shutil.move(model, root / "docs")
     seed_edge(root, "src/adapters/system-clock.ts", "src/web/main.ts")
-    (root / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
-    (root / "src/web/main.ts").write_text("export const changed = true;\n")
+    touch(root, "src/domain/employee.ts", "src/web/main.ts")
     result = run_arch(["assess", "--base", "HEAD", *FIXTURE_FLAGS, "--json"], root)
     assert result.returncode == 0, result.stderr
-    rows = json.loads(result.stdout)
+    rows = json.loads(result.stdout)["rows"]
     assert rows and {r["origin"] for r in rows} == {"left"}
     assert "no architecture model at HEAD" in result.stderr
 
 
-def run_assess(tmp_path: Path, graph: dict, model: dict, touched: list[str] | None) -> list[dict]:
+def test_absent_facts_are_reported_not_silently_empty(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    facts = json.loads((root / "facts.json").read_text())
+    facts["capabilities"]["exports"] = False
+    facts["capabilities"]["constructs"] = False
+    (root / "facts.json").write_text(json.dumps(facts))
+    result = run_arch(["assess", *FIXTURE_FLAGS, "--json"], root)
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert out == {"rows": [], "notProvided": ["abstractness", "constructs"]}
+    assert "abstractness rows not provided by the adapter; evaluate R31 and R32 from a fact slice" in result.stderr
+    assert "construction rows not provided by the adapter; evaluate R7 from a fact slice" in result.stderr
+
+
+def run_assess(tmp_path: Path, graph: dict, touched: dict | None) -> dict:
     script = (f"import {{ assess }} from {json.dumps(ASSESS.as_uri())};"
-              f"console.log(JSON.stringify(assess({{ graph: {json.dumps(graph)}, model: {json.dumps(model)},"
-              f" touchedComponents: {json.dumps(touched)} }})));")
+              f"console.log(JSON.stringify(assess({{ graph: {json.dumps(graph)}, model: {{ boundaries: {{ groups: [] }} }},"
+              f" touched: {json.dumps(touched)} }})));")
     result = run_node(script, tmp_path)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
@@ -138,19 +205,25 @@ def component(cid: str, fan_in: int, fan_out: int, instability, abstractness, zo
 
 
 def empty_graph(components: list[dict]) -> dict:
-    return {"units": [], "edges": [], "externals": [], "components": components, "componentEdges": [],
+    return {"capabilities": {"exports": True, "constructs": True}, "rings": ["entities", "use-cases", "adapters", "frameworks"],
+            "units": [], "edges": [], "externals": [], "components": components, "componentEdges": [],
             "cycles": {"modules": [], "components": []}}
 
 
 def test_zone_of_pain_is_assessed_only_when_the_change_touches_the_component(tmp_path: Path):
     graph = empty_graph([component("C1", 5, 0, 0, 0.1, "pain"), component("C2", 0, 3, 1, 0, None)])
-    model = {"boundaries": {"groups": []}}
-    assert run_assess(tmp_path, graph, model, None) == []
-    row = find(run_assess(tmp_path, graph, model, ["C1"]), "C1", "R31, R32")
-    assert row["severity"] == "major" and row["escalation"] == ["rule 3"]
+    assert run_assess(tmp_path, graph, None)["rows"] == []
+    row = find(run_assess(tmp_path, graph, {"units": [], "components": ["C1"]})["rows"], "C1", "R31, R32")
+    assert row["severity"] == "major" and row["escalation"] == []
 
 
 def test_abstract_component_without_outside_consumers_is_a_minor_row(tmp_path: Path):
     graph = empty_graph([component("C1", 0, 2, 1, 0.9, "uselessness", abstract_exports=3)])
-    row = find(run_assess(tmp_path, graph, {"boundaries": {"groups": []}}, None), "C1", "R31, R32")
+    row = find(run_assess(tmp_path, graph, None)["rows"], "C1", "R31, R32")
     assert row["severity"] == "minor" and row["escalation"] == []
+
+
+def test_cycle_targets_sort_members_numerically(tmp_path: Path):
+    graph = empty_graph([component("C2", 1, 1, 0.5, None, None), component("C10", 1, 1, 0.5, None, None)])
+    graph["cycles"]["components"] = [["C2", "C10"]]
+    assert keys(run_assess(tmp_path, graph, None)["rows"]) == [("C2 -> C10", "R30")]

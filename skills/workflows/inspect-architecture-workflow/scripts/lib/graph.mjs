@@ -5,7 +5,8 @@ import { selectAdapter } from "./adapters/index.mjs";
 import { git, headCommit, isClean, withBaseWorktree } from "./git.mjs";
 
 export const GRAPH_DIR = ".architecture/graph";
-export const GRAPH_VERSION = 3;
+export const GRAPH_VERSION = 4;
+export function naturalOrder(a, b) { return a.localeCompare(b, undefined, { numeric: true }); }
 export function graphPath(root, commit) { return path.join(root, GRAPH_DIR, `${commit}.json`); }
 
 export function stronglyConnected(nodes, edges) {
@@ -21,11 +22,11 @@ export function stronglyConnected(nodes, edges) {
     if (low.get(v) === idx.get(v)) {
       const scc = []; let w;
       do { w = stack.pop(); onStack.delete(w); scc.push(w); } while (w !== v);
-      if (scc.length > 1) result.push(scc.sort());
+      if (scc.length > 1) result.push(scc.sort(naturalOrder));
     }
   }
   for (const n of nodes) if (!idx.has(n)) visit(n);
-  return result.sort((a, b) => a[0].localeCompare(b[0]));
+  return result.sort((a, b) => naturalOrder(a[0], b[0]));
 }
 
 function round(x) { return x === null ? null : Math.round(x * 100) / 100; }

@@ -168,7 +168,7 @@ def test_edges_query_lists_outgoing_and_incoming_edges(tmp_path: Path):
 def test_edges_without_path_prints_usage(tmp_path: Path):
     result = run_arch(["query", "edges", *FIXTURE_FLAGS], copy_fixture("payroll", tmp_path / "p"))
     assert result.returncode == 1
-    assert result.stderr.strip() == "usage: arch query edges <path>"
+    assert result.stderr.strip() == "usage: arch query edges <path> | --kind <kind>"
 
 
 def test_boolean_flags_never_consume_the_next_argument(tmp_path: Path):
@@ -268,3 +268,15 @@ def test_components_query_lists_the_component_record(tmp_path: Path):
         ["C2", "adapters", "none", "", [], 3],
         ["C3", "web", "none", "", ["src/web/main.ts"], 2],
     ]
+
+
+def test_edges_by_kind_without_a_path_lists_every_edge_of_that_kind(tmp_path: Path):
+    out = q(copy_fixture("payroll", tmp_path / "p"), "edges", "--kind", "constructs")
+    assert out["columns"] == ["From", "To", "Kind", "Ring direction"]
+    assert [r[:2] for r in out["rows"]] == [
+        ["src/web/payroll-controller.ts", "src/adapters/pg-payroll-repository.ts"],
+        ["src/web/payroll-controller.ts", "src/adapters/system-clock.ts"],
+        ["src/web/payroll-controller.ts", "src/domain/payroll-use-case.ts"],
+    ]
+    assert {r[2] for r in out["rows"]} == {"constructs"}
+
