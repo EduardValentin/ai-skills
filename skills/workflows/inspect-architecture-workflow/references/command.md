@@ -17,8 +17,10 @@ take a value, so an argument after them stays positional. Every other flag takes
 
 ## Tooling
 
-The command needs the inspected project's language tooling installed: for TypeScript and
-JavaScript, `dependency-cruiser` and `typescript`. A language with no adapter stops the run with
+The command needs the inspected project's language tooling installed.
+
+<!-- adapters -->
+A language with no adapter stops the run with
 `no adapter for language: <language>; supported: typescript`, naming the configured language or
 `unknown` when none is configured and no `package.json` exists.
 
@@ -40,8 +42,9 @@ nominal `implements` only, sets `constructs` and `signatures` to false, and warn
 `cannot build a TypeScript program (<reason>); constructs and signatures are not provided`. The
 skill's own tests exercise the program-built facts only where `typescript` is installed; otherwise
 they cover only the fallback to per-file parsing.
+<!-- /adapters -->
 
-An import the cruiser cannot resolve is never an edge: it is reported as the warning
+An import the adapter cannot resolve is never an edge: it is reported as the warning
 `unresolved import <specifier> in <module>`. A module or dependency resolved outside the project
 root (a path starting with `../`) is an external tagged `vendor`, named after its first path
 segment, with the warning `module outside the root: <path>`.
@@ -50,6 +53,15 @@ segment, with the warning `module outside the root: <path>`.
 
 Beside the edges, the adapter supplies up to four optional facts per module and declares which it
 provides; the graph records them as `capabilities`, each true or false.
+
+| Fact | Meaning | Read by | Absent means |
+|---|---|---|---|
+| `exports` | abstract and concrete exported declarations per module | W5, W6 metrics (A, D, zones) | A and D undefined, zone rows skipped |
+| `implements` | symbols a module implements, nominally or, where the language is structurally typed, by assignability to a declared port | `ports` implementers; W1, W4 | implementers unknown; fact slice |
+| `constructs` | types from another module a module instantiates | W1 rows on construction of details by policy | construction unknown; fact slice |
+| `signatures` | for each exported symbol, the imported types named in its public interface | W1 rows on port signature types; W3 | signature types unknown; fact slice |
+
+Each fact lands in the graph this way:
 
 | Fact | In the graph | Absent means |
 |---|---|---|
@@ -83,7 +95,7 @@ provides `exports` and `implements` only.
 
 ## Known limits
 
-The derived graph covers only what the project's cruiser configuration includes. When that
+The derived graph covers only what the project's dependency tooling configuration includes. When that
 configuration excludes test files, `arch query units --kind test` returns only the test units the
 configuration does include, W7 evaluates that narrower set, and the run log records that the
 scope was narrowed.
@@ -113,7 +125,7 @@ given, or when either saved-output flag is given. A commit with no
 | Flag or argument | Meaning |
 |---|---|
 | `--commit <ref>` | Build the graph for `<ref>` instead of the working tree |
-| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
+| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--force` | Rebuild even when a cached graph file already exists |
 | `--json` | Print the full graph as JSON instead of the summary line |
@@ -134,7 +146,7 @@ environment; passing either always rebuilds, bypassing the cache.
 | Flag or argument | Meaning |
 |---|---|
 | `<base>` | The commit or ref to diff the working tree against (required) |
-| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` for both sides instead of running it |
+| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` for both sides instead of running it |
 | `--facts-json <file>` | Read the adapter facts from `<file>` for both sides instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the diff as JSON instead of the markdown sections |
 
@@ -157,7 +169,7 @@ and an untracked path never appears in the diff.
 | Flag or argument | Meaning |
 |---|---|
 | `--base <ref>` | Compare against `<ref>`: set Origin from `arch diff <ref>`, read the touched units and components from `arch query touched --base <ref>`, and emit only the rows inside the change |
-| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
+| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print `{ "rows": [...], "notProvided": [...] }` instead of a markdown table; each row is `{ workflow, target, rule, origin, verdict, severity, evidence, change, escalation }` |
 
@@ -234,7 +246,7 @@ merging.
 |---|---|
 | `<name>` | The query to run; see the table below |
 | `[args]` | The named query's own positional arguments and flags |
-| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
+| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the result as a JSON object of columns and rows instead of a markdown table; `touched --with-neighbors` prints `{ "touched": ..., "neighbors": ... }`, each a columns-and-rows object |
 
@@ -292,7 +304,7 @@ graph section renders no rows.
 
 | Flag or argument | Meaning |
 |---|---|
-| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
+| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 | `--json` | Print the uncovered paths as a JSON array instead of one path per line |
 
@@ -438,7 +450,7 @@ Direction lists the first three changes of the map. Agents totals the `--agents`
 
 | Flag or argument | Meaning |
 |---|---|
-| `--cruise-json <file>` | Read dependency-cruiser output from `<file>` instead of running it |
+| `--cruise-json <file>` | Read the project's dependency tooling output from `<file>` instead of running it |
 | `--facts-json <file>` | Read the adapter facts from `<file>` instead of running the tooling; `--exports-json` is an alias |
 
 Rewrites the block between the `<!-- arch:summary -->` and `<!-- /arch:summary -->` markers in

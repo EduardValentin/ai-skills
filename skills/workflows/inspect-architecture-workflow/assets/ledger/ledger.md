@@ -23,9 +23,10 @@ same path and rule match.
 
 ## Acceptances
 
-One line per `ACCEPTED` finding. A one-off stays here; a standing rule is also written to
-`decisions.md` as a generalized intended exception, cohesion group, deferred decision, or
-cohesion position, and the Promoted column names that row.
+One line per `ACCEPTED` finding. A one-off stays here; a standing rule is also written: a
+generalized intended exception, deferred decision, or cohesion position to `decisions.md`, or a
+cohesion group to `model/boundaries.json` with its explaining paragraph added to `decisions.md`.
+The Promoted column names that row.
 
 | Finding | One-off or standing | Reason | Accepted by | Date | Promoted to |
 |---|---|---|---|---|---|

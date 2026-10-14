@@ -44,13 +44,17 @@ row, ask one question: a one-off for this change, or a standing rule of the arch
   table. The row stays `ACCEPTED` while the same target and rule still match, so an acceptance
   made in plan review carries into the change review of the same ticket. On a machine with no
   ledger the finding resurfaces once and is accepted again or promoted.
-- **Standing rule.** Write one generalized row in `decisions.md`: an intended exception stated
-  from component or ring to component or ring, a cohesion group, a deferred decision, or a
-  cohesion position. Evaluators read those tables and raise nothing they cover, so no
-  per-ticket acceptance follows. Then set the row to `ACCEPTED` in the ledger as above.
+- **Standing rule.** For a cohesion group, run the printed `arch model add-group` (or
+  `remove-group`) invocation and add the group's explaining paragraph to `decisions.md`; for
+  anything else, write one generalized row in `decisions.md`: an intended exception stated from
+  component or ring to component or ring, a deferred decision, or a cohesion position. Evaluators
+  read `model/boundaries.json`'s groups and those `decisions.md` tables and raise nothing they
+  cover, so no per-ticket acceptance follows. Then set the row to `ACCEPTED` in the ledger as
+  above.
 
-`decisions.md` holds only decisions the workflows consume, each stated at component or boundary
-level: never a row per finding, per ticket, or per symbol.
+Cohesion groups live in `model/boundaries.json`, never in `decisions.md`. `decisions.md` holds
+only the decisions the workflows consume that are not already model data, each stated at
+component or boundary level: never a row per finding, per ticket, or per symbol.
 
 ## Severity
 
