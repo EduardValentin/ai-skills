@@ -12,7 +12,7 @@ def test_diff_reports_move_not_remove_and_add(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     init_repo(root)
     base = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
-    # Move employee.ts and adjust the cruise and exports fixtures the same way
+    # Move employee.ts and adjust the cruise and facts fixtures the same way
     (root / "src/domain/employee.ts").rename(root / "src/domain/employee-record.ts")
     cruise = json.loads((root / "cruise.json").read_text())
     for m in cruise["modules"]:
@@ -20,9 +20,9 @@ def test_diff_reports_move_not_remove_and_add(tmp_path: Path):
         for d in m["dependencies"]:
             if d.get("resolved") == "src/domain/employee.ts": d["resolved"] = "src/domain/employee-record.ts"
     (root / "cruise.json").write_text(json.dumps(cruise))
-    exports = json.loads((root / "exports.json").read_text())
-    exports["src/domain/employee-record.ts"] = exports.pop("src/domain/employee.ts")
-    (root / "exports.json").write_text(json.dumps(exports))
+    facts = json.loads((root / "facts.json").read_text())
+    facts["modules"]["src/domain/employee-record.ts"] = facts["modules"].pop("src/domain/employee.ts")
+    (root / "facts.json").write_text(json.dumps(facts))
     git(["add", "-A"], root)
     result = run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root)
     assert result.returncode == 0, result.stderr
@@ -31,7 +31,7 @@ def test_diff_reports_move_not_remove_and_add(tmp_path: Path):
     assert out["units"]["added"] == [] and out["units"]["removed"] == []
     assert out["edges"]["added"] == [] and out["edges"]["removed"] == []
     c1 = next(c for c in out["components"] if c["id"] == "C1")
-    assert c1["fanIn"] == [3, 3] and c1["movedPastThreshold"] is False
+    assert c1["fanIn"] == [4, 4] and c1["movedPastThreshold"] is False
 
 
 def test_diff_reports_new_outward_edge_and_metric_move(tmp_path: Path):
@@ -57,7 +57,7 @@ def test_graph_at_commit_uses_a_worktree_and_caches(tmp_path: Path):
     (root / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
     # Dirty cruise.json too, dropping a module: if the build ever read this
     # working-tree file instead of the worktree's committed one, the cache
-    # would end up with 7 units instead of 8.
+    # would end up with 8 units instead of 9.
     cruise = json.loads((root / "cruise.json").read_text())
     cruise["modules"] = [m for m in cruise["modules"] if m["source"] != "src/web/main.ts"]
     (root / "cruise.json").write_text(json.dumps(cruise))
@@ -65,7 +65,7 @@ def test_graph_at_commit_uses_a_worktree_and_caches(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     cached = root / f".architecture/graph/{base}.json"
     assert cached.exists()
-    assert len(json.loads(cached.read_text())["units"]) == 8
+    assert len(json.loads(cached.read_text())["units"]) == 10
     assert git(["worktree", "list"], root).stdout.count("\n") == 1
 
 
@@ -93,9 +93,9 @@ def test_diff_reports_removed_when_rename_target_is_not_covered(tmp_path: Path):
     for m in cruise["modules"]:
         m["dependencies"] = [d for d in m["dependencies"] if d.get("resolved") != "src/domain/employee.ts"]
     (root / "cruise.json").write_text(json.dumps(cruise))
-    exports = json.loads((root / "exports.json").read_text())
-    exports.pop("src/domain/employee.ts")
-    (root / "exports.json").write_text(json.dumps(exports))
+    facts = json.loads((root / "facts.json").read_text())
+    facts["modules"].pop("src/domain/employee.ts")
+    (root / "facts.json").write_text(json.dumps(facts))
     git(["add", "-A"], root)
     out = json.loads(run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root).stdout)
     assert out["units"]["moved"] == []
@@ -182,10 +182,10 @@ def test_diff_reports_module_cycles(tmp_path: Path):
     result = run_arch(["diff", base, *FIXTURE_FLAGS, "--json"], root)
     assert result.returncode == 0, result.stderr
     out = json.loads(result.stdout)
-    assert out["cycles"]["modules"] == {"new": [["src/domain/employee.ts", "src/domain/payroll-use-case.ts"]], "gone": []}
+    assert out["cycles"]["modules"] == {"new": [["src/domain/employee.ts", "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts"]], "gone": []}
     assert out["cycles"]["new"] == []
     markdown = run_arch(["diff", base, *FIXTURE_FLAGS], root).stdout
-    assert "+ src/domain/employee.ts -> src/domain/payroll-use-case.ts" in markdown.split("## Cycles")[1]
+    assert "+ src/domain/employee.ts -> src/domain/payroll-repository.ts -> src/domain/payroll-use-case.ts" in markdown.split("## Cycles")[1]
 
 
 def test_diff_against_head_on_a_dirty_tree(tmp_path: Path):

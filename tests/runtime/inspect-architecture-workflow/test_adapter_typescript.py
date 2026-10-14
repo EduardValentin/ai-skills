@@ -57,7 +57,7 @@ def test_extract_uses_saved_cruise_and_counts_exports(tmp_path: Path):
         pytest.skip("typescript not resolvable from the fixture")
     script = (f"import {{ createTypescriptAdapter }} from '{ADAPTER.as_posix()}';"
               "const a = createTypescriptAdapter({root: process.cwd(), tooling: {language:'typescript', roots:['src']}});"
-              "const r = await a.extract({roots:['src'], cruiseJsonPath:'cruise.json'});process.stdout.write(JSON.stringify(r));")
+              "const r = await a.extract({roots:['src'], dependenciesJsonPath:'cruise.json'});process.stdout.write(JSON.stringify(r));")
     result = run_node(script, root)
     assert result.returncode == 0, result.stderr
     out = json.loads(result.stdout)
@@ -71,7 +71,7 @@ def test_missing_typescript_is_a_clear_error(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     script = (f"import {{ createTypescriptAdapter }} from '{ADAPTER.as_posix()}';"
               "const a = createTypescriptAdapter({root: '/nonexistent-root', tooling: {language:'typescript', roots:['src']}});"
-              "try { await a.extract({roots:['src'], cruiseJsonPath: process.cwd()+'/cruise.json'}); } catch (e) { process.stdout.write(e.message); }")
+              "try { await a.extract({roots:['src'], dependenciesJsonPath: process.cwd()+'/cruise.json'}); } catch (e) { process.stdout.write(e.message); }")
     result = run_node(script, root)
     assert "typescript is not installed in /nonexistent-root" in result.stdout
 

@@ -6,7 +6,7 @@ export const MODEL_DIR = "docs/architecture/model";
 export const DEFAULT_RINGS = ["entities", "use-cases", "adapters", "frameworks"];
 export const KINDS = ["entity", "use-case", "port", "boundary-data", "controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui", "mixed"];
 const FILES = ["components", "rules", "overrides", "boundaries"];
-export const HARD_PROBLEM = /overlap|unknown ring|unknown kind|duplicate component|not a component|rings must/;
+export const HARD_PROBLEM = /overlap|unknown ring|unknown kind|duplicate component|not a component|duplicate group name|rings must/;
 
 async function readJson(file) {
   try { return JSON.parse(await readFile(file, "utf8")); }
@@ -20,7 +20,7 @@ export async function loadModel(root) {
 }
 
 export function allowedKinds(model) {
-  return model.rules.kinds ?? KINDS;
+  return model.rules?.kinds ?? KINDS;
 }
 
 export function componentOf(model, filePath) {
@@ -75,6 +75,12 @@ export function validateModel(model, existingPaths) {
   }
   for (const shape of model.boundaries.shapes) {
     for (const id of [shape.owner, ...(shape.components ?? [])]) if (!ids.has(id)) problems.push(`shape ${shape.name}: not a component: ${id}`);
+  }
+  const groupNames = new Set();
+  for (const group of model.boundaries.groups ?? []) {
+    if (groupNames.has(group.name)) problems.push(`duplicate group name: ${group.name}`);
+    groupNames.add(group.name);
+    for (const id of group.components ?? []) if (!ids.has(id)) problems.push(`group ${group.name}: not a component: ${id}`);
   }
   return problems;
 }

@@ -9,13 +9,10 @@ Header: audit <date> at commit <hash>, scope <scope>; last update <date> at comm
 
 ## Cohesion groups
 
-Sets of components expected to change together for one kind of reason. A change whose touched
-components all sit in one group is expected; one that spreads across groups is a finding unless
-accepted below. A component may belong to more than one group. Proposed by an audit from change
-history; confirmed by a person.
-
-| Group | Components | Kind of change it absorbs |
-|---|---|---|
+The groups themselves are recorded in `model/boundaries.json` and kept current with `model
+add-group` and `model remove-group`; read them with `query groups`. This section holds, per
+group, one paragraph on why it exists: the kind of change it absorbs and why its components
+belong together.
 
 ## Cohesion position per component
 

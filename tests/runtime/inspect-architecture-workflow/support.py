@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_DIR = REPO_ROOT / "skills" / "workflows" / "inspect-architecture-workflow"
 ARCH = SKILL_DIR / "scripts" / "arch.mjs"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-FIXTURE_FLAGS = ["--cruise-json", "cruise.json", "--exports-json", "exports.json"]
+FIXTURE_FLAGS = ["--dependencies-json", "cruise.json", "--facts-json", "facts.json"]
 
 
 def node_path() -> str:

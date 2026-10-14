@@ -1,4 +1,4 @@
-import { parseFlags } from "../args.mjs";
+import { parseFlags, savedInputs } from "../args.mjs";
 import { diffGraphs } from "../diff.mjs";
 import { renames } from "../git.mjs";
 import { loadOrBuildGraph, modelExistsAt } from "../graph.mjs";
@@ -39,17 +39,16 @@ export async function run(args, ctx) {
   const { positional, flags } = parseFlags(args);
   const [base] = positional;
   if (!base) {
-    console.error("usage: arch diff <base> [--cruise-json <file>] [--exports-json <file>] [--json]");
+    console.error("usage: arch diff <base> [--dependencies-json <file>] [--facts-json <file>] [--json]");
     return 1;
   }
   if (!(await modelExistsAt(ctx.root, base))) {
     console.error(`no architecture model at ${base}; evaluate the working tree with "arch query touched --base ${base}" (change-review.md, Map step 4)`);
     return 1;
   }
-  const cruiseJsonPath = flags["cruise-json"];
-  const exportsJsonPath = flags["exports-json"];
-  const baseGraph = await loadOrBuildGraph(ctx.root, { commit: base, cruiseJsonPath, exportsJsonPath });
-  const headGraph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath, exportsJsonPath, force: true });
+  const inputs = savedInputs(flags);
+  const baseGraph = await loadOrBuildGraph(ctx.root, { commit: base, ...inputs });
+  const headGraph = await loadOrBuildGraph(ctx.root, { ...inputs, force: true });
   const renameMap = await renames(ctx.root, base);
   const diff = diffGraphs(baseGraph, headGraph, renameMap);
   console.log(flags.json ? JSON.stringify(diff, null, 2) : renderMarkdown(diff));

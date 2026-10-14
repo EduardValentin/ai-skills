@@ -31,26 +31,38 @@ as accepted structure.
    3. The scope is the touched units plus every edge touching them, taken from `arch query edges
       <path>` per touched unit, or from the `edges` of `arch graph --json`.
    4. W6 is always applicable, since added component edges cannot be told apart from old ones.
-   5. Every finding is left in place unless its target is an `added` unit or an edge touching one
-      ("Introduced or left in place" in `verdicts.md`).
+   5. Every finding is left in place unless its target is an `added` unit, an edge touching one,
+      or a cohesion row ("Introduced or left in place" in `verdicts.md`).
    6. The run log states "base <base> predates the model; evaluated the working-tree graph".
 
 ## Evaluate
 
 1. A workflow W1 to W8 is applicable when a `changed` row falls in a section it reads. Carry the
    others' previous rows forward and name them in the run log.
-2. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
-   evaluation packet from `slicing.md` (the full component graph when W6 is applicable). It
-   judges only changed targets and the edges touching them, from rows and never from code, and
-   phrases findings as "the diff introduces" or "the diff leaves in place".
-3. Merge, escalate, mark each row introduced or left in place, group changes, and build the
-   improvement map per `verdicts.md`. A row the
+2. Run `arch assess --base <base>` and write its output to
+   `.architecture/slices/packet/00-assess.md`. It emits only rows inside the change, and they
+   keep the Origin it sets; in the base-without-model fallback (Map step 4) it warns and sets
+   Origin as that step says, from `arch query touched`.
+3. Dispatch one `architecture-evaluator` that runs every applicable workflow in order, with the
+   evaluation packet from `slicing.md` (the full component graph when W6 is applicable) and the
+   assess output file as decided rows. It judges only changed targets and the edges touching
+   them, from rows and never from code, and phrases findings as "the diff introduces" or "the
+   diff leaves in place".
+4. Merge the evaluator rows with the assessed rows into one row file, escalate, and mark each
+   evaluator row introduced or left in place per `verdicts.md`; `arch ledger add-run` and `arch
+   ledger map` in Record keep existing IDs, group changes, and build the improvement map. A row the
    plan review of this ticket set to `ACCEPTED` keeps that verdict while its target and rule
    still match; it is not raised again.
 
 ## Record
 
-1. Append the run to `ledger.md` and new rows to `change-history.md`; write `slices/`.
+1. Write the ledger through its subcommands, in this order: `arch ledger add-run --mode
+   change-review --base <base>` with the merged rows, the skipped workflows, the targets `arch
+   diff` reports removed, and `--evaluated` naming a file that lists the touched unit paths and
+   touched component IDs from `arch query touched --base <base>`, plus every component cycle
+   and every component edge target among the assessed rows, so an assessed row that vanished is
+   resolved; `arch ledger accept` once per finding the user accepts;
+   `arch ledger map`. Then append new rows to `change-history.md` and write `slices/`.
 2. Apply model edits through the subcommands only for changes no open finding disputes; run
    `arch readme-summary`; the implementer commits `docs/architecture/` with the code.
 3. Candidate rows implicated in an open finding are not written. List them in the ledger under

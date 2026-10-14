@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { parseFlags } from "../args.mjs";
+import { parseFlags, savedInputs } from "../args.mjs";
 import { loadOrBuildGraph } from "../graph.mjs";
 import { loadModel } from "../model.mjs";
 import { QUERIES, renderMarkdown } from "../queries.mjs";
@@ -14,7 +14,7 @@ function summaryLine(graph) {
 
 export async function run(args, ctx) {
   const { flags } = parseFlags(args);
-  const graph = await loadOrBuildGraph(ctx.root, { cruiseJsonPath: flags["cruise-json"], exportsJsonPath: flags["exports-json"] });
+  const graph = await loadOrBuildGraph(ctx.root, savedInputs(flags));
   const model = await loadModel(ctx.root);
   const metrics = renderMarkdown(await QUERIES.metrics(graph, model, { positional: [], flags: {} }, ctx.root));
   const componentGraph = renderMarkdown(await QUERIES["component-graph"](graph, model, { positional: [], flags: {} }, ctx.root));

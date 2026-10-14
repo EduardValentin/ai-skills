@@ -12,11 +12,12 @@ paths, a port as `path:symbol`, or a component ID), `rule`, `verdict` (`OK`, `SH
 `RESOLVED`, `ACCEPTED`), `severity`, `evidence` (paths), `change`, `protects` (the upcoming
 change), `run`.
 
-Before applying a decision table, check the intended exceptions and cohesion groups in
-`decisions.md`. A candidate finding whose edge, layer skip, or shared shape a recorded exception
-covers (same from-and-to components or rings, or the same shape) is written as `OK` naming the
-exception, never as `SHOULD_CHANGE`. Exceptions are read at component and ring level; a packet
-with no `decisions.md` has none.
+Before applying a decision table, check the intended exceptions in `decisions.md` and the
+cohesion groups in `model/boundaries.json`. A candidate finding whose edge, layer skip, or
+shared shape a recorded exception covers (same from-and-to components or rings, or the same
+shape) is written as `OK` naming the exception, never as `SHOULD_CHANGE`. Exceptions are read at
+component and ring level; a packet with no `decisions.md` has no exceptions, and one with no
+groups recorded in `model/boundaries.json` has no cohesion groups.
 
 Every `SHOULD_CHANGE` row carries a base severity. The coordinator may raise it by the escalation
 rules in `references/verdicts.md` (policy target, path of a named upcoming change, fan-in of three or more,

@@ -44,6 +44,20 @@ def test_validate_rejects_overlapping_component_globs(tmp_path: Path):
     assert any("overlap" in p and "C1" in p and "C9" in p for p in out)
 
 
+def test_validate_reports_group_problems(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    boundaries = root / "docs/architecture/model/boundaries.json"
+    data = json.loads(boundaries.read_text())
+    data["groups"] = [
+        {"name": "core", "components": ["C1", "C9"], "absorbs": "domain rule changes"},
+        {"name": "core", "components": ["C1"], "absorbs": "duplicate"},
+    ]
+    boundaries.write_text(json.dumps(data))
+    out = json.loads(node_eval("m.validateModel(model, new Set(['src/domain/employee.ts']))", root))
+    assert "group core: not a component: C9" in out
+    assert "duplicate group name: core" in out
+
+
 def test_validate_reports_stale_override_and_unknown_kind(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     (root / "docs/architecture/model/overrides.json").write_text(json.dumps({"version": 1, "overrides": [{"path": "src/gone.ts", "ring": "entities", "kind": "widget", "actors": []}]}))

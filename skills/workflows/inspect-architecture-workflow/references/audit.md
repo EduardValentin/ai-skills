@@ -18,8 +18,8 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 1. When `docs/architecture/model` is missing, create it from the templates and write
    `components.json` from the repository's package and folder layout (one component per
    workspace package and per top-level app folder), with `tooling.roots` listing one entry per
-   source root in that layout and `tooling.tsConfig` naming the TypeScript config that declares
-   the project's path aliases when it uses any; write `rules.json` from the project's
+   source root in that layout and any adapter-specific `tooling` setting the project needs (the
+   adapter table in `command.md` names them) when it uses any; write `rules.json` from the project's
    conventions document when one exists. When the project runs a code formatter over JSON (for
    example a `prettier` config or a `format:check` script), add `docs/architecture/model` to its
    ignore file so the canonical model files are not reformatted.
@@ -32,18 +32,23 @@ record and the ledger. The first audit creates the baseline; a later one refresh
 
 ## Evaluate
 
-1. Dispatch one `architecture-evaluator` per workflow W1 to W8, in parallel, each with the
-   evaluation packet from `slicing.md`; each receives the query output its `Reads:` line names.
-   Evaluators judge rows and open no project file.
-2. Merge per `slicing.md`: drop duplicate target-and-rule pairs, match rows to existing ledger
-   IDs, and settle each previous `SHOULD_CHANGE` row as resolved, still open, or removed.
-3. Apply severity escalation, group changes, and build the improvement map per `verdicts.md`.
+1. Run `arch assess` and write its output to `.architecture/slices/packet/00-assess.md`.
+2. Dispatch one `architecture-evaluator` per workflow W1 to W8, in parallel, each with the
+   evaluation packet from `slicing.md`; each receives the query output its `Reads:` line names
+   and the assess output file as decided rows. Evaluators judge rows and open no project file.
+3. Merge per `slicing.md`, the assessed rows included, into one row file; `arch ledger add-run`
+   in Record drops duplicate target-and-rule pairs, keeps existing IDs, and settles each previous
+   `SHOULD_CHANGE` row.
+4. Apply severity escalation, group changes, and build the improvement map per `verdicts.md`.
 
 ## Record
 
 1. Write `decisions.md` from its template when missing; run `arch readme-summary`; commit the
    model, decisions, and README with the audit.
-2. Write `ledger.md` (new run in the run log), `change-history.md`, and `slices/`.
+2. Write the ledger through its subcommands, in this order: `arch ledger add-run --mode audit`
+   with the merged rows and `--evaluated` naming a file holding the single line `*`, since an
+   audit evaluates everything and an assessed row that vanished must resolve; `arch ledger accept` once per finding the user accepts; `arch ledger
+   map`. Then write `change-history.md` and `slices/`.
 
 ## Return
 

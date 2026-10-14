@@ -52,8 +52,8 @@ and never committed.
 | `model/components.json` | Tooling settings; components as path globs with enforcement mode, release unit, and entry-point globs |
 | `model/rules.json` | Ring order, framework names, and classification rules: glob to ring, kind, actors; first match wins |
 | `model/overrides.json` | Per-path exceptions to the rules |
-| `model/boundaries.json` | Declared ports (path, symbol, owner, humble side) and shared data shapes |
-| `decisions.md` | Only decisions the workflows consume, at component or boundary level: deferred decisions and their ports, cohesion groups, cohesion position and cost per component, intended exceptions. Never a row per finding or per ticket |
+| `model/boundaries.json` | Declared ports (path, symbol, owner, humble side), shared data shapes, and cohesion groups (name, components, what kind of change it absorbs) |
+| `decisions.md` | Only decisions the workflows consume, at component or boundary level: deferred decisions and their ports, each cohesion group's explaining paragraph, cohesion position and cost per component, intended exceptions. Never a row per finding or per ticket |
 | `README.md` | Three paragraphs on the shape, how to read the folder, and a generated summary block the command fills |
 
 Agents change the model only through `model add-override`, `model add-port`,
@@ -65,9 +65,8 @@ files canonically; never by editing JSON text.
 component, ring, kind, actors, and export counts; edges with direction and
 crossings; externals; component metrics; component edges; cycles; uncovered
 modules. Deterministic from a commit, regenerated when missing, never
-committed. The command needs the project's language tooling installed
-(TypeScript and JavaScript: dependency-cruiser and typescript); a language
-with no adapter stops the run with an escalation naming it.
+committed. The command needs the project's language tooling installed; a
+language with no adapter stops the run with an escalation naming it.
 
 **Uncommitted ledger** at `.architecture/` in the inspected project. Confirm
 it is ignored before writing; if not, add it to the repository's local exclude
@@ -123,12 +122,17 @@ A run's cost is agent sessions, not skill text.
   review.
 - Mapping is a command, not an agent: `arch graph`, `arch diff`, and
   `arch uncovered`. A mapping agent is dispatched only for uncovered modules.
+- `arch assess` decides the structural decision-table rows that are a
+  function of the graph alone before the evaluator runs, so an evaluator
+  judges only what it leaves unmarked.
 - Packets name skill files by absolute path and carry query output, never
   pasted graph rows.
 - Audit fans out one evaluator per workflow; change and plan review dispatch
   one evaluator for every applicable workflow.
 - Evaluators judge query output and open no project file.
 - The history slice is `arch query volatility`, not an agent.
+- The ledger is kept by `arch ledger` subcommands; the coordinator never
+  edits its tables by hand.
 - The return contract reports agents dispatched and tokens when the harness
   shows them.
 

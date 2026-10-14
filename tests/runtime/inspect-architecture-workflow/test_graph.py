@@ -27,13 +27,13 @@ def test_graph_units_and_edges_are_classified(tmp_path: Path):
 def test_metrics_match_hand_computation(tmp_path: Path):
     g = build(copy_fixture("payroll", tmp_path / "p"))
     c = {x["id"]: x for x in g["components"]}
-    # C1 domain: importers outside C1 = pg-payroll-repository, system-clock, payroll-controller -> fanIn 3; fanOut 0
-    assert c["C1"]["fanIn"] == 3 and c["C1"]["fanOut"] == 0 and c["C1"]["instability"] == 0
+    # C1 domain: importers outside C1 = pg-payroll-repository, memory-payroll-repository, system-clock, payroll-controller -> fanIn 4; fanOut 0
+    assert c["C1"]["fanIn"] == 4 and c["C1"]["fanOut"] == 0 and c["C1"]["instability"] == 0
     # C1 exports: Employee (concrete), Clock (abstract), PayrollUseCase (concrete), PayrollRepository (abstract) -> A = 0.5, D = |0.5+0-1| = 0.5
     assert c["C1"]["abstractness"] == 0.5 and c["C1"]["distance"] == 0.5
     # C3 web: fanIn 0, fanOut = modules inside C3 that import outside it: only payroll-controller.ts -> 1 -> I = 1, A = 0 -> D = 0
     assert c["C3"]["fanIn"] == 0 and c["C3"]["fanOut"] == 1 and c["C3"]["instability"] == 1 and c["C3"]["distance"] == 0
-    assert {(e["from"], e["to"], e["modules"]) for e in g["componentEdges"]} == {("C2", "C1", 2), ("C3", "C1", 1), ("C3", "C2", 1)}
+    assert {(e["from"], e["to"], e["modules"]) for e in g["componentEdges"]} == {("C2", "C1", 3), ("C3", "C1", 1), ("C3", "C2", 1)}
 
 
 def test_component_with_no_edges_has_null_metrics_not_nan(tmp_path: Path):
@@ -74,7 +74,7 @@ def test_graph_is_written_to_cache_and_summary_printed(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["graph", *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("graph: 8 units,")
+    assert result.stdout.startswith("graph: 10 units, 16 edges,")
     assert (root / ".architecture/graph/working-tree.json").exists()
 
 
@@ -113,6 +113,14 @@ def test_tarjan_finds_nested_cycles():
     assert json.loads(result.stdout) == [["a", "b"]]
 
 
+def test_cycle_members_sort_numerically():
+    script = (f"import {{ stronglyConnected }} from '{GRAPH.as_posix()}';"
+              "process.stdout.write(JSON.stringify(stronglyConnected(['C10','C2','C3'], [['C10','C2'],['C2','C10'],['C3','C2'],['C2','C3']])));")
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [["C2", "C3", "C10"]]
+
+
 def test_empty_roots_fall_back_to_the_project_root(tmp_path: Path):
     script = (f"import {{ sourceRoots }} from '{GRAPH.as_posix()}';"
               "process.stdout.write(JSON.stringify([sourceRoots({components:{tooling:{roots:[]}}}), sourceRoots({components:{}}), sourceRoots({components:{tooling:{roots:['src']}}})]));")
@@ -124,7 +132,7 @@ def test_empty_roots_fall_back_to_the_project_root(tmp_path: Path):
     data = json.loads(comp.read_text())
     data["tooling"]["roots"] = []
     comp.write_text(json.dumps(data))
-    assert len(build(root)["units"]) == 8
+    assert len(build(root)["units"]) == 10
 
 
 def _clean_repo_with_tooling(tmp_path: Path) -> tuple[Path, str]:
@@ -157,8 +165,8 @@ def test_cached_graph_of_an_older_version_is_rebuilt(tmp_path: Path):
     result = run_arch(["graph", "--json"], root)
     assert result.returncode == 0, result.stderr
     rebuilt = json.loads(result.stdout)
-    assert rebuilt["version"] == 2 and rebuilt["generatedAt"] != "2000-01-01T00:00:00.000Z"
-    assert json.loads(cached.read_text())["version"] == 2
+    assert rebuilt["version"] == 4 and rebuilt["generatedAt"] != "2000-01-01T00:00:00.000Z"
+    assert json.loads(cached.read_text())["version"] == 4
 
 
 def _zone_of(abstract: int, concrete: int, importers: int, imports_out: int) -> str | None:

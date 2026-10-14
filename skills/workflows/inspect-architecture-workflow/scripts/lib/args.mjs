@@ -1,4 +1,4 @@
-const BOOLEAN_FLAGS = new Set(["json", "force", "with-neighbors"]);
+const BOOLEAN_FLAGS = new Set(["json", "force", "with-neighbors", "one-off", "standing"]);
 
 export function parseFlags(args) {
   const positional = [];
@@ -13,4 +13,8 @@ export function parseFlags(args) {
     i += 1;
   }
   return { positional, flags };
+}
+
+export function savedInputs(flags) {
+  return { dependenciesJsonPath: flags["dependencies-json"] ?? flags["cruise-json"], factsJsonPath: flags["facts-json"] ?? flags["exports-json"] };
 }
