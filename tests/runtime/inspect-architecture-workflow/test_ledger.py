@@ -46,6 +46,10 @@ def add_run(root: Path, rows: list[list[str]], *extra: str, mode="audit", scope=
     rows_file = root / ".architecture" / "rows.md"
     rows_file.parent.mkdir(parents=True, exist_ok=True)
     rows_file.write_text(table(rows))
+    if mode == "change-review" and "--base" not in extra:
+        extra = (*extra, "--base", "main")
+    if mode == "plan-review" and "--plan" not in extra:
+        extra = (*extra, "--plan", "docs/plan.md")
     result = run_arch(["ledger", "add-run", "--mode", mode, "--scope", scope, "--rows", str(rows_file), *extra], root)
     assert result.returncode == 0, result.stderr
     return result
@@ -65,8 +69,8 @@ def findings(root: Path) -> dict[str, dict]:
 
 def seed_ledger(root: Path, finding_rows: list[str]) -> None:
     text = TEMPLATE.read_text()
-    text = text.replace("|---|---|---|---|---|---|---|---|---|---|\n",
-                        "|---|---|---|---|---|---|---|---|---|---|\n| 1 | 2026-10-01 | abc12345 | audit | repository | SHOULD_CHANGE | 1 | 1 | 0 | 0 |\n", 1)
+    run_log = "| Run | Date | Commit | Mode | Scope | Key | Verdict | Blocker | Major | Minor | OK |\n|---|---|---|---|---|---|---|---|---|---|---|\n"
+    text = text.replace(run_log, run_log + "| 1 | 2026-10-01 | abc12345 | audit | repository | audit | SHOULD_CHANGE | 1 | 1 | 0 | 0 |\n", 1)
     marker = "| ID | Workflow | Target | Rule | Origin | Verdict | Severity | Evidence | Change | Protects | Run |\n|---|---|---|---|---|---|---|---|---|---|---|\n"
     text = text.replace(marker, marker + "".join(line + "\n" for line in finding_rows))
     (root / ".architecture").mkdir(exist_ok=True)
@@ -80,6 +84,7 @@ def test_template_round_trips_byte_for_byte(tmp_path: Path):
     result = run_node(script, tmp_path)
     assert result.returncode == 0, result.stderr
     assert result.stdout == TEMPLATE.read_text()
+    assert "| Run | Date | Commit | Mode | Scope | Key | Verdict | Blocker | Major | Minor | OK |" in result.stdout
 
 
 def test_seeded_ledger_round_trips_byte_for_byte(tmp_path: Path):
@@ -358,15 +363,49 @@ def test_duplicate_rows_keep_the_highest_severity_and_every_mark(tmp_path: Path)
     assert found["F1"]["evidence"] == "the evaluator's longer evidence [rule 1] [rule 3]"
 
 
-def test_fix_loop_keeps_counting_open_rows_of_the_same_scope(tmp_path: Path):
+def test_fix_loop_keeps_counting_open_rows_of_the_same_key(tmp_path: Path):
     root = project(tmp_path)
+    first_base = head(root)
     add_run(root, [row(target="src/old/a.ts -> src/old/b.ts", severity="major", change="Older change")], mode="audit", scope="repository")
-    add_run(root, [row(severity="major")], mode="change-review", scope="diff main")
+    add_run(root, [row(severity="major")], mode="change-review", scope="diff main", )
     first = run_arch(["ledger", "map"], root).stdout.splitlines()
     assert first[0].startswith("Verdict: SHOULD_CHANGE \u2014 0 blocker, 1 major")
     assert first[2] == "Carried: 1 open from earlier scopes (not blocking)"
-    add_run(root, [], mode="change-review", scope="diff main")
+
+    printed = add_run(root, [], mode="change-review", scope="second round of the ticket").stdout
+    assert "| SHOULD_CHANGE | 0 | 1 | 0 | 0 |" in printed
+    runs = parsed(root)["runs"]
+    assert (runs[2]["verdict"], runs[2]["key"], runs[0]["key"]) == ("SHOULD_CHANGE", first_base, "audit")
     second = run_arch(["ledger", "map"], root).stdout.splitlines()
     assert second[0].startswith("Verdict: SHOULD_CHANGE \u2014 0 blocker, 1 major")
     assert second[2] == "Carried: 1 open from earlier scopes (not blocking)"
-    assert parsed(root)["runs"][2]["verdict"] == "SHOULD_CHANGE"
+
+    (root / "src" / "later.ts").write_text("export {};\n")
+    git(["add", "-A"], root)
+    git(["commit", "-q", "-m", "later"], root)
+    add_run(root, [], mode="change-review", scope="diff main")
+    third = run_arch(["ledger", "map"], root).stdout.splitlines()
+    assert third[0].startswith("Verdict: OK \u2014 0 blocker, 0 major")
+    assert third[2] == "Carried: 2 open from earlier scopes (not blocking)"
+
+
+def test_plan_review_keys_runs_by_the_plan_path(tmp_path: Path):
+    root = project(tmp_path)
+    add_run(root, [row(severity="major")], "--plan", "docs/plans/payroll.md", mode="plan-review", scope="task 3")
+    assert parsed(root)["runs"][0]["key"] == "docs/plans/payroll.md"
+    rows_file = write_lines(root, "rows.md", table([]).splitlines())
+    missing = run_arch(["ledger", "add-run", "--mode", "plan-review", "--scope", "x", "--rows", str(rows_file)], root)
+    assert missing.returncode == 1 and "usage: arch ledger add-run" in missing.stderr
+    missing_base = run_arch(["ledger", "add-run", "--mode", "change-review", "--scope", "x", "--rows", str(rows_file)], root)
+    assert missing_base.returncode == 1 and "usage: arch ledger add-run" in missing_base.stderr
+
+
+def test_duplicates_of_equal_severity_keep_the_base(tmp_path: Path):
+    root = project(tmp_path)
+    add_run(root, [
+        row(severity="major (base minor)", evidence="short"), row(severity="major", evidence="the longer evidence"),
+        row(target="src/b.ts", severity="major", evidence="the longer evidence"), row(target="src/b.ts", severity="major (base minor)", evidence="short"),
+    ])
+    found = findings(root)
+    assert found["F1"]["severity"] == "major (base minor)" and found["F1"]["evidence"] == "the longer evidence"
+    assert found["F2"]["severity"] == "major (base minor)" and found["F2"]["evidence"] == "the longer evidence"

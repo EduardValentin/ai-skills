@@ -343,7 +343,7 @@ it, and a finding found again there reopens with its ID.
 
 | Subcommand | Meaning |
 |---|---|
-| `add-run --mode <audit\|change-review\|plan-review> --scope <text> --rows <file> [--skipped W1,W6] [--evaluated <file>] [--removed <file>]` | Merge this run's rows into the findings and append the run log row |
+| `add-run --mode <audit\|change-review\|plan-review> --scope <text> --rows <file> [--base <ref>] [--plan <path>] [--skipped W1,W6] [--evaluated <file>] [--removed <file>]` | Merge this run's rows into the findings and append the run log row |
 | `accept <F-id> --one-off\|--standing --by <who> --reason <text>` | Accept a finding and write its Acceptances row |
 | `map [--agents "<n> mapping, <n> fact, <n> evaluation"]` | Rewrite the Changes and Improvement map tables and print the return contract lines |
 
@@ -361,7 +361,8 @@ those markers. The Severity cell is `<severity>`, or `<severity> (base <severity
 row (`verdicts.md`, Severity); a row carrying only `[rule 1]` or `[rule 3]` marks at `major` with
 no base written is stored as `major (base minor)`, since those rules lift to `major` and only
 from below it. Every count and ordering reads the first word. Two rows with the same target and
-rule merge into one: the highest severity with its base, the union of the `[rule <n>]` marks, and
+rule merge into one: the highest severity with its base (at equal severity, the cell that
+carries a base), the union of the `[rule <n>]` marks, and
 the longer evidence.
 
 `--evaluated` and `--removed` name files listing targets one per line; blank lines and lines
@@ -378,12 +379,20 @@ incoming `OK` row resolves a matched open finding. Each previous `SHOULD_CHANGE`
 in `--removed` becomes `RESOLVED` with `resolved at <commit>: target removed` appended to its
 Evidence; a finding of a workflow named in `--skipped` is carried forward unchanged; a target
 evaluated this run becomes `RESOLVED` with `resolved at <commit>` appended; any other finding is
-carried forward unchanged. A carried-forward finding keeps its Run. The run log row records the
-mode, the scope (with `; skipped W1, W6` when workflows were skipped), the commit, and the run
-verdict and counts described under `map`. Prints the run log row:
+carried forward unchanged. A carried-forward finding keeps its Run.
+
+`--scope` is free text for people. The run's identity for the fix loop is its Key: the short
+commit `--base <ref>` resolves to in a change review, the `--plan <path>` as given in a plan
+review, and `audit` in an audit. `--base` is required in a change review and `--plan` in a plan
+review; without it the command prints its usage and exits 1.
+
+The run log row records the mode, the scope (with `; skipped W1, W6` when workflows were
+skipped), the Key, the commit, and the run verdict and counts described under `map`, computed
+after the run is recorded, so they equal what `map` prints for the same ledger. Prints the run
+log row:
 
 ```markdown
-| 2 | 2026-10-14 | 1a2b3c4d | change-review | diff main | SHOULD_CHANGE | 0 | 1 | 0 | 3 |
+| 2 | 2026-10-14 | 1a2b3c4d | change-review | diff main | 9f8e7d6c | SHOULD_CHANGE | 0 | 1 | 0 | 3 |
 ```
 
 ### `accept`
@@ -416,9 +425,9 @@ wording: Verdict, Pre-existing, Carried, Escalation, Direction (one numbered lin
 Agents.
 
 The run's rows are the findings whose Run is the last run, plus the open `SHOULD_CHANGE`
-findings whose Run is an earlier run of the same mode and scope (the scope without its skipped
-note): a fix loop keeps counting what it has not yet re-evaluated. Carried counts the open
-`SHOULD_CHANGE` findings of every other scope. Verdict counts the run's open
+findings whose Run is an earlier run of the same mode and Key: a fix loop keeps counting what it
+has not yet re-evaluated. Carried counts the open `SHOULD_CHANGE` findings of every other mode or
+Key. A run log row with an empty Key matches no other run. Verdict counts the run's open
 `SHOULD_CHANGE` rows that are `introduced` or carry `[rule 2]`, and is `SHOULD_CHANGE` when one of
 them is `blocker` or `major`; Pre-existing counts its other open rows; targets OK counts its `OK`
 rows; Escalation counts its `SHOULD_CHANGE` and `ACCEPTED` rows per `[rule <n>]` marker;

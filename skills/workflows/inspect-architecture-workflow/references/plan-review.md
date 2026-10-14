@@ -61,7 +61,7 @@ the evaluation packet as facts.
 ## Record
 
 Write the ledger through its subcommands, in this order: `arch ledger add-run --mode
-plan-review` with targets set to the proposed row paths; `arch ledger accept` once per finding
+plan-review --plan <path of the plan>` with targets set to the proposed row paths; `arch ledger accept` once per finding
 the user accepts; `arch ledger map`. Write `slices/`, including `slices/plan-overlay.md`. Do not touch `change-history.md` or the committed record;
 the change review after implementation updates the record from real code.
 

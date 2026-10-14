@@ -96,9 +96,11 @@ the rows, never written independently of them.
 rule 2 lifted its severity (fixing it first makes the named change cheaper). The other
 left-in-place rows never block: the return contract reports them under `Pre-existing` with their
 severities. A
-re-run of the same mode and scope (the plan review fix loop, a second round of a change review)
-counts its own rows and the open rows the earlier runs of that scope carried forward, so a
-finding the re-run did not evaluate still blocks. Open rows from other scopes never block; the
+re-run of the same mode and key (the plan review fix loop over one plan, a second round of a
+change review against one base commit) counts its own rows and the open rows the earlier runs
+with that mode and key carried forward, so a finding the re-run did not evaluate still blocks.
+The key is the base commit in a change review and the plan's path in a plan review; the scope
+text never decides it. Open rows of any other mode or key never block; the
 return contract reports them on the `Carried` line so they never vanish. In
 plan review a `SHOULD_CHANGE` verdict, or any open `UNDERSPECIFIED` row, blocks plan approval
 until each blocker and major row is resolved in the plan or `ACCEPTED` by the user and each

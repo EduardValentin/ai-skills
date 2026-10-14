@@ -2,8 +2,8 @@
 
 ## Run log
 
-| Run | Date | Commit | Mode | Scope | Verdict | Blocker | Major | Minor | OK |
-|---|---|---|---|---|---|---|---|---|---|
+| Run | Date | Commit | Mode | Scope | Key | Verdict | Blocker | Major | Minor | OK |
+|---|---|---|---|---|---|---|---|---|---|---|
 
 ## Changes
 

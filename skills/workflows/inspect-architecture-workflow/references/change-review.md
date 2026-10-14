@@ -58,7 +58,7 @@ as accepted structure.
 ## Record
 
 1. Write the ledger through its subcommands, in this order: `arch ledger add-run --mode
-   change-review` with the merged rows, the skipped workflows, the evaluated targets, and the
+   change-review --base <base>` with the merged rows, the skipped workflows, the evaluated targets, and the
    targets `arch diff` reports removed; `arch ledger accept` once per finding the user accepts;
    `arch ledger map`. Then append new rows to `change-history.md` and write `slices/`.
 2. Apply model edits through the subcommands only for changes no open finding disputes; run

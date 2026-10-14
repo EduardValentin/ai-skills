@@ -12,7 +12,7 @@ const DIRECTION_LENGTH = 3;
 const DASH = "\u2014";
 
 const TABLES = {
-  runs: { section: "Run log", columns: { Run: "run", Date: "date", Commit: "commit", Mode: "mode", Scope: "scope", Verdict: "verdict", Blocker: "blocker", Major: "major", Minor: "minor", OK: "ok" } },
+  runs: { section: "Run log", columns: { Run: "run", Date: "date", Commit: "commit", Mode: "mode", Scope: "scope", Key: "key", Verdict: "verdict", Blocker: "blocker", Major: "major", Minor: "minor", OK: "ok" } },
   changes: { section: "Changes", columns: { Change: "change", Description: "description", Resolves: "resolves" } },
   findings: { section: "Findings", columns: { ID: "id", Workflow: "workflow", Target: "target", Rule: "rule", Origin: "origin", Verdict: "verdict", Severity: "severity", Evidence: "evidence", Change: "change", Protects: "protects", Run: "run" } },
   acceptances: { section: "Acceptances", columns: { Finding: "finding", "One-off or standing": "kind", Reason: "reason", "Accepted by": "by", Date: "date", "Promoted to": "promoted" } },
@@ -174,8 +174,13 @@ function normalizeIncoming(row, mode) {
   };
 }
 
+function outranks(row, other) {
+  const difference = severityRank(severityOf(row)) - severityRank(severityOf(other));
+  return difference > 0 || (difference === 0 && Boolean(baseSeverityOf(row)) && !baseSeverityOf(other));
+}
+
 function mergeDuplicates(kept, row) {
-  const higher = severityRank(severityOf(row)) > severityRank(severityOf(kept)) ? row : kept;
+  const higher = outranks(row, kept) ? row : kept;
   const fuller = withoutMarks(row.evidence).length > withoutMarks(kept.evidence).length ? row : kept;
   return { ...fuller, severity: higher.severity, evidence: withMarks(fuller.evidence, [...marksOf(kept.evidence), ...marksOf(row.evidence)]) };
 }
@@ -233,7 +238,7 @@ function runLogRow(ledger, base) {
   return { ...base, verdict: result.verdict, blocker: String(result.counts.blocker), major: String(result.counts.major), minor: String(result.counts.minor), ok: String(result.ok) };
 }
 
-export function addRun(ledger, { mode, scope, commit, rows, skippedWorkflows = [], evaluatedTargets = [], removedTargets = [], date = today() }) {
+export function addRun(ledger, { mode, scope, key, commit, rows, skippedWorkflows = [], evaluatedTargets = [], removedTargets = [], date = today() }) {
   const run = String(nextNumber(ledger.runs.map((r) => r.run), /^(\d+)$/));
   const incoming = dedupe(rows.map((row) => normalizeIncoming(row, mode)));
   const incomingByKey = new Map(incoming.map((row) => [findingKey(row), row]));
@@ -251,9 +256,8 @@ export function addRun(ledger, { mode, scope, commit, rows, skippedWorkflows = [
   let nextId = nextNumber(ledger.findings.map((f) => f.id), /^F(\d+)$/);
   for (const row of incomingByKey.values()) { findings.push({ id: `F${nextId}`, ...row, run }); nextId += 1; }
   const skippedNote = skippedWorkflows.length > 0 ? `; skipped ${skippedWorkflows.join(", ")}` : "";
-  const updated = { ...ledger, findings };
-  const logRow = runLogRow(updated, { run, date, commit, mode, scope: `${scope}${skippedNote}` });
-  return { ...updated, runs: [...ledger.runs, logRow] };
+  const recorded = { ...ledger, findings, runs: [...ledger.runs, { run, date, commit, mode, scope: `${scope}${skippedNote}`, key }] };
+  return refreshRunLog(recorded, run);
 }
 
 export function refreshRunLog(ledger, run) {
@@ -262,12 +266,10 @@ export function refreshRunLog(ledger, run) {
 
 function emptyCounts() { return Object.fromEntries(SEVERITIES.map((s) => [s, 0])); }
 
-function scopeOf(runRow) { return String(runRow.scope).replace(/; skipped .*$/, ""); }
-
 function sameScopeRuns(ledger, run) {
   const current = ledger.runs.find((r) => r.run === run);
-  if (!current) return new Set([run]);
-  return new Set(ledger.runs.filter((r) => r.mode === current.mode && scopeOf(r) === scopeOf(current)).map((r) => r.run));
+  if (!current?.key) return new Set([run]);
+  return new Set(ledger.runs.filter((r) => r.mode === current.mode && r.key === current.key).map((r) => r.run));
 }
 
 export function runVerdict(ledger, run) {
