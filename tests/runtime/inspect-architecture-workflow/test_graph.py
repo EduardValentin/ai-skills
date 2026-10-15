@@ -18,7 +18,7 @@ def test_graph_units_and_edges_are_classified(tmp_path: Path):
     assert units["src/domain/payroll-use-case.ts"]["kind"] == "use-case"
     assert units["src/domain/payroll-use-case.ts"]["component"] == "C1"
     assert units["src/web/main.ts"]["kind"] == "composition-root"
-    e = next(x for x in g["edges"] if x["from"] == "src/adapters/system-clock.ts" and x["to"] == "src/domain/clock.ts")
+    e = next(x for x in g["edges"] if x["from"] == "src/adapters/pg-payroll-repository.ts" and x["to"] == "src/domain/payroll-repository.ts")
     assert e["crossesComponent"] is True and e["direction"] == "inward"
     e2 = next(x for x in g["edges"] if x["from"] == "src/domain/payroll-use-case.ts" and x["to"] == "src/domain/employee.ts")
     assert e2["direction"] == "inward" and e2["crossesComponent"] is False
@@ -29,7 +29,7 @@ def test_metrics_match_hand_computation(tmp_path: Path):
     c = {x["id"]: x for x in g["components"]}
     # C1 domain: importers outside C1 = pg-payroll-repository, memory-payroll-repository, system-clock, payroll-controller -> fanIn 4; fanOut 0
     assert c["C1"]["fanIn"] == 4 and c["C1"]["fanOut"] == 0 and c["C1"]["instability"] == 0
-    # C1 exports: Employee (concrete), Clock (abstract), PayrollUseCase (concrete), PayrollRepository (abstract) -> A = 0.5, D = |0.5+0-1| = 0.5
+    # C1 exports: Employee, PayrollUseCase (concrete), Clock, PayrollRepository (abstract); the barrel's exports are excluded -> A = 0.5, D = |0.5+0-1| = 0.5
     assert c["C1"]["abstractness"] == 0.5 and c["C1"]["distance"] == 0.5
     # C3 web: fanIn 0, fanOut = modules inside C3 that import outside it: only payroll-controller.ts -> 1 -> I = 1, A = 0 -> D = 0
     assert c["C3"]["fanIn"] == 0 and c["C3"]["fanOut"] == 1 and c["C3"]["instability"] == 1 and c["C3"]["distance"] == 0
@@ -74,7 +74,7 @@ def test_graph_is_written_to_cache_and_summary_printed(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["graph", *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("graph: 10 units, 16 edges,")
+    assert result.stdout.startswith("graph: 11 units, 20 edges,")
     assert (root / ".architecture/graph/working-tree.json").exists()
 
 
@@ -132,7 +132,7 @@ def test_empty_roots_fall_back_to_the_project_root(tmp_path: Path):
     data = json.loads(comp.read_text())
     data["tooling"]["roots"] = []
     comp.write_text(json.dumps(data))
-    assert len(build(root)["units"]) == 10
+    assert len(build(root)["units"]) == 11
 
 
 def _clean_repo_with_tooling(tmp_path: Path) -> tuple[Path, str]:
@@ -165,8 +165,8 @@ def test_cached_graph_of_an_older_version_is_rebuilt(tmp_path: Path):
     result = run_arch(["graph", "--json"], root)
     assert result.returncode == 0, result.stderr
     rebuilt = json.loads(result.stdout)
-    assert rebuilt["version"] == 4 and rebuilt["generatedAt"] != "2000-01-01T00:00:00.000Z"
-    assert json.loads(cached.read_text())["version"] == 4
+    assert rebuilt["version"] == 5 and rebuilt["generatedAt"] != "2000-01-01T00:00:00.000Z"
+    assert json.loads(cached.read_text())["version"] == 5
 
 
 def _zone_of(abstract: int, concrete: int, importers: int, imports_out: int) -> str | None:
@@ -193,3 +193,11 @@ def test_zone_classification():
     assert _zone_of(abstract=0, concrete=5, importers=2, imports_out=0) is None
     assert _zone_of(abstract=5, concrete=0, importers=0, imports_out=2) == "uselessness"
     assert _zone_of(abstract=1, concrete=1, importers=1, imports_out=1) is None
+
+
+def test_edges_with_a_barrel_at_either_end_cross_no_ring(tmp_path: Path):
+    edges = {(e["from"], e["to"]): e for e in build(copy_fixture("payroll", tmp_path / "p"))["edges"]}
+    consumer = edges[("src/adapters/system-clock.ts", "src/domain/index.ts")]
+    assert (consumer["direction"], consumer["crossesRing"], consumer["crossesComponent"]) == ("through-barrel", False, True)
+    publication = edges[("src/domain/index.ts", "src/domain/payroll-use-case.ts")]
+    assert (publication["direction"], publication["crossesRing"], publication["crossesComponent"]) == ("through-barrel", False, False)

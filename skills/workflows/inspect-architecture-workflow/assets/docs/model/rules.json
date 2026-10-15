@@ -1,7 +1,7 @@
 {
   "version": 1,
   "rings": [ "entities", "use-cases", "adapters", "frameworks" ],
-  "kinds": [ "entity", "use-case", "port", "boundary-data", "controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui", "mixed" ],
+  "kinds": [ "entity", "use-case", "port", "boundary-data", "controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui", "barrel", "mixed" ],
   "frameworks": [],
   "rules": []
 }

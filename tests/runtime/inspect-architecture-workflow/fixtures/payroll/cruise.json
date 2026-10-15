@@ -35,6 +35,7 @@
         "src/adapters/memory-payroll-repository.ts",
         "src/adapters/pg-payroll-repository.ts",
         "src/domain/payroll-repository.ts",
+        "src/domain/index.ts",
         "src/domain/payroll-use-case.ts"
       ],
       "orphan": false,
@@ -152,6 +153,7 @@
       ],
       "dependents": [
         "src/adapters/pg-payroll-repository.ts",
+        "src/domain/index.ts",
         "src/domain/payroll-use-case.ts"
       ],
       "orphan": false,
@@ -162,7 +164,7 @@
       "dependencies": [
         {
           "dynamic": false,
-          "module": "../domain/clock",
+          "module": "../domain",
           "moduleSystem": "es6",
           "exoticallyRequired": false,
           "dependencyTypes": [
@@ -172,7 +174,7 @@
             "pre-compilation-only"
           ],
           "preCompilationOnly": true,
-          "resolved": "src/domain/clock.ts",
+          "resolved": "src/domain/index.ts",
           "coreModule": false,
           "followable": true,
           "couldNotResolve": false,
@@ -188,10 +190,92 @@
       "valid": true
     },
     {
+      "source": "src/domain/index.ts",
+      "dependencies": [
+        {
+          "dynamic": false,
+          "module": "./clock",
+          "moduleSystem": "es6",
+          "exoticallyRequired": false,
+          "dependencyTypes": [
+            "local",
+            "export"
+          ],
+          "preCompilationOnly": false,
+          "resolved": "src/domain/clock.ts",
+          "coreModule": false,
+          "followable": true,
+          "couldNotResolve": false,
+          "matchesDoNotFollow": false,
+          "circular": false,
+          "valid": true
+        },
+        {
+          "dynamic": false,
+          "module": "./employee",
+          "moduleSystem": "es6",
+          "exoticallyRequired": false,
+          "dependencyTypes": [
+            "local",
+            "export"
+          ],
+          "preCompilationOnly": false,
+          "resolved": "src/domain/employee.ts",
+          "coreModule": false,
+          "followable": true,
+          "couldNotResolve": false,
+          "matchesDoNotFollow": false,
+          "circular": false,
+          "valid": true
+        },
+        {
+          "dynamic": false,
+          "module": "./payroll-repository",
+          "moduleSystem": "es6",
+          "exoticallyRequired": false,
+          "dependencyTypes": [
+            "local",
+            "export"
+          ],
+          "preCompilationOnly": false,
+          "resolved": "src/domain/payroll-repository.ts",
+          "coreModule": false,
+          "followable": true,
+          "couldNotResolve": false,
+          "matchesDoNotFollow": false,
+          "circular": false,
+          "valid": true
+        },
+        {
+          "dynamic": false,
+          "module": "./payroll-use-case",
+          "moduleSystem": "es6",
+          "exoticallyRequired": false,
+          "dependencyTypes": [
+            "local",
+            "export"
+          ],
+          "preCompilationOnly": false,
+          "resolved": "src/domain/payroll-use-case.ts",
+          "coreModule": false,
+          "followable": true,
+          "couldNotResolve": false,
+          "matchesDoNotFollow": false,
+          "circular": false,
+          "valid": true
+        }
+      ],
+      "dependents": [
+        "src/adapters/system-clock.ts"
+      ],
+      "orphan": false,
+      "valid": true
+    },
+    {
       "source": "src/domain/clock.ts",
       "dependencies": [],
       "dependents": [
-        "src/adapters/system-clock.ts",
+        "src/domain/index.ts",
         "src/domain/payroll-use-case.ts"
       ],
       "orphan": false,
@@ -259,6 +343,7 @@
         }
       ],
       "dependents": [
+        "src/domain/index.ts",
         "src/web/payroll-controller.ts"
       ],
       "orphan": false,
@@ -424,8 +509,8 @@
     "info": 0,
     "ignore": 0,
     "advisedExitCode": 0,
-    "totalCruised": 12,
-    "totalDependenciesCruised": 15,
+    "totalCruised": 13,
+    "totalDependenciesCruised": 19,
     "ruleSetUsed": {
       "forbidden": []
     }

@@ -19,7 +19,7 @@ def test_normalize_cruise_classifies_edges(tmp_path: Path):
     assert "src/domain/payroll-use-case.ts" in out["modules"]
     internal = {(e["from"], e["to"], e["kind"]) for e in out["edges"] if "to" in e}
     assert ("src/web/payroll-controller.ts", "src/domain/payroll-use-case.ts", "import") in internal
-    assert ("src/adapters/system-clock.ts", "src/domain/clock.ts", "type-import") in internal
+    assert ("src/adapters/system-clock.ts", "src/domain/index.ts", "type-import") in internal
     externals = {(e["from"], e["external"]["name"], e["external"]["tag"]) for e in out["edges"] if "external" in e}
     assert ("src/web/payroll-controller.ts", "express", "framework") in externals
     assert ("src/adapters/pg-payroll-repository.ts", "pg", "vendor") in externals

@@ -2,7 +2,7 @@ import { savedInputs } from "./args.mjs";
 import { matchesAny } from "./glob.mjs";
 import { classify, componentOf } from "./model.mjs";
 import { listUntracked, logNames, nameStatus } from "./git.mjs";
-import { loadOrBuildGraph } from "./graph.mjs";
+import { loadOrBuildGraph, ringDirection, THROUGH_BARREL } from "./graph.mjs";
 
 export const NOT_PROVIDED = "not provided by the adapter";
 
@@ -37,8 +37,10 @@ function cycles(graph) {
 function ringCrossings(graph, model, { flags }) {
   const direction = flags.direction ?? "outward";
   const byPath = unitsByPath(graph);
+  const ringsOf = (e) => ringDirection(graph.rings, byPath.get(e.from)?.ring ?? null, byPath.get(e.to)?.ring ?? null);
+  const directionOf = (e) => (e.direction === THROUGH_BARREL && flags["include-barrels"] ? ringsOf(e) : e.direction);
   const rows = graph.edges
-    .filter((e) => e.direction === direction)
+    .filter((e) => directionOf(e) === direction)
     .map((e) => [e.from, byPath.get(e.from)?.ring ?? null, e.to, byPath.get(e.to)?.ring ?? null, e.kind]);
   return { columns: ["From", "From ring", "To", "To ring", "Kind"], rows };
 }

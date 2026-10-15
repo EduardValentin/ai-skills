@@ -5,7 +5,8 @@ import { selectAdapter } from "./adapters/index.mjs";
 import { git, headCommit, isClean, withBaseWorktree } from "./git.mjs";
 
 export const GRAPH_DIR = ".architecture/graph";
-export const GRAPH_VERSION = 4;
+export const GRAPH_VERSION = 5;
+export const THROUGH_BARREL = "through-barrel";
 export function naturalOrder(a, b) { return a.localeCompare(b, undefined, { numeric: true }); }
 export function graphPath(root, commit) { return path.join(root, GRAPH_DIR, `${commit}.json`); }
 
@@ -29,6 +30,16 @@ export function stronglyConnected(nodes, edges) {
   return result.sort((a, b) => naturalOrder(a[0], b[0]));
 }
 
+export function ringDirection(rings, fromRing, toRing) {
+  const fi = fromRing === null ? -1 : rings.indexOf(fromRing), ti = toRing === null ? -1 : rings.indexOf(toRing);
+  if (fi < 0 || ti < 0) return "unknown";
+  return ti < fi ? "inward" : ti > fi ? "outward" : "same";
+}
+
+export function touchesBarrel(from, to) {
+  return from?.kind === "barrel" || to?.kind === "barrel";
+}
+
 function round(x) { return x === null ? null : Math.round(x * 100) / 100; }
 
 export function metricsFor(units, edges, components) {
@@ -44,9 +55,10 @@ export function metricsFor(units, edges, components) {
       if (fromIn && !toIn && unitByPath.get(e.to)?.component) exporters.add(e.from);
     }
     const fanIn = importers.size, fanOut = exporters.size;
-    const exportsKnown = inside.every((u) => u.exports);
-    const abstractExports = exportsKnown ? inside.reduce((n, u) => n + u.exports.abstract, 0) : null;
-    const totalExports = exportsKnown ? inside.reduce((n, u) => n + u.exports.abstract + u.exports.concrete, 0) : null;
+    const declaring = inside.filter((u) => u.kind !== "barrel");
+    const exportsKnown = declaring.every((u) => u.exports);
+    const abstractExports = exportsKnown ? declaring.reduce((n, u) => n + u.exports.abstract, 0) : null;
+    const totalExports = exportsKnown ? declaring.reduce((n, u) => n + u.exports.abstract + u.exports.concrete, 0) : null;
     const instability = fanIn + fanOut === 0 ? null : fanOut / (fanIn + fanOut);
     const abstractness = !totalExports ? null : abstractExports / totalExports;
     const distance = instability === null || abstractness === null ? null : Math.abs(abstractness + instability - 1);
@@ -73,7 +85,6 @@ function constructsEdges(extracted, capabilities) {
 
 export function buildGraph({ model, extracted, commit }) {
   const rings = model.rules.rings ?? DEFAULT_RINGS;
-  const ringIndex = (ring) => (ring === null ? null : rings.indexOf(ring));
   const capabilities = Object.fromEntries(CAPABILITIES.map((fact) => [fact, Boolean(extracted.capabilities?.[fact])]));
   const units = extracted.modules.map((m) => ({ path: m.path, ...classify(model, m.path), module: m }))
     .sort((a, b) => a.path.localeCompare(b.path))
@@ -82,9 +93,8 @@ export function buildGraph({ model, extracted, commit }) {
   const byPath = new Map(units.map((u) => [u.path, u]));
   const edges = [...extracted.edges.filter((e) => e.to), ...constructsEdges(extracted, capabilities)].map((e) => {
     const from = byPath.get(e.from), to = byPath.get(e.to);
-    const fi = ringIndex(from?.ring ?? null), ti = ringIndex(to?.ring ?? null);
-    const direction = fi === null || ti === null || fi < 0 || ti < 0 ? "unknown" : ti < fi ? "inward" : ti > fi ? "outward" : "same";
-    return { from: e.from, to: e.to, kind: e.kind, crossesComponent: (from?.component ?? null) !== (to?.component ?? null), crossesRing: direction !== "same" && direction !== "unknown", direction };
+    const direction = touchesBarrel(from, to) ? THROUGH_BARREL : ringDirection(rings, from?.ring ?? null, to?.ring ?? null);
+    return { from: e.from, to: e.to, kind: e.kind, crossesComponent: (from?.component ?? null) !== (to?.component ?? null), crossesRing: direction === "inward" || direction === "outward", direction };
   }).sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.kind.localeCompare(b.kind))
     .map((e, i) => ({ id: `E${i + 1}`, ...e }));
   const externalMap = new Map();

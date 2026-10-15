@@ -1,4 +1,4 @@
-import { naturalOrder } from "./graph.mjs";
+import { naturalOrder, touchesBarrel } from "./graph.mjs";
 import { allowedKinds, MODEL_DIR } from "./model.mjs";
 
 export const ASSESS_COLUMNS = ["Workflow", "Target", "Rule", "Origin", "Verdict", "Severity", "Evidence", "Change", "Escalation"];
@@ -46,6 +46,7 @@ function ringFindings(graph, byPath) {
   const findings = [];
   for (const pair of edgePairs(graph)) {
     const from = byPath.get(pair.from), to = byPath.get(pair.to);
+    if (touchesBarrel(from, to)) continue;
     const policyToDetail = POLICY_KINDS.has(from?.kind) && DETAIL_KINDS.has(to?.kind);
     if (!policyToDetail && pair.direction !== "outward") continue;
     const reason = policyToDetail ? "policy unit depends on a detail unit" : "edge crosses rings outward";
@@ -77,7 +78,7 @@ function constructionFindings(graph, byPath, model) {
   const detailKinds = constructedDetailKinds(model);
   return graph.edges.filter((e) => e.kind === "constructs").flatMap((edge) => {
     const from = byPath.get(edge.from), to = byPath.get(edge.to);
-    if (!from || !to || WIRING_KINDS.has(from.kind) || !detailKinds.has(to.kind)) return [];
+    if (!from || !to || touchesBarrel(from, to) || WIRING_KINDS.has(from.kind) || !detailKinds.has(to.kind)) return [];
     return [{
       workflow: "W1", target: edgeTarget(edge.from, edge.to), rule: "R7", severity: "blocker",
       evidence: `concrete detail constructed outside a composition root: ${describeUnit(from)} constructs ${describeUnit(to)}`,

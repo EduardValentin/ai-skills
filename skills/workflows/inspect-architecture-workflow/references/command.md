@@ -12,7 +12,7 @@ a hard model problem, or a tooling error (a language with no adapter, tooling th
 `arch uncovered` returns 1 whenever it lists at least one module; that is its normal job, not a
 failure. `arch assess` returns 0 whenever it succeeds, rows or not.
 
-`--json`, `--force`, `--with-neighbors`, `--one-off`, and `--standing` are switches: they never
+`--json`, `--force`, `--with-neighbors`, `--include-barrels`, `--one-off`, and `--standing` are switches: they never
 take a value, so an argument after them stays positional. Every other flag takes the next argument as its value.
 
 ## Tooling
@@ -60,7 +60,7 @@ provides; the graph records them as `capabilities`, each true or false.
 
 | Fact | Meaning | Read by | Absent means |
 |---|---|---|---|
-| `exports` | abstract and concrete exported declarations per module | W5, W6 metrics (A, D, zones) | A and D undefined, zone rows skipped |
+| `exports` | abstract and concrete exported declarations per module; a `barrel` unit's exports are left out of A | W5, W6 metrics (A, D, zones) | A and D undefined, zone rows skipped |
 | `implements` | symbols a module implements, nominally or, where the language is structurally typed, by assignability to a declared port | `ports` implementers; W1, W4 | implementers unknown; fact slice |
 | `constructs` | types from another module a module instantiates | W1 rows on construction of details by policy | construction unknown; fact slice |
 | `signatures` | for each exported symbol, the imported types named in its public interface | W1 rows on port signature types; W3 | signature types unknown; fact slice |
@@ -104,6 +104,10 @@ configuration excludes test files, `arch query units --kind test` returns only t
 configuration does include, W7 evaluates that narrower set, and the run log records that the
 scope was narrowed.
 
+An edge through a barrel is publication, not a crossing: the symbol a consumer uses through the
+barrel, and so its real dependency, is invisible at module level. W1 notes this as a known limit;
+`query ring-crossings --include-barrels` lists those edges by ring for a hand check.
+
 The `ports` query lists the implementers the `implements` fact names. An implementer the fact
 misses is settled through a fact slice (`slicing.md`).
 
@@ -126,8 +130,8 @@ function returns) or written as an inline literal is not detected.
 
 Builds `.architecture/graph/<commit>.json`: the adapter's `capabilities`; units with component,
 ring, kind, actors, and the adapter facts; edges of kind `import`, `type-import`, `dynamic`, and
-`constructs`, with direction and crossings; externals; component metrics; component edges;
-cycles; uncovered modules. Deterministic from a commit; rebuilt when the cache is missing, when
+`constructs`, with direction and crossings (see Barrel edges); externals; component metrics;
+component edges; cycles; uncovered modules. Deterministic from a commit; rebuilt when the cache is missing, when
 the cached file's `version` differs from the command's graph format version, when `--force` is
 given, or when either saved-output flag is given. A commit with no
 `docs/architecture/model/components.json` stops the run with `no architecture model at <ref>`.
@@ -150,6 +154,14 @@ graph is written.
 `--dependencies-json` and `--facts-json` feed saved adapter output instead of running the project's
 tooling. They exist for tests and for projects whose tooling cannot run in the current
 environment; passing either always rebuilds, bypassing the cache.
+
+### Barrel edges
+
+An edge whose `from` or `to` unit has kind `barrel` gets `direction` `through-barrel` and
+`crossesRing` false; `crossesComponent` is computed as for any edge. A re-export is publication,
+and a consumer importing a barrel depends on whichever symbol it uses, which the module graph
+cannot see. Metrics, component edges, and cycles count barrel edges like any other: a barrel
+still couples the components it joins.
 
 ## `diff`
 
@@ -195,9 +207,9 @@ It exits 0 whether or not it prints rows: an assessment is not a verdict.
 
 | Condition | Workflow | Rule | Base severity | Target |
 |---|---|---|---|---|
-| Edge from a policy unit (entity, use-case, port, boundary-data) to a detail unit (controller, presenter, gateway, adapter, composition-root, entry-point, test, config, ui) or to an external of any tag | W1 | R4 | blocker | the edge; `external:<name>` for an external |
-| Edge crossing rings outward, for any other unit | W1 | R4 | blocker | the edge |
-| `constructs` edge from a unit whose kind is not `test`, `config`, or `composition-root` to a unit of a detail kind: every allowed kind except the policy kinds (entity, use-case, port, boundary-data), `test`, `config`, `composition-root`, and `mixed`; needs the `constructs` fact | W1 | R7 | blocker | the edge |
+| Edge from a policy unit (entity, use-case, port, boundary-data) to a detail unit (controller, presenter, gateway, adapter, composition-root, entry-point, test, config, ui) or to an external of any tag; never an edge with a barrel at either end | W1 | R4 | blocker | the edge; `external:<name>` for an external |
+| Edge crossing rings outward, for any other unit; never an edge with a barrel at either end | W1 | R4 | blocker | the edge |
+| `constructs` edge from a unit whose kind is not `test`, `config`, or `composition-root` to a unit of a detail kind: every allowed kind except the policy kinds (entity, use-case, port, boundary-data), `test`, `config`, `composition-root`, and `mixed`; separately, the edge check means an edge with a barrel at either end never fires, whatever the kinds; needs the `constructs` fact | W1 | R7 | blocker | the edge |
 | Cycle in the component graph | W6 | R30 | blocker | the cycle's component IDs, sorted numerically |
 | Cycle among modules | W6 | R30 | blocker | the cycle's paths, sorted numerically |
 | Component edge whose source has a lower I than its target (from more stable to less stable) | W6 | R31 | major | the component edge `C<a> -> C<b>` |
@@ -282,7 +294,7 @@ hand match of the plan's or diff's file list against the globs in
 | `metrics` | none | Component, Units, Fan-in, Fan-out, I, A, D, Zone | W5, W6 |
 | `component-graph` | none | From, To, Importing modules | W6, W8 |
 | `cycles` | none | Level, Members | W6 |
-| `ring-crossings` | `[--direction outward\|inward\|same]` (default `outward`) | From, From ring, To, To ring, Kind | W1, W2, W3, W4 |
+| `ring-crossings` | `[--direction outward\|inward\|same]` (default `outward`), `[--include-barrels]` | From, From ring, To, To ring, Kind | W1, W2, W3, W4 |
 | `fan-in` | `<path>` | Importer, Component, Kind | W7, severity escalation rule 3 |
 | `edges` | `<path>`, `--kind <kind>`, or both (one is required) | Direction, Other, Kind, Ring direction; with `--kind` and no path: From, To, Kind, Ring direction | W1, plan review step 1 |
 | `units` | `[--component <id>] [--kind <k>] [--ring <r>]` | Path, Kind, Ring, Actors, Abstract, Concrete | W2, W3, W4, W7 |
@@ -303,7 +315,9 @@ the module's type appears once per kind. `signatures` prints one row per type fr
 that an exported symbol of the module names in its public interface; a symbol whose interface
 names none has no row. `ring-crossings` filters every internal edge whose two
 rings are known by its direction: `outward` and `inward` list edges that cross rings, `same` lists
-edges whose two ends sit in the same ring. `components` prints the component record from
+edges whose two ends sit in the same ring. It leaves out `through-barrel` edges (see Barrel edges)
+unless `--include-barrels` is given, which files each of them under the direction its two rings
+give. `edges` prints a barrel edge's direction as is, `through-barrel`. `components` prints the component record from
 `docs/architecture/model/components.json` with each component's unit count in the graph.
 `groups` prints the cohesion groups from `docs/architecture/model/boundaries.json`.
 `entry-points` expands each component's entry-point globs

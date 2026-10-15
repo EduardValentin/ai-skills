@@ -1,4 +1,4 @@
-const BOOLEAN_FLAGS = new Set(["json", "force", "with-neighbors", "one-off", "standing"]);
+const BOOLEAN_FLAGS = new Set(["json", "force", "with-neighbors", "one-off", "standing", "include-barrels"]);
 
 export function parseFlags(args) {
   const positional = [];

@@ -109,7 +109,7 @@ def test_absent_exports_capability_leaves_abstractness_undefined(tmp_path: Path)
     c1 = next(c for c in graph(root)["components"] if c["id"] == "C1")
     assert c1["abstractness"] is None and c1["distance"] is None and c1["inZone"] is None
     metrics = run_arch(["query", "metrics", *FIXTURE_FLAGS], root)
-    assert "| C1 domain | 4 | 4 | 0 | 0 | undefined | undefined | none |" in metrics.stdout.splitlines()
+    assert "| C1 domain | 5 | 4 | 0 | 0 | undefined | undefined | none |" in metrics.stdout.splitlines()
 
 
 def test_exports_json_is_an_alias_without_constructs_or_signatures(tmp_path: Path):
@@ -118,7 +118,7 @@ def test_exports_json_is_an_alias_without_constructs_or_signatures(tmp_path: Pat
     assert g["capabilities"] == {"exports": True, "implements": True, "constructs": False, "signatures": False}
     assert not any(e["kind"] == "constructs" for e in g["edges"])
     c1 = next(c for c in g["components"] if c["id"] == "C1")
-    assert (c1["units"], c1["fanIn"], c1["abstractness"], c1["distance"]) == (4, 4, 0.5, 0.5)
+    assert (c1["units"], c1["fanIn"], c1["abstractness"], c1["distance"]) == (5, 4, 0.5, 0.5)
     result = run_arch(["query", "signatures", "src/domain/payroll-use-case.ts", "--cruise-json", "cruise.json", "--exports-json", "exports.json"], root)
     assert result.returncode == 0 and result.stdout.strip() == "not provided by the adapter"
 

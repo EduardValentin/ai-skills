@@ -1,4 +1,4 @@
-import type { Clock } from "../domain/clock";
+import type { Clock } from "../domain";
 
 export class SystemClock implements Clock {
   now(): Date {

@@ -1,6 +1,7 @@
 {
   "src/domain/clock.ts": { "exports": { "abstract": 1, "concrete": 0 }, "implements": [] },
   "src/domain/employee.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [] },
+  "src/domain/index.ts": { "exports": { "abstract": 0, "concrete": 4 }, "implements": [] },
   "src/domain/payroll-repository.ts": { "exports": { "abstract": 1, "concrete": 0 }, "implements": [] },
   "src/domain/payroll-use-case.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": [] },
   "src/adapters/pg-payroll-repository.ts": { "exports": { "abstract": 0, "concrete": 1 }, "implements": ["PayrollRepository"] },

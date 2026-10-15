@@ -156,7 +156,7 @@ def test_kinds_come_from_rules_json_when_listed(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     rules_path = root / "docs/architecture/model/rules.json"
     rules = json.loads(rules_path.read_text())
-    rules["kinds"] = ["entity", "use-case", "port", "adapter", "controller", "composition-root", "saga"]
+    rules["kinds"] = ["entity", "use-case", "port", "adapter", "controller", "composition-root", "barrel", "saga"]
     rules_path.write_text(json.dumps(rules))
     accepted = run_arch(["model", "add-override", "src/domain/employee.ts", "ring=use-cases", "kind=saga"], root)
     assert accepted.returncode == 0, accepted.stderr
