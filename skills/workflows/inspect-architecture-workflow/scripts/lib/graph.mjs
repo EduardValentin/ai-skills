@@ -55,9 +55,10 @@ export function metricsFor(units, edges, components) {
       if (fromIn && !toIn && unitByPath.get(e.to)?.component) exporters.add(e.from);
     }
     const fanIn = importers.size, fanOut = exporters.size;
-    const exportsKnown = inside.every((u) => u.exports);
-    const abstractExports = exportsKnown ? inside.reduce((n, u) => n + u.exports.abstract, 0) : null;
-    const totalExports = exportsKnown ? inside.reduce((n, u) => n + u.exports.abstract + u.exports.concrete, 0) : null;
+    const declaring = inside.filter((u) => u.kind !== "barrel");
+    const exportsKnown = declaring.every((u) => u.exports);
+    const abstractExports = exportsKnown ? declaring.reduce((n, u) => n + u.exports.abstract, 0) : null;
+    const totalExports = exportsKnown ? declaring.reduce((n, u) => n + u.exports.abstract + u.exports.concrete, 0) : null;
     const instability = fanIn + fanOut === 0 ? null : fanOut / (fanIn + fanOut);
     const abstractness = !totalExports ? null : abstractExports / totalExports;
     const distance = instability === null || abstractness === null ? null : Math.abs(abstractness + instability - 1);

@@ -118,7 +118,7 @@ def test_exports_json_is_an_alias_without_constructs_or_signatures(tmp_path: Pat
     assert g["capabilities"] == {"exports": True, "implements": True, "constructs": False, "signatures": False}
     assert not any(e["kind"] == "constructs" for e in g["edges"])
     c1 = next(c for c in g["components"] if c["id"] == "C1")
-    assert (c1["units"], c1["fanIn"], c1["abstractness"], c1["distance"]) == (5, 4, 0.25, 0.75)
+    assert (c1["units"], c1["fanIn"], c1["abstractness"], c1["distance"]) == (5, 4, 0.5, 0.5)
     result = run_arch(["query", "signatures", "src/domain/payroll-use-case.ts", "--cruise-json", "cruise.json", "--exports-json", "exports.json"], root)
     assert result.returncode == 0 and result.stdout.strip() == "not provided by the adapter"
 

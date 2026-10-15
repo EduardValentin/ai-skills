@@ -60,7 +60,8 @@ unstable one (high I) should be concrete (low A) so it stays cheap to change. An
 component has A = 1 and, once implemented, I = 0.
 
 Abstract exports are a component's exported interfaces, type aliases, and abstract classes; A is
-undefined when C has no exports.
+undefined when C has no exports. A unit of kind `barrel` adds nothing to either count, since its
+exports are other modules' declarations published again.
 
 ## The balanced line and distance
 

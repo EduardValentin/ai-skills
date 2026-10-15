@@ -60,7 +60,7 @@ provides; the graph records them as `capabilities`, each true or false.
 
 | Fact | Meaning | Read by | Absent means |
 |---|---|---|---|
-| `exports` | abstract and concrete exported declarations per module | W5, W6 metrics (A, D, zones) | A and D undefined, zone rows skipped |
+| `exports` | abstract and concrete exported declarations per module; a `barrel` unit's exports are left out of A | W5, W6 metrics (A, D, zones) | A and D undefined, zone rows skipped |
 | `implements` | symbols a module implements, nominally or, where the language is structurally typed, by assignability to a declared port | `ports` implementers; W1, W4 | implementers unknown; fact slice |
 | `constructs` | types from another module a module instantiates | W1 rows on construction of details by policy | construction unknown; fact slice |
 | `signatures` | for each exported symbol, the imported types named in its public interface | W1 rows on port signature types; W3 | signature types unknown; fact slice |
@@ -209,7 +209,7 @@ It exits 0 whether or not it prints rows: an assessment is not a verdict.
 |---|---|---|---|---|
 | Edge from a policy unit (entity, use-case, port, boundary-data) to a detail unit (controller, presenter, gateway, adapter, composition-root, entry-point, test, config, ui) or to an external of any tag; never an edge with a barrel at either end | W1 | R4 | blocker | the edge; `external:<name>` for an external |
 | Edge crossing rings outward, for any other unit; never an edge with a barrel at either end | W1 | R4 | blocker | the edge |
-| `constructs` edge from a unit whose kind is not `test`, `config`, or `composition-root` to a unit of a detail kind: every allowed kind except the policy kinds (entity, use-case, port, boundary-data), `test`, `config`, `composition-root`, `barrel`, and `mixed`; never an edge with a barrel at either end; needs the `constructs` fact | W1 | R7 | blocker | the edge |
+| `constructs` edge from a unit whose kind is not `test`, `config`, or `composition-root` to a unit of a detail kind: every allowed kind except the policy kinds (entity, use-case, port, boundary-data), `test`, `config`, `composition-root`, and `mixed`; separately, the edge check means an edge with a barrel at either end never fires, whatever the kinds; needs the `constructs` fact | W1 | R7 | blocker | the edge |
 | Cycle in the component graph | W6 | R30 | blocker | the cycle's component IDs, sorted numerically |
 | Cycle among modules | W6 | R30 | blocker | the cycle's paths, sorted numerically |
 | Component edge whose source has a lower I than its target (from more stable to less stable) | W6 | R31 | major | the component edge `C<a> -> C<b>` |

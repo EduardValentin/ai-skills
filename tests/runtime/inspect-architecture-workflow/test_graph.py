@@ -29,8 +29,8 @@ def test_metrics_match_hand_computation(tmp_path: Path):
     c = {x["id"]: x for x in g["components"]}
     # C1 domain: importers outside C1 = pg-payroll-repository, memory-payroll-repository, system-clock, payroll-controller -> fanIn 4; fanOut 0
     assert c["C1"]["fanIn"] == 4 and c["C1"]["fanOut"] == 0 and c["C1"]["instability"] == 0
-    # C1 exports: Employee, PayrollUseCase (concrete), Clock, PayrollRepository (abstract), and the barrel's four export-from lines (concrete) -> A = 2/8 = 0.25, D = |0.25+0-1| = 0.75
-    assert c["C1"]["abstractness"] == 0.25 and c["C1"]["distance"] == 0.75
+    # C1 exports: Employee, PayrollUseCase (concrete), Clock, PayrollRepository (abstract); the barrel's exports are excluded -> A = 0.5, D = |0.5+0-1| = 0.5
+    assert c["C1"]["abstractness"] == 0.5 and c["C1"]["distance"] == 0.5
     # C3 web: fanIn 0, fanOut = modules inside C3 that import outside it: only payroll-controller.ts -> 1 -> I = 1, A = 0 -> D = 0
     assert c["C3"]["fanIn"] == 0 and c["C3"]["fanOut"] == 1 and c["C3"]["instability"] == 1 and c["C3"]["distance"] == 0
     assert {(e["from"], e["to"], e["modules"]) for e in g["componentEdges"]} == {("C2", "C1", 3), ("C3", "C1", 1), ("C3", "C2", 1)}

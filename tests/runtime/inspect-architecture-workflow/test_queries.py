@@ -14,7 +14,7 @@ def test_metrics_table(tmp_path: Path):
     out = q(copy_fixture("payroll", tmp_path / "p"), "metrics")
     assert out["columns"] == ["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"]
     c1 = next(r for r in out["rows"] if r[0] == "C1 domain")
-    assert c1[1:] == [5, 4, 0, 0, 0.25, 0.75, "none"]
+    assert c1[1:] == [5, 4, 0, 0, 0.5, 0.5, "none"]
 
 
 def test_ring_crossings_outward_is_empty_and_inward_lists_edges(tmp_path: Path):
@@ -104,7 +104,7 @@ def test_markdown_rendering(tmp_path: Path):
     lines = result.stdout.splitlines()
     assert lines[0] == "| Component | Units | Fan-in | Fan-out | I | A | D | Zone |"
     assert lines[1] == "|---|---|---|---|---|---|---|---|"
-    assert any(l.startswith("| C1 domain | 5 | 4 | 0 | 0 | 0.25 | 0.75 | none |") for l in lines)
+    assert any(l.startswith("| C1 domain | 5 | 4 | 0 | 0 | 0.5 | 0.5 | none |") for l in lines)
 
 
 def test_component_graph_sorts_component_ids_numerically():
