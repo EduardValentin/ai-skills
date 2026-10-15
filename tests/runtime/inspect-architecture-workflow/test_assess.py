@@ -70,8 +70,8 @@ def test_seeded_component_cycle_yields_cycle_rows(tmp_path: Path):
     rows = assess_rows(root)
     component_cycle = find(rows, "C1 -> C2 -> C3", "R30")
     assert component_cycle["workflow"] == "W6" and component_cycle["severity"] == "blocker"
-    members = sorted(["src/adapters/pg-payroll-repository.ts", "src/domain/employee.ts", "src/domain/payroll-repository.ts",
-                      "src/domain/payroll-use-case.ts", CONTROLLER])
+    members = sorted(["src/adapters/pg-payroll-repository.ts", "src/adapters/system-clock.ts", "src/domain/employee.ts", "src/domain/index.ts",
+                      "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts", CONTROLLER])
     assert find(rows, " -> ".join(members), "R30")["severity"] == "blocker"
     assert find(rows, f"src/domain/employee.ts -> {CONTROLLER}", "R4")["workflow"] == "W1"
 
@@ -306,3 +306,27 @@ def test_base_without_a_model_marks_cohesion_rows_and_edges_of_added_units_intro
     assert find(rows, "src/domain/bonus.ts -> src/web/main.ts", "R4")["origin"] == "introduced"
     assert find(rows, "src/adapters/system-clock.ts -> src/web/main.ts", "R4")["origin"] == "left"
     assert find(rows, "docs/architecture/model/boundaries.json", "R28")["origin"] == "introduced"
+
+
+BARREL = "src/domain/index.ts"
+
+
+def test_an_outward_edge_through_a_barrel_is_not_a_crossing(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    seed_edge(root, BARREL, "src/adapters/memory-payroll-repository.ts")
+    rows = assess_rows(root)
+    assert not any(r["rule"] == "R4" and BARREL in r["target"] for r in rows), rows
+
+
+def test_an_outward_edge_not_through_a_barrel_is_still_a_crossing(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    seed_edge(root, "src/domain/employee.ts", "src/adapters/memory-payroll-repository.ts")
+    assert find(assess_rows(root), "src/domain/employee.ts -> src/adapters/memory-payroll-repository.ts", "R4")["severity"] == "blocker"
+
+
+def test_ring_and_construction_rows_skip_an_edge_with_a_barrel_at_either_end(tmp_path: Path):
+    for constructing, constructed in (("controller", "barrel"), ("barrel", "gateway")):
+        assert run_assess(tmp_path, construction_graph(constructing, constructed), None)["rows"] == [], (constructing, constructed)
+    graph = construction_graph("entity", "barrel")
+    graph["edges"] = [{"from": "src/a.ts", "to": "src/b.ts", "kind": "import", "direction": "outward"}]
+    assert run_assess(tmp_path, graph, None)["rows"] == []

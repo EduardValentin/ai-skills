@@ -24,6 +24,7 @@ list below applies. `arch model` refuses an override or rule whose kind is not l
 | test | A test suite, fixture, fake, or testing API. |
 | config | Configuration, routing tables, dependency-injection registration, and migrations. |
 | ui | Framework-bound screen code that copies a view model to the screen. |
+| barrel | A module that only re-exports other modules; its edges are publication, not dependency. |
 | mixed | A unit that matches two or more kinds; always a candidate for W2 and W3. |
 
 ## Ring and level

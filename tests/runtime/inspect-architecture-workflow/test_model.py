@@ -20,6 +20,13 @@ def test_classify_uses_override_then_first_rule(tmp_path: Path):
     assert out[1]["kind"] == "entity"
 
 
+def test_barrel_is_a_default_kind_and_the_fixture_classifies_its_barrel(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    out = json.loads(node_eval("[m.KINDS.includes('barrel'), m.classify(model,'src/domain/index.ts')]", root))
+    assert out[0] is True
+    assert out[1]["kind"] == "barrel" and out[1]["ring"] == "entities" and out[1]["component"] == "C1"
+
+
 def test_override_beats_rule(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     overrides = root / "docs/architecture/model/overrides.json"

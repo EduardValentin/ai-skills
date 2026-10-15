@@ -14,28 +14,30 @@ def test_metrics_table(tmp_path: Path):
     out = q(copy_fixture("payroll", tmp_path / "p"), "metrics")
     assert out["columns"] == ["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"]
     c1 = next(r for r in out["rows"] if r[0] == "C1 domain")
-    assert c1[1:] == [4, 4, 0, 0, 0.5, 0.5, "none"]
+    assert c1[1:] == [5, 4, 0, 0, 0.25, 0.75, "none"]
 
 
 def test_ring_crossings_outward_is_empty_and_inward_lists_edges(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     assert q(root, "ring-crossings")["rows"] == []
     inward = q(root, "ring-crossings", "--direction", "inward")["rows"]
-    assert ["src/adapters/system-clock.ts", "adapters", "src/domain/clock.ts", "entities", "type-import"] in inward
+    assert ["src/adapters/pg-payroll-repository.ts", "adapters", "src/domain/payroll-repository.ts", "entities", "type-import"] in inward
 
 
 def test_fan_in_and_units(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     importers = {r[0] for r in q(root, "fan-in", "src/domain/clock.ts")["rows"]}
-    assert importers == {"src/domain/payroll-use-case.ts", "src/adapters/system-clock.ts"}
+    assert importers == {"src/domain/payroll-use-case.ts", "src/domain/index.ts"}
     ports = {r[0] for r in q(root, "units", "--component", "C1", "--kind", "port")["rows"]}
     assert ports == {"src/domain/clock.ts", "src/domain/payroll-repository.ts"}
 
 
 def test_ports_derive_implementers_and_consumers(tmp_path: Path):
     rows = q(copy_fixture("payroll", tmp_path / "p"), "ports")["rows"]
+    repository = next(r for r in rows if r[0] == "src/domain/payroll-repository.ts:PayrollRepository")
+    assert repository[1] == "C1" and repository[3] == "src/adapters/memory-payroll-repository.ts, src/adapters/pg-payroll-repository.ts" and repository[4] == "C2 (1)"
     clock = next(r for r in rows if r[0] == "src/domain/clock.ts:Clock")
-    assert clock[1] == "C1" and clock[3] == "src/adapters/system-clock.ts" and clock[4] == "C2 (1)"
+    assert clock[3] == "src/adapters/system-clock.ts" and clock[4] == ""
 
 
 def test_touched_lists_changed_units_with_neighbors(tmp_path: Path):
@@ -102,7 +104,7 @@ def test_markdown_rendering(tmp_path: Path):
     lines = result.stdout.splitlines()
     assert lines[0] == "| Component | Units | Fan-in | Fan-out | I | A | D | Zone |"
     assert lines[1] == "|---|---|---|---|---|---|---|---|"
-    assert any(l.startswith("| C1 domain | 4 | 4 | 0 | 0 | 0.5 | 0.5 | none |") for l in lines)
+    assert any(l.startswith("| C1 domain | 5 | 4 | 0 | 0 | 0.25 | 0.75 | none |") for l in lines)
 
 
 def test_component_graph_sorts_component_ids_numerically():
@@ -157,7 +159,7 @@ def test_edges_query_lists_outgoing_and_incoming_edges(tmp_path: Path):
     out = q(root, "edges", "src/domain/clock.ts")
     assert out["columns"] == ["Direction", "Other", "Kind", "Ring direction"]
     assert sorted(out["rows"]) == [
-        ["in", "src/adapters/system-clock.ts", "type-import", "inward"],
+        ["in", "src/domain/index.ts", "import", "through-barrel"],
         ["in", "src/domain/payroll-use-case.ts", "import", "inward"],
     ]
     rows = q(root, "edges", "src/web/payroll-controller.ts")["rows"]
@@ -176,7 +178,7 @@ def test_boolean_flags_never_consume_the_next_argument(tmp_path: Path):
     result = run_arch(["query", "fan-in", "--json", "src/domain/clock.ts", *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
     importers = {r[0] for r in json.loads(result.stdout)["rows"]}
-    assert importers == {"src/domain/payroll-use-case.ts", "src/adapters/system-clock.ts"}
+    assert importers == {"src/domain/payroll-use-case.ts", "src/domain/index.ts"}
 
 
 def test_null_cells_render_empty_except_metric_columns(tmp_path: Path):
@@ -245,8 +247,8 @@ def test_touched_with_neighbors_adds_untouched_neighbor_unit_rows(tmp_path: Path
     assert set(out) == {"touched", "neighbors"}
     assert [r[0] for r in out["touched"]["rows"]] == ["src/domain/employee.ts"]
     assert out["neighbors"]["columns"] == ["Path", "Component", "Kind", "Ring", "Actors", "Abstract", "Concrete"]
-    assert [r[0] for r in out["neighbors"]["rows"]] == ["src/adapters/memory-payroll-repository.ts", "src/adapters/pg-payroll-repository.ts", "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts"]
-    assert out["neighbors"]["rows"][3][1:4] == ["C1", "use-case", "use-cases"]
+    assert [r[0] for r in out["neighbors"]["rows"]] == ["src/adapters/memory-payroll-repository.ts", "src/adapters/pg-payroll-repository.ts", "src/domain/index.ts", "src/domain/payroll-repository.ts", "src/domain/payroll-use-case.ts"]
+    assert out["neighbors"]["rows"][4][1:4] == ["C1", "use-case", "use-cases"]
     markdown = run_arch(["query", "touched", "--base", "HEAD", "--with-neighbors", *FIXTURE_FLAGS], root).stdout
     assert "| Path | Component | Kind | Ring | Change | Neighbors |" in markdown
     assert "| Path | Component | Kind | Ring | Actors | Abstract | Concrete |" in markdown
@@ -265,7 +267,7 @@ def test_components_query_lists_the_component_record(tmp_path: Path):
     out = q(copy_fixture("payroll", tmp_path / "p"), "components")
     assert out["columns"] == ["Component", "Name", "Enforcement", "Release unit", "Entry points", "Units"]
     assert out["rows"] == [
-        ["C1", "domain", "none", "", [], 4],
+        ["C1", "domain", "none", "", [], 5],
         ["C2", "adapters", "none", "", [], 3],
         ["C3", "web", "none", "", ["src/web/main.ts"], 3],
     ]
@@ -281,3 +283,33 @@ def test_edges_by_kind_without_a_path_lists_every_edge_of_that_kind(tmp_path: Pa
     ]
     assert {r[2] for r in out["rows"]} == {"constructs"}
 
+
+
+BARREL = "src/domain/index.ts"
+
+
+def test_barrel_edges_are_through_barrel(tmp_path: Path):
+    rows = q(copy_fixture("payroll", tmp_path / "p"), "edges", BARREL)["rows"]
+    assert sorted(rows) == [
+        ["in", "src/adapters/system-clock.ts", "type-import", "through-barrel"],
+        ["out", "src/domain/clock.ts", "import", "through-barrel"],
+        ["out", "src/domain/employee.ts", "import", "through-barrel"],
+        ["out", "src/domain/payroll-repository.ts", "import", "through-barrel"],
+        ["out", "src/domain/payroll-use-case.ts", "import", "through-barrel"],
+    ]
+
+
+def test_ring_crossings_leave_out_barrel_edges(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    for direction in ("outward", "inward", "same"):
+        rows = q(root, "ring-crossings", "--direction", direction)["rows"]
+        assert not any(BARREL in (r[0], r[2]) for r in rows), direction
+
+
+def test_ring_crossings_include_barrel_edges_by_their_rings_when_asked(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    assert q(root, "ring-crossings", "--include-barrels")["rows"] == [
+        [BARREL, "entities", "src/domain/payroll-use-case.ts", "use-cases", "import"],
+    ]
+    inward = q(root, "ring-crossings", "--include-barrels", "--direction", "inward")["rows"]
+    assert ["src/adapters/system-clock.ts", "adapters", BARREL, "entities", "type-import"] in inward

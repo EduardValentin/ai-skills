@@ -4,7 +4,7 @@ import { globToRegExp, matchesAny } from "./glob.mjs";
 
 export const MODEL_DIR = "docs/architecture/model";
 export const DEFAULT_RINGS = ["entities", "use-cases", "adapters", "frameworks"];
-export const KINDS = ["entity", "use-case", "port", "boundary-data", "controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui", "mixed"];
+export const KINDS = ["entity", "use-case", "port", "boundary-data", "controller", "presenter", "gateway", "adapter", "composition-root", "entry-point", "test", "config", "ui", "barrel", "mixed"];
 const FILES = ["components", "rules", "overrides", "boundaries"];
 export const HARD_PROBLEM = /overlap|unknown ring|unknown kind|duplicate component|not a component|duplicate group name|rings must/;
 

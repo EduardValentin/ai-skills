@@ -57,7 +57,7 @@ def test_graph_at_commit_uses_a_worktree_and_caches(tmp_path: Path):
     (root / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
     # Dirty cruise.json too, dropping a module: if the build ever read this
     # working-tree file instead of the worktree's committed one, the cache
-    # would end up with 8 units instead of 9.
+    # would end up with 10 units instead of 11.
     cruise = json.loads((root / "cruise.json").read_text())
     cruise["modules"] = [m for m in cruise["modules"] if m["source"] != "src/web/main.ts"]
     (root / "cruise.json").write_text(json.dumps(cruise))
@@ -65,7 +65,7 @@ def test_graph_at_commit_uses_a_worktree_and_caches(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     cached = root / f".architecture/graph/{base}.json"
     assert cached.exists()
-    assert len(json.loads(cached.read_text())["units"]) == 10
+    assert len(json.loads(cached.read_text())["units"]) == 11
     assert git(["worktree", "list"], root).stdout.count("\n") == 1
 
 
