@@ -93,6 +93,10 @@ present — a selector root (or `data-parity-root` value) is attached to the
 DOM, or a component name has at least one root through
 `parityFindReactRoots`, both polled every 100 ms, so a page without React
 fibers yet or a component that mounts late is retried until `--timeout`;
+every finite CSS animation and transition on the page has finished
+(`document.getAnimations()` polled each frame; infinite ones such as
+spinners are ignored, and the pointer is already parked at the top-left
+corner after the last step);
 `document.fonts.ready` settles (skipped when the page has no
 `document.fonts`); and two animation frames pass. Each wait has the
 `--timeout` budget. A root that never appears fails the capture with one
@@ -101,6 +105,7 @@ of:
 ```
 <side> <WxH>: root "<selector>" did not appear within <timeout> ms
 <side> <WxH>: no roots found for component "<name>" within <timeout> ms
+<side> <WxH>: animations did not finish within <timeout> ms
 <side> <WxH>: fonts and paint did not settle within <timeout> ms
 ```
 

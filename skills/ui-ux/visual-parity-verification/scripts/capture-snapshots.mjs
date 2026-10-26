@@ -460,6 +460,20 @@ async function awaitPaint(page, timeout) {
   }
 }
 
+function noFiniteAnimationRunning() {
+  if (typeof document.getAnimations !== "function") return true;
+  return document.getAnimations().every((animation) => {
+    if (animation.playState !== "running" && animation.playState !== "pending") return true;
+    const timing = animation.effect ? animation.effect.getComputedTiming() : null;
+    return !timing || !Number.isFinite(timing.endTime);
+  });
+}
+
+async function awaitAnimations(page, timeout) {
+  await page.waitForFunction(noFiniteAnimationRunning, null, { timeout, polling: "raf" })
+    .catch(readinessTimeout(`animations did not finish within ${timeout} ms`));
+}
+
 async function awaitSettled(page, timeout) {
   await page.waitForLoadState("networkidle", { timeout });
   await awaitPaint(page, timeout);
@@ -469,6 +483,7 @@ async function awaitReady(page, job, runtime) {
   await page.waitForLoadState("networkidle", { timeout: runtime.options.timeout });
   if (job.component) await awaitComponent(page, job, runtime);
   else await awaitRoot(page, job, runtime);
+  await awaitAnimations(page, runtime.options.timeout);
   await awaitPaint(page, runtime.options.timeout);
 }
 

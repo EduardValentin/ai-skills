@@ -52,7 +52,7 @@ steps.
 
 Readiness belongs to the capture command, which lets the page settle
 (network idle, fonts, two animation frames) before the steps and waits for
-network idle, the root, fonts and two animation frames after the last step
+network idle, the root, finished animations, fonts and two animation frames after the last step
 (`capture.md`). States never carry readiness steps: no `waitFor` on the root,
 no settle sleeps.
 
