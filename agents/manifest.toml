@@ -21,7 +21,7 @@ color = "cyan"
 id = "acceptance-criteria-reviewer"
 source = "acceptance-criteria-reviewer.md"
 description = "Read-only reviewer that checks an implementation covers every acceptance criterion and approved-plan item faithfully, drops nothing silently, and builds nothing beyond the approved scope."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+groups = ["ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "high"
@@ -38,7 +38,7 @@ color = "blue"
 id = "architecture-coordinator"
 source = "architecture-coordinator.md"
 description = "Architect agent that runs the inspect-architecture-workflow skill: audits a codebase, reviews a diff, or reviews an implementation plan before approval by dispatching mapping and evaluation subagents, merging their rows, and writing the committed architecture record and the uncommitted refactoring ledger."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "inspect-architecture-workflow"]
+groups = ["ticket-workflow", "implementation-workflow", "inspect-architecture-workflow"]
 preload_skills = ["inspect-architecture-workflow"]
 
 [agent.codex]
@@ -73,7 +73,7 @@ color = "cyan"
 id = "code-cleanliness-reviewer"
 source = "code-cleanliness-reviewer.md"
 description = "Read-only reviewer of function, class and module readability: single responsibility, at most three parameters, no boolean parameters, inverted conditionals over nesting, and domain-revealing names."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+groups = ["ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
 model = "gpt-5.6-sol"
@@ -91,7 +91,7 @@ color = "green"
 id = "performance-reviewer"
 source = "performance-reviewer.md"
 description = "Read-only reviewer of performance, load behavior and long-term reliability judged against the supplied expected-demand profile, flagging both under-provisioning and over-engineering."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+groups = ["ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
 model = "gpt-5.6-sol"
@@ -109,7 +109,7 @@ color = "yellow"
 id = "design-system-reviewer"
 source = "design-system-reviewer.md"
 description = "Read-only reviewer of design-system growth: ad hoc styling that belongs in the system, tokens added on every design-system source, synonym tokens, and reusable primitive drift."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+groups = ["ticket-workflow", "implementation-workflow"]
 preload_skills = ["semantic-design-tokens", "reusable-ui-components"]
 
 [agent.codex]
@@ -128,7 +128,7 @@ color = "magenta"
 id = "security-reviewer"
 source = "security-reviewer.md"
 description = "Read-only security reviewer for code diffs with plausible trust-boundary, input-handling, dependency, auth, data exposure, or privilege risk."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+groups = ["ticket-workflow", "implementation-workflow"]
 
 [agent.codex]
 model = "gpt-5.6-sol"
@@ -146,7 +146,7 @@ color = "red"
 id = "qa-verifier"
 source = "qa-verifier.md"
 description = "Behavior verifier for running apps, APIs, services, and user flows where acceptance criteria must be exercised against real behavior."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "qa-verification"]
+groups = ["ticket-workflow", "implementation-workflow", "qa-verification"]
 preload_skills = ["qa-verification"]
 
 [agent.codex]
@@ -163,7 +163,7 @@ color = "green"
 id = "visual-verifier"
 source = "visual-verifier.md"
 description = "Rendered-output and accessibility verifier for frontend changes that need DOM-backed layout, responsive, focus, contrast and motion checks without a comparison basis."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow", "visual-validation"]
+groups = ["ticket-workflow", "implementation-workflow", "visual-validation"]
 preload_skills = ["visual-validation"]
 
 [agent.codex]
@@ -180,7 +180,7 @@ color = "purple"
 id = "parity-verifier"
 source = "parity-verifier.md"
 description = "Parity tester for prototype-backed applications that verifies changed production surfaces match the prototype exactly from browser computed style and geometry, writing verdicts into the session's parity ledger."
-groups = ["ticket-workflow", "multi-ticket-workflow", "prototype-backed-workflow", "visual-parity-verification"]
+groups = ["ticket-workflow", "prototype-backed-workflow", "visual-parity-verification"]
 preload_skills = ["visual-parity-verification"]
 
 [agent.codex]
@@ -194,25 +194,10 @@ effort = "high"
 color = "purple"
 
 [[agent]]
-id = "eli-coach-project-manager"
-source = "eli-coach-project-manager.md"
-description = "Assistant Project Manager and user story coordinator for the Eli Coach Platform MVP, tracking Linear board movement and recommending next tickets from scope, dependencies, and recent activity."
-groups = ["eli-coach-platform", "project-management"]
-
-[agent.codex]
-model_reasoning_effort = "high"
-sandbox_mode = "workspace-write"
-
-[agent.claude]
-model = "sonnet"
-effort = "high"
-color = "yellow"
-
-[[agent]]
 id = "implementation-coordinator"
 source = "implementation-coordinator.md"
 description = "Implementation coordinator for approved standalone code units or delegated implementation slices, owning implementation, review, QA, UI verification when relevant, fixes, and reporting."
-groups = ["ticket-workflow", "multi-ticket-workflow", "implementation-workflow"]
+groups = ["ticket-workflow", "implementation-workflow"]
 preload_skills = ["implementation-workflow"]
 
 [agent.codex]

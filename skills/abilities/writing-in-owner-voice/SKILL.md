@@ -3,7 +3,7 @@ name: writing-in-owner-voice
 description: >-
     Use when drafting outbound text another person will read in the owner's voice: Slack messages, standup updates, PR descriptions, review comments, replies to reviewer feedback, ticket bodies, or walkthroughs for a teammate.
 compatibility: >-
-    Works standalone from any draft, findings, or work summary. When `pr-reviewer-summary`, `ticket-writing`, or `jira-ticket-writing` supply the sections, they own the structure and this skill owns the wording. Needs no tools.
+    Works standalone from any draft, findings, or work summary. When `pr-reviewer-summary` or `ticket-writing` supply the sections, they own the structure and this skill owns the wording. Needs no tools.
 metadata:
     status: experimental
     allows_tool_references: 'true'
