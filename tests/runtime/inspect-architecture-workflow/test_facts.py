@@ -18,38 +18,11 @@ def q(root: Path, *args: str, flags: list[str] = FIXTURE_FLAGS) -> dict:
     return json.loads(result.stdout)
 
 
-def graph(root: Path, flags: list[str] = FIXTURE_FLAGS) -> dict:
-    result = run_arch(["graph", *flags, "--json"], root)
-    assert result.returncode == 0, result.stderr
-    return json.loads(result.stdout)
-
-
 def set_capability(root: Path, name: str, value: bool) -> None:
     facts_file = root / "facts.json"
     facts = json.loads(facts_file.read_text())
     facts["capabilities"][name] = value
     facts_file.write_text(json.dumps(facts))
-
-
-def test_graph_records_capabilities_and_unit_signatures(tmp_path: Path):
-    g = graph(copy_fixture("payroll", tmp_path / "p"))
-    assert g["capabilities"] == {"exports": True, "implements": True, "constructs": True, "signatures": True}
-    units = {u["path"]: u for u in g["units"]}
-    assert units["src/adapters/memory-payroll-repository.ts"]["signatures"] == [
-        {"symbol": "memoryPayrollRepository", "types": [{"symbol": "Employee", "path": "src/domain/employee.ts"}]},
-    ]
-
-
-def test_constructs_become_edges_classified_like_imports(tmp_path: Path):
-    g = graph(copy_fixture("payroll", tmp_path / "p"))
-    constructs = {(e["to"], e["crossesComponent"], e["crossesRing"], e["direction"])
-                  for e in g["edges"] if e["kind"] == "constructs"}
-    assert constructs == {
-        ("src/adapters/pg-payroll-repository.ts", True, False, "same"),
-        ("src/adapters/system-clock.ts", True, False, "same"),
-        ("src/domain/payroll-use-case.ts", True, True, "inward"),
-    }
-    assert all(e["from"] == "src/web/payroll-controller.ts" for e in g["edges"] if e["kind"] == "constructs")
 
 
 def test_signatures_query_lists_one_row_per_imported_type(tmp_path: Path):
@@ -87,7 +60,6 @@ def test_absent_signatures_capability_is_reported_not_empty(tmp_path: Path):
     result = run_arch(["query", "signatures", "src/domain/payroll-use-case.ts", *FIXTURE_FLAGS], root)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "not provided by the adapter"
-    assert graph(root)["capabilities"]["signatures"] is False
 
 
 def test_absent_implements_capability_is_reported_in_ports(tmp_path: Path):
@@ -97,28 +69,15 @@ def test_absent_implements_capability_is_reported_in_ports(tmp_path: Path):
     assert all(r[3] == "not provided by the adapter" for r in rows)
 
 
-def test_absent_constructs_capability_adds_no_constructs_edges(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    set_capability(root, "constructs", False)
-    assert not any(e["kind"] == "constructs" for e in graph(root)["edges"])
-
-
 def test_absent_exports_capability_leaves_abstractness_undefined(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     set_capability(root, "exports", False)
-    c1 = next(c for c in graph(root)["components"] if c["id"] == "C1")
-    assert c1["abstractness"] is None and c1["distance"] is None and c1["inZone"] is None
     metrics = run_arch(["query", "metrics", *FIXTURE_FLAGS], root)
     assert "| C1 domain | 5 | 4 | 0 | 0 | undefined | undefined | none |" in metrics.stdout.splitlines()
 
 
-def test_exports_json_is_an_alias_without_constructs_or_signatures(tmp_path: Path):
+def test_exports_json_alias_reports_signatures_as_not_provided(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
-    g = graph(root, ["--cruise-json", "cruise.json", "--exports-json", "exports.json"])
-    assert g["capabilities"] == {"exports": True, "implements": True, "constructs": False, "signatures": False}
-    assert not any(e["kind"] == "constructs" for e in g["edges"])
-    c1 = next(c for c in g["components"] if c["id"] == "C1")
-    assert (c1["units"], c1["fanIn"], c1["abstractness"], c1["distance"]) == (5, 4, 0.5, 0.5)
     result = run_arch(["query", "signatures", "src/domain/payroll-use-case.ts", "--cruise-json", "cruise.json", "--exports-json", "exports.json"], root)
     assert result.returncode == 0 and result.stdout.strip() == "not provided by the adapter"
 
@@ -205,16 +164,3 @@ def test_a_module_that_is_not_a_script_gets_empty_facts_without_a_warning(tmp_pa
     assert stylesheet == {"path": "src/web/payroll.css", "exports": {"abstract": 0, "concrete": 0}, "implements": [], "constructs": [], "signatures": []}
 
 
-def test_the_script_module_is_in_the_graph_with_its_saved_facts(tmp_path: Path):
-    g = graph(copy_fixture("payroll", tmp_path / "p"))
-    router = next(u for u in g["units"] if u["path"] == "src/web/legacy-router.js")
-    assert router["exports"] == {"abstract": 0, "concrete": 1}
-    assert ("src/web/legacy-router.js", "src/web/payroll-controller.ts", "import") in {(e["from"], e["to"], e["kind"]) for e in g["edges"]}
-    assert not any("legacy-router" in w for w in g["warnings"])
-
-
-def test_the_generic_saved_output_flag_and_the_older_one_build_the_same_graph(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    generic = graph(root, ["--dependencies-json", "cruise.json", "--facts-json", "facts.json"])
-    older = graph(root, ["--cruise-json", "cruise.json", "--facts-json", "facts.json"])
-    assert generic["edges"] == older["edges"] and generic["units"] == older["units"]

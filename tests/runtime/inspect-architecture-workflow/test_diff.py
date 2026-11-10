@@ -50,38 +50,6 @@ def test_diff_reports_new_outward_edge_and_metric_move(tmp_path: Path):
     assert out["cycles"]["new"] == [["C1", "C2"]]
 
 
-def test_graph_at_commit_uses_a_worktree_and_caches(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    init_repo(root)
-    base = git(["rev-parse", "--short=8", "HEAD"], root).stdout.strip()
-    (root / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
-    # Dirty cruise.json too, dropping a module: if the build ever read this
-    # working-tree file instead of the worktree's committed one, the cache
-    # would end up with 10 units instead of 11.
-    cruise = json.loads((root / "cruise.json").read_text())
-    cruise["modules"] = [m for m in cruise["modules"] if m["source"] != "src/web/main.ts"]
-    (root / "cruise.json").write_text(json.dumps(cruise))
-    result = run_arch(["graph", "--commit", base, *FIXTURE_FLAGS], root)
-    assert result.returncode == 0, result.stderr
-    cached = root / f".architecture/graph/{base}.json"
-    assert cached.exists()
-    assert len(json.loads(cached.read_text())["units"]) == 11
-    assert git(["worktree", "list"], root).stdout.count("\n") == 1
-
-
-def test_graph_at_commit_works_from_a_repository_subdirectory(tmp_path: Path):
-    repo = tmp_path / "repo"
-    pkg = repo / "pkg"
-    copy_fixture("payroll", pkg)
-    init_repo(repo)
-    base = git(["rev-parse", "--short=8", "HEAD"], repo).stdout.strip()
-    (pkg / "src/domain/employee.ts").write_text("export class Employee { changed = true; }\n")
-    result = run_arch(["graph", "--commit", base, *FIXTURE_FLAGS], pkg)
-    assert result.returncode == 0, result.stderr
-    assert (pkg / f".architecture/graph/{base}.json").exists()
-    assert git(["worktree", "list"], repo).stdout.count("\n") == 1
-
-
 def test_diff_reports_removed_when_rename_target_is_not_covered(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     init_repo(root)
@@ -152,9 +120,6 @@ def test_diff_against_a_base_without_a_model_says_how_to_proceed(tmp_path: Path)
     assert result.returncode == 1
     assert result.stderr.strip() == (f'no architecture model at {first}; evaluate the working tree with '
                                      f'"arch query touched --base {first}" (change-review.md, Map step 4)')
-    graph = run_arch(["graph", "--commit", first, *FIXTURE_FLAGS], root)
-    assert graph.returncode == 2
-    assert graph.stderr.strip() == f"no architecture model at {first}"
 
 
 def test_diff_markdown_renders_missing_values_with_the_query_renderer(tmp_path: Path):

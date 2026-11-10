@@ -32,6 +32,7 @@ def test_init_legacy_writes_only_non_default_statuses(tmp_path: Path):
     assert {status for status, _ in rules.values()} == {"advisory"}
     assert all(reason for _, reason in rules.values())
     assert document(tmp_path)["adapter"] == "cat adapter.json"
+    (tmp_path / "adapter.json").write_text('{"version": 1, "modules": [{"path": "src/domain/entity.ts"}]}')
     assert edit(tmp_path, "validate").returncode == 0
 
 
@@ -268,8 +269,8 @@ def test_record_environment_variable_selects_the_record_directory(tmp_path: Path
     assert edit(root, "validate").returncode == 2
     env = {"ARCH_RECORD_DIR": "alt"}
     assert run_arch(["model", "validate"], root, env).returncode == 0
-    assert run_arch(["model", "set-adapter", "other"], root, env).returncode == 0
-    assert json.loads((root / "alt/architecture.json").read_text())["adapter"] == "other"
+    assert run_arch(["model", "set-adapter", "cat ./adapter.json"], root, env).returncode == 0
+    assert json.loads((root / "alt/architecture.json").read_text())["adapter"] == "cat ./adapter.json"
     assert run_arch(["model", "validate", "--record", "alt"], root).returncode == 0
 
 

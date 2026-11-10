@@ -30,7 +30,7 @@ START_MARKER = "<!-- adapters -->"
 END_MARKER = "<!-- /adapters -->"
 
 TEMPLATES_DIR = SKILL_DIR / "assets" / "adapter-templates"
-GENERIC_SCRIPT_FOLDERS = ("adapter", "model", "cli")
+GENERIC_SCRIPT_FOLDERS = ("adapter", "model", "cli", "graph")
 
 GENERIC_SCRIPTS = [
     SKILL_DIR / "scripts" / "lib" / name for name in ("graph.mjs", "queries.mjs", "assess.mjs", "ledger.mjs")

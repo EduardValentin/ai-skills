@@ -1,8 +1,10 @@
 import { existsSync } from "node:fs";
 import { ModelError, UsageError } from "../cli/errors.mjs";
 import { parseArgs } from "../cli/flags.mjs";
+import { loadGraph } from "../graph/load.mjs";
 import { EDITS } from "../model/edits.mjs";
 import { explainPath, renderExplanation, renderThresholds, thresholdRows } from "../model/explain.mjs";
+import { graphProblems } from "../model/graph-problems.mjs";
 import { RECORD_MODES, STARTS, initModel } from "../model/init.mjs";
 import { loadModel, modelFile, readDocument, recordDir } from "../model/load.mjs";
 import { migrateOldModel } from "../model/migrate.mjs";
@@ -38,10 +40,15 @@ function print(flags, data, text) {
   console.log(flags.json ? JSON.stringify(data, null, 2) : text);
 }
 
-function validate({ root, flags }) {
-  requireModel(root, flags);
+async function validate({ root, flags }) {
+  const model = requireModel(root, flags);
   print(flags, { ok: true }, "model: ok");
-  return 0;
+  const graph = await loadGraph(root, model, { flags });
+  const problems = graphProblems(model, graph);
+  if (problems.length === 0) return 0;
+  const listed = problems.join("\n- ");
+  const advice = "Fix these entries and run arch model validate again.";
+  throw new ModelError(`the model does not fit the code:\n- ${listed}\n${advice}`);
 }
 
 function explain({ root, flags, positional: [path] }) {
