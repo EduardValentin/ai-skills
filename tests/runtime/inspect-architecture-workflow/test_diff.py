@@ -153,7 +153,7 @@ def test_diff_against_a_base_without_a_model_says_how_to_proceed(tmp_path: Path)
     assert result.stderr.strip() == (f'no architecture model at {first}; evaluate the working tree with '
                                      f'"arch query touched --base {first}" (change-review.md, Map step 4)')
     graph = run_arch(["graph", "--commit", first, *FIXTURE_FLAGS], root)
-    assert graph.returncode == 1
+    assert graph.returncode == 2
     assert graph.stderr.strip() == f"no architecture model at {first}"
 
 

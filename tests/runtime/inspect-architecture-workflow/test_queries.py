@@ -87,14 +87,14 @@ def test_touched_from_a_subdirectory_root_uses_relative_paths(tmp_path: Path):
 def test_touched_without_base_prints_usage(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["query", "touched", *FIXTURE_FLAGS], root)
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert result.stderr.strip() == "usage: arch query touched --base <ref>"
 
 
 def test_volatility_without_since_prints_usage(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     result = run_arch(["query", "volatility", *FIXTURE_FLAGS], root)
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert result.stderr.strip() == "usage: arch query volatility --since <ref>"
 
 
@@ -169,7 +169,7 @@ def test_edges_query_lists_outgoing_and_incoming_edges(tmp_path: Path):
 
 def test_edges_without_path_prints_usage(tmp_path: Path):
     result = run_arch(["query", "edges", *FIXTURE_FLAGS], copy_fixture("payroll", tmp_path / "p"))
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert result.stderr.strip() == "usage: arch query edges <path> | --kind <kind>"
 
 

@@ -64,7 +64,7 @@ def test_signatures_query_lists_one_row_per_imported_type(tmp_path: Path):
 
 def test_signatures_query_without_path_prints_usage(tmp_path: Path):
     result = run_arch(["query", "signatures", *FIXTURE_FLAGS], copy_fixture("payroll", tmp_path / "p"))
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert result.stderr.strip() == "usage: arch query signatures <path>"
 
 

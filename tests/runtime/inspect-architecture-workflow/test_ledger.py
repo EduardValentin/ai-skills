@@ -271,7 +271,7 @@ def test_accept_unknown_finding_fails(tmp_path: Path):
     root = project(tmp_path)
     add_run(root, [row()])
     result = run_arch(["ledger", "accept", "F9", "--one-off", "--by", "Eduard", "--reason", "x"], root)
-    assert result.returncode == 1 and "no finding F9" in result.stderr
+    assert result.returncode == 2 and "no finding F9" in result.stderr
 
 
 def test_map_orders_changes_by_severity_then_rows_and_names_them(tmp_path: Path):
@@ -447,6 +447,6 @@ def test_an_escalation_mark_without_a_base_severity_is_refused(tmp_path: Path):
     for marked in (row(severity="major", escalation="rule 3"), row(severity="blocker", evidence="fixing it first shrinks UC-1 [rule 2]")):
         rows_file = write_lines(root, "rows.md", table([marked]).splitlines())
         result = run_arch(["ledger", "add-run", "--mode", "audit", "--scope", "x", "--rows", str(rows_file)], root)
-        assert result.returncode == 1
+        assert result.returncode == 2
         assert f"row {EDGE} R4: an escalation mark needs a base severity" in result.stderr
     assert not (root / ".architecture" / "ledger.md").exists()
