@@ -17,8 +17,14 @@ export function statusForRow(model, rules, components) {
   return strictest(perRule);
 }
 
-export function isOffForProject(model, rules) {
-  return rules.every((rule) => statusForRule(model, rule, null) === "off");
+function isOffEverywhere(model, rule) {
+  const entries = Object.entries(model.rules).filter(([key]) => key.split("@")[0] === rule);
+  const projectStatus = model.rules[rule]?.status ?? "enforced";
+  return projectStatus === "off" && entries.every(([, entry]) => entry.status === "off");
+}
+
+export function isOffForEveryComponent(model, rules) {
+  return rules.every((rule) => isOffEverywhere(model, rule));
 }
 
 export function concernsEnforcedRule(model, rules) {

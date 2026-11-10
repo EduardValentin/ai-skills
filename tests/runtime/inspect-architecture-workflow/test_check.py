@@ -104,7 +104,7 @@ def component(name: str, fan_in: int, fan_out: int, instability, abstractness, z
 def empty_graph(components: list[dict]) -> dict:
     return {"capabilities": {"exports": True, "constructs": True},
             "rings": ["entities", "use-cases", "adapters", "frameworks"],
-            "units": [], "edges": [], "externals": [], "components": components, "componentEdges": [],
+            "units": [], "edges": [], "externals": [], "uncovered": [], "components": components, "componentEdges": [],
             "cycles": {"modules": [], "components": []}}
 
 
@@ -161,7 +161,7 @@ def test_unseeded_fixture_has_only_the_construction_rows_without_a_base(tmp_path
     assert (row["check"], row["defect"], row["severity"], row["baseSeverity"]) == (
         "detail-constructed-outside-root", "detail-constructed-outside-root", "blocker", "blocker")
     assert (row["status"], row["origin"], row["lifts"]) == ("enforced", "none", [])
-    assert set(out) == {"model", "rows", "incomplete", "skipped", "covered"}
+    assert set(out) == {"model", "rows", "incomplete", "notRun", "skipped", "covered"}
     assert out["model"] is True and out["incomplete"] == [] and out["covered"] == 0
     assert out["skipped"] == [{"rule": "R6", "status": "off", "component": None,
                                "reason": "one delivery mechanism; controllers call use cases directly"}]
@@ -280,6 +280,7 @@ def test_escalation_rules_lift_but_never_lower(tmp_path: Path):
         "const row = (extra) => ({ severity: 'minor', defect: 'x', units: [], components: [], edge: null, ...extra });"
         "const unitEdge = (from, to) => ({ level: 'unit', from, to });"
         "console.log(JSON.stringify([escalateRow(row({ edge: unitEdge('core/a.ts', 'core/b.ts') }), context),"
+        "escalateRow(row({ edge: unitEdge('leaf/c.ts', 'leaf/c.ts') }), context),"
         "escalateRow(row({ edge: unitEdge('leaf/c.ts', 'core/a.ts') }), context),"
         "escalateRow(row({ components: ['core'] }), context),"
         "escalateRow(row({ components: ['leaf'] }), context),"
@@ -289,9 +290,10 @@ def test_escalation_rules_lift_but_never_lower(tmp_path: Path):
     )
     result = run_node(script, tmp_path)
     assert result.returncode == 0, result.stderr
-    policy_edge, detail_edge, fan_in, low_fan_in, cycle, blocker = json.loads(result.stdout)
+    policy_edge, detail_edge, to_side, fan_in, low_fan_in, cycle, blocker = json.loads(result.stdout)
     assert policy_edge == {"severity": "major", "lifts": [1]}
     assert detail_edge == {"severity": "minor", "lifts": []}
+    assert to_side == {"severity": "major", "lifts": [3]}
     assert fan_in == {"severity": "major", "lifts": [3]}
     assert low_fan_in == {"severity": "minor", "lifts": []}
     assert cycle == {"severity": "blocker", "lifts": [4]}
@@ -418,7 +420,7 @@ def test_a_base_that_predates_the_model_is_compared_with_the_current_model(tmp_p
     assert result.returncode == 1, result.stderr
     rows = json.loads(result.stdout)["rows"]
     assert {(r["rules"][0], r["origin"]) for r in rows} == {
-        ("R4", "introduced"), ("R28", "introduced"), ("R30", "introduced"), ("R31", "inherited"),
+        ("R4", "introduced"), ("R28", "introduced"), ("R30", "introduced"), ("R31", "introduced"),
         ("R7", "inherited")}
 
 
@@ -642,3 +644,153 @@ def test_ring_and_construction_rows_skip_an_edge_with_a_barrel_at_either_end(tmp
     graph = construction_graph("entity", "barrel")
     graph["edges"] = [{"from": "src/a.ts", "to": "src/b.ts", "kind": "import", "direction": "outward"}]
     assert run_checks(tmp_path, graph)["rows"] == []
+
+
+def set_exports(root: Path, exports: dict[str, tuple[int, int]]) -> None:
+    def change(document: dict) -> None:
+        for module in document["modules"]:
+            if module["path"] in exports:
+                abstract, concrete = exports[module["path"]]
+                module["exports"] = {"abstract": abstract, "concrete": concrete}
+
+    edit_json(root / ADAPTER, change)
+
+
+def rename_unit(root: Path, old: str, new: str) -> None:
+    git(["mv", old, new], root)
+
+    def rename(document: dict) -> None:
+        for module in document["modules"]:
+            if module["path"] == old:
+                module["path"] = new
+        for edge in document["edges"]:
+            for end in ("from", "to"):
+                if edge.get(end) == old:
+                    edge[end] = new
+        for module in document["modules"]:
+            for constructed in module["constructs"]:
+                if constructed["path"] == old:
+                    constructed["path"] = new
+
+    edit_json(root / ADAPTER, rename)
+    git(["add", "-A"], root)
+
+
+def test_a_file_that_imported_a_detail_and_now_constructs_it_is_introduced(tmp_path: Path):
+    root = repo(tmp_path)
+    pristine = (root / ADAPTER).read_text()
+    edit_json(root / ADAPTER, lambda d: [m.update(constructs=[]) for m in d["modules"] if m["path"] == CONTROLLER])
+    init_repo(root)
+    (root / ADAPTER).write_text(pristine)
+    touch(root, CONTROLLER)
+    out = check_output(root, "--base", "HEAD", exit_code=1)
+    assert keys(out["rows"]) == CONSTRUCTION_ROWS and {r["origin"] for r in out["rows"]} == {"introduced"}
+
+
+def test_moving_a_touched_component_into_the_zone_of_pain_is_introduced(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    set_exports(root, {"src/domain/payroll-repository.ts": (0, 1), "src/domain/clock.ts": (0, 1)})
+    touch(root, EMPLOYEE)
+    row = find(check_rows(root, "--base", "HEAD"), "domain", "R31")
+    assert row["defect"] == "zone-of-pain" and row["origin"] == "introduced"
+
+
+def test_removing_the_last_outside_consumer_of_an_abstract_component_is_introduced(tmp_path: Path):
+    root = repo(tmp_path)
+    set_exports(root, {"src/adapters/memory-payroll-repository.ts": (1, 0)})
+    init_repo(root)
+    def cut_consumers(document: dict) -> None:
+        document["edges"] = [e for e in document["edges"]
+                             if not (e["from"] == CONTROLLER and str(e.get("to", "")).startswith("src/adapters/"))]
+        for module in document["modules"]:
+            if module["path"] == CONTROLLER:
+                module["constructs"] = []
+
+    edit_json(root / ADAPTER, cut_consumers)
+    touch(root, CLOCK)
+    row = find(check_rows(root, "--base", "HEAD"), "adapters", "R31")
+    assert row["defect"] == "unused-abstraction" and row["origin"] == "introduced"
+
+
+def test_a_unit_moved_so_an_import_becomes_policy_to_detail_is_introduced(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    moved = "src/domain/payroll-controller-use-case.ts"
+    rename_unit(root, CONTROLLER, moved)
+    rows = check_rows(root, "--base", "HEAD")
+    assert find(rows, f"{moved} -> {PG}", "R4")["origin"] == "introduced"
+
+
+def test_a_renamed_file_with_an_unchanged_construction_breach_is_inherited(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    renamed = "src/web/pay-controller.ts"
+    rename_unit(root, CONTROLLER, renamed)
+    out = check_output(root, "--base", "HEAD", exit_code=0)
+    assert keys(out["rows"]) == [(f"{renamed} -> {PG}", "R7"), (f"{renamed} -> {CLOCK}", "R7")]
+    assert {r["origin"] for r in out["rows"]} == {"inherited"}
+
+
+def test_rows_that_describe_the_change_are_always_introduced(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    touch(root, EMPLOYEE, MAIN)
+    assert {r["origin"] for r in check_rows(root, "--base", "HEAD") if "R28" in r["rules"]} == {"introduced"}
+    model_edit(root, "add-group", "split", "members=domain", "absorbs=domain only")
+    rows = [r for r in check_rows(root, "--base", "HEAD") if "R27" in r["rules"]]
+    assert rows and {r["origin"] for r in rows} == {"introduced"}
+
+
+def test_a_merged_row_is_introduced_when_any_contributing_row_is(tmp_path: Path):
+    script = (
+        f"import {{ mergeRows }} from {json.dumps(RUN_MODULE)};"
+        "const row = (rule, origin) => ({ check: rule, defect: 'd', rules: [rule], severity: 'major', target: 't',"
+        " evidence: rule, correction: 'c', units: [], components: [], origin });"
+        "console.log(JSON.stringify([mergeRows([row('R4', 'inherited'), row('R17', 'introduced')])[0].origin,"
+        " mergeRows([row('R4', 'inherited'), row('R17', 'inherited')])[0].origin]));"
+    )
+    result = run_node(script, tmp_path)
+    assert json.loads(result.stdout) == ["introduced", "inherited"]
+
+
+def test_a_check_runs_when_a_rule_is_off_for_the_project_but_enforced_for_a_component(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    model_edit(root, "set-rule", "R7", "off", "reason=not applicable")
+    model_edit(root, "set-rule", "R7@web", "enforced", "reason=the web component must stay clean")
+    out = check_output(root, exit_code=1)
+    assert keys(out["rows"]) == CONSTRUCTION_ROWS and {r["status"] for r in out["rows"]} == {"enforced"}
+
+
+def test_checks_that_need_a_base_are_listed_as_not_run_without_one(tmp_path: Path):
+    root = repo(tmp_path)
+    init_repo(root)
+    out = check_output(root)
+    assert [(e["check"], e["rules"]) for e in out["notRun"]] == [
+        ("zone-of-pain", ["R31", "R32"]), ("no-cohesion-groups", ["R28"]), ("change-spans-groups", ["R27"])]
+    assert out["incomplete"] == []
+    text = run_arch(["check"], root).stdout
+    assert "## Not run without --base\n\n- zone-of-pain (R31 Depend toward stability; R32 Use metrics as a screen)" in text
+    assert check_output(root, "--base", "HEAD")["notRun"] == []
+
+
+def test_every_uncovered_unit_is_incomplete_without_a_base(tmp_path: Path):
+    root = repo(tmp_path)
+
+    def add_module(document: dict) -> None:
+        document["modules"].append({"path": "tools/helper.ts", "exports": {"abstract": 0, "concrete": 1},
+                                    "implements": [], "constructs": [], "signatures": []})
+
+    edit_json(root / ADAPTER, add_module)
+    out = check_output(root)
+    assert [e["target"] for e in out["incomplete"]] == ["tools/helper.ts"]
+    assert run_arch(["check", "--strict"], root).returncode == 1
+
+
+def test_a_unit_without_exports_makes_the_abstractness_checks_incomplete(tmp_path: Path):
+    graph = empty_graph([component("svc", 0, 2, 1, None, None)])
+    graph["units"] = [{"path": "svc/a.ts", "component": "svc", "ring": "entities", "kind": "port", "exports": None}]
+    out = run_checks(tmp_path, graph, touched_scope("svc"))
+    assert out["rows"] == []
+    assert {(e["check"], e["target"]) for e in out["incomplete"]} == {
+        ("zone-of-pain", "svc/a.ts"), ("unused-abstractions", "svc/a.ts")}

@@ -26,7 +26,6 @@ function componentRow(name, evidence, correction) {
     correction,
     units: [],
     components: [name],
-    originKey: { type: "component", name },
     edge: null,
   };
 }
@@ -86,7 +85,6 @@ function unstableDependencyRows(context) {
         correction: CORRECTIONS.stability(edge.from, edge.to),
         units: [],
         components: [edge.from, edge.to],
-        originKey: { type: "componentEdge", from: edge.from, to: edge.to },
         edge: { level: "component", from: edge.from, to: edge.to },
       },
     ];
@@ -125,6 +123,24 @@ function unusedAbstractionRows(context) {
       ),
     ];
   });
+}
+
+function unitsWithoutExports(context, componentNames) {
+  return context.graph.units
+    .filter((unit) => componentNames.has(unit.component) && unit.kind !== "barrel" && !unit.exports)
+    .map((unit) => ({
+      target: unit.path,
+      reason: `${unit.path} reports no exports although the adapter provides them, so abstractness is unknown. ` +
+        "Make the adapter report the exports of every module.",
+    }));
+}
+
+function zoneOfPainUndecided(context) {
+  return unitsWithoutExports(context, new Set(context.touched.components));
+}
+
+function unusedAbstractionUndecided(context) {
+  return unitsWithoutExports(context, new Set(context.graph.components.map((component) => component.name)));
 }
 
 function touchedComponents(context) {
@@ -211,6 +227,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: ["exports"],
     needsBase: true,
     run: zoneOfPainRows,
+    undecided: zoneOfPainUndecided,
   },
   {
     id: "unused-abstractions",
@@ -221,6 +238,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: ["exports"],
     needsBase: false,
     run: unusedAbstractionRows,
+    undecided: unusedAbstractionUndecided,
   },
   {
     id: "no-cohesion-groups",

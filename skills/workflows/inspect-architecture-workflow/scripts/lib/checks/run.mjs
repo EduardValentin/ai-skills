@@ -4,7 +4,7 @@ import { isCoveredByException } from "./exceptions.mjs";
 import { createOriginResolver } from "./origin.mjs";
 import { CHECKS } from "./registry.mjs";
 import { ruleNumber } from "./rule-titles.mjs";
-import { isOffForProject, skippedRules, statusForRow } from "./status.mjs";
+import { isOffForEveryComponent, skippedRules, statusForRow } from "./status.mjs";
 import { naturalOrder } from "./targets.mjs";
 
 const CLASSIFICATION_CHECK = "classification";
@@ -20,6 +20,7 @@ function mergeGroup(rows) {
     check: union(rows.map((row) => [row.check])).join(", "),
     rules: union(rows.map((row) => row.rules)).sort((a, b) => ruleNumber(a) - ruleNumber(b)),
     severity: rows.map((row) => row.severity).reduce(highestSeverity),
+    origin: rows.some((row) => row.origin === "introduced") ? "introduced" : first.origin,
     evidence: union(rows.map((row) => [row.evidence])).join("; "),
     units: union(rows.map((row) => row.units)),
     components: union(rows.map((row) => row.components)),
@@ -53,6 +54,10 @@ function missingFactEntry(check, missing) {
   };
 }
 
+function undecidedEntries(check, context) {
+  return (check.undecided?.(context) ?? []).map((entry) => ({ check: check.id, rules: check.rules, ...entry }));
+}
+
 function runCheck(check, context) {
   if (check.needsBase && !context.touched) return { rows: [], incomplete: [] };
   const missing = check.facts.filter((fact) => !context.graph.capabilities?.[fact]);
@@ -64,21 +69,21 @@ function runCheck(check, context) {
     rules: check.rules,
     severity: check.severity,
   }));
-  return { rows, incomplete: [] };
+  return { rows, incomplete: undecidedEntries(check, context) };
 }
 
-function unclassifiedEntries(touched) {
-  return (touched?.uncovered ?? []).map((path) => ({
+function unclassifiedEntries(graph, touched) {
+  return (touched ? touched.uncovered : graph.uncovered).map((path) => ({
     check: CLASSIFICATION_CHECK,
     rules: [],
     target: path,
     reason:
-      `${path} is changed but has no component or no kind, so no check could judge it. ` +
+      `${path} has no component or no kind, so no check could judge it. ` +
       "Add its component or classify it with arch model classify.",
   }));
 }
 
-function finalRow(row, context, originOf) {
+function finalRow(row, context) {
   const { severity, lifts } = escalateRow(row, context);
   return {
     check: row.check,
@@ -89,7 +94,7 @@ function finalRow(row, context, originOf) {
     baseSeverity: row.severity,
     lifts,
     status: statusForRow(context.model, row.rules, rowComponents(row, context)),
-    origin: originOf(row.originKey),
+    origin: row.origin,
     evidence: row.evidence,
     correction: row.correction,
   };
@@ -99,19 +104,31 @@ function byRuleThenTarget(a, b) {
   return ruleNumber(a.rules[0]) - ruleNumber(b.rules[0]) || naturalOrder(a.target, b.target);
 }
 
+function baseRowsOf(checks, { baseGraph, model, touched }) {
+  if (!baseGraph) return [];
+  const context = createContext({ graph: baseGraph, model, touched });
+  return checks.flatMap((check) => runCheck(check, context).rows);
+}
+
+function notRunEntries(checks, touched) {
+  if (touched) return [];
+  return checks.filter((check) => check.needsBase).map((check) => ({ check: check.id, rules: check.rules }));
+}
+
 export function runChecks({ graph, model, baseGraph = null, touched = null }) {
   const context = createContext({ graph, model, baseGraph, touched });
-  const originOf = createOriginResolver({ graph, baseGraph, touched });
-  const active = CHECKS.filter((check) => !isOffForProject(model, check.rules));
+  const active = CHECKS.filter((check) => !isOffForEveryComponent(model, check.rules));
   const results = active.map((check) => runCheck(check, context));
+  const originOf = createOriginResolver({ graph, baseGraph, baseRows: baseRowsOf(active, context), touched });
   const inChange = results.flatMap((result) => result.rows).filter((row) => inScope(row, touched));
-  const decided = mergeRows(inChange).filter(
+  const decided = mergeRows(inChange.map((row) => ({ ...row, origin: originOf(row) }))).filter(
     (row) => statusForRow(model, row.rules, rowComponents(row, context)) !== "off",
   );
   const uncovered = decided.filter((row) => !isCoveredByException(row, context));
   return {
-    rows: uncovered.map((row) => finalRow(row, context, originOf)).sort(byRuleThenTarget),
-    incomplete: [...results.flatMap((result) => result.incomplete), ...unclassifiedEntries(touched)],
+    rows: uncovered.map((row) => finalRow(row, context)).sort(byRuleThenTarget),
+    incomplete: [...results.flatMap((result) => result.incomplete), ...unclassifiedEntries(graph, touched)],
+    notRun: notRunEntries(active, touched),
     skipped: skippedRules(model),
     covered: decided.length - uncovered.length,
   };

@@ -1,4 +1,4 @@
-import { rowComponents } from "./context.mjs";
+import { dependedOnComponents } from "./context.mjs";
 
 const SEVERITY_ORDER = ["minor", "major", "blocker"];
 const CYCLE_DEFECT = "cycle";
@@ -17,7 +17,7 @@ function startsInPolicyUnit(row, context) {
 
 function reachesWidelyDependedOnComponent(row, context) {
   const bound = context.model.thresholds.escalationFanIn;
-  const names = new Set(rowComponents(row, context));
+  const names = new Set(dependedOnComponents(row, context));
   return context.graph.components.some((component) => names.has(component.name) && component.fanIn >= bound);
 }
 

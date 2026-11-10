@@ -39,12 +39,17 @@ function section(title, lines) {
   return `## ${title}\n\n${lines.length > 0 ? lines.join("\n") : NONE}`;
 }
 
-export function renderCheckMarkdown({ rows, incomplete, skipped, covered }) {
+function notRunLine(entry) {
+  return `- ${entry.check} (${entry.rules.map(titledRule).join("; ")})`;
+}
+
+export function renderCheckMarkdown({ rows, incomplete, notRun, skipped, covered }) {
   const coveredLine = covered > 0 ? [`Covered by recorded exceptions: ${covered}`] : [];
   return [
     table(rows),
     ...coveredLine,
     section("Incomplete", incomplete.map(incompleteLine)),
+    section("Not run without --base", notRun.map(notRunLine)),
     section("Rules not enforced", skipped.map(skippedLine)),
   ].join("\n\n");
 }

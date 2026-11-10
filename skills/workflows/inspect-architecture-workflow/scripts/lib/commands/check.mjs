@@ -17,7 +17,7 @@ function printWarnings(graph) {
 async function comparisonWithBase(root, model, graph, flags) {
   if (!flags.base) return {};
   const baseGraph = await loadGraph(root, model, { ref: flags.base, flags });
-  return { baseGraph, touched: await touchedScope(root, graph, model, flags.base) };
+  return { baseGraph, touched: await touchedScope(root, graph, flags.base) };
 }
 
 function breaches(result, flags) {

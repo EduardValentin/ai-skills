@@ -21,7 +21,6 @@ function unitEdgeRow({ from, to, evidence, correction }) {
     correction,
     units: [from, to],
     components: [],
-    originKey: { type: "edge", from, to },
     edge: { level: "unit", from, to },
   };
 }
@@ -64,7 +63,6 @@ function policyImportsExternal(context) {
             correction: CORRECTIONS.external(external.name),
           }),
           units: [importer],
-          originKey: { type: "external", from: importer, name: external.name },
         };
       }),
   );
