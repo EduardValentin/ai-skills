@@ -2,7 +2,7 @@ import json
 import shutil
 from pathlib import Path
 
-from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, init_repo, run_arch, run_node
+from support import add_old_group, FIXTURE_FLAGS, SKILL_DIR, copy_fixture, init_repo, run_arch, run_node
 
 ASSESS = SKILL_DIR / "scripts" / "lib" / "assess.mjs"
 COLUMNS = "| Workflow | Target | Rule | Origin | Verdict | Severity | Evidence | Change | Escalation |"
@@ -102,8 +102,7 @@ def test_change_across_components_without_groups_asks_for_them_until_a_group_cov
     root = two_component_change(tmp_path)
     rows = assess_rows(root, "--base", "HEAD")
     assert [(r["workflow"], r["rule"], r["severity"]) for r in rows] == [("W6", "R28", "minor")]
-    added = run_arch(["model", "add-group", "payroll", "components=C1,C3", "absorbs=payroll rules"], root)
-    assert added.returncode == 0, added.stderr
+    add_old_group(root, "payroll", ["C1", "C3"], "payroll rules")
     assert assess_rows(root, "--base", "HEAD") == []
 
 
@@ -111,8 +110,8 @@ def test_r27_rows_are_the_touched_components_that_share_no_group_with_some_other
     root = repo(tmp_path)
     init_repo(root)
     touch(root, "src/domain/employee.ts", "src/adapters/system-clock.ts", "src/web/main.ts")
-    assert run_arch(["model", "add-group", "storage", "components=C1,C2", "absorbs=storage"], root).returncode == 0
-    assert run_arch(["model", "add-group", "delivery", "components=C2,C3", "absorbs=delivery"], root).returncode == 0
+    add_old_group(root, "storage", ["C1", "C2"], "storage")
+    add_old_group(root, "delivery", ["C2", "C3"], "delivery")
     rows = [r for r in assess_rows(root, "--base", "HEAD") if r["rule"] == "R27"]
     assert keys(rows) == [("C1", "R27"), ("C3", "R27")]
     assert rows[0]["evidence"] == "C1 shares no recorded group with C3; groups holding C1: storage"
@@ -122,7 +121,7 @@ def test_r27_rows_are_the_touched_components_that_share_no_group_with_some_other
 
 def test_r27_evidence_says_none_when_no_group_holds_the_component(tmp_path: Path):
     root = two_component_change(tmp_path)
-    assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=storage"], root).returncode == 0
+    add_old_group(root, "core", ["C1", "C2"], "storage")
     rows = assess_rows(root, "--base", "HEAD")
     assert keys(rows) == [("C1", "R27"), ("C3", "R27")]
     assert rows[1]["evidence"] == "C3 shares no recorded group with C1; groups holding C3: none"

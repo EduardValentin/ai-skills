@@ -1,211 +1,273 @@
 import json
 from pathlib import Path
 
-from support import FIXTURE_FLAGS, copy_fixture, init_repo, run_arch
+from support import copy_fixture, git, run_arch
+
+RECORD = "docs/architecture/architecture.json"
+GUIDANCE_RULES = {"R3", "R15", "R23", "R24", "R26", "R29", "R33", "R37"}
+LEGACY_ONLY_RULES = {"R6", "R19", "R21", "R22"}
 
 
-def overrides(root: Path) -> list:
-    return json.loads((root / "docs/architecture/model/overrides.json").read_text())["overrides"]
+def payroll(tmp_path: Path) -> Path:
+    return copy_fixture("payroll", tmp_path / "p")
 
 
-def test_add_override_upserts_and_sorts(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    assert run_arch(["model", "add-override", "src/domain/employee.ts", "ring=entities", "kind=boundary-data", "actors=finance,hr"], root).returncode == 0
-    assert run_arch(["model", "add-override", "src/adapters/system-clock.ts", "ring=adapters", "kind=gateway"], root).returncode == 0
-    assert run_arch(["model", "add-override", "src/domain/employee.ts", "ring=entities", "kind=entity"], root).returncode == 0
-    rows = overrides(root)
-    assert [r["path"] for r in rows] == ["src/adapters/system-clock.ts", "src/domain/employee.ts"]
-    assert rows[1]["kind"] == "entity" and rows[1]["actors"] == []
+def model_file(root: Path) -> Path:
+    return root / RECORD
 
 
-def test_add_override_rejects_unknown_kind(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["model", "add-override", "src/domain/employee.ts", "ring=entities", "kind=widget"], root)
-    assert result.returncode == 1 and "unknown kind: widget" in result.stderr
-    assert overrides(root) == []
+def document(root: Path) -> dict:
+    return json.loads(model_file(root).read_text())
 
 
-def test_remove_override_missing(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["model", "remove-override", "src/nope.ts"], root)
-    assert result.returncode == 1 and "no override for src/nope.ts" in result.stderr
+def edit(root: Path, *args: str):
+    return run_arch(["model", *args], root)
 
 
-def test_add_port_assigns_next_id(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    assert run_arch(["model", "add-port", "src/domain/employee.ts", "Employees", "owner=C1", "humble=adapters"], root).returncode == 0
-    ports = json.loads((root / "docs/architecture/model/boundaries.json").read_text())["ports"]
-    assert ports[-1] == {"id": "B3", "path": "src/domain/employee.ts", "symbol": "Employees", "owner": "C1", "humbleSide": "adapters"}
-
-
-def groups(root: Path) -> list:
-    return json.loads((root / "docs/architecture/model/boundaries.json").read_text())["groups"]
-
-
-def test_add_group_writes_canonically_and_upserts(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=domain rule changes"], root).returncode == 0
-    assert groups(root) == [{"name": "core", "components": ["C1", "C2"], "absorbs": "domain rule changes"}]
-    assert run_arch(["model", "add-group", "core", "components=C1", "absorbs=narrower reason"], root).returncode == 0
-    assert groups(root) == [{"name": "core", "components": ["C1"], "absorbs": "narrower reason"}]
-
-
-def test_remove_group_missing(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["model", "remove-group", "nope"], root)
-    assert result.returncode == 1 and "no group nope" in result.stderr
-
-
-def test_remove_group_removes_it(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    assert run_arch(["model", "add-group", "core", "components=C1", "absorbs=domain rule changes"], root).returncode == 0
-    assert run_arch(["model", "remove-group", "core"], root).returncode == 0
-    assert groups(root) == []
-
-
-def test_add_group_rejects_unknown_component(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    boundaries_path = root / "docs/architecture/model/boundaries.json"
-    before = boundaries_path.read_bytes()
-    result = run_arch(["model", "add-group", "core", "components=C1,C9", "absorbs=domain rule changes"], root)
-    assert result.returncode == 1 and "group core: not a component: C9" in result.stderr
-    assert boundaries_path.read_bytes() == before
-
-
-def test_add_component_rejects_duplicate(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["model", "add-component", "C1", "again", "paths=src/x/**"], root)
-    assert result.returncode == 1 and "duplicate component id: C1" in result.stderr
-
-
-def test_add_rule_before(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    assert run_arch(["model", "add-rule", "match=src/domain/**/*.dto.ts", "ring=entities", "kind=boundary-data", "before=src/domain/**"], root).returncode == 0
-    rules = json.loads((root / "docs/architecture/model/rules.json").read_text())["rules"]
-    index = [r["match"] for r in rules].index("src/domain/**/*.dto.ts")
-    assert rules[index + 1]["match"] == "src/domain/**"
-
-
-def test_validate_reports_ok(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["model", "validate", *FIXTURE_FLAGS], root)
-    assert result.returncode == 0 and result.stdout.strip() == "model: ok"
-
-
-def test_remove_rule_removes_exactly_one_and_keeps_order(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    rules_path = root / "docs/architecture/model/rules.json"
-    before = [r["match"] for r in json.loads(rules_path.read_text())["rules"]]
-    result = run_arch(["model", "remove-rule", "match=src/domain/clock.ts"], root)
+def test_init_legacy_writes_only_non_default_statuses(tmp_path: Path):
+    result = edit(tmp_path, "init", "--start", "legacy", "--adapter", "cat adapter.json")
     assert result.returncode == 0, result.stderr
-    after = [r["match"] for r in json.loads(rules_path.read_text())["rules"]]
-    before.remove("src/domain/clock.ts")
-    assert after == before
+    rules = document(tmp_path)["rules"]
+    assert set(rules) == GUIDANCE_RULES | LEGACY_ONLY_RULES
+    assert {status for status, _ in rules.values()} == {"advisory"}
+    assert all(reason for _, reason in rules.values())
+    assert document(tmp_path)["adapter"] == "cat adapter.json"
+    assert edit(tmp_path, "validate").returncode == 0
 
 
-def test_remove_rule_missing(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["model", "remove-rule", "match=src/nope/**"], root)
-    assert result.returncode == 1 and "no rule matching src/nope/**" in result.stderr
+def test_init_greenfield_writes_only_the_guidance_rules(tmp_path: Path):
+    assert edit(tmp_path, "init", "--start", "greenfield", "--adapter", "cat adapter.json").returncode == 0
+    assert set(document(tmp_path)["rules"]) == GUIDANCE_RULES
 
 
-def test_remove_component_refuses_while_referenced_then_succeeds_once_unreferenced(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    components_path = root / "docs/architecture/model/components.json"
-    assert run_arch(["model", "add-component", "C9", "throwaway", "paths=src/throwaway/**"], root).returncode == 0
-
-    result = run_arch(["model", "remove-component", "C1"], root)
-    assert result.returncode == 1
-    assert "component C1 is referenced by" in result.stderr
-    ids = [c["id"] for c in json.loads(components_path.read_text())["components"]]
-    assert "C1" in ids
-
-    result = run_arch(["model", "remove-component", "C9"], root)
+def test_init_local_adds_record_path_to_local_exclude(tmp_path: Path):
+    git(["init", "-q", "-b", "main"], tmp_path)
+    result = edit(tmp_path, "init", "--start", "greenfield", "--adapter", "a", "--record-mode", "local")
     assert result.returncode == 0, result.stderr
-    ids = [c["id"] for c in json.loads(components_path.read_text())["components"]]
-    assert "C9" not in ids and "C1" in ids
+    assert document(tmp_path)["record"] == "local"
+    exclude = (tmp_path / ".git/info/exclude").read_text().splitlines()
+    assert "/docs/architecture/" in exclude
 
 
-def test_remove_component_missing(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    result = run_arch(["model", "remove-component", "C9"], root)
-    assert result.returncode == 1 and "no component C9" in result.stderr
+def test_init_refuses_to_overwrite_an_existing_model(tmp_path: Path):
+    root = payroll(tmp_path)
+    before = model_file(root).read_bytes()
+    result = edit(root, "init", "--start", "greenfield", "--adapter", "a")
+    assert result.returncode == 2 and "arch model" in result.stderr and "already exists" in result.stderr
+    assert model_file(root).read_bytes() == before
 
 
-def test_validate_passes_with_adapter_warnings(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    cruise = json.loads((root / "cruise.json").read_text())
-    emp = next(m for m in cruise["modules"] if m["source"] == "src/domain/employee.ts")
-    emp["dependencies"].append({"module": "@app/missing", "resolved": "@app/missing", "dependencyTypes": ["unknown"], "couldNotResolve": True})
-    (root / "cruise.json").write_text(json.dumps(cruise))
-    result = run_arch(["model", "validate", *FIXTURE_FLAGS], root)
+def test_init_needs_start_and_adapter(tmp_path: Path):
+    assert edit(tmp_path, "init", "--adapter", "a").returncode == 2
+    assert edit(tmp_path, "init", "--start", "greenfield").returncode == 2
+    assert edit(tmp_path, "init", "--start", "someday", "--adapter", "a").returncode == 2
+
+
+def test_set_rule_per_component(tmp_path: Path):
+    root = payroll(tmp_path)
+    result = edit(root, "set-rule", "R6@domain", "off", "reason=no delivery code lives here")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "model: ok"
-    assert "unresolved import @app/missing in src/domain/employee.ts" in result.stderr
+    rules = document(root)["rules"]
+    assert rules["R6@domain"] == ["off", "no delivery code lives here"]
+    assert rules["R6"][0] == "off"
 
 
-def test_validate_fails_on_a_model_problem(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    assert run_arch(["model", "add-rule", "match=src/nowhere/**", "ring=entities", "kind=entity"], root).returncode == 0
-    result = run_arch(["model", "validate", *FIXTURE_FLAGS], root)
-    assert result.returncode == 1
-    assert "unused rule: src/nowhere/**" in result.stderr
+def test_set_rule_needs_a_reason(tmp_path: Path):
+    result = edit(payroll(tmp_path), "set-rule", "R6@domain", "off")
+    assert result.returncode == 2 and "reason" in result.stderr
 
 
-def test_kinds_come_from_rules_json_when_listed(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    rules_path = root / "docs/architecture/model/rules.json"
-    rules = json.loads(rules_path.read_text())
-    rules["kinds"] = ["entity", "use-case", "port", "adapter", "controller", "composition-root", "barrel", "saga"]
-    rules_path.write_text(json.dumps(rules))
-    accepted = run_arch(["model", "add-override", "src/domain/employee.ts", "ring=use-cases", "kind=saga"], root)
-    assert accepted.returncode == 0, accepted.stderr
-    refused = run_arch(["model", "add-override", "src/adapters/system-clock.ts", "ring=adapters", "kind=gateway"], root)
-    assert refused.returncode == 1 and "unknown kind: gateway" in refused.stderr
-    assert [o["kind"] for o in overrides(root)] == ["saga"]
+def test_set_rule_rejects_unknown_component_and_status(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert "nowhere" in edit(root, "set-rule", "R6@nowhere", "off", "reason=x").stderr
+    assert edit(root, "set-rule", "R6", "maybe", "reason=x").returncode == 2
 
 
-def test_model_without_subcommand_prints_usage(tmp_path: Path):
-    result = run_arch(["model"], copy_fixture("payroll", tmp_path / "p"))
-    assert result.returncode == 1
-    assert result.stderr.strip() == "usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule|add-group|remove-group>"
+def test_set_threshold_rejects_unknown_knob(tmp_path: Path):
+    result = edit(payroll(tmp_path), "set-threshold", "distanceMaxx", "1")
+    assert result.returncode == 2
+    assert "distanceMaxx" in result.stderr and "painMinFanIn" in result.stderr
 
 
-def test_edits_check_required_arguments(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    model_dir = root / "docs/architecture/model"
-    before = {f.name: f.read_bytes() for f in model_dir.iterdir()}
-    cases = [
-        (["add-rule", "ring=entities", "kind=entity"], "usage: arch model add-rule match=<glob> ring=<r> kind=<k> [actors=a,b] [before=<glob>]"),
-        (["add-override", "ring=entities", "kind=entity"], "usage: arch model add-override <path> ring=<r> kind=<k> [actors=a,b] [reason=<text>]"),
-        (["add-component", "C9", "nine"], "usage: arch model add-component <id> <name> paths=<glob,...> [enforcement=<text>] [release=<text>] [entry=<glob,...>]"),
-        (["add-component", "paths=src/x/**"], "usage: arch model add-component <id> <name> paths=<glob,...> [enforcement=<text>] [release=<text>] [entry=<glob,...>]"),
-        (["add-group", "components=C1", "absorbs=domain rule changes"], "usage: arch model add-group <name> components=<C,...> absorbs=<text>"),
-        (["add-group", "core", "absorbs=domain rule changes"], "usage: arch model add-group <name> components=<C,...> absorbs=<text>"),
-        (["add-group", "core", "components=C1"], "usage: arch model add-group <name> components=<C,...> absorbs=<text>"),
-    ]
-    for args, usage in cases:
-        result = run_arch(["model", *args], root)
-        assert result.returncode == 1, args
-        assert result.stderr.strip() == usage, args
-    assert {f.name: f.read_bytes() for f in model_dir.iterdir()} == before
+def test_set_threshold_checks_type_and_range(tmp_path: Path):
+    root = payroll(tmp_path)
+    before = model_file(root).read_bytes()
+    for knob, value in [("interfaceUseShare", "1.5"), ("escalationFanIn", "0"), ("escalationFanIn", "2.5"),
+                        ("distanceDeviations", "0"), ("painMaxInstability", "high"), ("historyWindow", "")]:
+        result = edit(root, "set-threshold", knob, value)
+        assert result.returncode == 2, (knob, value)
+        assert knob in result.stderr, (knob, value, result.stderr)
+    assert model_file(root).read_bytes() == before
 
 
-def test_add_component_refuses_globs_overlapping_tracked_paths(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    init_repo(root)
-    components_path = root / "docs/architecture/model/components.json"
-    before = components_path.read_bytes()
-    result = run_arch(["model", "add-component", "C9", "employees", "paths=src/domain/employee.ts"], root)
-    assert result.returncode == 1
-    assert "component globs overlap: C1 and C9" in result.stderr
-    assert components_path.read_bytes() == before
+def test_set_and_unset_threshold(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "set-threshold", "escalationFanIn", "5").returncode == 0
+    assert edit(root, "set-threshold", "historyWindow", "3 months").returncode == 0
+    assert document(root)["thresholds"] == {"escalationFanIn": 5, "historyWindow": "3 months"}
+    assert edit(root, "unset-threshold", "escalationFanIn").returncode == 0
+    assert edit(root, "unset-threshold", "historyWindow").returncode == 0
+    assert "thresholds" not in document(root)
+    assert edit(root, "unset-threshold", "historyWindow").returncode == 2
 
 
-def test_refused_edit_leaves_the_file_bytes_untouched(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    overrides_path = root / "docs/architecture/model/overrides.json"
-    before = overrides_path.read_bytes()
-    result = run_arch(["model", "add-override", "src/domain/employee.ts", "ring=nowhere", "kind=entity"], root)
-    assert result.returncode == 1 and "unknown ring: nowhere" in result.stderr
-    assert overrides_path.read_bytes() == before
+def test_explain_names_the_matching_pair(tmp_path: Path):
+    result = edit(payroll(tmp_path), "explain", "src/domain/payroll-repository.ts")
+    assert result.returncode == 0, result.stderr
+    assert "domain, pair 2: **/*-repository.ts -> port" in result.stdout
+    assert "ring: entities" in result.stdout and "actors: unknown" in result.stdout
+
+
+def test_explain_reports_an_unclassified_path(tmp_path: Path):
+    result = edit(payroll(tmp_path), "explain", "scripts/build.ts")
+    assert result.returncode == 0 and "component: none" in result.stdout and "matched: none" in result.stdout
+
+
+def test_explain_json(tmp_path: Path):
+    out = json.loads(edit(payroll(tmp_path), "explain", "src/domain/clock.ts", "--json").stdout)
+    assert out["kind"] == "port" and out["matched"] == {"component": "domain", "index": 2, "pattern": "clock.ts"}
+
+
+def test_explain_thresholds_lists_default_and_project_value(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "set-threshold", "escalationFanIn", "5").returncode == 0
+    lines = edit(root, "explain-thresholds").stdout.splitlines()
+    fan_in = next(line for line in lines if line.startswith("escalationFanIn"))
+    assert "default 3" in fan_in and "project 5" in fan_in
+    share = next(line for line in lines if line.startswith("interfaceUseShare"))
+    assert "default 0.5" in share and "project 0.5" in share
+    assert len(lines) == 13
+
+
+def test_edit_writes_one_entry_per_line_and_omits_defaults(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-port", "src/domain/employee.ts#Employees", "owner=domain", "defers=storage choice").returncode == 0
+    assert edit(root, "add-component", "reports", "paths=src/reports/**").returncode == 0
+    text = model_file(root).read_text()
+    assert text.endswith("}\n") and not text.endswith("\n\n")
+    port_lines = [line for line in text.splitlines() if '"at":' in line]
+    assert len(port_lines) == 3
+    for omitted in ["valueType", "enforcement", "release", '"rings"', '"thresholds"', '"entry": []']:
+        assert omitted not in text
+    keys = list(json.loads(text))
+    assert keys == ["version", "adapter", "record", "components", "ports", "rules"]
+    assert edit(root, "validate").returncode == 0
+    assert model_file(root).read_text() == text
+
+
+def test_refused_edit_leaves_the_file_untouched(tmp_path: Path):
+    root = payroll(tmp_path)
+    before = model_file(root).read_bytes()
+    removed = edit(root, "remove-component", "domain")
+    assert removed.returncode == 2 and "ports[0].owner" in removed.stderr
+    ghost = edit(root, "add-port", "src/domain/x.ts#X", "owner=ghost")
+    assert ghost.returncode == 2
+    assert model_file(root).read_bytes() == before
+
+
+def test_add_and_remove_component(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-component", "reports", "paths=src/reports/**,src/extra/**").returncode == 0
+    assert document(root)["components"][-1] == {"name": "reports", "paths": ["src/reports/**", "src/extra/**"]}
+    assert edit(root, "add-component", "reports", "paths=src/x/**").returncode == 2
+    assert edit(root, "remove-component", "reports").returncode == 0
+    assert edit(root, "remove-component", "reports").returncode == 2
+
+
+def test_classify_inserts_before_a_pattern_and_replaces_in_place(tmp_path: Path):
+    root = payroll(tmp_path)
+    result = edit(root, "classify", "domain", "**/*-service.ts", "use-case", "before=**/*-repository.ts",
+                  "reason=services are use cases")
+    assert result.returncode == 0, result.stderr
+    pairs = document(root)["components"][0]["classify"]
+    assert pairs[1] == ["**/*-service.ts", "use-case", {"reason": "services are use cases"}]
+    assert edit(root, "classify", "domain", "**/*-service.ts", "entity", "actors=hr,finance").returncode == 0
+    pairs = document(root)["components"][0]["classify"]
+    assert [p[0] for p in pairs].count("**/*-service.ts") == 1
+    assert pairs[1][1:] == ["entity", {"actors": ["hr", "finance"]}]
+    assert edit(root, "classify", "domain", "x.ts", "entity", "before=missing").returncode == 2
+    assert edit(root, "classify", "domain", "x.ts", "widget").returncode == 2
+
+
+def test_classify_without_before_appends_and_unclassify_removes(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "classify", "adapters", "odd.ts", "adapter", "ring=frameworks").returncode == 0
+    assert document(root)["components"][1]["classify"][-1] == ["odd.ts", "adapter", {"ring": "frameworks"}]
+    assert edit(root, "unclassify", "adapters", "odd.ts").returncode == 0
+    assert edit(root, "unclassify", "adapters", "odd.ts").returncode == 2
+
+
+def test_add_and_remove_port(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-port", "src/domain/employee.ts#Employees", "owner=domain", "humble=adapters").returncode == 0
+    assert document(root)["ports"][-1] == {"at": "src/domain/employee.ts#Employees", "owner": "domain", "humble": "adapters"}
+    assert edit(root, "remove-port", "src/domain/employee.ts#Employees").returncode == 0
+    assert edit(root, "remove-port", "src/domain/employee.ts#Employees").returncode == 2
+    assert edit(root, "add-port", "src/domain/employee.ts", "owner=domain").returncode == 2
+
+
+def test_add_group_needs_members_and_absorbs(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-group", "core", "members=domain,adapters").returncode == 2
+    assert edit(root, "add-group", "core", "absorbs=rule changes").returncode == 2
+    assert edit(root, "add-group", "core", "members=domain,ghost", "absorbs=rule changes").returncode == 2
+    assert edit(root, "add-group", "core", "members=domain,adapters", "absorbs=rule changes").returncode == 0
+    assert document(root)["groups"] == [{"name": "core", "members": ["domain", "adapters"], "absorbs": "rule changes"}]
+    assert edit(root, "remove-group", "core").returncode == 0
+    assert "groups" not in document(root)
+    assert edit(root, "remove-group", "core").returncode == 2
+
+
+def test_forbidden_edges_and_exceptions(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-forbidden-edge", "domain", "ring:frameworks", "reason=policy must not know frameworks").returncode == 0
+    assert edit(root, "add-forbidden-edge", "domain", "ring:nowhere", "reason=x").returncode == 2
+    assert edit(root, "add-exception", "web", "src/domain/clock.ts", "rule=R5", "reason=migration").returncode == 0
+    assert edit(root, "add-exception", "web", "adapters", "reason=temporary").returncode == 0
+    doc = document(root)
+    assert doc["forbidden"] == [{"from": "domain", "to": "ring:frameworks", "reason": "policy must not know frameworks"}]
+    assert doc["exceptions"][0] == {"from": "web", "to": "src/domain/clock.ts", "rule": "R5", "reason": "migration"}
+    assert edit(root, "remove-exception", "web", "adapters").returncode == 0
+    assert edit(root, "remove-forbidden-edge", "domain", "ring:frameworks").returncode == 0
+    assert edit(root, "remove-forbidden-edge", "domain", "ring:frameworks").returncode == 2
+    assert [e["to"] for e in document(root)["exceptions"]] == ["src/domain/clock.ts"]
+
+
+def test_set_adapter(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "set-adapter", "node tools/adapter.mjs").returncode == 0
+    assert document(root)["adapter"] == "node tools/adapter.mjs"
+
+
+def test_validate_reports_every_problem_and_exits_2(tmp_path: Path):
+    root = payroll(tmp_path)
+    doc = document(root)
+    doc["ports"][0]["owner"] = "ghost"
+    model_file(root).write_text(json.dumps(doc))
+    result = edit(root, "validate")
+    assert result.returncode == 2 and "ports[0].owner" in result.stderr
+
+
+def test_validate_without_a_model_says_how_to_create_one(tmp_path: Path):
+    result = edit(tmp_path, "validate")
+    assert result.returncode == 2 and "arch model init" in result.stderr
+
+
+def test_unknown_subcommand_and_unknown_argument(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert "add-component" in edit(root, "frobnicate").stderr
+    assert edit(root, "frobnicate").returncode == 2
+    assert edit(root, "add-component", "x", "paths=a/**", "colour=red").returncode == 2
+    assert edit(root, "validate", "--start", "legacy").returncode == 2
+
+
+def test_record_environment_variable_selects_the_record_directory(tmp_path: Path):
+    root = payroll(tmp_path)
+    (root / "alt").mkdir()
+    model_file(root).rename(root / "alt/architecture.json")
+    assert edit(root, "validate").returncode == 2
+    env = {"ARCH_RECORD_DIR": "alt"}
+    assert run_arch(["model", "validate"], root, env).returncode == 0
+    assert run_arch(["model", "set-adapter", "other"], root, env).returncode == 0
+    assert json.loads((root / "alt/architecture.json").read_text())["adapter"] == "other"
+    assert run_arch(["model", "validate", "--record", "alt"], root).returncode == 0

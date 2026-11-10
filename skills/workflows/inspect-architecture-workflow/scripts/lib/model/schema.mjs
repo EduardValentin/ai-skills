@@ -3,6 +3,7 @@ import { DEFAULT_KINDS, DEFAULT_RINGS, DEFAULT_THRESHOLDS, RULE_COUNT } from "./
 import { validateShape } from "./validate-shape.mjs";
 
 const SCHEMA_URL = new URL("../../../assets/architecture.schema.json", import.meta.url);
+const RING_PREFIX = "ring:";
 const RULE_KEY = /^R([0-9]+)(?:@(.+))?$/;
 
 export function readSchema() {
@@ -99,6 +100,15 @@ function thresholdProblems(doc) {
     .map((key) => `thresholds.${key}: not a known threshold. Use one of ${knobs.join(", ")}.`);
 }
 
+function edgeProblems(doc) {
+  const rings = doc.rings ?? DEFAULT_RINGS;
+  const edges = [...(doc.forbidden ?? []), ...(doc.exceptions ?? [])];
+  const ends = edges.flatMap((edge) => [edge.from, edge.to]);
+  return ends
+    .filter((end) => end.startsWith(RING_PREFIX) && !rings.includes(end.slice(RING_PREFIX.length)))
+    .map((end) => `${end}: not a ring. Use ${RING_PREFIX}<ring> with one of ${rings.join(", ")}.`);
+}
+
 function referenceProblems(doc) {
   const names = new Set((doc.components ?? []).map((component) => component.name));
   const problems = [];
@@ -126,5 +136,6 @@ export function modelProblems(doc) {
     ...ruleProblems(doc),
     ...thresholdProblems(doc),
     ...referenceProblems(doc),
+    ...edgeProblems(doc),
   ];
 }

@@ -31,8 +31,14 @@ function checkString(value, schema, path) {
 
 function checkNumber(value, schema, path) {
   if (typeof value !== "number") return [];
-  if (schema.minimum !== undefined && value < schema.minimum) return [`${path}: must be at least ${schema.minimum}`];
-  return [];
+  const problems = [];
+  const { minimum, maximum } = schema;
+  if (minimum !== undefined && value < minimum) problems.push(`${path}: must be at least ${minimum}`);
+  if (maximum !== undefined && value > maximum) problems.push(`${path}: must be at most ${maximum}`);
+  if (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum) {
+    problems.push(`${path}: must be greater than ${schema.exclusiveMinimum}`);
+  }
+  return problems;
 }
 
 function checkArray(value, schema, path) {

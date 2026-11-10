@@ -36,6 +36,22 @@ export const DEFAULT_THRESHOLDS = {
   planFixRounds: 2,
 };
 
+export const THRESHOLD_DESCRIPTIONS = {
+  interfaceUseShare: "Share of an interface's members a consumer must use for the interface to fit that consumer.",
+  componentUseShare: "Share of a component's exports a consumer must use for the dependency to count as real use.",
+  detailReasonChanges: "Count of recent changes for a detail reason that marks a unit as changing for that reason.",
+  historyWindow: "How far back change history reaches, written as a date expression such as 6 months.",
+  escalationFanIn: "Count of dependents that makes a unit widely depended on, which escalates findings about it.",
+  painMaxInstability: "Highest instability of a unit that still sits in the zone of pain.",
+  painMaxAbstractness: "Highest abstractness of a unit that still sits in the zone of pain.",
+  painMinFanIn: "Count of dependents a stable, concrete unit needs before it is reported in the zone of pain.",
+  uselessMinAbstractness: "Lowest abstractness of a unit that sits in the zone of uselessness.",
+  uselessMinInstability: "Lowest instability of a unit that sits in the zone of uselessness.",
+  distanceDeviations: "Standard deviations above the mean distance to the main sequence that mark an outlier.",
+  distanceJump: "Increase in a component's distance to the main sequence between base and head that is reported.",
+  planFixRounds: "Rounds of plan fixes before the remaining findings go to the user.",
+};
+
 export const RULE_COUNT = 41;
 
 export const RULE_STATUSES = ["enforced", "advisory", "off"];

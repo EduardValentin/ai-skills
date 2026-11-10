@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import FIXTURE_FLAGS, SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+from support import add_old_group, FIXTURE_FLAGS, SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
 
 def q(root: Path, *args: str) -> dict:
@@ -257,7 +257,7 @@ def test_touched_with_neighbors_adds_untouched_neighbor_unit_rows(tmp_path: Path
 def test_groups_query_lists_groups_added_to_the_model(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     assert q(root, "groups")["rows"] == []
-    assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=domain rule changes"], root).returncode == 0
+    add_old_group(root, "core", ["C1", "C2"], "domain rule changes")
     out = q(root, "groups")
     assert out["columns"] == ["Group", "Components", "Absorbs"]
     assert out["rows"] == [["core", ["C1", "C2"], "domain rule changes"]]

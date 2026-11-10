@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -52,6 +53,14 @@ def run_node(script: str, cwd: Path) -> subprocess.CompletedProcess[str]:
 def copy_fixture(name: str, dest: Path) -> Path:
     shutil.copytree(FIXTURES / name, dest, dirs_exist_ok=True)
     return dest
+
+
+def add_old_group(root: Path, name: str, components: list[str], absorbs: str) -> None:
+    """Record a cohesion group in the old four-file model by editing its file directly."""
+    path = root / "docs/architecture/model/boundaries.json"
+    data = json.loads(path.read_text())
+    data.setdefault("groups", []).append({"name": name, "components": components, "absorbs": absorbs})
+    path.write_text(json.dumps(data, indent=2) + "\n")
 
 
 def git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

@@ -2,6 +2,7 @@
 import process from "node:process";
 import { ArchError, UsageError } from "./lib/cli/errors.mjs";
 import { parseArgs } from "./lib/cli/flags.mjs";
+import { run as runModel } from "./lib/commands/model.mjs";
 
 const NOT_IMPLEMENTED_EXIT = 2;
 
@@ -32,7 +33,7 @@ const handlers = {
   query: legacy("query"),
   assess: legacy("assess"),
   uncovered: legacy("uncovered"),
-  model: legacy("model"),
+  model: runModel,
   ledger: legacy("ledger"),
   "readme-summary": legacy("readme"),
 };

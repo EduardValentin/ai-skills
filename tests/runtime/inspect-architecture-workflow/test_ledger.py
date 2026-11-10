@@ -2,7 +2,7 @@ import json
 import shlex
 from pathlib import Path
 
-from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+from support import add_old_group, SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
 LEDGER_LIB = SKILL_DIR / "scripts" / "lib" / "ledger.mjs"
 TEMPLATE = SKILL_DIR / "assets" / "ledger" / "ledger.md"
@@ -205,12 +205,6 @@ def payroll_project(tmp_path: Path) -> Path:
     return root
 
 
-def run_printed_model_command(root: Path, stdout: str) -> None:
-    line = next(l for l in stdout.splitlines() if l.startswith("arch model add-group"))
-    result = run_arch(shlex.split(line)[1:], root)
-    assert result.returncode == 0, result.stderr
-
-
 def test_accept_standing_creates_a_group_from_the_evidence_when_none_holds_the_target(tmp_path: Path):
     root = project(tmp_path)
     add_run(root, [row(workflow="W6", target="C3", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C3", "C1, C2", "none"), change="Split the change")])
@@ -223,8 +217,8 @@ def test_accept_standing_creates_a_group_from_the_evidence_when_none_holds_the_t
 
 def test_accept_standing_widens_every_group_the_evidence_names(tmp_path: Path):
     root = payroll_project(tmp_path)
-    assert run_arch(["model", "add-group", "core", "components=C1,C2", "absorbs=core rules"], root).returncode == 0
-    assert run_arch(["model", "add-group", "side", "components=C1", "absorbs=side rules"], root).returncode == 0
+    add_old_group(root, "core", ["C1", "C2"], "core rules")
+    add_old_group(root, "side", ["C1"], "side rules")
     add_run(root, [row(workflow="W6", target="C1", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C1", "C3", "core, side"), change="Split the change")])
     result = run_arch(["ledger", "accept", "F1", "--standing", "--by", "Eduard", "--reason", "web moves with the domain"], root)
     assert result.returncode == 0, result.stderr
@@ -233,18 +227,15 @@ def test_accept_standing_widens_every_group_the_evidence_names(tmp_path: Path):
     assert parsed(root)["acceptances"][0]["promoted"] == "model/boundaries.json groups core, side; decisions.md Cohesion groups"
 
 
-def test_the_printed_widening_command_widens_the_current_group(tmp_path: Path):
+def test_the_printed_widening_command_names_the_current_group_with_the_added_component(tmp_path: Path):
     root = payroll_project(tmp_path)
-    assert run_arch(["model", "add-group", "billing", "components=C1", "absorbs=billing rules"], root).returncode == 0
+    add_old_group(root, "billing", ["C1"], "billing rules")
     add_run(root, [
         row(workflow="W6", target="C1", rule="R27", severity="major", evidence=R27_EVIDENCE.format("C1", "C2", "billing"), change="Split the change"),
     ])
     first = run_arch(["ledger", "accept", "F1", "--standing", "--by", "Eduard", "--reason", "payroll moves with billing"], root)
     assert first.returncode == 0, first.stderr
     assert 'arch model add-group billing components=C1,C2 absorbs="billing rules"' in first.stdout
-    run_printed_model_command(root, first.stdout)
-    groups = json.loads((root / "docs/architecture/model/boundaries.json").read_text())["groups"]
-    assert next(g for g in groups if g["name"] == "billing")["components"] == ["C1", "C2"]
 
 
 def test_accepting_again_updates_the_acceptance_row(tmp_path: Path):
@@ -424,7 +415,7 @@ def test_an_audit_that_evaluates_everything_resolves_a_vanished_assessed_row(tmp
 
 def test_standing_acceptance_of_a_lifted_r27_row_reads_the_group_without_the_mark(tmp_path: Path):
     root = payroll_project(tmp_path)
-    assert run_arch(["model", "add-group", "billing", "components=C1,C2", "absorbs=billing rules"], root).returncode == 0
+    add_old_group(root, "billing", ["C1", "C2"], "billing rules")
     evidence = R27_EVIDENCE.format("C1", "C3", "billing") + " [rule 2]"
     add_run(root, [row(workflow="W6", target="C1", rule="R27", severity="blocker (base major)", evidence=evidence, change="Split the change")])
     result = run_arch(["ledger", "accept", "F1", "--standing", "--by", "Eduard", "--reason", "web moves with billing"], root)

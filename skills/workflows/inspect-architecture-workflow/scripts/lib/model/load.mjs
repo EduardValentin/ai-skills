@@ -13,7 +13,11 @@ export function recordDir(root, flags = {}) {
   return resolve(root, chosen);
 }
 
-function readDocument(file) {
+export function modelFile(root, flags = {}) {
+  return resolve(recordDir(root, flags), MODEL_FILE);
+}
+
+export function readDocument(file) {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
   } catch (error) {
@@ -54,6 +58,10 @@ function normalizeRules(rules = {}) {
   );
 }
 
+function normalizeGroup(group) {
+  return { name: group.name, members: group.members, absorbs: group.absorbs };
+}
+
 function normalize(doc) {
   return {
     version: doc.version,
@@ -65,7 +73,7 @@ function normalize(doc) {
     components: doc.components.map(normalizeComponent),
     ports: (doc.ports ?? []).map(normalizePort),
     shapes: doc.shapes ?? [],
-    groups: doc.groups ?? [],
+    groups: (doc.groups ?? []).map(normalizeGroup),
     rules: normalizeRules(doc.rules),
     thresholds: { ...DEFAULT_THRESHOLDS, ...(doc.thresholds ?? {}) },
     forbidden: doc.forbidden ?? [],
@@ -88,16 +96,20 @@ function ringProblems(model) {
   return problems;
 }
 
+export function documentProblems(doc) {
+  const problems = modelProblems(doc);
+  if (problems.length > 0) return problems;
+  return ringProblems(normalize(doc));
+}
+
 export function loadModel(root, flags = {}) {
-  const file = resolve(recordDir(root, flags), MODEL_FILE);
+  const file = modelFile(root, flags);
   if (!existsSync(file)) return null;
   const doc = readDocument(file);
-  const problems = modelProblems(doc);
-  const model = problems.length === 0 ? normalize(doc) : null;
-  const allProblems = model ? ringProblems(model) : problems;
-  if (allProblems.length > 0) {
-    const listed = allProblems.join("\n- ");
+  const problems = documentProblems(doc);
+  if (problems.length > 0) {
+    const listed = problems.join("\n- ");
     throw new ModelError(`${file} is invalid:\n- ${listed}\nFix these entries and run the command again.`);
   }
-  return model;
+  return normalize(doc);
 }

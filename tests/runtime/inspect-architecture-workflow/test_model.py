@@ -182,8 +182,31 @@ def test_port_owner_must_be_a_component(tmp_path: Path):
 
 def test_group_members_must_be_components(tmp_path: Path):
     root = payroll(tmp_path)
-    write_model(root, lambda m: m.update({"groups": [{"name": "core", "members": ["domain", "ghost"]}]}))
+    write_model(root, lambda m: m.update({"groups": [{"name": "core", "members": ["domain", "ghost"], "absorbs": "rule changes"}]}))
     assert "groups[0].members" in load_error(root)["message"]
+
+
+def test_group_needs_absorbs_and_it_is_normalized(tmp_path: Path):
+    root = payroll(tmp_path)
+    write_model(root, lambda m: m.update({"groups": [{"name": "core", "members": ["domain"]}]}))
+    assert "groups[0].absorbs: is required" in load_error(root)["message"]
+    write_model(root, lambda m: m.update({"groups": [{"name": "core", "members": ["domain"], "absorbs": "rules"}]}))
+    groups = node_json("await out((await loadModel(process.cwd(), {})).groups);", root)
+    assert groups == [{"name": "core", "members": ["domain"], "absorbs": "rules"}]
+
+
+def test_threshold_values_are_checked_for_type_and_range(tmp_path: Path):
+    root = payroll(tmp_path)
+    for knob, value in [("interfaceUseShare", 1.5), ("painMaxInstability", -0.1), ("escalationFanIn", 0),
+                        ("planFixRounds", 1.5), ("distanceDeviations", 0), ("historyWindow", "")]:
+        write_model(root, lambda m: m.update({"thresholds": {knob: value}}))
+        assert f"thresholds.{knob}" in load_error(root)["message"], knob
+
+
+def test_edge_endpoint_ring_must_exist(tmp_path: Path):
+    root = payroll(tmp_path)
+    write_model(root, lambda m: m.update({"forbidden": [{"from": "domain", "to": "ring:nowhere", "reason": "x"}]}))
+    assert "ring:nowhere" in load_error(root)["message"]
 
 
 def test_overlapping_component_paths_are_refused(tmp_path: Path):

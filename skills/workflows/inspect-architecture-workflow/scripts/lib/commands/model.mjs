@@ -1,213 +1,175 @@
-import { parseFlags, savedInputs } from "../args.mjs";
-import { listTracked } from "../git.mjs";
-import { loadOrBuildGraph } from "../graph.mjs";
-import { HARD_PROBLEM, loadModel, validateModel, writeModelFile } from "../model.mjs";
+import { existsSync } from "node:fs";
+import { ModelError, UsageError } from "../cli/errors.mjs";
+import { parseArgs } from "../cli/flags.mjs";
+import { EDITS } from "../model/edits.mjs";
+import { explainPath, renderExplanation, renderThresholds, thresholdRows } from "../model/explain.mjs";
+import { RECORD_MODES, STARTS, initModel } from "../model/init.mjs";
+import { loadModel, modelFile, readDocument, recordDir } from "../model/load.mjs";
+import { migrateOldModel } from "../model/migrate.mjs";
+import { writeDocument } from "../model/write.mjs";
 
-const USAGE = "usage: arch model <validate|add-override|remove-override|add-port|remove-port|add-component|remove-component|add-rule|remove-rule|add-group|remove-group>";
-const EDIT_USAGE = {
-  "add-override": "usage: arch model add-override <path> ring=<r> kind=<k> [actors=a,b] [reason=<text>]",
-  "add-component": "usage: arch model add-component <id> <name> paths=<glob,...> [enforcement=<text>] [release=<text>] [entry=<glob,...>]",
-  "add-rule": "usage: arch model add-rule match=<glob> ring=<r> kind=<k> [actors=a,b] [before=<glob>]",
-  "add-group": "usage: arch model add-group <name> components=<C,...> absorbs=<text>",
-};
+const MAX_POSITIONAL = 12;
+const KEY_VALUE = /^([a-z]+)=([\s\S]*)$/;
+const INIT_FLAGS = ["start", "adapter", "record-mode"];
+const INIT_USAGE =
+  'arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]';
+const GLOBAL_FLAGS = ["json", "record"];
 
-const LIST_KEYS = new Set(["actors", "paths", "entry", "components"]);
-
-function splitArgs(args) {
-  const kv = {};
-  const plain = [];
-  for (const arg of args) {
-    const eq = arg.indexOf("=");
-    if (eq < 0) { plain.push(arg); continue; }
-    const key = arg.slice(0, eq);
-    const raw = arg.slice(eq + 1);
-    kv[key] = LIST_KEYS.has(key) ? raw.split(",").filter((s) => s.length > 0) : raw;
-  }
-  return { kv, plain };
+function missingModel(root, flags) {
+  return new ModelError(
+    `no architecture model found at ${modelFile(root, flags)}. ` +
+      'Create one with arch model init --start <greenfield|legacy> --adapter "<command>", ' +
+      "or convert the old files with arch model migrate.",
+  );
 }
 
-function upsert(array, matches, entry) {
-  const index = array.findIndex(matches);
-  if (index >= 0) array[index] = entry; else array.push(entry);
+function requireModel(root, flags) {
+  const model = loadModel(root, flags);
+  if (model) return model;
+  throw missingModel(root, flags);
 }
 
-function refuseOrWrite(model, name, data, existingPaths) {
-  const problems = validateModel(model, existingPaths);
-  const hard = problems.filter((p) => HARD_PROBLEM.test(p));
-  if (hard.length) {
-    for (const problem of problems) console.error(problem);
-    return 1;
-  }
-  return writeModelFile(model, name, data).then(() => 0);
+function requireDocument(root, flags) {
+  if (existsSync(modelFile(root, flags))) return readDocument(modelFile(root, flags));
+  throw missingModel(root, flags);
 }
 
-async function validate(flags, ctx) {
-  let graph;
-  try {
-    graph = await loadOrBuildGraph(ctx.root, { ...savedInputs(flags), force: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.startsWith("model is invalid")) console.error(message);
-    return 1;
-  }
-  for (const warning of graph.warnings) console.error(warning);
-  const problems = validateModel(await loadModel(ctx.root), new Set(graph.units.map((u) => u.path)));
-  if (problems.length) return 1;
-  console.log("model: ok");
+function print(flags, data, text) {
+  console.log(flags.json ? JSON.stringify(data, null, 2) : text);
+}
+
+function validate({ root, flags }) {
+  requireModel(root, flags);
+  print(flags, { ok: true }, "model: ok");
   return 0;
 }
 
-function addOverride(model, plain, kv) {
-  const [targetPath] = plain;
-  const entry = { path: targetPath, ring: kv.ring, kind: kv.kind, actors: kv.actors ?? [] };
-  if (kv.reason !== undefined) entry.reason = kv.reason;
-  upsert(model.overrides.overrides, (o) => o.path === targetPath, entry);
-  return refuseOrWrite(model, "overrides", model.overrides);
+function explain({ root, flags, positional: [path] }) {
+  const result = explainPath(requireModel(root, flags), path.replace(/^\.\//, ""));
+  print(flags, result, renderExplanation(result));
+  return 0;
 }
 
-function removeOverride(model, plain) {
-  const [targetPath] = plain;
-  const index = model.overrides.overrides.findIndex((o) => o.path === targetPath);
-  if (index < 0) { console.error(`no override for ${targetPath}`); return 1; }
-  model.overrides.overrides.splice(index, 1);
-  return refuseOrWrite(model, "overrides", model.overrides);
+function explainThresholds({ root, flags }) {
+  const rows = thresholdRows(loadModel(root, flags));
+  print(flags, rows, renderThresholds(rows));
+  return 0;
 }
 
-function nextPortId(ports) {
-  const max = ports.reduce((n, port) => {
-    const match = /^B(\d+)$/.exec(port.id);
-    return match ? Math.max(n, Number(match[1])) : n;
-  }, 0);
-  return `B${max + 1}`;
+function requireChoice(flags, name, choices) {
+  const value = flags[name];
+  if (choices.includes(value)) return value;
+  throw new UsageError(`--${name} must be one of ${choices.join(", ")}. Pass it as --${name} <value>.`);
 }
 
-function addPort(model, plain, kv) {
-  const [targetPath, symbol] = plain;
-  const ports = model.boundaries.ports;
-  const matches = (port) => port.path === targetPath && port.symbol === symbol;
-  const existing = ports.find(matches);
-  const entry = { id: existing?.id ?? nextPortId(ports), path: targetPath, symbol, owner: kv.owner };
-  if (kv.humble !== undefined) entry.humbleSide = kv.humble;
-  upsert(ports, matches, entry);
-  return refuseOrWrite(model, "boundaries", model.boundaries);
+async function init({ root, flags }) {
+  const start = requireChoice(flags, "start", STARTS);
+  if (!flags.adapter) {
+    throw new UsageError('init needs --adapter "<command>", the command that prints the adapter document.');
+  }
+  const modeFlags = { "record-mode": flags["record-mode"] ?? RECORD_MODES[0] };
+  const recordMode = requireChoice(modeFlags, "record-mode", RECORD_MODES);
+  const file = modelFile(root, flags);
+  await initModel({ root, directory: recordDir(root, flags), file, start, adapter: flags.adapter, recordMode });
+  console.log(`wrote ${file}. Check it with arch model validate.`);
+  return 0;
 }
 
-function removePort(model, plain) {
-  const [targetPath, symbol] = plain;
-  const ports = model.boundaries.ports;
-  const index = ports.findIndex((port) => port.path === targetPath && port.symbol === symbol);
-  if (index < 0) { console.error(`no port for ${targetPath}:${symbol}`); return 1; }
-  ports.splice(index, 1);
-  return refuseOrWrite(model, "boundaries", model.boundaries);
+function migrate({ root, flags }) {
+  const file = modelFile(root, flags);
+  const notes = migrateOldModel({ root, flags, file });
+  console.log(`wrote ${file}. The old files under the record path were left in place.`);
+  notes.forEach((note) => console.log(note));
+  console.log(
+    "The adapter is empty. Copy an adapter template for your language from the skill's adapter-templates " +
+      'directory into the project, then run arch model set-adapter "<command>".',
+  );
+  return 0;
 }
 
-async function trackedPaths(root) {
-  try { return new Set(await listTracked(root)); }
-  catch { return undefined; }
-}
-
-async function addComponent(model, plain, kv, root) {
-  const [id, name] = plain;
-  const entry = {
-    id,
-    name,
-    paths: kv.paths ?? [],
-    enforcement: kv.enforcement ?? "none",
-    releaseUnit: kv.release ?? "",
-    entryPoints: kv.entry ?? [],
+function applyEdit(edit) {
+  return ({ root, flags, positional, keys }) => {
+    const file = modelFile(root, flags);
+    const document = requireDocument(root, flags);
+    edit.apply(document, positional, keys);
+    writeDocument(file, document);
+    console.log(`updated ${file}`);
+    return 0;
   };
-  model.components.components.push(entry);
-  return refuseOrWrite(model, "components", model.components, await trackedPaths(root));
 }
 
-function addRule(model, kv) {
-  const entry = { match: kv.match, ring: kv.ring, kind: kv.kind, actors: kv.actors ?? [] };
-  const rules = model.rules.rules;
-  let insertAt = rules.length;
-  if (kv.before !== undefined) {
-    const index = rules.findIndex((rule) => rule.match === kv.before);
-    if (index >= 0) insertAt = index;
+function command(usage, positional, run, extra = {}) {
+  return { usage, positional, required: [], optional: [], flags: [], run, ...extra };
+}
+
+function directCommands() {
+  return {
+    init: command(INIT_USAGE, 0, init, { flags: INIT_FLAGS }),
+    validate: command("arch model validate", 0, validate),
+    explain: command("arch model explain <path>", 1, explain),
+    "explain-thresholds": command("arch model explain-thresholds", 0, explainThresholds),
+    migrate: command("arch model migrate", 0, migrate),
+  };
+}
+
+function editCommands() {
+  return Object.fromEntries(
+    Object.entries(EDITS).map(([name, edit]) => [name, { ...edit, flags: [], run: applyEdit(edit) }]),
+  );
+}
+
+const SUBCOMMANDS = { ...directCommands(), ...editCommands() };
+
+function chooseSubcommand(name) {
+  if (Object.hasOwn(SUBCOMMANDS, name)) return SUBCOMMANDS[name];
+  const known = Object.keys(SUBCOMMANDS).join(", ");
+  throw new UsageError(`unknown model subcommand: ${name ?? "(none)"}. Known subcommands: ${known}.`);
+}
+
+function rejectForeignFlags(subcommand, flags) {
+  const allowed = [...GLOBAL_FLAGS, ...subcommand.flags];
+  const foreign = Object.keys(flags).filter((name) => !allowed.includes(name));
+  if (foreign.length > 0) {
+    throw new UsageError(`--${foreign[0]} does not apply to this subcommand. usage: ${subcommand.usage}`);
   }
-  rules.splice(insertAt, 0, entry);
-  return refuseOrWrite(model, "rules", model.rules);
 }
 
-function removeRule(model, kv) {
-  const rules = model.rules.rules;
-  const index = rules.findIndex((rule) => rule.match === kv.match);
-  if (index < 0) { console.error(`no rule matching ${kv.match}`); return 1; }
-  rules.splice(index, 1);
-  return refuseOrWrite(model, "rules", model.rules);
+function splitKeyValues(subcommand, args) {
+  const positional = [];
+  const keys = {};
+  const allowed = [...subcommand.required, ...subcommand.optional];
+  for (const arg of args) {
+    const match = KEY_VALUE.exec(arg);
+    if (!match) {
+      positional.push(arg);
+    } else if (allowed.includes(match[1])) {
+      keys[match[1]] = match[2];
+    } else {
+      throw new UsageError(`unknown argument "${match[1]}=". usage: ${subcommand.usage}`);
+    }
+  }
+  return { positional, keys };
 }
 
-function componentReferences(model, id) {
-  const references = [];
-  for (const port of model.boundaries.ports) if (port.owner === id) references.push(`port ${port.path}:${port.symbol}`);
-  for (const shape of model.boundaries.shapes) if (shape.owner === id || (shape.components ?? []).includes(id)) references.push(`shape ${shape.name}`);
-  return references;
+function checkArguments(subcommand, { positional, keys }) {
+  const missing = subcommand.required.filter((name) => !keys[name]);
+  if (positional.length !== subcommand.positional || missing.length > 0) {
+    const detail = missing.length > 0 ? ` Missing: ${missing.map((name) => `${name}=`).join(", ")}.` : "";
+    throw new UsageError(`wrong arguments.${detail} usage: ${subcommand.usage}`);
+  }
 }
 
-function removeComponent(model, plain) {
-  const [id] = plain;
-  const components = model.components.components;
-  const index = components.findIndex((c) => c.id === id);
-  if (index < 0) { console.error(`no component ${id}`); return 1; }
-  const references = componentReferences(model, id);
-  if (references.length) { console.error(`component ${id} is referenced by ${references.join(", ")}`); return 1; }
-  components.splice(index, 1);
-  return refuseOrWrite(model, "components", model.components);
-}
-
-function addGroup(model, plain, kv) {
-  const [name] = plain;
-  const groups = model.boundaries.groups ?? (model.boundaries.groups = []);
-  const entry = { name, components: kv.components ?? [], absorbs: kv.absorbs ?? "" };
-  upsert(groups, (g) => g.name === name, entry);
-  return refuseOrWrite(model, "boundaries", model.boundaries);
-}
-
-function removeGroup(model, plain) {
-  const [name] = plain;
-  const groups = model.boundaries.groups ?? [];
-  const index = groups.findIndex((g) => g.name === name);
-  if (index < 0) { console.error(`no group ${name}`); return 1; }
-  groups.splice(index, 1);
-  return refuseOrWrite(model, "boundaries", model.boundaries);
-}
-
-const EDITS = {
-  "add-override": addOverride,
-  "remove-override": removeOverride,
-  "add-port": addPort,
-  "remove-port": removePort,
-  "add-component": addComponent,
-  "remove-component": removeComponent,
-  "add-rule": (model, plain, kv) => addRule(model, kv),
-  "remove-rule": (model, plain, kv) => removeRule(model, kv),
-  "add-group": addGroup,
-  "remove-group": removeGroup,
+const SPEC = {
+  flags: { start: "value", adapter: "value", "record-mode": "value" },
+  positional: { min: 0, max: MAX_POSITIONAL },
 };
 
-const REQUIRED = {
-  "add-override": ({ plain }) => plain.length >= 1,
-  "add-component": ({ plain, kv }) => plain.length >= 2 && kv.paths !== undefined && kv.paths.length > 0,
-  "add-rule": ({ kv }) => Boolean(kv.match),
-  "add-group": ({ plain, kv }) => plain.length >= 1 && kv.components !== undefined && kv.components.length > 0 && Boolean(kv.absorbs),
-};
-
-export async function run(args, ctx) {
-  const { positional, flags } = parseFlags(args);
-  const [sub, ...rest] = positional;
-  if (!sub) { console.error(USAGE); return 1; }
-  if (sub === "validate") return validate(flags, ctx);
-
-  const edit = EDITS[sub];
-  if (!edit) {
-    console.error(`unknown model subcommand: ${sub}; known: validate, ${Object.keys(EDITS).join(", ")}`);
-    return 1;
-  }
-  const { kv, plain } = splitArgs(rest);
-  if (REQUIRED[sub] && !REQUIRED[sub]({ plain, kv })) { console.error(EDIT_USAGE[sub]); return 1; }
-  const model = await loadModel(ctx.root);
-  return edit(model, plain, kv, ctx.root);
+export async function run(args, { root }) {
+  const { positional: all, flags } = parseArgs(SPEC, args);
+  const [name, ...rest] = all;
+  const subcommand = chooseSubcommand(name);
+  rejectForeignFlags(subcommand, flags);
+  const parsed = splitKeyValues(subcommand, rest);
+  checkArguments(subcommand, parsed);
+  return subcommand.run({ root, flags, ...parsed });
 }
