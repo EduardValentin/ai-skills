@@ -29,8 +29,15 @@ COMMAND_MD = SKILL_DIR / "references" / "command.md"
 START_MARKER = "<!-- adapters -->"
 END_MARKER = "<!-- /adapters -->"
 
+TEMPLATES_DIR = SKILL_DIR / "assets" / "adapter-templates"
+GENERIC_SCRIPT_FOLDERS = ("adapter", "model", "cli")
+
 GENERIC_SCRIPTS = [
     SKILL_DIR / "scripts" / "lib" / name for name in ("graph.mjs", "queries.mjs", "assess.mjs", "ledger.mjs")
+] + [
+    script
+    for folder in GENERIC_SCRIPT_FOLDERS
+    for script in sorted((SKILL_DIR / "scripts" / "lib" / folder).glob("*.mjs"))
 ]
 
 AGENT_FILES = [
@@ -62,7 +69,7 @@ def _allowed_line_numbers(path) -> set[int]:
 
 
 def _md_files() -> list:
-    files = sorted(SKILL_DIR.rglob("*.md"))
+    files = [path for path in sorted(SKILL_DIR.rglob("*.md")) if TEMPLATES_DIR not in path.parents]
     return files + AGENT_FILES
 
 

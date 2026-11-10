@@ -1,16 +1,60 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from support import SKILL_DIR, copy_fixture, run_node
+from support import SKILL_DIR, copy_fixture, install_fake_tooling, node_path, run_node
 
-ADAPTER = SKILL_DIR / "scripts" / "lib" / "adapters" / "typescript.mjs"
+TEMPLATE = SKILL_DIR / "assets" / "adapter-templates" / "typescript" / "adapter.mjs"
+REQUEST = {"version": 1, "frameworks": ["express"], "ports": []}
+
+
+def run_template(root: Path, source_root: Path | str | None = None, request: dict | None = None):
+    env = {**__import__("os").environ, "ARCH_SOURCE_ROOT": str(source_root or root)}
+    return subprocess.run(
+        [node_path(), str(TEMPLATE)], cwd=root, env=env, input=json.dumps(request or REQUEST),
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+
+
+def typescript_resolvable(root: Path) -> bool:
+    probe = ("import {createRequire} from 'node:module';"
+             "try{createRequire(process.cwd()+'/x.js').resolve('typescript');process.stdout.write('yes')}"
+             "catch{process.stdout.write('no')}")
+    return run_node(probe, root).stdout == "yes"
+
+
+def install_cruise_shim(root: Path) -> None:
+    shim = root / "node_modules/.bin/depcruise"
+    shim.parent.mkdir(parents=True, exist_ok=True)
+    shim.write_text("#!/bin/sh\ncat cruise.json\n")
+    shim.chmod(0o755)
+
+
+def write_project(root: Path, files: dict[str, str], cruise: dict) -> None:
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    (root / "cruise.json").write_text(json.dumps(cruise))
+    (root / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"strict": True, "target": "ES2022"}}))
+    install_cruise_shim(root)
+
+
+def cruise_of(*pairs: tuple[str, str | None]) -> dict:
+    sources: dict[str, list[dict]] = {}
+    for source, target in pairs:
+        sources.setdefault(source, [])
+        if target:
+            sources.setdefault(target, [])
+            sources[source].append({"module": target, "resolved": target, "dependencyTypes": ["local", "import"],
+                                    "dynamic": False, "couldNotResolve": False})
+    return {"modules": [{"source": name, "dependencies": deps} for name, deps in sources.items()]}
 
 
 def test_normalize_cruise_classifies_edges(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
-    script = (f"import {{ normalizeCruise }} from '{ADAPTER.as_posix()}';import {{ readFile }} from 'node:fs/promises';"
+    script = (f"import {{ normalizeCruise }} from '{TEMPLATE.as_posix()}';import {{ readFile }} from 'node:fs/promises';"
               "const j = JSON.parse(await readFile('cruise.json','utf8'));const n = normalizeCruise(j, ['express']);"
               "process.stdout.write(JSON.stringify({modules:[...n.modules].sort(), edges:n.edges}));")
     result = run_node(script, root)
@@ -37,7 +81,7 @@ def test_normalize_cruise_treats_npm_dev_and_node_modules_entries_as_external():
             {"source": "node_modules/x/index.js", "dependencies": []},
         ],
     }
-    script = (f"import {{ normalizeCruise }} from '{ADAPTER.as_posix()}';"
+    script = (f"import {{ normalizeCruise }} from '{TEMPLATE.as_posix()}';"
               f"const n = normalizeCruise({json.dumps(cruise)}, []);"
               "process.stdout.write(JSON.stringify({modules:[...n.modules].sort(), edges:n.edges}));")
     result = run_node(script, Path.cwd())
@@ -52,32 +96,66 @@ def test_normalize_cruise_treats_npm_dev_and_node_modules_entries_as_external():
 
 def test_extract_uses_saved_cruise_and_counts_exports(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
-    has_ts = run_node("import {createRequire} from 'node:module';try{createRequire(process.cwd()+'/x.js').resolve('typescript');process.stdout.write('yes')}catch{process.stdout.write('no')}", root).stdout == "yes"
-    if not has_ts:
+    if not typescript_resolvable(root):
         pytest.skip("typescript not resolvable from the fixture")
-    script = (f"import {{ createTypescriptAdapter }} from '{ADAPTER.as_posix()}';"
-              "const a = createTypescriptAdapter({root: process.cwd(), tooling: {language:'typescript', roots:['src']}});"
-              "const r = await a.extract({roots:['src'], dependenciesJsonPath:'cruise.json'});process.stdout.write(JSON.stringify(r));")
-    result = run_node(script, root)
+    install_cruise_shim(root)
+    result = run_template(root)
     assert result.returncode == 0, result.stderr
-    out = json.loads(result.stdout)
-    by_path = {m["path"]: m for m in out["modules"]}
+    document = json.loads(result.stdout)
+    by_path = {m["path"]: m for m in document["modules"]}
     assert by_path["src/domain/clock.ts"]["exports"] == {"abstract": 1, "concrete": 0}
     assert by_path["src/domain/employee.ts"]["exports"] == {"abstract": 0, "concrete": 1}
     assert by_path["src/adapters/system-clock.ts"]["implements"] == ["Clock"]
 
 
+def test_template_prints_a_document_from_the_saved_cruise(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    install_fake_tooling(root)
+    result = run_template(root)
+    assert result.returncode == 0, result.stderr
+    document = json.loads(result.stdout)
+    assert document["version"] == 1
+    assert document["capabilities"]["exports"] is True
+    assert document["capabilities"]["signatures"] is False
+    assert document["capabilities"]["symbolImports"] is False
+    assert "src/domain/payroll-use-case.ts" in {m["path"] for m in document["modules"]}
+    externals = {(e["from"], e["external"]["name"], e["external"]["tag"]) for e in document["edges"] if "external" in e}
+    assert ("src/web/payroll-controller.ts", "express", "framework") in externals
+    assert any("cannot build a TypeScript program" in warning for warning in document["warnings"])
+
+
 def test_missing_typescript_is_a_clear_error(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
-    script = (f"import {{ createTypescriptAdapter }} from '{ADAPTER.as_posix()}';"
-              "const a = createTypescriptAdapter({root: '/nonexistent-root', tooling: {language:'typescript', roots:['src']}});"
-              "try { await a.extract({roots:['src'], dependenciesJsonPath: process.cwd()+'/cruise.json'}); } catch (e) { process.stdout.write(e.message); }")
-    result = run_node(script, root)
-    assert "typescript is not installed in /nonexistent-root" in result.stdout
+    result = run_template(root, source_root="/nonexistent-root")
+    assert result.returncode != 0
+    assert "typescript is not installed in /nonexistent-root" in result.stderr
+
+
+def test_tree_without_packages_sees_the_source_roots_packages_during_the_run(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    install_fake_tooling(source)
+    shim = source / "node_modules/.bin/depcruise"
+    shim.write_text("#!/bin/sh\ntest -d node_modules/typescript && cat cruise.json\n")
+    tree = copy_fixture("payroll", tmp_path / "base-tree")
+    result = run_template(tree, source_root=source)
+    assert result.returncode == 0, result.stderr
+    assert "src/domain/clock.ts" in {m["path"] for m in json.loads(result.stdout)["modules"]}
+    assert not (tree / "node_modules").exists()
+
+
+def test_source_root_falls_back_to_the_current_directory(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    install_fake_tooling(root)
+    import os
+    env = {key: value for key, value in os.environ.items() if key != "ARCH_SOURCE_ROOT"}
+    result = subprocess.run([node_path(), str(TEMPLATE)], cwd=root, env=env, input=json.dumps(REQUEST),
+                            capture_output=True, text=True, timeout=120, check=False)
+    assert result.returncode == 0, result.stderr
 
 
 def _locate(root: Path) -> "subprocess.CompletedProcess[str]":
-    script = (f"import {{ locateCruiserBin }} from '{ADAPTER.as_posix()}';"
+    script = (f"import {{ locateCruiserBin }} from '{TEMPLATE.as_posix()}';"
               f"try {{ process.stdout.write(await locateCruiserBin({json.dumps(str(root))})); }}"
               "catch (e) { process.stderr.write('ERR:' + e.message); }")
     return run_node(script, root)
@@ -113,7 +191,7 @@ def test_locate_cruiser_bin_missing_is_a_clear_error(tmp_path: Path):
 
 
 def _normalize(cruise: dict) -> dict:
-    script = (f"import {{ normalizeCruise }} from '{ADAPTER.as_posix()}';"
+    script = (f"import {{ normalizeCruise }} from '{TEMPLATE.as_posix()}';"
               f"const n = normalizeCruise({json.dumps(cruise)}, []);"
               "process.stdout.write(JSON.stringify({modules:[...n.modules].sort(), edges:n.edges, warnings:n.warnings}));")
     result = run_node(script, Path.cwd())
@@ -150,21 +228,20 @@ def test_dependency_outside_the_root_is_an_external_with_a_warning():
     assert "module outside the root: ../sibling/x.ts" in out["warnings"]
 
 
-def test_cruise_arguments_pass_the_tsconfig_only_with_the_bundled_config(tmp_path: Path):
-    (tmp_path / "tsconfig.json").write_text("{}")
+def test_cruise_arguments_pass_the_tsconfig_only_when_it_exists(tmp_path: Path):
     (tmp_path / "tsconfig.app.json").write_text("{}")
-    script = (f"import {{ cruiseArguments, DEFAULT_CONFIG }} from '{ADAPTER.as_posix()}';"
+    script = (f"import {{ cruiseArguments }} from '{TEMPLATE.as_posix()}';"
               f"const root = {json.dumps(str(tmp_path))};"
-              "const out = [await cruiseArguments(root, {}, DEFAULT_CONFIG, ['src']),"
-              " await cruiseArguments(root, {tsConfig: 'tsconfig.app.json'}, DEFAULT_CONFIG, ['src']),"
-              " await cruiseArguments(root, {}, root + '/.dependency-cruiser.cjs', ['src'])];"
+              "const settings = { roots: ['src'], dependencyCruiserConfig: '/cfg.cjs' };"
+              "const out = [await cruiseArguments(root, { ...settings, tsConfig: 'tsconfig.app.json' }),"
+              " await cruiseArguments(root, { ...settings, tsConfig: 'tsconfig.json' })];"
               "process.stdout.write(JSON.stringify(out));")
     result = run_node(script, tmp_path)
     assert result.returncode == 0, result.stderr
-    bundled, named, own = json.loads(result.stdout)
-    assert bundled[bundled.index("--ts-config") + 1] == str(tmp_path / "tsconfig.json")
+    named, absent = json.loads(result.stdout)
     assert named[named.index("--ts-config") + 1] == str(tmp_path / "tsconfig.app.json")
-    assert "--ts-config" not in own
+    assert named[named.index("--config") + 1] == "/cfg.cjs"
+    assert "--ts-config" not in absent
 
 
 def test_locate_cruiser_bin_skips_a_malformed_package_json(tmp_path: Path):
@@ -191,3 +268,41 @@ def test_package_resolved_outside_the_root_keeps_its_package_name():
     out = _normalize(cruise)
     assert out["edges"] == [{"from": "src/a.ts", "external": {"name": "react", "tag": "vendor"}}]
     assert out["warnings"] == []
+
+
+SOURCE_B = "export class Foo {}\n"
+SOURCE_A = (
+    'import { Foo } from "./b";\n'
+    "export function isFoo(value: unknown): boolean {\n"
+    "  return value instanceof Foo;\n"
+    "}\n"
+)
+
+
+def real_typescript_project(tmp_path: Path) -> Path:
+    root = tmp_path / "ts-project"
+    root.mkdir()
+    if not typescript_resolvable(root):
+        pytest.skip("typescript not resolvable from the project")
+    write_project(root, {"src/a.ts": SOURCE_A, "src/b.ts": SOURCE_B}, cruise_of(("src/a.ts", "src/b.ts")))
+    return root
+
+
+def test_template_reports_symbol_imports(tmp_path: Path):
+    root = real_typescript_project(tmp_path)
+    result = run_template(root)
+    assert result.returncode == 0, result.stderr
+    document = json.loads(result.stdout)
+    assert document["capabilities"]["symbolImports"] is True
+    edge = next(e for e in document["edges"] if e.get("to") == "src/b.ts")
+    assert edge["symbols"] == ["Foo"]
+
+
+def test_template_reports_type_checks(tmp_path: Path):
+    root = real_typescript_project(tmp_path)
+    result = run_template(root)
+    assert result.returncode == 0, result.stderr
+    document = json.loads(result.stdout)
+    assert document["capabilities"]["typeChecks"] is True
+    module = next(m for m in document["modules"] if m["path"] == "src/a.ts")
+    assert module["typeChecks"] == [{"symbol": "Foo", "path": "src/b.ts", "line": 3}]

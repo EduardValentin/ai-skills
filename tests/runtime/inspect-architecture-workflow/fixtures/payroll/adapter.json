@@ -1,0 +1,352 @@
+{
+  "version": 1,
+  "capabilities": {
+    "exports": true,
+    "implements": true,
+    "constructs": true,
+    "signatures": true,
+    "symbolImports": false,
+    "typeChecks": false
+  },
+  "modules": [
+    {
+      "path": "src/adapters/memory-payroll-repository.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "PayrollRepository"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "memoryPayrollRepository",
+          "types": [
+            {
+              "symbol": "Employee",
+              "path": "src/domain/employee.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/pg-payroll-repository.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "PayrollRepository"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "PgPayrollRepository",
+          "types": [
+            {
+              "symbol": "Employee",
+              "path": "src/domain/employee.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/adapters/system-clock.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "Clock"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "SystemClock",
+          "types": []
+        }
+      ]
+    },
+    {
+      "path": "src/domain/clock.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Clock",
+          "types": []
+        }
+      ]
+    },
+    {
+      "path": "src/domain/employee.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Employee",
+          "types": []
+        }
+      ]
+    },
+    {
+      "path": "src/domain/index.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 4
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Employee",
+          "types": []
+        },
+        {
+          "symbol": "Clock",
+          "types": []
+        },
+        {
+          "symbol": "PayrollRepository",
+          "types": [
+            {
+              "symbol": "Employee",
+              "path": "src/domain/employee.ts"
+            }
+          ]
+        },
+        {
+          "symbol": "PayrollUseCase",
+          "types": [
+            {
+              "symbol": "PayrollRepository",
+              "path": "src/domain/payroll-repository.ts"
+            },
+            {
+              "symbol": "Clock",
+              "path": "src/domain/clock.ts"
+            },
+            {
+              "symbol": "Employee",
+              "path": "src/domain/employee.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/domain/payroll-repository.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "PayrollRepository",
+          "types": [
+            {
+              "symbol": "Employee",
+              "path": "src/domain/employee.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/domain/payroll-use-case.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "PayrollUseCase",
+          "types": [
+            {
+              "symbol": "PayrollRepository",
+              "path": "src/domain/payroll-repository.ts"
+            },
+            {
+              "symbol": "Clock",
+              "path": "src/domain/clock.ts"
+            },
+            {
+              "symbol": "Employee",
+              "path": "src/domain/employee.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/web/legacy-router.js",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "legacyRouter",
+          "types": []
+        }
+      ]
+    },
+    {
+      "path": "src/web/main.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": []
+    },
+    {
+      "path": "src/web/payroll-controller.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [
+        {
+          "symbol": "PgPayrollRepository",
+          "path": "src/adapters/pg-payroll-repository.ts"
+        },
+        {
+          "symbol": "SystemClock",
+          "path": "src/adapters/system-clock.ts"
+        },
+        {
+          "symbol": "PayrollUseCase",
+          "path": "src/domain/payroll-use-case.ts"
+        }
+      ],
+      "signatures": [
+        {
+          "symbol": "payrollController",
+          "types": []
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/adapters/memory-payroll-repository.ts",
+      "to": "src/domain/employee.ts",
+      "kind": "type-import"
+    },
+    {
+      "from": "src/adapters/pg-payroll-repository.ts",
+      "to": "src/domain/employee.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/adapters/pg-payroll-repository.ts",
+      "to": "src/domain/payroll-repository.ts",
+      "kind": "type-import"
+    },
+    {
+      "from": "src/adapters/pg-payroll-repository.ts",
+      "external": {
+        "name": "pg",
+        "tag": "vendor"
+      }
+    },
+    {
+      "from": "src/domain/payroll-repository.ts",
+      "to": "src/domain/employee.ts",
+      "kind": "type-import"
+    },
+    {
+      "from": "src/adapters/system-clock.ts",
+      "to": "src/domain/index.ts",
+      "kind": "type-import"
+    },
+    {
+      "from": "src/domain/index.ts",
+      "to": "src/domain/clock.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/domain/index.ts",
+      "to": "src/domain/employee.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/domain/index.ts",
+      "to": "src/domain/payroll-repository.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/domain/index.ts",
+      "to": "src/domain/payroll-use-case.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/domain/payroll-use-case.ts",
+      "to": "src/domain/clock.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/domain/payroll-use-case.ts",
+      "to": "src/domain/employee.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/domain/payroll-use-case.ts",
+      "to": "src/domain/payroll-repository.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/web/legacy-router.js",
+      "to": "src/web/payroll-controller.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/web/payroll-controller.ts",
+      "to": "src/adapters/pg-payroll-repository.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/web/payroll-controller.ts",
+      "to": "src/adapters/system-clock.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/web/payroll-controller.ts",
+      "to": "src/domain/payroll-use-case.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/web/payroll-controller.ts",
+      "external": {
+        "name": "express",
+        "tag": "vendor"
+      }
+    },
+    {
+      "from": "src/web/main.ts",
+      "to": "src/web/payroll-controller.ts",
+      "kind": "import"
+    }
+  ],
+  "warnings": []
+}
