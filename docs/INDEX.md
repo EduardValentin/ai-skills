@@ -10,6 +10,12 @@ Use this page to choose the shortest guide that answers your question.
 | [Architecture](ARCHITECTURE.md) | Contributors and maintainers | Source layout, CLI components, sandbox lifecycle, trust boundaries, and result flow |
 | [Contributing](CONTRIBUTING.md) | Repository contributors | Environment setup, development workflow, required gates, and runtime maintenance |
 
+## Draft proposals
+
+| Proposal | Status | Covers |
+| --- | --- | --- |
+| [Architecture inspection rework](proposals/architecture-inspection-rework.md) | Discussion draft | Collected feedback, proposed maintainability focus, check structure, and open questions |
+
 The public [Agent Skills specification](https://agentskills.io/specification)
 is the portability baseline. Rules described as repository policy are
 additional constraints enforced by this project.
