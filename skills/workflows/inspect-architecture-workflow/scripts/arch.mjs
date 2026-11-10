@@ -2,6 +2,7 @@
 import process from "node:process";
 import { ArchError, UsageError } from "./lib/cli/errors.mjs";
 import { parseArgs } from "./lib/cli/flags.mjs";
+import { run as runCheck } from "./lib/commands/check.mjs";
 import { run as runCollect } from "./lib/commands/collect.mjs";
 import { run as runModel } from "./lib/commands/model.mjs";
 
@@ -26,12 +27,10 @@ const NO_POSITIONAL = { min: 0, max: 0 };
 
 const handlers = {
   collect: runCollect,
-  check: pending("check", { flags: { base: "value", strict: "boolean" }, positional: NO_POSITIONAL }),
+  check: runCheck,
   applicable: pending("applicable", { flags: {}, positional: NO_POSITIONAL }),
   findings: pending("findings", { flags: {}, positional: { min: 0, max: 2 } }),
-  diff: legacy("diff"),
   query: legacy("query"),
-  assess: legacy("assess"),
   uncovered: legacy("uncovered"),
   model: runModel,
   ledger: legacy("ledger"),

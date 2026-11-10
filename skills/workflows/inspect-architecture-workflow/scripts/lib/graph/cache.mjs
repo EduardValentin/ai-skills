@@ -60,7 +60,8 @@ function contentHashes(top, paths) {
     maxBuffer: MAX_BUFFER,
     encoding: "utf8",
   });
-  return present.map((file, index) => `${file}\0${output.split("\n")[index]}`);
+  const hashes = output.split("\n");
+  return present.map((file, index) => `${file}\0${hashes[index]}`);
 }
 
 async function workingTreeState(root, flags) {

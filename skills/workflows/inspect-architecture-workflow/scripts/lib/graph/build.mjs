@@ -6,10 +6,15 @@ export const GRAPH_VERSION = 6;
 export const THROUGH_BARREL = "through-barrel";
 const FACTS = ["exports", "implements", "signatures", "typeChecks"];
 
+function compareCodeUnits(a, b) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
 function byText(...keys) {
   return (a, b) => {
     for (const key of keys) {
-      const order = a[key].localeCompare(b[key]);
+      const order = compareCodeUnits(a[key], b[key]);
       if (order !== 0) return order;
     }
     return 0;
