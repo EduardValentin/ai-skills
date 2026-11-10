@@ -7,8 +7,15 @@ commit it, and own it. The contract it follows is in the adapter-contract refere
 
 | File | Purpose |
 |---|---|
-| `adapter.mjs` | Reads the request on standard input, runs dependency-cruiser and the TypeScript program, prints the document. Standalone: it imports nothing from the skill. |
+| `adapter.mjs` | The entry point and the settings. Reads the request on standard input, assembles the document, prints it. |
+| `dependency-tool.mjs` | Locates and runs dependency-cruiser, and turns its output into modules, edges, and externals. |
+| `link-packages.mjs` | Links the source root's installed packages into a bare checkout for the run, and removes the links. |
+| `compiler.mjs` | Loads the compiler, builds the program, and assembles the per-module facts. |
+| `compiler-facts.mjs` | The compiler-based fact scans: exports, implements, constructs, signatures, symbol imports, type checks. |
+| `files.mjs` | Two small file helpers shared by the others. |
 | `cruise-config.cjs` | The dependency-cruiser configuration the adapter passes by default. |
+
+All files import only each other and Node built-ins. Nothing is imported from the skill.
 
 ## Settings
 
@@ -22,9 +29,12 @@ Edit the `settings` constant at the top of your copy of `adapter.mjs`:
 
 ## Requirements
 
-`typescript` and `dependency-cruiser` installed in the project that `ARCH_SOURCE_ROOT` names. The
+`typescript` 5.x or 6.x and `dependency-cruiser`, installed in the project that `ARCH_SOURCE_ROOT` names. The
 adapter resolves both from `ARCH_SOURCE_ROOT` and falls back to the current directory when the
-variable is unset, so you can also run it by hand:
+variable is unset. TypeScript 7 and later have no JavaScript compiler API; when the adapter finds one
+it exits with status 1 and prints `The TypeScript found in <root> is version <v>, which has no
+JavaScript compiler API. This adapter supports TypeScript 5.x and 6.x. Install a supported version
+in <root>.` You can also run it by hand:
 
 ```
 echo '{"version":1,"frameworks":[],"ports":[]}' | node adapter.mjs

@@ -21,6 +21,10 @@ guarantees:
   command, the status, and the last five lines of standard error. Run the command by hand from the
   project root to see its full output.
 
+- The command has 10 minutes to finish. Set the environment variable `ARCH_ADAPTER_TIMEOUT_SECONDS`
+  to a number of seconds to change the limit. On timeout `arch` stops the command, exits 2, and
+  names the command and the limit.
+
 The adapter reads only the working tree. It never needs the model file, so a base commit never
 needs a model of its own: `arch` applies the current model to the document.
 

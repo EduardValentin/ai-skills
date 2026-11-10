@@ -41,7 +41,8 @@ function documentProblems(document) {
   if (document === null || typeof document !== "object" || Array.isArray(document)) {
     return ["document: expected an object"];
   }
-  return [...validateShape(document, readDocumentSchema()), ...edgeProblems(document.edges)];
+  const shapeProblems = validateShape(document, readDocumentSchema());
+  return shapeProblems.length > 0 ? shapeProblems : edgeProblems(document.edges);
 }
 
 function normalizeCapabilities(declared = {}) {

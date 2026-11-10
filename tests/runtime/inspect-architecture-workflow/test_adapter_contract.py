@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from support import SKILL_DIR, copy_fixture, node_path, run_node
 
 RUN = (SKILL_DIR / "scripts/lib/adapter/run.mjs").as_posix()
@@ -33,9 +35,10 @@ def project(tmp_path: Path, adapter: str) -> Path:
     return root
 
 
-def run_adapter(root: Path):
+def run_adapter(root: Path, timeout_seconds: str | None = None):
+    set_limit = f"process.env.ARCH_ADAPTER_TIMEOUT_SECONDS = '{timeout_seconds}';" if timeout_seconds else ""
     script = (
-        f"import {{ loadModel }} from '{LOAD}';import {{ runAdapter }} from '{RUN}';"
+        f"{set_limit}import {{ loadModel }} from '{LOAD}';import {{ runAdapter }} from '{RUN}';"
         "try {"
         "  const model = loadModel(process.cwd(), {});"
         "  const document = await runAdapter(model, process.cwd(), process.cwd());"
@@ -131,3 +134,41 @@ def test_capability_left_out_is_false(tmp_path: Path):
     assert module["exports"] == {"abstract": 1, "concrete": 2}
     assert module["implements"] == []
     assert "symbols" not in out["edges"][0]
+
+
+MALFORMED_DOCUMENTS = [
+    ({"version": 1, "edges": [None]}, "edges[0]"),
+    ({"version": 1, "edges": "x"}, "edges"),
+    ({"version": 1, "modules": "x"}, "modules"),
+    ({"version": 1, "modules": ["x"]}, "modules[0]"),
+    ({"version": 1, "modules": [None]}, "modules[0]"),
+    ({"version": 1, "edges": [{"from": "a"}]}, "edges[0]"),
+    ([], "document"),
+]
+
+
+@pytest.mark.parametrize(("document", "path"), MALFORMED_DOCUMENTS)
+def test_malformed_document_is_a_tooling_error_naming_the_path(tmp_path: Path, document, path):
+    root = project(tmp_path, "cat out.json")
+    adapter_printing(root, document)
+    result = run_adapter(root)
+    assert result.returncode == 2
+    assert result.stderr.startswith("ToolingError:")
+    assert path in result.stderr
+    assert "TypeError" not in result.stderr
+
+
+def test_adapter_that_runs_too_long_is_stopped_with_the_limit_named(tmp_path: Path):
+    root = project(tmp_path, "sleep 30")
+    result = run_adapter(root, timeout_seconds="1")
+    assert result.returncode == 2
+    assert "sleep 30" in result.stderr
+    assert "1 seconds" in result.stderr
+    assert "ARCH_ADAPTER_TIMEOUT_SECONDS" in result.stderr
+
+
+def test_invalid_timeout_variable_is_a_tooling_error(tmp_path: Path):
+    root = project(tmp_path, "echo {}")
+    result = run_adapter(root, timeout_seconds="soon")
+    assert result.returncode == 2
+    assert "ARCH_ADAPTER_TIMEOUT_SECONDS" in result.stderr

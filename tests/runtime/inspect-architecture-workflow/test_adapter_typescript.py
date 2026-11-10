@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -11,7 +12,7 @@ REQUEST = {"version": 1, "frameworks": ["express"], "ports": []}
 
 
 def run_template(root: Path, source_root: Path | str | None = None, request: dict | None = None):
-    env = {**__import__("os").environ, "ARCH_SOURCE_ROOT": str(source_root or root)}
+    env = {**os.environ, "ARCH_SOURCE_ROOT": str(source_root or root)}
     return subprocess.run(
         [node_path(), str(TEMPLATE)], cwd=root, env=env, input=json.dumps(request or REQUEST),
         capture_output=True, text=True, timeout=120, check=False,
@@ -147,7 +148,6 @@ def test_tree_without_packages_sees_the_source_roots_packages_during_the_run(tmp
 def test_source_root_falls_back_to_the_current_directory(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     install_fake_tooling(root)
-    import os
     env = {key: value for key, value in os.environ.items() if key != "ARCH_SOURCE_ROOT"}
     result = subprocess.run([node_path(), str(TEMPLATE)], cwd=root, env=env, input=json.dumps(REQUEST),
                             capture_output=True, text=True, timeout=120, check=False)
@@ -306,3 +306,49 @@ def test_template_reports_type_checks(tmp_path: Path):
     assert document["capabilities"]["typeChecks"] is True
     module = next(m for m in document["modules"] if m["path"] == "src/a.ts")
     assert module["typeChecks"] == [{"symbol": "Foo", "path": "src/b.ts", "line": 3}]
+
+
+def test_links_are_removed_after_a_failing_run(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    install_fake_tooling(source)
+    (source / "node_modules/.bin/depcruise").write_text("#!/bin/sh\ntest -d node_modules && echo boom-detail >&2; exit 1\n")
+    tree = copy_fixture("payroll", tmp_path / "base-tree")
+    result = run_template(tree, source_root=source)
+    assert result.returncode != 0
+    assert "boom-detail" in result.stderr
+    assert not (tree / "node_modules").exists()
+
+
+def test_unsupported_compiler_version_is_a_clear_error(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    install_fake_tooling(root)
+    (root / "node_modules/typescript/index.js").write_text('module.exports = { version: "7.0.2" };\n')
+    result = run_template(root)
+    assert result.returncode != 0
+    assert "version 7.0.2" in result.stderr
+    assert "5.x and 6.x" in result.stderr
+
+
+OLD_ADAPTER = SKILL_DIR / "scripts" / "lib" / "adapters" / "typescript.mjs"
+
+
+# Removed together with the old adapter in the next task.
+def test_fixture_adapter_json_equals_what_the_old_adapter_produced(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    script = (f"import {{ createTypescriptAdapter }} from '{OLD_ADAPTER.as_posix()}';"
+              "const adapter = createTypescriptAdapter({root: process.cwd(), tooling: {roots: ['src']}});"
+              "const result = await adapter.extract({roots: ['src'], dependenciesJsonPath: 'cruise.json',"
+              " factsJsonPath: 'facts.json', frameworks: []});"
+              "process.stdout.write(JSON.stringify(result));")
+    result = run_node(script, root)
+    assert result.returncode == 0, result.stderr
+    old = json.loads(result.stdout)
+    fixture = json.loads((root / "adapter.json").read_text())
+    assert fixture["modules"] == old["modules"]
+    assert fixture["edges"] == old["edges"]
+    assert fixture["warnings"] == old["warnings"]
+    old_capabilities = {name: True for name in old["capabilities"] if old["capabilities"][name]}
+    assert {name: fixture["capabilities"][name] for name in old_capabilities} == old_capabilities
+    assert fixture["capabilities"]["symbolImports"] is False
+    assert fixture["capabilities"]["typeChecks"] is False
