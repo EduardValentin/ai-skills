@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { ModelError } from "../cli/errors.mjs";
 import { DEFAULT_RINGS, DEFAULT_THRESHOLDS } from "./defaults.mjs";
-import { documentProblems } from "./load.mjs";
+import { adapterHint, documentProblems } from "./load.mjs";
 
 const COMPONENT_FIELDS = ["name", "paths", "entry", "published", "enforcement", "release"];
 const COMPONENT_DEFAULTS = { entry: [], published: [], enforcement: "none", release: "" };
@@ -136,7 +136,8 @@ export function writeDocument(file, doc) {
   const problems = documentProblems(doc);
   if (problems.length > 0) {
     const listed = problems.join("\n- ");
-    throw new ModelError(`edit refused, ${file} left unchanged:\n- ${listed}\nCorrect the arguments and run again.`);
+    const advice = `Correct the arguments and run again.${adapterHint(problems)}`;
+    throw new ModelError(`edit refused, ${file} left unchanged:\n- ${listed}\n${advice}`);
   }
   writeCanonical(file, doc);
 }

@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { ModelError, ToolingError } from "../cli/errors.mjs";
 import { git } from "../git.mjs";
@@ -35,9 +35,10 @@ async function excludeLocally(root, directory) {
   const out = await git(root, ["rev-parse", "--show-toplevel", "--git-path", "info/exclude"]);
   const [top, excludePath] = out.trim().split("\n");
   const exclude = resolve(root, excludePath);
-  const entry = `/${relative(top, directory).split("\\").join("/")}/`;
+  const entry = `/${relative(realpathSync(top), realpathSync(directory)).split("\\").join("/")}/`;
   mkdirSync(dirname(exclude), { recursive: true });
-  appendFileSync(exclude, `${entry}\n`);
+  const present = existsSync(exclude) ? readFileSync(exclude, "utf8").split("\n") : [];
+  if (!present.includes(entry)) appendFileSync(exclude, `${entry}\n`);
 }
 
 async function excludeOrExplain(root, directory) {
@@ -53,6 +54,6 @@ export async function initModel({ root, directory, file, ...choices }) {
     throw new ModelError(`${file} already exists. Edit it with arch model subcommands instead of running init again.`);
   }
   mkdirSync(directory, { recursive: true });
-  if (choices.recordMode === "local") await excludeOrExplain(root, directory);
   writeDocument(file, initialDocument(choices));
+  if (choices.recordMode === "local") await excludeOrExplain(root, directory);
 }

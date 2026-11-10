@@ -118,6 +118,14 @@ function setRule(doc, [key, status], { reason }) {
   doc.rules[key] = [status, reason];
 }
 
+function unsetRule(doc, [key]) {
+  if (!doc.rules || !Object.hasOwn(doc.rules, key)) {
+    throw new UsageError(`rule ${key} has no entry in the model, so it already has its default status.`);
+  }
+  delete doc.rules[key];
+  dropEmptySection(doc, "rules");
+}
+
 function knobList() {
   return Object.keys(DEFAULT_THRESHOLDS).join(", ");
 }
@@ -130,7 +138,7 @@ function requireKnob(knob) {
 function parseThresholdValue(knob, text) {
   if (typeof DEFAULT_THRESHOLDS[knob] === "string") return text;
   const value = Number(text);
-  if (text.trim() === "" || Number.isNaN(value)) {
+  if (text.trim() === "" || !Number.isFinite(value)) {
     throw new UsageError(`threshold "${knob}" needs a number, got "${text}". Pass a number.`);
   }
   return value;
@@ -169,8 +177,24 @@ function addException(doc, [from, to], keys) {
   upsert(section(doc, "exceptions"), matches, entry);
 }
 
-function removeException(doc, [from, to]) {
-  removeOrRefuse(doc, "exceptions", sameEnds(from, to), `exception ${from} -> ${to}`);
+function describeException(exception) {
+  return `${exception.from} -> ${exception.to}${exception.rule ? ` rule=${exception.rule}` : " (no rule)"}`;
+}
+
+function selectException(doc, from, to, rule) {
+  const matching = (doc.exceptions ?? []).filter(sameEnds(from, to));
+  if (matching.length === 0) throw new UsageError(`there is no exception ${from} -> ${to}. Nothing was changed.`);
+  if (rule !== undefined) return (exception) => sameEnds(from, to)(exception) && exception.rule === rule;
+  if (matching.length > 1 && matching.every((exception) => exception.rule)) {
+    const listed = matching.map(describeException).join("; ");
+    throw new UsageError(`several exceptions match: ${listed}. Choose one with rule=<R>.`);
+  }
+  return (exception) => sameEnds(from, to)(exception) && !exception.rule;
+}
+
+function removeException(doc, [from, to], { rule }) {
+  const matches = selectException(doc, from, to, rule);
+  removeOrRefuse(doc, "exceptions", matches, `exception ${from} -> ${to}${rule ? ` rule=${rule}` : ""}`);
 }
 
 function setAdapter(doc, [command]) {
@@ -226,6 +250,12 @@ export const EDITS = {
     { required: ["reason"], optional: ["rule"] },
     addException,
   ),
-  "remove-exception": edit("arch model remove-exception <from> <to>", 2, {}, removeException),
+  "remove-exception": edit(
+    "arch model remove-exception <from> <to> [rule=<R>]",
+    2,
+    { optional: ["rule"] },
+    removeException,
+  ),
+  "unset-rule": edit("arch model unset-rule <R>[@<component>]", 1, {}, unsetRule),
   "set-adapter": edit("arch model set-adapter <command>", 1, {}, setAdapter),
 };

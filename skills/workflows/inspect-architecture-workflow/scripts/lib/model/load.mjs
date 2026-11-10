@@ -96,6 +96,13 @@ function ringProblems(model) {
   return problems;
 }
 
+const ADAPTER_HINT = 'Run arch model set-adapter "<command>" to give the model its adapter command.';
+
+export function adapterHint(problems) {
+  const onlyAdapter = problems.length === 1 && problems[0].startsWith("adapter:");
+  return onlyAdapter ? `\n${ADAPTER_HINT}` : "";
+}
+
 export function documentProblems(doc) {
   const problems = modelProblems(doc);
   if (problems.length > 0) return problems;
@@ -109,7 +116,8 @@ export function loadModel(root, flags = {}) {
   const problems = documentProblems(doc);
   if (problems.length > 0) {
     const listed = problems.join("\n- ");
-    throw new ModelError(`${file} is invalid:\n- ${listed}\nFix these entries and run the command again.`);
+    const advice = `Fix these entries and run the command again.${adapterHint(problems)}`;
+    throw new ModelError(`${file} is invalid:\n- ${listed}\n${advice}`);
   }
   return normalize(doc);
 }

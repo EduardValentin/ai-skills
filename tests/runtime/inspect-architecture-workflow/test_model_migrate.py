@@ -86,3 +86,31 @@ def test_migrate_refuses_a_rule_that_falls_under_no_component(tmp_path: Path):
     result = migrate(root)
     assert result.returncode == 2 and "scripts/**" in result.stderr
     assert not (root / RECORD / "architecture.json").exists()
+
+
+def test_migrate_maps_component_ids_inside_shapes(tmp_path: Path):
+    root, _ = payroll_with_old_model(tmp_path)
+    boundaries = root / RECORD / "model/boundaries.json"
+    data = json.loads(boundaries.read_text())
+    data["shapes"] = [{"name": "payroll-flow", "owner": "C1", "components": ["C1", "C3"]}]
+    boundaries.write_text(json.dumps(data))
+    assert migrate(root).returncode == 0
+    shapes = json.loads((root / RECORD / "architecture.json").read_text())["shapes"]
+    assert shapes == [{"name": "payroll-flow", "owner": "domain", "components": ["domain", "web"]}]
+
+
+def test_migrate_gives_a_rule_to_the_component_with_the_longest_matching_prefix(tmp_path: Path):
+    root, _ = payroll_with_old_model(tmp_path)
+    components = root / RECORD / "model/components.json"
+    data = json.loads(components.read_text())
+    data["components"].append({"id": "C4", "name": "reports", "paths": ["src/domain/reports/*.ts"],
+                               "enforcement": "none", "releaseUnit": "", "entryPoints": []})
+    components.write_text(json.dumps(data))
+    rules = root / RECORD / "model/rules.json"
+    old = json.loads(rules.read_text())
+    old["rules"].insert(0, {"match": "src/domain/reports/*.ts", "ring": "use-cases", "kind": "use-case", "actors": []})
+    rules.write_text(json.dumps(old))
+    assert migrate(root).returncode == 0
+    names = {c["name"]: c for c in json.loads((root / RECORD / "architecture.json").read_text())["components"]}
+    assert names["reports"]["classify"] == [["*.ts", "use-case"]]
+    assert ["reports/*.ts", "use-case"] not in names["domain"]["classify"]

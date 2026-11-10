@@ -35,10 +35,19 @@ function relativeTo(component, path) {
   return prefix === undefined ? null : path.slice(prefix.length);
 }
 
+function prefixLength(component, path) {
+  const matching = component.paths.map(literalDirectory).filter((directory) => path.startsWith(directory));
+  return Math.max(-1, ...matching.map((directory) => directory.length));
+}
+
 function owner(components, path) {
-  for (const component of components) {
-    const relative = relativeTo(component, path);
-    if (relative !== null) return { component, relative };
+  const ranked = components
+    .map((component) => ({ component, length: prefixLength(component, path) }))
+    .filter((candidate) => candidate.length >= 0)
+    .sort((a, b) => b.length - a.length);
+  if (ranked.length > 0) {
+    const { component } = ranked[0];
+    return { component, relative: path.slice(ranked[0].length) };
   }
   throw new ModelError(
     `the old model has "${path}", which falls under no component. ` +
@@ -100,7 +109,21 @@ function namesById(old) {
 
 function convertPorts(old) {
   const names = namesById(old);
-  return old.boundaries.ports.map((port) => ({ at: `${port.path}#${port.symbol}`, owner: names.get(port.owner) }));
+  return old.boundaries.ports.map((port) => ({
+    at: `${port.path}#${port.symbol}`,
+    owner: names.get(port.owner),
+    ...(port.humbleSide && { humble: port.humbleSide }),
+  }));
+}
+
+function convertShapes(old) {
+  const names = namesById(old);
+  return (old.boundaries.shapes ?? []).map((shape) => {
+    const converted = { ...shape };
+    if (shape.owner !== undefined) converted.owner = names.get(shape.owner) ?? shape.owner;
+    if (shape.components !== undefined) converted.components = shape.components.map((id) => names.get(id) ?? id);
+    return converted;
+  });
 }
 
 function convertGroups(old) {
@@ -121,16 +144,9 @@ function convertOldModel(old) {
     frameworks: old.rules.frameworks ?? [],
     components: convertComponents(old),
     ports: convertPorts(old),
-    shapes: old.boundaries.shapes ?? [],
+    shapes: convertShapes(old),
     groups: convertGroups(old),
   };
-}
-
-function humbleSideNotes(old) {
-  return old.boundaries.ports
-    .filter((port) => port.humbleSide)
-    .map((port) => `port ${port.path}#${port.symbol} had humble side "${port.humbleSide}"; ` +
-      "it is not carried over. Set it with arch model add-port <path>#<Symbol> owner=<component> humble=<ring>.");
 }
 
 export function migrateOldModel({ root, flags, file }) {
@@ -144,5 +160,4 @@ export function migrateOldModel({ root, flags, file }) {
     throw new ModelError(`the old model converts to an invalid model:\n- ${problems.join("\n- ")}\nFix the old files.`);
   }
   writeCanonical(file, document);
-  return humbleSideNotes(old);
 }

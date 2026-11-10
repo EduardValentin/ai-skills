@@ -77,9 +77,8 @@ async function init({ root, flags }) {
 
 function migrate({ root, flags }) {
   const file = modelFile(root, flags);
-  const notes = migrateOldModel({ root, flags, file });
+  migrateOldModel({ root, flags, file });
   console.log(`wrote ${file}. The old files under the record path were left in place.`);
-  notes.forEach((note) => console.log(note));
   console.log(
     "The adapter is empty. Copy an adapter template for your language from the skill's adapter-templates " +
       'directory into the project, then run arch model set-adapter "<command>".',

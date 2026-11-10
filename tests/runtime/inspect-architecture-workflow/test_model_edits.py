@@ -271,3 +271,70 @@ def test_record_environment_variable_selects_the_record_directory(tmp_path: Path
     assert run_arch(["model", "set-adapter", "other"], root, env).returncode == 0
     assert json.loads((root / "alt/architecture.json").read_text())["adapter"] == "other"
     assert run_arch(["model", "validate", "--record", "alt"], root).returncode == 0
+
+
+def test_set_threshold_rejects_non_finite_numbers(tmp_path: Path):
+    root = payroll(tmp_path)
+    before = model_file(root).read_bytes()
+    for value in ["Infinity", "-Infinity", "NaN"]:
+        assert edit(root, "set-threshold", "distanceDeviations", value).returncode == 2, value
+    assert model_file(root).read_bytes() == before
+
+
+def test_init_rerun_and_repeat_leave_one_exclude_entry(tmp_path: Path):
+    git(["init", "-q", "-b", "main"], tmp_path)
+    args = ["init", "--start", "greenfield", "--adapter", "a", "--record-mode", "local"]
+    assert edit(tmp_path, *args).returncode == 0
+    exclude = tmp_path / ".git/info/exclude"
+    first = exclude.read_text()
+    assert edit(tmp_path, *args).returncode == 2
+    assert exclude.read_text() == first
+    model_file(tmp_path).unlink()
+    assert edit(tmp_path, *args).returncode == 0
+    assert exclude.read_text() == first
+    assert first.splitlines().count("/docs/architecture/") == 1
+
+
+def test_init_local_exclude_entry_is_relative_to_the_repository_through_a_symlink(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(["init", "-q", "-b", "main"], repo)
+    link = tmp_path / "link"
+    link.symlink_to(repo)
+    result = run_arch(["model", "init", "--start", "greenfield", "--adapter", "a", "--record-mode", "local"], link)
+    assert result.returncode == 0, result.stderr
+    assert "/docs/architecture/" in (repo / ".git/info/exclude").read_text().splitlines()
+
+
+def test_remove_exception_selects_by_rule(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-exception", "web", "adapters", "rule=R5", "reason=a").returncode == 0
+    assert edit(root, "add-exception", "web", "adapters", "rule=R7", "reason=b").returncode == 0
+    refused = edit(root, "remove-exception", "web", "adapters")
+    assert refused.returncode == 2 and "R5" in refused.stderr and "R7" in refused.stderr
+    assert edit(root, "remove-exception", "web", "adapters", "rule=R5").returncode == 0
+    assert [e["rule"] for e in document(root)["exceptions"]] == ["R7"]
+    assert edit(root, "add-exception", "web", "adapters", "reason=any rule").returncode == 0
+    assert edit(root, "remove-exception", "web", "adapters").returncode == 0
+    assert [e["rule"] for e in document(root)["exceptions"]] == ["R7"]
+
+
+def test_empty_adapter_refusal_says_to_run_set_adapter(tmp_path: Path):
+    root = payroll(tmp_path)
+    doc = document(root)
+    doc["adapter"] = ""
+    model_file(root).write_text(json.dumps(doc))
+    for args in (["validate"], ["set-threshold", "escalationFanIn", "4"]):
+        result = edit(root, *args)
+        assert result.returncode == 2 and 'arch model set-adapter "<command>"' in result.stderr, args
+    assert edit(root, "set-adapter", "cat adapter.json").returncode == 0
+
+
+def test_unset_rule_removes_the_entry(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "set-rule", "R6@domain", "off", "reason=x").returncode == 0
+    assert edit(root, "unset-rule", "R6@domain").returncode == 0
+    assert list(document(root)["rules"]) == ["R6"]
+    assert edit(root, "unset-rule", "R6").returncode == 0
+    assert "rules" not in document(root)
+    assert edit(root, "unset-rule", "R6").returncode == 2

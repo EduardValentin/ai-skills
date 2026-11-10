@@ -15,7 +15,7 @@
         ["**", "controller"] ] }
   ],
   "ports": [
-    { "at": "src/domain/payroll-repository.ts#PayrollRepository", "owner": "domain" },
+    { "at": "src/domain/payroll-repository.ts#PayrollRepository", "owner": "domain", "humble": "adapters" },
     { "at": "src/domain/clock.ts#Clock", "owner": "domain" }
   ],
   "rules": { "R6": ["off", "one delivery mechanism; controllers call use cases directly"] }

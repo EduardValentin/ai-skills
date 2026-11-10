@@ -31,6 +31,7 @@ function checkString(value, schema, path) {
 
 function checkNumber(value, schema, path) {
   if (typeof value !== "number") return [];
+  if (!Number.isFinite(value)) return [`${path}: must be a finite number`];
   const problems = [];
   const { minimum, maximum } = schema;
   if (minimum !== undefined && value < minimum) problems.push(`${path}: must be at least ${minimum}`);
