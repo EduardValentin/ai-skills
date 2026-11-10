@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "adapter": "./adapter",
+  "record": "committed",
+  "components": [
+    { "name": "domain", "paths": ["src/domain/**"], "classify": [["**", "entity"]] }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "adapter": "cat adapter.json",
+  "record": "committed",
+  "components": [
+    { "name": "domain", "paths": ["src/domain/**"], "classify": [
+        ["**/*-use-case.ts", "use-case"],
+        ["**/*-repository.ts", "port"],
+        ["clock.ts", "port"],
+        ["index.ts", "barrel", { "ring": "entities" }],
+        ["**", "entity"] ] },
+    { "name": "adapters", "paths": ["src/adapters/**"], "classify": [["**", "adapter"]] },
+    { "name": "web", "paths": ["src/web/**"], "entry": ["main.ts"], "classify": [
+        ["main.ts", "composition-root"],
+        ["**", "controller"] ] }
+  ],
+  "ports": [
+    { "at": "src/domain/payroll-repository.ts#PayrollRepository", "owner": "domain" },
+    { "at": "src/domain/clock.ts#Clock", "owner": "domain" }
+  ],
+  "rules": { "R6": ["off", "one delivery mechanism; controllers call use cases directly"] }
+}
