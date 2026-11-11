@@ -74,6 +74,10 @@ function edgeEndProblem(section, entry, end) {
   );
 }
 
+function unitOfEnd(end) {
+  return end.split("#")[0];
+}
+
 function edgeEndProblems(model, paths) {
   const entries = [
     ...model.forbidden.map((entry) => ({ section: "forbidden", entry })),
@@ -82,7 +86,7 @@ function edgeEndProblems(model, paths) {
   return entries.flatMap(({ section, entry }) =>
     [entry.from, entry.to]
       .filter((end) => end !== ANY_DESTINATION)
-      .filter((end) => isPathEnd(model, end) && !paths.some((path) => compileGlob(end).test(path)))
+      .filter((end) => isPathEnd(model, end) && !paths.some((path) => compileGlob(unitOfEnd(end)).test(path)))
       .map((end) => edgeEndProblem(section, entry, end)),
   );
 }

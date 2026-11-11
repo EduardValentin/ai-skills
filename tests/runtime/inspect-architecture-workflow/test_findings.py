@@ -1,4 +1,6 @@
 import json
+
+import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -782,3 +784,40 @@ def test_dropped_count_includes_the_check_rows_covered_by_exceptions(tmp_path):
     result = audit(root, tmp_path)
     assert result.returncode == 0, result.stderr
     assert "Dropped: 1 (1 covered by an exception)" in result.stdout
+
+
+def judged_port_finding() -> dict:
+    return finding("consumer-uses-few-interface-members", "src/domain/clock.ts#Clock",
+                   evidence=["src/domain/clock.ts:1"])
+
+
+@pytest.mark.parametrize(
+    "ends",
+    [
+        ("src/domain/clock.ts#Clock", "*"),
+        ("src/domain/clock.ts", "*"),
+        ("domain", "*"),
+    ],
+)
+def test_every_exception_end_form_covers_a_judged_port_finding(tmp_path, ends):
+    root = workspace(tmp_path)
+    touch(root, "src/domain/clock.ts")
+    first = change_review(root, tmp_path, judged_port_finding())
+    assert "Verdict: SHOULD_CHANGE" in first.stdout, first.stdout + first.stderr
+    assert run_arch(["model", "add-exception", *ends, "reason=accepted"], root).returncode == 0
+    rerun = change_review(root, tmp_path, judged_port_finding())
+    assert "Verdict: OK" in rerun.stdout, rerun.stdout
+
+
+def test_port_exception_does_not_cover_a_sibling_port_or_the_unit(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    assert run_arch(["model", "add-exception", "src/domain/employee.ts#Other", "*", "reason=x"], root).returncode == 0
+    assert "Verdict: SHOULD_CHANGE" in change_review(root, tmp_path, finding()).stdout
+
+
+def test_ring_exception_covers_a_judged_unit_finding(tmp_path):
+    root = workspace(tmp_path)
+    blocked_change_review(root, tmp_path)
+    assert run_arch(["model", "add-exception", "ring:entities", "*", "reason=accepted"], root).returncode == 0
+    assert "Verdict: OK" in change_review(root, tmp_path, finding()).stdout

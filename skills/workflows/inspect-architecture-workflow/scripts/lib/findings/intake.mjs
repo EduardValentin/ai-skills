@@ -3,7 +3,7 @@ import { UsageError } from "../cli/errors.mjs";
 import { createContext, rowComponents } from "../checks/context.mjs";
 import { escalateRow, highestSeverity } from "../checks/escalate.mjs";
 import { JUDGMENTS } from "../checks/registry.mjs";
-import { isJudgedTargetCovered } from "../checks/exceptions.mjs";
+import { isCoveredByException } from "../checks/exceptions.mjs";
 import { statusForRow } from "../checks/status.mjs";
 import { DEFAULT_KINDS } from "../model/defaults.mjs";
 import { validateShape } from "../model/validate-shape.mjs";
@@ -244,7 +244,7 @@ const DROP_REASONS = { off: "rule off", covered: "covered by an exception" };
 
 function dropReason(judgment, row, context) {
   if (statusForRow(context.model, judgment.rules, rowComponents(row, context)) === "off") return DROP_REASONS.off;
-  if (isJudgedTargetCovered(row, judgment.rules, context)) return DROP_REASONS.covered;
+  if (isCoveredByException({ ...row, rules: judgment.rules }, context)) return DROP_REASONS.covered;
   return null;
 }
 
