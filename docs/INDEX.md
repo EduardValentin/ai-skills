@@ -14,7 +14,7 @@ Use this page to choose the shortest guide that answers your question.
 
 | Proposal | Status | Covers |
 | --- | --- | --- |
-| [Architecture inspection rework](proposals/architecture-inspection-rework.md) | Discussion draft | Collected feedback, proposed maintainability focus, check structure, and open questions |
+| [Architecture inspection rework](proposals/architecture-inspection-rework.md) | Superseded by the implemented rework; kept as the record of the discussion | Collected feedback, proposed maintainability focus, check structure, and open questions |
 
 The public [Agent Skills specification](https://agentskills.io/specification)
 is the portability baseline. Rules described as repository policy are

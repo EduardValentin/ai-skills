@@ -14,6 +14,7 @@ arch applicable --base <ref> --full
 arch applicable --files <a,b>
 arch applicable --proposal .architecture/work/proposal.json --full
 arch applicable --all
+arch applicable --all --out .architecture/work/applicable.json
 ```
 
 ## Flags
@@ -25,6 +26,7 @@ arch applicable --all
 | `--proposal` | a proposal, a working file | The scope is a plan: the proposal's modules and edges, the components and component edges they add, and the plan itself, so the judgments whose target is `plan` are in scope. The file has the shape `arch check` reads with `--proposal`. |
 | `--all` | none | The scope is every unit and component, as in an audit. A review is needed whenever any judgment condition is in scope. |
 | `--full` | none | With `--base`, `--files`, or `--proposal`: list every judgment condition in scope even when the scope is contained in one component. `--all` already lists them all. |
+| `--out` | a working file | Write the JSON output to this file and print one line with its counts instead. `arch findings add` reads the file with `--applicable`. |
 | `--json` | none | Print the JSON output instead of the report. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
@@ -49,15 +51,18 @@ reviewer; the output then counts the judgment conditions it left out, and `--ful
 The report prints "Review needed: yes" or "no", the reasons, each rule group with judgment
 conditions in scope and its rules, the uncovered files, and the count of conditions not reviewed.
 
-The JSON output has `model`; `review`, true or false; `reasons`; `groups`, the rule-group names,
+The JSON output has `model`; `mode`, the scope flag given (`base`, `files`, `proposal`, or `all`);
+`review`, true or false; `reasons`; `groups`, the rule-group names,
 each the name of a rule-group file; `judgments`, the judgments in scope per group, each with its
 `id`, its `targets`, and its one-sentence `condition` with the project's knob values filled in,
 so a caller can hand a reviewer the conditions as they are; with `--all`, the cross-cutting
 judgments are listed once under `cross-cutting`; `uncovered`,
-the paths in scope no pattern covers; and `notReviewed`, the count of judgment conditions a
-contained scope left out. Without a model it is
+the paths in scope no pattern covers; `inScope`, the count of judgment conditions in scope, listed
+or left out; and `notReviewed`, the count of judgment conditions a contained scope left out. Without a model it is
 `{"model":false,"review":false,"reasons":["no architecture model; run a baseline audit to enable the full review"]}`
-and the report is that line alone.
+and the report is that line alone. With `--out`, the command prints
+`wrote <file>: review <yes|no>, <n> judgment conditions in scope, <m> not reviewed`, or
+`wrote <file>: no model`.
 
 ## Example
 
@@ -94,4 +99,4 @@ Judgment conditions not reviewed for a contained change: 27. Pass --full to revi
 ```
 
 With `--all`, the known-defects fixture prints "Review needed: yes" with the reason "audit: every
-unit and component is in scope and 59 judgment conditions apply" and all nine rule groups.
+unit and component is in scope and 60 judgment conditions apply" and all nine rule groups.

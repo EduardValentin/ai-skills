@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import copy_fixture, git, init_repo, run_arch
+from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
 MODEL = "docs/architecture/architecture.json"
 CURRENT = "docs/architecture/current.md"
@@ -239,3 +239,29 @@ def test_validate_reports_the_model_result_then_the_tooling_error(tmp_path: Path
     result = validate(root)
     assert result.returncode == 2
     assert "model file: ok" in result.stdout and "adapter command" in result.stderr
+
+
+CACHE_MODULE = (SKILL_DIR / "scripts" / "lib" / "graph" / "cache.mjs").as_uri()
+
+
+def state(root: Path) -> str:
+    result = run_node(f"import {{ sourceState }} from {json.dumps(CACHE_MODULE)};"
+                      "console.log(await sourceState(process.cwd(), null));", root)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def test_the_working_tree_state_changes_when_a_tracked_file_is_deleted_or_renamed(tmp_path: Path):
+    root = repo(tmp_path)
+    clean = state(root)
+    assert state(root) == clean
+    (root / "src/domain/clock.ts").unlink()
+    deleted = state(root)
+    assert deleted != clean
+    git(["checkout", "--", "src/domain/clock.ts"], root)
+    assert state(root) == clean
+    git(["mv", "src/domain/clock.ts", "src/domain/time-source.ts"], root)
+    renamed = state(root)
+    assert renamed not in (clean, deleted)
+    git(["mv", "src/domain/time-source.ts", "src/domain/other-clock.ts"], root)
+    assert state(root) not in (clean, deleted, renamed)

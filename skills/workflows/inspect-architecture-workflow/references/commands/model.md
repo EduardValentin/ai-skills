@@ -23,7 +23,7 @@ Create and check the model:
 - `arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]`: write a new model holding the adapter command and the starting point's default rule statuses, with no components yet; `add-component` adds the first. `local` also adds the record path to the repository's local exclude file. Refuses to overwrite a model.
 - `arch model migrate`: convert the four model files of the earlier format into `architecture.json`, leaving them in place. The adapter is left empty; set it with `set-adapter`.
 - `arch model status`: say whether a model file exists, without reading the code or running the adapter. A flow runs it first to learn whether there is a model.
-- `arch model validate`: check the model file against the schema, then the model against the code. It fails on a model with no components, a classification pattern or a port that matches no module, a module two components claim, and a forbidden edge or exception whose end is not exact: a component, a ring, an external the adapter reports, `*` as a destination, or the path of a module with or without `#<Symbol>`. A glob end is refused.
+- `arch model validate`: check the model file against the schema, then the model against the code. It fails on a model with no components, a classification pattern that matches no module in a component that has modules, a port that matches no module, a module two components claim, and a forbidden edge or exception whose end is not exact: a component, a ring, an external the adapter reports, `*` as a destination, or the path of a module with or without `#<Symbol>`. A glob end is refused. A pattern of a component that has no modules yet, as in a greenfield project, is only a warning.
 - `arch model explain <path>`: print the path's component, kind, ring, actors, and the classification pair that matched.
 - `arch model explain-thresholds`: print every knob with its default, the project's value, and its meaning.
 
@@ -48,7 +48,7 @@ Rule statuses, thresholds, and accepted findings:
 - `arch model add-forbidden-edge <from> <to> reason=<text>`: record a dependency that must not exist, so a check reports it. Each end is matched exactly, as for an exception: a component name, `ring:<ring>`, or a unit path.
 - `arch model remove-forbidden-edge <from> <to>`
 - `arch model add-exception <from> <to> [rule=<R>] reason=<text>`: accept a finding by recording an intended dependency, for one target or generalized to a component or ring pair. Ends are matched exactly, never as globs: a unit path, `<path>#<Symbol>` (a port), a component name, or `ring:<name>`; `to` may also be `external:<name>`, or the literal `*` to accept a finding about one target instead of an edge. With `*`, `from` names that target: a unit path covers the unit and its ports, a `<path>#<Symbol>` covers only that port, a component name covers the component, and `ring:<name>` covers every unit of the ring. A `*` exception never covers a dependency cycle. Without `rule=` it covers every rule. With `rule=`, it removes only that rule from a finding that breaks several, which stays with the rules left. `arch findings add` drops a judged finding once no rule is left, and `arch check` counts such a row in `covered`.
-- `arch model remove-exception <from> <to> [rule=<R>]`
+- `arch model remove-exception <from> <to> [rule=<R>]`: an exception recorded with `rule=` is removed only with the same `rule=`; without it, the command names the form to run.
 - `arch model add-upcoming <text>`: remember an upcoming change the user confirmed, so every later review counts it as a named upcoming change, as `--upcoming` does for one run of `arch findings add`. Refused when the same text is already recorded.
 - `arch model remove-upcoming <text>`: forget a recorded upcoming change once it has shipped or been dropped.
 - `arch model set-adapter <command>`: set the command that prints the adapter document.
@@ -77,7 +77,8 @@ A flag given to a subcommand it does not apply to is a usage error.
 An edit prints `updated <model file>`; `init` and `migrate` print `wrote <model file>` and the next
 step. `status` prints `model: present at <model file>` or `model: absent; run a baseline audit`;
 with `--json`, an object with `model`, true or false, and `path`, the model file. `validate` prints `model: ok` only when
-the model file and the code both pass. A model that does not fit the code exits 2 with
+the model file and the code both pass, after one `warning:` line per pattern of a component that has
+no modules yet; with `--json`, `{"ok": true, "warnings": [...]}`. A model that does not fit the code exits 2 with
 `model does not fit the code:` and one line per problem on standard error. When the adapter cannot
 run, `validate` prints `model file: ok` and then exits 2 with the tooling error. A refused edit prints
 `edit refused, <model file> left unchanged:` and each schema problem. With `--json`, `explain`
@@ -112,7 +113,7 @@ $ arch model add-upcoming "a second delivery mechanism"
 the upcoming change "a second delivery mechanism" is already recorded. Nothing was changed.
 $ arch model validate
 model does not fit the code:
-- exceptions src/web/gone.ts -> *: "src/web/gone.ts" is not a component, a ring, or the exact path of a module. Ends are matched exactly, never as globs. Run arch model remove-exception src/web/gone.ts *, then add it again with a component name, ring:<ring>, or the exact path of a module.
+- exceptions src/web/gone.ts -> *: "src/web/gone.ts" is not a component, a ring, or the exact path of a module. Ends are matched exactly, never as globs. Run arch model remove-exception src/web/gone.ts '*', then add it again with a component name, ring:<ring>, or the exact path of a module.
 Fix these entries and run arch model validate again.
 ```
 

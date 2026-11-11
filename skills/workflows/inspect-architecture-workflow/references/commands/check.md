@@ -86,8 +86,8 @@ From the payroll fixture, whose model sets R6 off:
 $ arch check
 | Rule | Target | Severity | Status | Origin | Evidence | Corrections |
 |---|---|---|---|---|---|---|
+| R7 Lower-level components are plugins | src/web/payroll-controller.ts -> src/adapters/pg-payroll-repository.ts | blocker | enforced | none | concrete detail constructed outside a composition root: src/web/payroll-controller.ts (adapters, controller) constructs src/adapters/pg-payroll-repository.ts (adapters, adapter) | Move the construction of src/adapters/pg-payroll-repository.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `PayrollRepository` in `src/domain/payroll-repository.ts` |
 | R7 Lower-level components are plugins | src/web/payroll-controller.ts -> src/adapters/system-clock.ts | blocker | enforced | none | concrete detail constructed outside a composition root: src/web/payroll-controller.ts (adapters, controller) constructs src/adapters/system-clock.ts (adapters, adapter) | Move the construction of src/adapters/system-clock.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `Clock` in `src/domain/clock.ts` |
-| R38 Enforce boundaries with the build | domain | major | enforced | none | domain has enforcement "none", which the build does not check, and adapters, web depend on it | If something already stops code outside domain from importing its internals, record that mechanism in the enforcement field of domain; otherwise add the cheapest enforcement the project has, such as a visibility rule, an export list, or an import rule that fails the build, and record it there; make it a separate build unit only when none of those is available |
 
 ## Incomplete
 
@@ -105,5 +105,4 @@ $ arch check
 - R6 Use cases own their boundaries: off (one delivery mechanism; controllers call use cases directly)
 ```
 
-Two of the four rows are left out here for length; the command exits 1 because findings of
-enforced rules are blockers and majors.
+The command exits 1 because findings of enforced rules are blockers.

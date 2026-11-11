@@ -8,6 +8,7 @@ import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
 import { checkBinding } from "../findings/binding.mjs";
 import { requireWorkPlacement } from "../findings/placement.mjs";
+import { judgmentConditions, readApplicable } from "../findings/applicable.mjs";
 import { judgedFindings, judgedQuestions, readJudged } from "../findings/intake.mjs";
 import { checkFinding, mergeFindings, replaceStored, scopeTag } from "../findings/merge.mjs";
 import { overlappingFindings } from "../findings/overlaps.mjs";
@@ -16,11 +17,12 @@ import { readStore, storeOf, writeStore } from "../findings/store.mjs";
 import { withEnforcement } from "../findings/verdict.mjs";
 
 const FLOWS = ["audit", "change-review", "plan-review"];
+const WORK_FILE_FLAGS = ["check", "proposal", "applicable"];
 const SUBCOMMANDS = ["add", "list"];
 export const ADD_SPEC = {
   flags: {
     flow: "value", check: "value", judged: "list", base: "git-ref", plan: "value", proposal: "value",
-    upcoming: "list",
+    upcoming: "list", applicable: "value",
   },
   positional: { min: 0, max: 0 },
 };
@@ -50,7 +52,7 @@ function checkAddFlags(flags, root) {
     throw new UsageError(`--flow ${flags.flow} is not a flow. Use one of: ${FLOWS.join(", ")}.`);
   }
   requireAll(flags, ADD_REQUIRED[flags.flow]);
-  for (const name of ["check", "proposal"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
+  for (const name of WORK_FILE_FLAGS) if (flags[name]) requireWorkPlacement(root, flags[name], name);
   for (const file of flags.judged ?? []) requireWorkPlacement(root, file, "judged");
 }
 
@@ -87,7 +89,7 @@ function confirmedUpcoming(model, flags) {
   return [...new Set([...model.upcoming, ...(flags.upcoming ?? [])])];
 }
 
-function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, tag }) {
+function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, tag, applicable }) {
   return {
     flow: flags.flow,
     scope: subject.scopeLabel,
@@ -96,6 +98,7 @@ function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, t
     incomplete: withEnforcement(model, check.incomplete),
     skipped: check.skipped,
     notRun: check.notRun,
+    judgmentConditions: judgmentConditions(applicable, flags.judged),
     upcoming,
     questions: judged.questions,
     disputes: judged.disputes,
@@ -118,6 +121,7 @@ async function add(args, { root }) {
     print(noModelData(flags.flow), flags);
     return 0;
   }
+  const applicable = flags.applicable ? readApplicable(flags.applicable, flags.flow) : null;
   const model = loadModel(root, flags);
   if (!model) {
     throw new ModelError(`${flags.check} was made with a model, but none is found now. Run from the same project.`);
@@ -140,7 +144,7 @@ async function add(args, { root }) {
     tag,
     scope: subject.scope,
   });
-  const run = { flags, subject, check, model, judged, findings: merged, upcoming, tag };
+  const run = { flags, subject, check, model, judged, findings: merged, upcoming, tag, applicable };
   const store = storeOf(stored, lastRunOf(run));
   await writeStore(root, store);
   print(contractData(store), flags);

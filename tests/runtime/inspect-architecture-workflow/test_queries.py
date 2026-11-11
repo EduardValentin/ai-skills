@@ -376,7 +376,6 @@ def test_unknown_query_and_unknown_flag_are_usage_errors(tmp_path: Path):
     assert unknown.returncode == 2 and "metrics" in unknown.stderr
     flag = run_arch(["query", "metrics", "--bse", "main"], root)
     assert flag.returncode == 2 and "--bse" in flag.stderr
-    assert run_arch(["query"], root).returncode == 2
 
 
 def test_a_query_refuses_a_flag_it_does_not_take_and_lists_the_ones_it_takes(tmp_path: Path):
@@ -388,3 +387,11 @@ def test_a_query_refuses_a_flag_it_does_not_take_and_lists_the_ones_it_takes(tmp
     for accepted in ("--component", "--kind", "--ring"):
         assert accepted in result.stderr
     assert run_arch(["query", "units", "--kind", "port"], root).returncode == 0
+
+
+def test_query_without_a_name_lists_every_query(tmp_path: Path):
+    result = run_arch(["query"], payroll(tmp_path))
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    for name in ["metrics", "components", "touched --base <ref> [--with-neighbors]", "units [--component <value>]"]:
+        assert any(line.startswith(f"- {name}") for line in lines), (name, result.stdout)

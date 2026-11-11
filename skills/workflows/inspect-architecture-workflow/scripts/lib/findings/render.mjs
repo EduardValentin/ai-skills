@@ -64,7 +64,9 @@ export function contractData(store) {
     scope: lastRun.scope,
     ...summary,
     incompleteReasons: incompleteReasons(lastRun.incomplete),
+    incomplete: lastRun.incomplete,
     notRun: lastRun.notRun,
+    judgmentConditions: lastRun.judgmentConditions ?? null,
     notEnforced: lastRun.skipped.map(notEnforcedEntry),
     corrections: groupCorrections(groups.blocking),
     questions: lastRun.questions,
@@ -87,6 +89,12 @@ function countsLine(counts) {
 function notEnforcedLine(entry) {
   const place = entry.component ? ` in ${entry.component}` : "";
   return `${entry.rule}${place} (${entry.status}: ${entry.reason})`;
+}
+
+function incompleteLine(entry) {
+  const rules = entry.rules.length > 0 ? ` (${rulesText(entry.rules)})` : "";
+  const target = entry.target ?? entry.task ?? "all targets";
+  return `- ${entry.check}${rules}: ${target}: ${entry.reason}`;
 }
 
 function notRunLine(entry) {
@@ -140,6 +148,11 @@ function droppedLine(data) {
   return `Dropped: ${total}${parts.length > 0 ? ` (${parts.join(", ")})` : ""}`;
 }
 
+function judgmentConditionsLine(counts) {
+  if (!counts) return "Judgment conditions: not reported";
+  return `Judgment conditions: ${counts.inScope} in scope, ${counts.notReviewed} not reviewed`;
+}
+
 function listOrNone(items) {
   return items.length > 0 ? items.join(", ") : "none";
 }
@@ -159,7 +172,9 @@ export function renderContract(data) {
     `Verdict: ${data.verdict}: ${countsLine(data.blocking)} blocking`,
     `Inherited: ${countsLine(data.inherited)} (not blocking)`,
     `Incomplete: ${data.incompleteCount} conditions${reasons}`,
+    ...data.incomplete.map(incompleteLine),
     `Not run: ${listOrNone(data.notRun.map(notRunLine))}`,
+    judgmentConditionsLine(data.judgmentConditions),
     `Advisory: ${plural(data.advisory, "finding")}`,
     droppedLine(data),
     `Rules not enforced: ${listOrNone(data.notEnforced.map(notEnforcedLine))}`,

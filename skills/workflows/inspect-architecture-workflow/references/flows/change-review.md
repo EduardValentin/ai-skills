@@ -1,9 +1,8 @@
 # Change review
 
 The procedure for reviewing a diff against a base commit: the command decides every condition it
-can, at most one reviewer judges the rest, and the command stores the findings and prints the
-result. Follow it step by step when the skill is invoked with `change-review` or a calling workflow
-names this flow.
+can, at most one reviewer judges the rest, and the command stores and prints the findings. Follow
+it step by step when the skill is invoked with `change-review` or a calling workflow names this flow.
 
 Inputs: the base ref the diff is compared with, written `<ref>` below, and the upcoming changes the
 ticket or plan states. Run every command from the project root. The skill folder holds `SKILL.md`,
@@ -17,7 +16,7 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
 1. Run `arch model status --json`; its `path` is the model path.
 2. If `model` is `false`, return `Verdict: OK` with the line
    "no architecture model; run a baseline audit to enable the full review", and stop with `OK`.
-3. Run `arch applicable --base <ref> --json`.
+3. Run `arch applicable --base <ref> --out .architecture/work/applicable.json` and read that file.
 4. If `uncovered` lists modules, dispatch `architecture-classifier` with them,
    `references/classification.md`, and `references/rules/vocabulary.md`. It returns `arch model`
    commands with a reason each, and open questions. Run the commands, then step 3 again, once: a
@@ -57,7 +56,7 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
    `judged.json`, in which each answered question became a finding, a `liftedBy` on a finding, or
    nothing, and unanswered ones remain. Never edit a judged file by hand. If the user wants an
    answer remembered, run `arch model add-upcoming "<text>"`.
-10. Run `arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`,
+10. Run `arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`,
     with `--upcoming` once for every upcoming change the packet stated and every confirmed answer.
     It prints the result and its verdict.
     - If it refuses judged findings, it names the file and the finding: send the problems to the
@@ -72,10 +71,11 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
       `advisory` in place of `off`;
     - a number: `arch model set-threshold <knob> <value>`, with a knob `arch model explain-thresholds` lists.
 
-    Then run steps 5 and 10 again. An exception or `off` covering every rule of a finding moves it
-    to `Dropped:`, `advisory` to `Advisory:`; covering some rules leaves it with the rest. After a
-    threshold, a finding from `check` no longer appears on the rerun, and a judged finding whose
-    condition names that knob is judged again by the same reviewer, in a fresh `judged.json`, beforehand.
+    Then run `arch model validate`, and steps 5 and 10 again. An exception or `off` covering every
+    rule of a finding moves it to `Dropped:`, `advisory` to `Advisory:`; covering some rules leaves
+    it with the rest. After a threshold, a finding from `check` no longer appears on the rerun, and a
+    judged finding whose condition names that knob is judged again by the same reviewer, in a fresh
+    `judged.json`, beforehand.
 12. After a fix to the code or to the classification, run steps 3 and 5 again. If `groups` is now
     empty, run step 10 without `--judged`. Otherwise the same reviewer judges again against the new
     `judgments`, writes a fresh `judged.json`, and steps 9 and 10 follow. Never pass judged

@@ -1,4 +1,5 @@
 import { compileGlob, matchesAny } from "../glob.mjs";
+import { shellWord } from "../text.mjs";
 import { relativeToComponent } from "./classify.mjs";
 import { ANY_DESTINATION } from "./defaults.mjs";
 
@@ -8,19 +9,29 @@ function modulePaths(graph) {
   return graph.units.map((unit) => unit.path);
 }
 
-function unmatchedPairProblems(model, paths) {
+function unmatchedPairs(model, paths) {
   return model.components.flatMap((component) => {
     const relatives = paths
       .filter((path) => matchesAny(path, component.paths))
       .map((path) => relativeToComponent(component, path));
     return component.classify
       .filter((pair) => !relatives.some((relative) => compileGlob(pair.pattern).test(relative)))
-      .map(
-        (pair) =>
-          `component "${component.name}": classification pattern "${pair.pattern}" matches no module. ` +
-          `Remove it with arch model unclassify ${component.name} "${pair.pattern}" or correct the pattern.`,
-      );
+      .map((pair) => ({ component: component.name, pattern: pair.pattern, empty: relatives.length === 0 }));
   });
+}
+
+function unmatchedPairProblem({ component, pattern }) {
+  return (
+    `component "${component}": classification pattern "${pattern}" matches no module. ` +
+    `Remove it with arch model unclassify ${component} "${pattern}" or correct the pattern.`
+  );
+}
+
+function unmatchedPairWarning({ component, pattern }) {
+  return (
+    `component "${component}": classification pattern "${pattern}" matches no module yet. ` +
+    `${component} has no modules, so the pattern is kept; it becomes an error once ${component} has modules.`
+  );
 }
 
 function missingPortProblems(model, paths) {
@@ -60,7 +71,7 @@ function unknownExternalProblems(model, graph) {
     .map(
       (entry) =>
         `exceptions ${entry.from} -> ${entry.to}: the adapter reports no such external. ` +
-        `Run arch model remove-exception ${entry.from} ${entry.to}, or correct the name.`,
+        `Run arch model remove-exception ${shellWord(entry.from)} ${shellWord(entry.to)}, or correct the name.`,
     );
 }
 
@@ -70,7 +81,7 @@ function edgeEndProblem(section, entry, end) {
   return (
     `${section} ${entry.from} -> ${entry.to}: "${end}" is not a component, a ring, or the exact path of a module. ` +
     "Ends are matched exactly, never as globs. " +
-    `Run arch model ${REMOVAL_COMMAND[section]} ${entry.from} ${entry.to}, ` +
+    `Run arch model ${REMOVAL_COMMAND[section]} ${shellWord(entry.from)} ${shellWord(entry.to)}, ` +
     "then add it again with a component name, ring:<ring>, or the exact path of a module."
   );
 }
@@ -95,11 +106,15 @@ function edgeEndProblems(model, paths) {
 
 export function graphProblems(model, graph) {
   const paths = modulePaths(graph);
-  return [
-    ...unmatchedPairProblems(model, paths),
-    ...missingPortProblems(model, paths),
-    ...overlapProblems(model, paths),
-    ...edgeEndProblems(model, paths),
-    ...unknownExternalProblems(model, graph),
-  ];
+  const unmatched = unmatchedPairs(model, paths);
+  return {
+    problems: [
+      ...unmatched.filter((pair) => !pair.empty).map(unmatchedPairProblem),
+      ...missingPortProblems(model, paths),
+      ...overlapProblems(model, paths),
+      ...edgeEndProblems(model, paths),
+      ...unknownExternalProblems(model, graph),
+    ],
+    warnings: unmatched.filter((pair) => pair.empty).map(unmatchedPairWarning),
+  };
 }

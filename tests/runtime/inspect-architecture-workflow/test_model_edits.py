@@ -545,3 +545,37 @@ def test_a_model_built_only_by_init_and_edits_reaches_a_clean_strict_check(tmp_p
     assert result.returncode == 0, result.stdout + result.stderr
     out = json.loads(result.stdout)
     assert out["rows"] == [] and out["incomplete"] == []
+
+
+def test_a_pattern_of_a_component_without_modules_is_a_warning_until_it_has_modules(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-component", "reports", "paths=src/reports/**").returncode == 0
+    assert edit(root, "classify", "reports", "**/*-report.*", "presenter").returncode == 0
+    warned = edit(root, "validate")
+    assert warned.returncode == 0, warned.stderr
+    assert "model: ok" in warned.stdout
+    assert 'warning: component "reports": classification pattern "**/*-report.*" matches no module' in warned.stdout
+    assert json.loads(edit(root, "validate", "--json").stdout)["warnings"]
+    (root / "src/reports").mkdir()
+    (root / "src/reports/summary.ts").write_text("export const summary = 1;\n")
+    adapter = json.loads((root / "adapter.json").read_text())
+    adapter["modules"].append({"path": "src/reports/summary.ts", "exports": {"abstract": 0, "concrete": 1}})
+    (root / "adapter.json").write_text(json.dumps(adapter))
+    failed = edit(root, "validate")
+    assert failed.returncode == 2 and "model: ok" not in failed.stdout
+    assert 'classification pattern "**/*-report.*" matches no module' in failed.stderr
+
+
+def test_remove_exception_names_the_rule_form_when_only_a_rule_exception_exists(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-exception", "web", "adapters", "rule=R7", "reason=a").returncode == 0
+    refused = edit(root, "remove-exception", "web", "adapters")
+    assert refused.returncode == 2
+    assert "rule=R7" in refused.stderr and "arch model remove-exception web adapters rule=R7" in refused.stderr
+
+
+def test_suggested_commands_quote_the_star_end(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-exception", "src/gone.ts", "*", "reason=x").returncode == 0
+    result = edit(root, "validate")
+    assert result.returncode == 2 and "arch model remove-exception src/gone.ts '*'" in result.stderr

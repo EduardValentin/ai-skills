@@ -37,7 +37,7 @@ color = "blue"
 [[agent]]
 id = "architecture-reviewer"
 source = "architecture-reviewer.md"
-description = "Read-only reviewer that judges the architecture conditions no check decides, reading the evidence packet and the source it names, and returns judged findings with evidence and questions for the owner. In a plan review it first turns the plan into a proposal the command can check."
+description = "Read-only reviewer that judges the architecture conditions no check decides, reading the evidence packet and the source it names, and returns judged findings with evidence and questions for the user. In a plan review it first turns the plan into a proposal the command can check."
 groups = ["ticket-workflow", "implementation-workflow", "inspect-architecture-workflow"]
 
 [agent.codex]

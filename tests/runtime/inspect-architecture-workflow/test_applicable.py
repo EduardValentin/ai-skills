@@ -437,3 +437,25 @@ def test_proposal_file_follows_the_work_placement_rule(tmp_path: Path):
     (root / "proposal.json").write_text(json.dumps({"version": 1}))
     result = run_arch(["applicable", "--proposal", "proposal.json"], root)
     assert result.returncode == 2 and ".architecture/" in result.stderr
+
+
+def test_out_writes_the_json_and_prints_the_counts(tmp_path: Path):
+    root = repo(tmp_path)
+    touch(root, EMPLOYEE)
+    result = run_arch(["applicable", "--base", "HEAD", "--out", ".architecture/work/applicable.json"], root)
+    assert result.returncode == 0, result.stderr
+    written = json.loads((root / ".architecture/work/applicable.json").read_text())
+    assert written == applicable(root, "--base", "HEAD")
+    assert written["inScope"] == written["notReviewed"] > 0
+    assert result.stdout.strip() == (
+        f"wrote .architecture/work/applicable.json: review no, {written['inScope']} judgment conditions in scope, "
+        f"{written['notReviewed']} not reviewed"
+    )
+    refused = run_arch(["applicable", "--base", "HEAD", "--out", "applicable.json"], root)
+    assert refused.returncode == 2 and ".architecture/work/" in refused.stderr
+
+
+def test_in_scope_counts_the_listed_judgments_and_those_left_out(tmp_path: Path):
+    root = repo(tmp_path)
+    out = applicable(root, "--all")
+    assert out["inScope"] == sum(len(entries) for entries in out["judgments"].values()) and out["notReviewed"] == 0

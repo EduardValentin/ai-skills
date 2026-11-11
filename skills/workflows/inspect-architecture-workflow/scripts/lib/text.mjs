@@ -5,3 +5,7 @@ export function plural(count, noun) {
 export function alternatives(corrections) {
   return corrections.join(" | ");
 }
+
+export function shellWord(text) {
+  return /^[\w./:#@-]+$/.test(text) ? text : `'${text}'`;
+}

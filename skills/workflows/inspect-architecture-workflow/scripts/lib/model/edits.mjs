@@ -1,4 +1,5 @@
 import { UsageError } from "../cli/errors.mjs";
+import { shellWord } from "../text.mjs";
 import { ANY_DESTINATION, DEFAULT_THRESHOLDS } from "./defaults.mjs";
 
 function splitList(text) {
@@ -226,7 +227,7 @@ function requireValidExceptionEnds(from, to) {
     );
   }
   if (to.startsWith(EXTERNAL_PREFIX) && to.length === EXTERNAL_PREFIX.length) {
-    throw new UsageError(`"${to}" names no external. Write external:<name>, for example external:lodash.`);
+    throw new UsageError(`"${to}" names no external. Write external:<name> with the name the adapter reports for it.`);
   }
 }
 
@@ -241,6 +242,10 @@ function describeException(exception) {
   return `${exception.from} -> ${exception.to}${exception.rule ? ` rule=${exception.rule}` : " (no rule)"}`;
 }
 
+function removalCommand(from, to, rule) {
+  return `arch model remove-exception ${shellWord(from)} ${shellWord(to)} rule=${rule}`;
+}
+
 function selectException(doc, from, to, rule) {
   const matching = (doc.exceptions ?? []).filter(sameEnds(from, to));
   if (matching.length === 0) throw new UsageError(`there is no exception ${from} -> ${to}. Nothing was changed.`);
@@ -248,6 +253,12 @@ function selectException(doc, from, to, rule) {
   if (matching.length > 1 && matching.every((exception) => exception.rule)) {
     const listed = matching.map(describeException).join("; ");
     throw new UsageError(`several exceptions match: ${listed}. Choose one with rule=<R>.`);
+  }
+  if (matching.every((exception) => exception.rule)) {
+    throw new UsageError(
+      `the exception ${from} -> ${to} exists only with rule=${matching[0].rule}. ` +
+        `Run ${removalCommand(from, to, matching[0].rule)}. Nothing was changed.`,
+    );
   }
   return (exception) => sameEnds(from, to)(exception) && !exception.rule;
 }

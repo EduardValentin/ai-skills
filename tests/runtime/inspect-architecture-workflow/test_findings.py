@@ -565,7 +565,7 @@ def test_findings_store_holds_no_dates_or_run_numbers(tmp_path):
     last_run = store(root)["lastRun"]
     assert set(last_run) == {
         "flow", "scope", "base", "plan", "incomplete", "skipped", "notRun", "upcoming", "questions", "findingKeys",
-        "covered", "dropped", "disputes", "overlaps",
+        "covered", "dropped", "disputes", "overlaps", "judgmentConditions",
     }
     assert store(root)["version"] == 1
 
@@ -1079,3 +1079,79 @@ def test_a_plan_only_judgment_refuses_a_unit_target_in_plan_review(tmp_path):
     on_unit = finding("structure-consequence-unstated", "src/domain/overtime-rule.ts", evidence=[f"{plan}#Rule storage"])
     refused = plan_review(root, tmp_path, plan, on_unit)
     assert_refused(refused, root, "structure-consequence-unstated", "does not apply to", "plan (plan-review only)")
+
+
+def applicable_file(root: Path, tmp_path: Path, *args: str) -> Path:
+    result = run_arch(["applicable", *args, "--json"], root)
+    assert result.returncode == 0, result.stderr
+    return write_json(tmp_path / "applicable.json", json.loads(result.stdout))
+
+
+def test_judgment_conditions_in_scope_and_not_reviewed_travel_with_the_run(tmp_path):
+    root = workspace(tmp_path)
+    scope = applicable_file(root, tmp_path, "--all")
+    in_scope = json.loads(scope.read_text())["inScope"]
+    check = check_file(root, tmp_path)
+    skipped = add(root, "audit", check, "--applicable", str(scope))
+    assert skipped.returncode == 0, skipped.stderr
+    assert f"Judgment conditions: {in_scope} in scope, {in_scope} not reviewed" in skipped.stdout
+    assert store(root)["lastRun"]["judgmentConditions"] == {"inScope": in_scope, "notReviewed": in_scope}
+    reviewed = add(root, "audit", check, "--applicable", str(scope), "--judged", str(judged(tmp_path)))
+    assert f"Judgment conditions: {in_scope} in scope, 0 not reviewed" in reviewed.stdout
+
+
+def test_a_contained_change_reports_the_conditions_it_left_out(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    scope = applicable_file(root, tmp_path, "--base", "main")
+    counts = json.loads(scope.read_text())
+    assert counts["review"] is False and counts["notReviewed"] > 0
+    result = add(root, "change-review", check_file(root, tmp_path, "--base", "main"), "--base", "main",
+                 "--applicable", str(scope))
+    assert f"Judgment conditions: {counts['inScope']} in scope, {counts['notReviewed']} not reviewed" in result.stdout
+
+
+def test_without_applicable_the_judgment_conditions_are_not_reported(tmp_path):
+    root = workspace(tmp_path)
+    result = audit(root, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "Judgment conditions: not reported" in result.stdout
+    assert store(root)["lastRun"]["judgmentConditions"] is None
+
+
+def test_an_applicable_file_of_another_scope_or_shape_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    check = check_file(root, tmp_path)
+    touch_free = applicable_file(root, tmp_path, "--files", EMPLOYEE)
+    wrong_mode = add(root, "audit", check, "--applicable", str(touch_free))
+    assert_refused(wrong_mode, root, "--all", "arch applicable")
+    not_applicable = write_json(tmp_path / "other.json", {"rows": []})
+    wrong_shape = add(root, "audit", check, "--applicable", str(not_applicable))
+    assert_refused(wrong_shape, root, "arch applicable", "--out")
+
+
+def test_each_incomplete_entry_is_printed_on_its_own_line(tmp_path):
+    root = workspace(tmp_path)
+    edit_json(root / ADAPTER, lambda d: d["capabilities"].update(typeChecks=False))
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path)
+    assert "Verdict: INCOMPLETE" in result.stdout
+    lines = result.stdout.splitlines()
+    start = next(index for index, line in enumerate(lines) if line.startswith("Incomplete: 1 conditions"))
+    assert lines[start + 1] == (
+        "- type-check-on-implementation (R13 Substitutable implementations, narrow interfaces): all targets: "
+        "the adapter document does not provide typeChecks, so type-check-on-implementation could not be decided. "
+        "Make the adapter provide it, or set R13 to advisory or off with arch model set-rule."
+    )
+
+
+def test_a_clarification_request_is_printed_with_its_task(tmp_path):
+    root = workspace(tmp_path)
+    plan = write_plan(root)
+    proposal = write_json(tmp_path / "proposal.json",
+                          {"version": 1, "unknown": [{"task": "Task 3", "fact": "which table stores rules"}]})
+    check = check_file(root, tmp_path, "--proposal", str(proposal))
+    result = add(root, "plan-review", check, "--plan", plan, "--proposal", str(proposal))
+    assert result.returncode == 0, result.stderr
+    assert ("- clarification: Task 3: Task 3 does not state: which table stores rules. "
+            "Ask the plan author to state it, then review the plan again.") in result.stdout.splitlines()

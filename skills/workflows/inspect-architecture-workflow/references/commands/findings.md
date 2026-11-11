@@ -9,7 +9,7 @@ prints that result again.
 ## Synopsis
 
 ```
-arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --judged .architecture/work/judged.json
+arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json
 arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json
 arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-tests.json --judged .architecture/work/judged-humble-objects.json
 arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --upcoming "<confirmed upcoming change>"
@@ -29,6 +29,7 @@ arch findings list --rank
 | `--base` | a branch, tag, or commit | Required in `change-review`: the ref the check compared with. |
 | `--plan` | the plan file | Required in `plan-review`: plan evidence cites its headings. |
 | `--proposal` | the proposal file | Required in `plan-review`: the file the check ran on. |
+| `--applicable` | the `arch applicable` JSON file | Made with `--out` for the same scope: `--all` in an audit, `--base` in a change review, `--proposal` in a plan review. Its counts give the line `Judgment conditions: <n> in scope, <m> not reviewed`. |
 | `--upcoming` | text | A named upcoming change the user confirmed; repeat the flag for each. A finding's `liftedBy` must equal one of them or one recorded with `arch model add-upcoming`. |
 | `--json` | none | Print the result as JSON. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
@@ -41,7 +42,7 @@ arch findings list --rank
 | `--json` | none | Print the result as JSON. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
-The check output, the judged findings, and the proposal are working files. Working files live
+The check output, the applicable output, the judged findings, and the proposal are working files. Working files live
 under `.architecture/work/`; the command refuses a working file elsewhere inside the project.
 
 ## Exit codes
@@ -60,7 +61,7 @@ The judged findings file is one object:
     { "judgment": "detail-reached-without-port", "target": "src/domain/payroll-use-case.ts",
       "consequence": "Swapping the clock for tests or another runtime means editing the use case.",
       "correction": "Take the Clock port in the constructor and drop the SystemClock import.",
-      "evidence": ["src/domain/payroll-use-case.ts:2"], "origin": "introduced" } ],
+      "evidence": ["src/domain/payroll-use-case.ts:1"], "origin": "introduced" } ],
   "questions": ["Will payroll run in a second time zone this year?"],
   "disputes": [ { "path": "src/domain/payroll-use-case.ts",
                   "reason": "It formats the payslip text, which is presenter work, not a use case's." } ] }
@@ -89,9 +90,16 @@ rules above, `add` stores nothing and lists every problem, each prefixed with it
 in that file, such as `.architecture/work/judged.json: findings[0] (src/domain/payroll-use-case.ts)`.
 
 The printed result has one line each for the verdict with its blocking counts by severity, the
-inherited counts, the incomplete conditions and why, the checks not run, the advisory findings,
+inherited counts, and the count of incomplete conditions by kind, followed by one line per incomplete
+condition, `- <check> (<rule numbers and titles>): <target>: <reason and what to do>`, where a
+condition missing a fact for every target names `all targets` and a clarification request is
+`- clarification: <task>: <reason>`; then one line each for the checks not run,
+`Judgment conditions: <n> in scope, <m> not reviewed`, the advisory findings,
 `Dropped:` with the count of findings an exception covers or whose rule is off and the reasons,
-and the rules not enforced; then the corrections, grouped by correction and ordered by severity.
+and the rules not enforced. The judgment line counts the conditions `arch applicable` put in scope,
+and those no reviewer judged: the ones a contained change left out, or all of them when no
+`--judged` file was given. Without `--applicable` it reads `Judgment conditions: not reported`.
+Then come the corrections, grouped by correction and ordered by severity.
 A finding keeps every distinct correction of the check rows and judged findings merged into it, a
 check row's first, printed as `Fix: <a> | <b>`.
 Then come three sections, each left out when it is empty: `Inherited findings:` and `Wider
@@ -110,7 +118,9 @@ follows; wider observations stay in their own section and are not ranked. Withou
 baseline audit to enable the full review".
 
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
-`advisory`, `covered` (check findings an exception covered), `dropped` (each dropped judged finding
+`advisory`, `covered` (check findings an exception covered), `incomplete` (each incomplete entry
+with its `check`, `rules`, `target`, `reason`, and `enforced`), `judgmentConditions` (`inScope` and
+`notReviewed`, or `null` without `--applicable`), `dropped` (each dropped judged finding
 with its `target`, `judgment`, and `reason`), `wider`, `incompleteCount`, `incompleteReasons`,
 `notRun`, `notEnforced`, `corrections` (each group's `severity`, `rules`, `targets`,
 `consequence`, `corrections`, and `findings` count), `questions`, `disputes` (each `path` and
@@ -124,12 +134,16 @@ From the payroll fixture after a commit that makes the payroll use case import t
 adapter, with the judged file above:
 
 ```
-$ arch findings add --flow change-review --base main --check .architecture/work/check.json --judged .architecture/work/judged.json
+$ arch applicable --base main --out .architecture/work/applicable.json
+wrote .architecture/work/applicable.json: review yes, 38 judgment conditions in scope, 0 not reviewed
+$ arch findings add --flow change-review --base main --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json
 # Architecture change-review: changes since main
 Verdict: SHOULD_CHANGE: 3 blocker, 2 major, 0 minor blocking
-Inherited: 0 blocker, 1 major, 0 minor (not blocking)
+Inherited: 0 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 1 conditions (1 missing facts)
+- type-check-on-implementation (R13 Substitutable implementations, narrow interfaces): all targets: the adapter document does not provide typeChecks, so type-check-on-implementation could not be decided. Make the adapter provide it, or set R13 to advisory or off with arch model set-rule.
 Not run: distance-over-threshold (fewer than 8 components)
+Judgment conditions: 38 in scope, 0 not reviewed
 Advisory: 0 findings
 Dropped: 0
 Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
@@ -137,8 +151,6 @@ Corrections:
 1. R30 No dependency cycles: adapters -> domain: A change to any component in adapters -> domain can force a change to all of them, so none can be released or tested alone. Fix: Break the cycle adapters -> domain by removing one of its edges: move what that edge uses into the depending side, or merge the members if they always change together; only if the dependency must stay, have the side that needs it declare an interface the other side implements
 3. R4 Dependencies point toward policy; R5 The consumer owns the port: src/domain/payroll-use-case.ts -> src/adapters/system-clock.ts: A change to src/adapters/system-clock.ts can force a change to the business rule in src/domain/payroll-use-case.ts, which cannot be tested without it. Fix: Depend on the existing port `Clock` in `src/domain/clock.ts` instead of src/adapters/system-clock.ts, and have the composition root pass src/adapters/system-clock.ts to src/domain/payroll-use-case.ts
 5. R23 Defer unforced decisions: src/domain/payroll-use-case.ts: Swapping the clock for tests or another runtime means editing the use case. Fix: Take the Clock port in the constructor and drop the SystemClock import.
-Inherited findings:
-- R38 Enforce boundaries with the build: domain: Nothing fails when code outside domain imports one of its internal modules, so such imports pile up unnoticed and any internal change to domain can break code outside it. Fix: If something already stops code outside domain from importing its internals, record that mechanism in the enforcement field of domain; otherwise add the cheapest enforcement the project has, such as a visibility rule, an export list, or an import rule that fails the build, and record it there; make it a separate build unit only when none of those is available
 Questions for the user: 1
 - Will payroll run in a second time zone this year?
 Classification disputes: 1
@@ -157,12 +169,14 @@ accepted it with an exception, and `check` and `add` ran again with the same jud
 $ arch model add-exception src/web/payroll-controller.ts '*' rule=R20 reason="validation stays here until the second form arrives"
 $ arch check --base main --out .architecture/work/check.json
 wrote .architecture/work/check.json: 2 findings, 1 incomplete
-$ arch findings add --flow change-review --base main --check .architecture/work/check.json --judged .architecture/work/judged.json
+$ arch findings add --flow change-review --base main --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json
 # Architecture change-review: changes since main
 Verdict: INCOMPLETE: 0 blocker, 0 major, 0 minor blocking
 Inherited: 2 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 1 conditions (1 missing facts)
+- type-check-on-implementation (R13 Substitutable implementations, narrow interfaces): all targets: the adapter document does not provide typeChecks, so type-check-on-implementation could not be decided. Make the adapter provide it, or set R13 to advisory or off with arch model set-rule.
 Not run: distance-over-threshold (fewer than 8 components)
+Judgment conditions: 18 in scope, 0 not reviewed
 Advisory: 0 findings
 Dropped: 1 (1 covered by an exception)
 Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
@@ -181,12 +195,13 @@ An audit of the known-defects fixture with one file per reviewer, where two revi
 same use case and proposed two fixes:
 
 ```
-$ arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-dependency-direction.json --judged .architecture/work/judged-deferral-and-boundaries.json
+$ arch findings add --flow audit --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged-dependency-direction.json --judged .architecture/work/judged-deferral-and-boundaries.json
 # Architecture audit: all components
 Verdict: SHOULD_CHANGE: 20 blocker, 10 major, 3 minor blocking
 Inherited: 0 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 0 conditions
 Not run: zone-of-pain (needs --base), no-cohesion-groups (needs --base), change-spans-groups (needs --base)
+Judgment conditions: 60 in scope, 0 not reviewed
 Advisory: 0 findings
 Dropped: 0
 Rules not enforced: none

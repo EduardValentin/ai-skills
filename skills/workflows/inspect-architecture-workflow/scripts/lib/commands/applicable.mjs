@@ -11,12 +11,12 @@ import { proposalComparison } from "../checks/proposal.mjs";
 import { UsageError } from "../cli/errors.mjs";
 import { parseArgs } from "../cli/flags.mjs";
 import { loadGraph } from "../graph/load.mjs";
-import { requireWorkPlacement } from "../findings/placement.mjs";
+import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
 import { createClassifier } from "../model/classify.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 
 export const APPLICABLE_SPEC = {
-  flags: { base: "git-ref", files: "value", proposal: "value", all: "boolean", full: "boolean" },
+  flags: { base: "git-ref", files: "value", proposal: "value", all: "boolean", full: "boolean", out: "value" },
   positional: { min: 0, max: 0 },
 };
 
@@ -115,14 +115,16 @@ function applicability(model, scope, flags) {
   return { review: false, reasons: [CONTAINED], groups: [], uncovered, notReviewed: inScope };
 }
 
-function jsonOutput(result) {
+function jsonOutput(result, flags) {
   return {
     model: true,
+    mode: APPLICABLE_MODES.find((mode) => flags[mode]),
     review: result.review,
     reasons: result.reasons,
     groups: result.groups.map((entry) => entry.group),
     uncovered: result.uncovered,
     judgments: Object.fromEntries(result.groups.map((entry) => [entry.group, entry.judgments])),
+    inScope: judgmentCount(result.groups) + result.notReviewed,
     notReviewed: result.notReviewed,
   };
 }
@@ -152,9 +154,21 @@ function renderProse(result) {
   ].join("\n");
 }
 
-function printNoModel(flags) {
-  const output = { model: false, review: false, reasons: [NO_MODEL_LINE] };
-  console.log(flags.json ? JSON.stringify(output) : NO_MODEL_LINE);
+const NO_MODEL_OUTPUT = { model: false, review: false, reasons: [NO_MODEL_LINE] };
+
+function summaryLine(output) {
+  if (!output.model) return "no model";
+  const review = output.review ? "yes" : "no";
+  return `review ${review}, ${output.inScope} judgment conditions in scope, ${output.notReviewed} not reviewed`;
+}
+
+async function emit(output, text, { root, flags }) {
+  if (flags.out) {
+    await writeWorkFile(root, flags.out, `${JSON.stringify(output, null, 2)}\n`);
+    console.log(`wrote ${flags.out}: ${summaryLine(output)}`);
+  } else {
+    console.log(flags.json ? JSON.stringify(output, null, 2) : text);
+  }
 }
 
 async function scopeOf(root, model, flags) {
@@ -167,14 +181,14 @@ async function scopeOf(root, model, flags) {
 export async function run(args, { root }) {
   const { flags } = parseArgs(APPLICABLE_SPEC, args);
   requireOneMode(flags);
-  if (flags.proposal) requireWorkPlacement(root, flags.proposal, "proposal");
+  for (const name of ["proposal", "out"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
   const model = loadModel(root, flags);
   if (!model) {
-    printNoModel(flags);
+    await emit(NO_MODEL_OUTPUT, NO_MODEL_LINE, { root, flags });
     return 0;
   }
   const scope = await scopeOf(root, model, flags);
   const result = applicability(model, scope, flags);
-  console.log(flags.json ? JSON.stringify(jsonOutput(result), null, 2) : renderProse(result));
+  await emit(jsonOutput(result, flags), renderProse(result), { root, flags });
   return 0;
 }

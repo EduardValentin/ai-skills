@@ -27,10 +27,10 @@ defined in `references/rules/vocabulary.md`.
 
    ```json
    { "version": 1,
-     "modules": [ { "path": "src/billing/invoice-use-case.ts" } ],
-     "edges": [ { "from": "src/billing/invoice-use-case.ts", "to": "src/billing/invoices.ts", "kind": "import" } ],
-     "removedModules": [], "removedEdges": [ { "from": "src/billing/a.ts", "to": "src/billing/b.ts" } ],
-     "classify": [ { "path": "src/billing/invoice-use-case.ts", "kind": "use-case", "component": "billing" } ],
+     "modules": [ { "path": "src/billing/invoice-use-case" } ],
+     "edges": [ { "from": "src/billing/invoice-use-case", "to": "src/billing/invoices", "kind": "import" } ],
+     "removedModules": [], "removedEdges": [ { "from": "src/billing/a", "to": "src/billing/b" } ],
+     "classify": [ { "path": "src/billing/invoice-use-case", "kind": "use-case", "component": "billing" } ],
      "unknown": [ { "task": "Task 2: Invoice report", "fact": "which component the report reads from" } ] }
    ```
 
@@ -40,8 +40,8 @@ defined in `references/rules/vocabulary.md`.
    It exits 1 only when the plan introduces a blocker or major finding of an enforced rule;
    continue either way. If it refuses the proposal, give its message to the reviewer, write the
    corrected proposal, and run this step again.
-6. Run `arch applicable --proposal .architecture/work/proposal.json --full --json`. If `groups` is
-   empty, go to step 9 and leave out `--judged`.
+6. Run `arch applicable --proposal .architecture/work/proposal.json --full --out .architecture/work/applicable.json`.
+   If `groups` in that file is empty, go to step 9 and leave out `--judged`.
 7. Ask the same reviewer to judge, with `.architecture/work/check.json`,
    `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, the file of every other
    group in `groups`, such as `references/rules/dependency-direction.md`, each with its `judgments`
@@ -67,13 +67,13 @@ defined in `references/rules/vocabulary.md`.
    `judged.json`, in which each answered question became a finding, a `liftedBy` on a finding, or
    nothing, and unanswered ones remain. Never edit a judged file by hand. This flow never writes
    the model: tell the user that the `add-upcoming` model edit remembers an answer.
-9. Run `arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`.
+9. Run `arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`.
    Give `--upcoming` once for every upcoming change the plan states and every confirmed answer. It
    prints the result and its verdict. If it refuses judged findings, send the listed problems to
    the reviewer, write its fresh judged file, and run this step again; if it says the check is
    stale or made from another proposal, run step 5 again, then this step.
-10. Collect the clarification requests, the `incomplete` entries of `.architecture/work/check.json`
-    with `"clarification": true`, each a `task` and the `fact` it leaves open; report them apart.
+10. The printed result lists each clarification request under `Incomplete:` on its own
+    `- clarification: <task>: <reason>` line, naming the fact the task leaves open; report them apart.
 11. If the verdict is `SHOULD_CHANGE` or `INCOMPLETE` and fewer than `planFixRounds` revisions have
     been made, the plan's author revises it; count the revision and run steps 4 to 6 again. The same
     reviewer judges again against the new `judgments`, its fresh file replaces `judged.json`, and

@@ -469,6 +469,9 @@ def project_with_an_unclassified_module(tmp_path):
     return root
 
 
+APPLICABLE_FILE = ".architecture/work/applicable.json"
+
+
 class FlowRunner:
     """Runs a flow's own command lines, substituting only the placeholders."""
 
@@ -508,7 +511,8 @@ def test_the_change_review_flow_runs_as_written_through_acceptances(tmp_path):
         "<ref>": "main", "<upcoming change>": "a second payroll form", "<text>": "accepted by the user",
     })
     assert json.loads(flow.run_step(1).stdout)["model"] is True
-    applicable = json.loads(flow.run_step(3).stdout)
+    assert flow.run_step(3).returncode == 0
+    applicable = json.loads((root / APPLICABLE_FILE).read_text())
     assert applicable["review"] is True and "humble-objects" in applicable["groups"]
     assert flow.run_step(5).returncode in (0, 1)
     flow.judged_path(10).write_text(json.dumps(CHANGE_REVIEW_JUDGED))
@@ -546,9 +550,12 @@ def test_the_audit_flow_classifies_every_module_before_collecting(tmp_path):
 
     assert flow.run_step(8).returncode == 0
     assert flow.run_step(9).returncode in (0, 1)
-    assert json.loads(flow.run_step(10).stdout)["review"] is True
+    assert flow.run_step(10).returncode == 0
+    assert json.loads((root / APPLICABLE_FILE).read_text())["review"] is True
     flow.judged_path(14).write_text(json.dumps({"findings": [], "questions": []}))
-    assert "# Architecture audit" in flow.run_step(14).stdout
+    audited = flow.run_step(14).stdout
+    assert "# Architecture audit" in audited and "Judgment conditions: " in audited
+    assert "Judgment conditions: not reported" not in audited
     assert "## Ranked by change volatility" in flow.run_step(16).stdout
 
 
@@ -566,6 +573,7 @@ def test_the_audit_flow_reconciles_overlapping_findings_of_parallel_reviewers(tm
     root = payroll_repository(tmp_path)
     flow = FlowRunner("audit", root, {"<upcoming change>": "a second payroll form"})
     assert flow.run_step(9).returncode in (0, 1)
+    assert flow.run_step(10).returncode == 0
     parallel = {
         "reasons-to-change": audit_judged("unit-serves-several-actors", "Split the reporting behavior out."),
         "business-rule-placement": audit_judged("entity-carries-framework-traits", "Remove the framework base class."),
@@ -659,3 +667,28 @@ def test_every_flow_shows_the_non_blocking_sections():
     for name in REVIEW_FLOWS:
         assert "`Inherited findings`" in flow_text(name), name
         assert "The verdict line is what the caller returns" in flow_text(name), name
+
+
+def test_every_flow_hands_the_applicable_counts_to_findings_add():
+    for name in FLOW_NAMES:
+        lines = command_lines(flow_file(name))
+        assert any(line.startswith("arch applicable") and f"--out {APPLICABLE_FILE}" in line for line in lines), name
+        adds = [line for line in lines if line.startswith("arch findings add --flow")]
+        assert adds and all(f"--applicable {APPLICABLE_FILE}" in line for line in adds), name
+
+
+def test_an_acceptance_by_model_edit_validates_the_model_before_the_rerun():
+    assert "then `arch model validate`, then steps 8, 9, 14, and 16 again" in flow_text("audit")
+    assert "Then run `arch model validate`, and steps 5 and 10 again" in flow_text("change-review")
+
+
+def test_the_audit_classify_loop_stops_when_a_pass_makes_no_progress():
+    step = " ".join(numbered_steps(flow_file("audit").read_text())[7].split())
+    assert "lists the same modules as before this pass" in step and "show them to the user" in step
+    assert "`warning:`" in " ".join(numbered_steps(flow_file("audit").read_text())[5].split())
+
+
+def test_plan_review_reads_clarification_requests_from_the_printed_result():
+    step = " ".join(numbered_steps(flow_file("plan-review").read_text())[10].split())
+    assert "- clarification: <task>: <reason>" in step
+    assert "check.json" not in step and '"clarification": true' not in step

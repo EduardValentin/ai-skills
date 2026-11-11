@@ -23,7 +23,7 @@ the plan. Each project records which rules apply to it in one model file.
 
 | Flow | Use it for | Follow |
 |---|---|---|
-| `audit` | A deliberate baseline of a codebase or named components; builds the model | [audit](references/flows/audit.md) |
+| `audit` | A deliberate baseline of a whole codebase; builds the model | [audit](references/flows/audit.md) |
 | `change-review` | A diff against a base commit; the routine path | [change review](references/flows/change-review.md) |
 | `plan-review` | A plan or spec before approval, before any code exists | [plan review](references/flows/plan-review.md) |
 

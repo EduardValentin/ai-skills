@@ -63,13 +63,14 @@ async function validate({ root, flags }) {
   const model = requireModel(root, flags);
   requireComponents(model);
   const graph = await graphOf(root, model, flags);
-  const problems = graphProblems(model, graph);
+  const { problems, warnings } = graphProblems(model, graph);
   if (problems.length > 0) {
     const listed = problems.join("\n- ");
     const advice = "Fix these entries and run arch model validate again.";
     throw new ModelError(`model does not fit the code:\n- ${listed}\n${advice}`);
   }
-  print(flags, { ok: true }, "model: ok");
+  const text = [...warnings.map((warning) => `warning: ${warning}`), "model: ok"].join("\n");
+  print(flags, { ok: true, warnings }, text);
   return 0;
 }
 
