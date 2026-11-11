@@ -117,8 +117,8 @@ When the reviewer selection includes architecture plan review, invoke the
 plan and follow its flow yourself, with the written plan's path and the
 upcoming changes the plan states. The plan need not use architecture
 vocabulary: the flow's `architecture-reviewer` turns it into concrete files
-and imports, and its `arch applicable` step decides whether any condition
-needs judging. The flow prints a verdict, findings with corrections phrased
+and imports, then reviews the plan however small it is; no precheck can skip
+that review. The flow prints a verdict, findings with corrections phrased
 for the plan, clarification requests where the plan is not concrete enough,
 and questions for the user; put the questions to the user.
 
@@ -128,8 +128,9 @@ handoff. `SHOULD_CHANGE` or `INCOMPLETE` blocks approval: answer the
 clarifications and revise the plan within the revisions the flow allows, or
 present a finding to the user, who may accept it with a reason through the
 model edit the flow names. Only the user accepts a finding. When the
-selection excludes plan review, record `architecture plan review: not
-selected` in the handoff and present the plan without it.
+selection excludes plan review, no architecture plan review runs: record
+`architecture plan review: not selected` in the handoff and present the plan
+without it.
 
 Present the plan, together with the plan-review return when one exists, and
 obtain separate explicit approval of the plan.

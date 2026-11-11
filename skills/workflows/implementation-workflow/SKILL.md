@@ -133,20 +133,23 @@ by the delta since the previous round.
    expected-demand profile. The full set is `acceptance-criteria-reviewer`,
    `code-cleanliness-reviewer`, `security-reviewer`, `performance-reviewer`,
    `design-system-reviewer`, and architecture change review. Architecture
-   change review is not one agent: the main agent invokes the
-   `inspect-architecture-workflow` skill with `change-review` and follows its
-   flow over the frozen diff, with the diff's base ref and the upcoming
-   changes the plan states. Its `arch applicable` step decides whether it
-   dispatches `architecture-reviewer`, and it dispatches
-   `architecture-classifier` only for modules the model does not cover. It
-   counts as `CLEAN` when its printed
+   change review is not one agent: when the selection includes it, the main
+   agent invokes the `inspect-architecture-workflow` skill with
+   `change-review` and follows its flow over the frozen diff, with the diff's
+   base ref and the upcoming changes the plan states. The flow has
+   `architecture-reviewer` review the diff however small it is; no precheck
+   can skip that review. It dispatches `architecture-classifier` only for
+   modules the model does not cover. It counts as `CLEAN` when its printed
    verdict is `OK`, including the result with the line "no architecture
    model; run a baseline audit to enable the full review", which goes into the
    implementation report. `SHOULD_CHANGE` and `INCOMPLETE` block the gate
    until the findings are fixed or the user accepts each one through the
    model edit the flow names; the main agent never rejects an architecture
-   finding. When the packet carries no selection, ask the
-   user once with these defaults: `acceptance-criteria-reviewer` and
+   finding. When the selection excludes architecture change review, no
+   architecture review runs and the implementation report records
+   `architecture change review: not selected`. When the packet carries no
+   selection, ask the user once with these defaults:
+   `acceptance-criteria-reviewer` and
    `code-cleanliness-reviewer` selected; `design-system-reviewer` selected
    when the diff touches styles, tokens, or UI primitives in a design-system
    source the repository keeps; the others not selected. Record the answer
@@ -200,7 +203,7 @@ shape.
 | `security-reviewer` | touches authentication, authorization, input parsing or validation, persistence, data exposure, redirects, files, external requests, privileged actions, dependencies, logging, serialization, or raw HTML rendering. |
 | `performance-reviewer` | touches data fetching, queries, caching, loops or list rendering over collections, memoization, dependencies, background work, or a hot path the demand profile names. |
 | `design-system-reviewer` | touches styles, tokens, UI primitives, or component markup. |
-| architecture change review | adds or edits source code or a dependency manifest. Re-enter the flow after a fix as it describes: its `arch applicable` step decides whether `architecture-reviewer` judges again, so a delta that brings no judgment condition into scope costs only the command. |
+| architecture change review | adds or edits source code or a dependency manifest. Re-enter the flow after a fix as it describes: `architecture-reviewer` reviews the revised diff again against the judgment conditions the flow lists. |
 
 ## Verification Gate
 
@@ -262,7 +265,8 @@ The final report includes:
   findings, or carried forward with the unmet predicate), accepted and
   rejected findings with dispositions; for architecture change review, the
   printed verdict line, or the no-model line, the model edits by which the
-  user accepted findings, and `.architecture/findings.json`
+  user accepted findings, and `.architecture/findings.json`, or
+  `architecture change review: not selected`
 - manual QA coverage, criterion-level outcomes, and final evidence
 - visual verification coverage and outcome, or `not applicable: no rendered
   surface changed`
