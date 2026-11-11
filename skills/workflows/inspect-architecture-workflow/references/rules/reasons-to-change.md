@@ -123,7 +123,7 @@ Check questions:
 Examples:
 ```
 // bad
-unit cart publishes its field items: List of Item     // callers push into items
+unit Cart exposes its field items: List of Item       // callers push into items
 // good
 unit Cart: add(i: Item), total() -> Money             // items stays private to Cart
 ```

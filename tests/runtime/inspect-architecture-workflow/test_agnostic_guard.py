@@ -109,7 +109,7 @@ LANGUAGE_SYNTAX_PATTERNS = [
     r"===",
     r"\bimport\s*\{",
     r"\bfrom\s+[\"']",
-    r"\b(export|const|let|private|async|await)\s",
+    r"\b(export|const|let|private|public|protected|async|await)\s",
     r"\bnew\s+\w+\s*\(",
     r"\binstanceof\b",
     r"\bclass\s+[A-Z]",
@@ -118,8 +118,20 @@ LANGUAGE_SYNTAX_PATTERNS = [
     r"\{\s*\}",
     r"\)\s*:\s*\w",
     r":\s*(string|number|boolean|void)\b",
+    r"\bdef\s",
+    r"\bself\b",
+    r"\bfrom\s+[\w.]+\s+import\s",
+    r"\bfunc\s",
+    r":=",
+    r"\bfn\s",
+    r"@[A-Za-z_]\w*\(",
 ]
 LANGUAGE_SYNTAX = re.compile("|".join(LANGUAGE_SYNTAX_PATTERNS))
+DECLARATION_KEYWORD = r"\b(export|const|let|private|public|protected|async|await)\s"
+DECLARATION = DECLARATION_KEYWORD + r"+(?:\w+\s+)?\w+\s*[=(:;]"
+CODE_IN_COMMENT = re.compile(
+    "|".join(pattern for pattern in LANGUAGE_SYNTAX_PATTERNS if pattern != DECLARATION_KEYWORD) + "|" + DECLARATION
+)
 PSEUDOCODE_COMMENT = "//"
 
 
@@ -143,8 +155,9 @@ def _code_examples(path) -> list[tuple[int, str]]:
 
 
 def _language_syntax_in(example: str) -> bool:
-    code = example.split(PSEUDOCODE_COMMENT)[0]
-    return bool(LANGUAGE_SYNTAX.search(code) or ";" in code or LANGUAGE_EXTENSION.search(example))
+    code, _, comment = example.partition(PSEUDOCODE_COMMENT)
+    code_in_comment = CODE_IN_COMMENT.search(comment)
+    return bool(LANGUAGE_SYNTAX.search(code) or ";" in code or code_in_comment or LANGUAGE_EXTENSION.search(example))
 
 
 def test_catalog_examples_are_written_in_pseudocode():
@@ -155,3 +168,51 @@ def test_catalog_examples_are_written_in_pseudocode():
         if _language_syntax_in(example)
     ]
     assert not violations, "catalog example in a language's syntax:\n" + "\n".join(violations)
+
+
+CODE_SAMPLES = [
+    "def total(order):",
+    "return self.items",
+    "from billing import Invoice",
+    "func Total(o Order) Money",
+    "total := sum(lines)",
+    "fn total(order: Order) -> Money",
+    "public Money total()",
+    "protected void apply()",
+    '@Entity("loans")',
+    "unit Cart: add(i: Item)     // self.items.append(i)",
+    "unit Cart: add(i: Item)     // const items = []",
+]
+PSEUDOCODE_SAMPLES = [
+    "unit Cart: add(i: Item), total() -> Money             // items stays private to Cart",
+    "interface Users: query(sql: Text) -> List of Row",
+    "expect r.interest is \"12.50\"",
+    "done = false, repeat until done: ... if x then done = true",
+    "unit Loan extends OrmModel, annotated Entity: toJson()",
+    "// bad: the use case defines itself by the framework",
+]
+
+
+def test_the_pseudocode_guard_flags_code_in_examples_and_in_their_comments():
+    flagged = [sample for sample in CODE_SAMPLES if not _language_syntax_in(sample)]
+    assert not flagged, f"not flagged as a language's syntax: {flagged}"
+    wrongly = [sample for sample in PSEUDOCODE_SAMPLES if _language_syntax_in(sample)]
+    assert not wrongly, f"pseudocode flagged as a language's syntax: {wrongly}"
+
+
+EXAMPLE_CONSTRUCTS = ["`List of X`", "then", "`repeat until`", "`annotated`", "`expect x is y`",
+                      "`component X publishes:`", "`implements`", "`// bad`"]
+
+
+def test_the_vocabulary_explains_every_example_construct_in_at_most_six_lines():
+    vocabulary = (SKILL_DIR / "references" / "rules" / "vocabulary.md").read_text()
+    section = vocabulary.split("## How examples are written", 1)[1].strip().splitlines()
+    assert len(section) <= 6, section
+    text = " ".join(section)
+    assert [construct for construct in EXAMPLE_CONSTRUCTS if construct not in text] == []
+    assert "how the catalog's examples are written" in " ".join(vocabulary.split("\n## ", 1)[0].split())
+
+
+def test_publishes_names_only_a_component_surface_in_examples():
+    lines = [line for path in CATALOG for _, line in _code_examples(path) if "publishes" in line]
+    assert lines and all(line.lstrip().startswith("component ") for line in lines), lines

@@ -1,8 +1,9 @@
 # Vocabulary
 
 The terms the rule catalog, the classification guide, the metrics page, and the three flows use,
-each defined here and nowhere else. Read it before the first rule file, and come back to it
-whenever a rule or a flow uses a word in a sense that seems narrower than everyday speech.
+each defined here and nowhere else, and at the end how the catalog's examples are written. Read it
+before the first rule file, and come back to it whenever a rule or a flow uses a word in a sense
+that seems narrower than everyday speech.
 
 ## Change and value
 
@@ -132,8 +133,9 @@ whenever a rule or a flow uses a word in a sense that seems narrower than everyd
 
 ## How examples are written
 
-Examples in the catalog are pseudocode that reads the same in any stack. `interface Name:` or
-`unit Name:` (a class, a module, or a set of functions) is followed by its operations, each written
-`operation(argument: Type) -> Result`; `data Name(field: Type)` is boundary data; units relate by
-`implements`, `extends`, `uses`, and `constructs`; control flow is plain `if` and `else`; `// bad`
-and `// good` mark the contrast; and paths carry no file extension, as in `billing/EmployeeRepository`.
+Examples in the catalog are pseudocode that reads the same in any stack: `unit Name:` (a class, a
+module, or a set of functions) or `interface Name:` lists operations `op(arg: Type) -> Result`, with
+`List of X` for a collection; `data Name(field: Type)` is boundary data; units relate by `implements`,
+`extends`, `uses`, `constructs`, and `annotated` (a framework marker); control flow is
+`if ... then ... else` and `repeat until`; `expect x is y` is a test assertion; `component X publishes:`
+lists a published surface; `// bad` and `// good` mark the contrast; paths carry no file extension.
