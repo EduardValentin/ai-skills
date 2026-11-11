@@ -63,7 +63,7 @@ Examples:
 - Mature platform: "`orders-reporting` split out so reporting consumers stop receiving core
   releases."
 
-Not a finding when: `no-cohesion-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-without-groups`: the changes that touched components together were such mechanical edits, or the model records no cohesion groups, published surfaces, or forbidden edges at all and no change in scope was made harder by their absence; `cohesion-position-unstated`: the model records no cohesion groups and no change in scope was made harder by that.
+Not a finding when: `no-cohesion-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-without-groups`: the changes that touched components together were such mechanical edits, or the model records no cohesion groups and no change in scope was made harder by that; `cohesion-position-unstated`: the model records no cohesion groups and no change in scope was made harder by that.
 
 ### R29. Let the component map emerge
 
@@ -153,9 +153,10 @@ Not a finding when: `abstractions-without-implementor`: the component is a publi
 
 Guidance: advisory by default.
 
-**Use the metrics as a screen, never a verdict.** Distance is a screen: it picks components worth
-a look, and is never on its own a finding or a reason to restructure. A component far from the
-balanced line is a finding only when someone can say in words what its position costs. When the
+**Use the metrics as a screen, never a verdict.** Distance is an advisory screen: the check
+`distance-over-threshold` raises an advisory row for each component worth a look, and that row
+never blocks unless the project enforces R32. It is never a reason to restructure on its own: a
+component far from the balanced line needs someone to say in words what its position costs. When the
 graph has at least {distanceMinComponents} components, compare each component's distance with the
 rest of the graph:
 the metrics page defines instability, abstractness, distance, and the bounds of the zones. Two
@@ -184,7 +185,7 @@ Examples:
 - Note and leave alone: a `string-utils` package in the same position but unchanged within
   {historyWindow}.
 
-Not a finding when: `distance-over-threshold`: nobody can say in words why the component's position is harmful, volatile and depended on or abstract and unused, since a number alone is never a finding; `unused-abstractions`: the published extension point stated under R31; `abstractions-without-implementor`: the published extension point stated under R31.
+Not a finding when: `distance-over-threshold`: nobody can say in words why the component's position is harmful, volatile and depended on or abstract and unused, so the user accepts its advisory row with an exception that says so; `unused-abstractions`: the published extension point stated under R31; `abstractions-without-implementor`: the published extension point stated under R31.
 
 ### R33. Release components bottom-up
 

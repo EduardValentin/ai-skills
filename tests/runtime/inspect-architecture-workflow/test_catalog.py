@@ -398,15 +398,21 @@ def test_the_port_r4_requires_is_never_an_abstraction_without_reason():
 
 def test_r6_raises_the_direct_call_only_for_more_than_one_delivery_mechanism():
     text = " ".join("\n".join(rule_sections()["R6"]["lines"]).split())
-    assert "only when controllers of more than one component call the same use case" in text
+    assert "sees units of kind controller or entry-point" in text
+    assert "only when such units of more than one component call the same use case" in text
+    assert "It does not see two delivery mechanisms inside the same component" in text
     row = condition_rows("dependency-direction")["controller-imports-use-case"][0]
-    assert row[1].startswith("Controllers of more than one component import the same use-case unit")
+    assert row[1].startswith("Controllers or entry points of more than one component import the same use-case unit")
+    inside = "delivery-mechanisms-in-one-component-call-use-case"
+    assert f"`{inside}` covers that case" in text
+    assert "one delivery mechanism split into several units" in clause_for("R6", inside)
     assert "returns its result to its caller" in clause_for("R6", "use-case-names-its-details")
 
 
 def test_distance_is_a_screen_and_never_a_verdict():
     text = " ".join("\n".join(rule_sections()["R32"]["lines"]).split())
-    assert "Distance is a screen" in text and "never on its own a finding" in text
+    assert "Distance is an advisory screen" in text and "never on its own a finding" not in text
+    assert "never blocks unless the project enforces R32" in text
     for rule in ["R28", "R32"]:
         assert first_paragraph(rule_sections()[rule]["lines"]).startswith(GUIDANCE), rule
 

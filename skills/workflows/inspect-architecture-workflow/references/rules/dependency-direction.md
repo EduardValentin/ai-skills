@@ -77,12 +77,15 @@ every dependency runs from adapter to use case: wherever control must flow outwa
 port inward, implement it outward, and never call outward directly. A use case that returns its
 result to its caller calls nothing outward and needs no output boundary. The input boundary, which
 the use case implements and the controllers depend on instead of the class, earns its place once
-a second delivery mechanism calls the use case: the check raises a controller's direct call only
-when controllers of more than one component call the same use case.
+a second delivery mechanism calls the use case. The check `controller-imports-use-case` sees units
+of kind controller or entry-point, and raises a direct call only when such units of more than one
+component call the same use case. It does not see two delivery mechanisms inside the same
+component, since the model does not say which mechanism a unit serves; the judgment
+`delivery-mechanisms-in-one-component-call-use-case` covers that case.
 
 Check questions:
 - Does the use case import its presenter or its gateway?
-- Do the controllers of more than one delivery mechanism import the use-case class?
+- Do the controllers or entry points of more than one delivery mechanism import the use-case class?
 - Are the boundaries declared in the use-case component?
 
 Examples:
@@ -100,7 +103,7 @@ export class PlaceOrder implements PlaceOrderInputBoundary {
 // persistence/SqlOrders implements Orders and holds all the query code
 ```
 
-Not a finding when: `controller-imports-use-case`: the controllers of the different components are one delivery mechanism split by area, such as one web API organized per feature, so record an exception for those calls with that reason, and a use case that the controllers of one component call is never raised; `use-case-names-its-details`: the use case returns its result to its caller instead of calling a presenter, and reaches its store only through a storage port, so it names no implementation.
+Not a finding when: `controller-imports-use-case`: the controllers of the different components are one delivery mechanism split by area, such as one web API organized per feature, so record an exception for those calls with that reason, and a use case that the controllers of one component call is never raised; `use-case-names-its-details`: the use case returns its result to its caller instead of calling a presenter, and reaches its store only through a storage port, so it names no implementation; `delivery-mechanisms-in-one-component-call-use-case`: the callers are one delivery mechanism split into several units, such as the handlers of one web API.
 
 ### R7. Lower-level components are plugins
 
@@ -170,7 +173,8 @@ Not a finding when: the edited tests assert behavior the change deliberately alt
 | `port-signature-detail-type` | The signature of a recorded port names a type declared in a detail unit. | R5 | check (needs signatures) | blocker | `port-carries-detail-type` |
 | `policy-detail-edge-beside-port` | A policy unit depends directly on a detail unit that implements a port the policy unit's component owns. | R5 | check (needs implements) | blocker | `policy-depends-on-detail` |
 | `port-in-shared-bucket` | A port sits in a shared interfaces bucket with no consumer beside it, instead of beside the policy that calls it. | R5 | judgment | blocker | `port-on-wrong-side` |
-| `controller-imports-use-case` | Controllers of more than one component import the same use-case unit for more than its types, so more than one delivery mechanism calls the use-case class instead of an input boundary. | R6 | check | blocker | `use-case-called-without-boundary` |
+| `controller-imports-use-case` | Controllers or entry points of more than one component import the same use-case unit for more than its types, so more than one delivery mechanism calls the use-case class instead of an input boundary. | R6 | check | blocker | `use-case-called-without-boundary` |
+| `delivery-mechanisms-in-one-component-call-use-case` | Controllers or entry points of more than one delivery mechanism inside the same component, such as a web controller and a command-line entry point, call the same use-case class directly instead of an input boundary. | R6 | judgment | blocker | `use-case-called-without-boundary` |
 | `use-case-names-its-details` | A use case reaches its presenter or its store through their implementations instead of an output boundary and a storage port declared in the use-case module. | R6 | judgment | blocker | `policy-depends-on-detail` |
 | `detail-constructed-outside-root` | A unit whose role is not wiring constructs a unit whose role is detail. | R7 | check (needs constructs) | blocker | `detail-constructed-outside-root` |
 | `mixed-unit-constructed-outside-root` | A unit that is not a composition root, config, or test constructs a mixed unit that holds a concrete detail. | R7 | judgment | blocker | `detail-constructed-outside-root` |

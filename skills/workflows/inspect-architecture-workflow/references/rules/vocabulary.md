@@ -115,7 +115,7 @@ whenever a rule or a flow uses a word in a sense that seems narrower than everyd
 | Decisions file | An optional `decisions.md` beside the model, holding longer explanations for people, such as the cost each component's cohesion position accepts. No check reads it. |
 | Smallest correction | The least change inside the scope that removes the finding's consequence. |
 | Wider observation | A finding whose target lies outside the scope, or whose only correction is larger than the smallest change inside the scope. It keeps its target, consequence, and evidence, is reported apart, and never blocks. |
-| Overlapping findings | Judged findings of one run, from two or more reviewers' judged files, that name the same unit, as their target or as an edge end, with different corrections. `arch findings add` and `arch findings list` group them per unit, and one reviewer reconciles them into one correction per unit, or states that they are independent. Check findings never overlap, since their corrections are fixed. |
+| Overlapping findings | Judged findings of one run, from two or more reviewers' judged files, that name the same unit, as their target or as an edge end, with different corrections, compared before findings of one target and defect kind merge. `arch findings add` and `arch findings list` group them per unit, and one reviewer reconciles them into one correction per unit, or states that they are independent. Check findings never overlap, since their corrections are fixed. |
 
 ## Flows and their files
 
@@ -123,7 +123,7 @@ whenever a rule or a flow uses a word in a sense that seems narrower than everyd
 |---|---|
 | Rule group | One file of the catalog: a set of related rules with their conditions table, such as dependency direction. `arch applicable` names the rule groups a scope brings into play. |
 | Uncovered module | A module the adapter reports that no classification pair of the model matches, so it has no component or kind. Conditions that need it are incomplete until it is classified. |
-| Judged finding | A finding a reviewer returns for a judgment condition, in the shape `arch findings add` reads: the judgment id, the target, the consequence, the correction, the evidence, and in a review its origin. The command adds the rules, defect kind, and severity from the judgment. |
+| Judged finding | A finding a reviewer returns for a judgment condition, in the shape `arch findings add` reads: the judgment id, the target, the consequence, the correction, the evidence, and in a review its origin. The command adds the rules, defect kind, and severity from the judgment. The reviewer's one JSON object also carries its questions and its classification disputes, each a unit path and what its code shows that the model contradicts. |
 | Origin | Whether a finding is `introduced` by the change or plan under review or `inherited` from the code before it. An audit has no origin. Only introduced findings, and inherited ones a named upcoming change makes heavier, can block a review. |
 | Verdict | The one-word result of a flow: `OK`, `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE` when none is and a condition of an enforced rule could not be decided. `SHOULD_CHANGE` and `INCOMPLETE` block a caller's gate. |
 | Proposal | What a plan would add to or remove from the code, written in the module and edge shapes of the adapter document, so the command can check a plan before the code exists. |

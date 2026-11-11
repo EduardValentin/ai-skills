@@ -54,6 +54,18 @@ const DEPENDENCY_DIRECTION = [
       "and a storage port declared in the use-case module.",
   },
   {
+    id: "delivery-mechanisms-in-one-component-call-use-case",
+    rules: ["R6"],
+    group: "dependency-direction",
+    severity: "blocker",
+    defect: "use-case-called-without-boundary",
+    targets: ["use-case"],
+    condition:
+      "Controllers or entry points of more than one delivery mechanism inside the same component, such as a web " +
+      "controller and a command-line entry point, call the same use-case class directly instead of an input " +
+      "boundary.",
+  },
+  {
     id: "mixed-unit-constructed-outside-root",
     rules: ["R7"],
     group: "dependency-direction",

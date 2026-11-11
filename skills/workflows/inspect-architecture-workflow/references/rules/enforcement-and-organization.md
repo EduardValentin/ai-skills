@@ -19,7 +19,9 @@ cruder and slower but the strongest mode where the language has no visibility ac
 code review, never alone, since it fails under deadline pressure. Every symbol is private to its
 component unless a concrete outside consumer needs it; a concrete implementation is never
 published when only its interface is consumed; a deep import into a component's internals does
-not resolve. Publish only the component's interface and its wiring factory.
+not resolve. Publish only the component's interface and its wiring factory. For a boundary nothing
+enforces yet, first record a mechanism that already stops the imports, then add the cheapest one
+the project has, and add a separate build unit only when nothing cheaper is available.
 
 Check questions:
 - For each boundary, what concrete error does a developer see when crossing it?
