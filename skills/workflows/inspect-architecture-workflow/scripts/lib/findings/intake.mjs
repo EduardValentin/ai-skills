@@ -1,0 +1,329 @@
+import { readFileSync } from "node:fs";
+import { UsageError } from "../cli/errors.mjs";
+import { createContext, rowComponents } from "../checks/context.mjs";
+import { escalateRow, highestSeverity } from "../checks/escalate.mjs";
+import { JUDGMENTS } from "../checks/registry.mjs";
+import { rulesLeftUncovered } from "../checks/exceptions.mjs";
+import { statusForRow } from "../checks/status.mjs";
+import { DEFAULT_KINDS } from "../model/defaults.mjs";
+import { validateShape } from "../model/validate-shape.mjs";
+import { evidenceProblems } from "./evidence.mjs";
+import { componentOfTarget, isInScope, recognizeTarget, unitsOfTarget } from "./targets.mjs";
+
+const TEXT = { type: "string" };
+const SET_BY_JUDGMENT = ["rules", "defect", "severity"];
+const LIFT_RULE = 2;
+const PLAN_TARGET = "plan";
+const PLAN_RECOGNIZED = { kind: PLAN_TARGET, units: [], components: [], edge: null };
+
+export const JUDGED_SCHEMA = {
+  type: "object",
+  required: ["findings"],
+  additionalProperties: false,
+  properties: {
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["judgment", "target"],
+        additionalProperties: false,
+        properties: {
+          judgment: { type: "string", minLength: 1 },
+          target: { type: "string", minLength: 1 },
+          consequence: TEXT,
+          correction: TEXT,
+          evidence: { type: "array", items: TEXT },
+          wider: { type: "boolean" },
+          origin: { type: "string", enum: ["introduced", "inherited"] },
+          liftedBy: { type: "string", minLength: 1 },
+        },
+      },
+    },
+    questions: { type: "array", items: { type: "string", minLength: 1 } },
+    disputes: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["path", "reason"],
+        additionalProperties: false,
+        properties: { path: { type: "string", minLength: 1 }, reason: { type: "string", minLength: 1 } },
+      },
+    },
+  },
+};
+
+function readJudgedFile(file) {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    throw new UsageError(
+      `judged findings file ${file} cannot be read as JSON: ${error.message}. ` +
+        "Write the reviewer's findings and questions as one JSON object and pass its path with --judged.",
+    );
+  }
+}
+
+export function readJudged(files) {
+  return files.map((file) => ({ file, document: readJudgedFile(file) }));
+}
+
+export function judgedQuestions(documents) {
+  return documents.flatMap(({ document }) => document.questions ?? []);
+}
+
+function disputesOf(documents) {
+  return documents.flatMap(({ file, document }) =>
+    (document.disputes ?? []).map((dispute, index) => ({ dispute, index, file })),
+  );
+}
+
+function disputeProblems(located, graph) {
+  const units = new Set(graph.units.map((unit) => unit.path));
+  return located
+    .filter(({ dispute }) => !units.has(dispute.path))
+    .map(
+      ({ dispute, index, file }) =>
+        `${file}: disputes[${index}] (${dispute.path}) names a path that is not a unit of the graph. ` +
+        "Use the path of a module the adapter reports, as arch model explain <path> shows it.",
+    );
+}
+
+function withoutJudgmentFields(entry) {
+  if (entry === null || typeof entry !== "object") return entry;
+  return Object.fromEntries(Object.entries(entry).filter(([key]) => !SET_BY_JUDGMENT.includes(key)));
+}
+
+function shapeProblems(document) {
+  const shapeOnly = Array.isArray(document?.findings)
+    ? { ...document, findings: document.findings.map(withoutJudgmentFields) }
+    : document;
+  return validateShape(shapeOnly, JUDGED_SCHEMA);
+}
+
+function blank(text) {
+  return typeof text !== "string" || text.trim() === "";
+}
+
+function completenessProblems(entry) {
+  return [
+    ...(entry.evidence?.length > 0 ? [] : ["has no evidence. Add at least one <path>:<line> entry that shows it."]),
+    ...(blank(entry.consequence) ? ["has no consequence. State in one sentence what it costs to maintain."] : []),
+    ...(blank(entry.correction) ? ["has no correction. State the smallest change inside the scope."] : []),
+  ];
+}
+
+function setByJudgmentProblem(entry) {
+  const given = SET_BY_JUDGMENT.filter((key) => Object.hasOwn(entry, key));
+  if (given.length === 0) return [];
+  return [`sets ${given.join(", ")}, which come from the judgment entry. Remove them and name the judgment.`];
+}
+
+function escalationRow(recognized, target, judgment) {
+  return {
+    target,
+    defect: judgment.defect,
+    severity: judgment.severity,
+    units: recognized.units,
+    components: recognized.components,
+    edge: recognized.edge,
+  };
+}
+
+function scopeProblems(entry, recognized, ctx) {
+  if (recognized.kind === PLAN_TARGET || entry.wider || isInScope(ctx.scope, entry.target)) return [];
+  return [`is outside the reviewed scope. Mark it "wider": true to report it as a wider observation.`];
+}
+
+function originProblems(entry, flow) {
+  if (flow === "audit") {
+    return Object.hasOwn(entry, "origin")
+      ? ["sets origin, which an audit does not have. Remove it: an audit has no base to compare with."]
+      : [];
+  }
+  if (entry.origin) return [];
+  return [
+    'has no origin. State "origin": "introduced" if the change creates the defect, or "inherited" if it leaves ' +
+      "a defect that was already there in place.",
+  ];
+}
+
+function existedAtBase(recognized, ctx) {
+  const created = new Set(ctx.scope?.created ?? []);
+  if (recognized.components.length > 0) {
+    const unitsOf = (name) => ctx.graph.units.filter((unit) => unit.component === name);
+    return recognized.components.some((name) => unitsOf(name).some((unit) => !created.has(unit.path)));
+  }
+  return recognized.units.length === 0 || recognized.units.some((path) => !created.has(path));
+}
+
+function inheritedProblems(entry, recognized, ctx) {
+  if (entry.origin !== "inherited" || existedAtBase(recognized, ctx)) return [];
+  return [
+    `states "origin": "inherited", but ${entry.target} did not exist at the base of the review: the change ` +
+      'created it, so the defect is "introduced". State "origin": "introduced".',
+  ];
+}
+
+function unitFits(unit, targets, model) {
+  if (targets.includes(unit.kind)) return true;
+  if (targets.includes("test-suite") && unit.kind === "test") return true;
+  if (DEFAULT_KINDS[unit.kind]) return false;
+  const role = model.kinds[unit.kind]?.role;
+  return targets.some((target) => DEFAULT_KINDS[target] && DEFAULT_KINDS[target].role === role);
+}
+
+function fitsJudgment(recognized, judgment, ctx) {
+  const { targets } = judgment;
+  if (recognized.kind === PLAN_TARGET) return targets.includes(PLAN_TARGET);
+  if (recognized.components.length > 0) return targets.includes("component");
+  if (recognized.kind === "port" && targets.includes("port")) return true;
+  const kindOf = new Map(ctx.graph.units.map((unit) => [unit.path, unit]));
+  return recognized.units.some((path) => unitFits(kindOf.get(path), targets, ctx.model));
+}
+
+function fitProblems(entry, judgment, recognized, ctx) {
+  if (fitsJudgment(recognized, judgment, ctx)) return [];
+  const applies = judgment.targets.map((target) => (target === "plan" ? "plan (plan-review only)" : target));
+  return [
+    `has the target "${entry.target}", which the judgment "${judgment.id}" does not apply to. ` +
+      `It applies to: ${applies.join(", ")}. Pick a target of that kind or another judgment.`,
+  ];
+}
+
+function liftProblems(entry, ctx) {
+  if (!entry.liftedBy || ctx.upcoming.includes(entry.liftedBy)) return [];
+  return [
+    `lifts for "${entry.liftedBy}", which nobody confirmed. ` +
+      "Ask the user, then pass the answer with --upcoming, or record it in the model.",
+  ];
+}
+
+function evidenceProblemsOf(entry, ctx) {
+  if (!(entry.evidence?.length > 0)) return [];
+  return evidenceProblems({ root: ctx.root, flow: ctx.flow, plan: ctx.plan, evidence: entry.evidence });
+}
+
+function liftedToBlocker({ severity, lifts }) {
+  const lifted = highestSeverity("blocker", severity);
+  return { severity: lifted, lifts: lifted === severity ? lifts : [...lifts, LIFT_RULE] };
+}
+
+function originOf(entry, flow) {
+  return flow === "audit" ? "none" : entry.origin;
+}
+
+function buildFinding({ entry, file, judgment, row, context, flow, graph }) {
+  const escalated = escalateRow(row, context);
+  const { severity, lifts } = entry.liftedBy ? liftedToBlocker(escalated) : escalated;
+  return {
+    target: entry.target,
+    defect: judgment.defect,
+    rules: judgment.rules,
+    severity,
+    baseSeverity: judgment.severity,
+    lifts,
+    status: statusForRow(context.model, judgment.rules, rowComponents(row, context)),
+    origin: originOf(entry, flow),
+    provenance: "judged",
+    judgedFiles: [file],
+    consequence: entry.consequence.trim(),
+    corrections: [entry.correction.trim()],
+    evidence: entry.evidence,
+    wider: entry.wider === true,
+    ...(entry.liftedBy && { liftedBy: entry.liftedBy }),
+    component: componentOfTarget(graph, entry.target),
+    units: unitsOfTarget(graph, entry.target, judgment.defect),
+  };
+}
+
+function unknownJudgment(id) {
+  return `names the judgment "${id}", which does not exist. Use a judgment id from the rule group files.`;
+}
+
+function planTargetOutsidePlanReview() {
+  return 'has the target "plan", which only a plan-review finding may use. Name the unit, edge, port, or component.';
+}
+
+function recognize(target, ctx) {
+  if (target !== PLAN_TARGET) return recognizeTarget(ctx.graph, target);
+  return ctx.flow === "plan-review" ? PLAN_RECOGNIZED : null;
+}
+
+function unknownTarget(target) {
+  const kinds = "a unit path, an edge <from> -> <to>, a port <path>#<Symbol>, a component name, or a proposed unit";
+  return `has the target "${target}", which the graph does not know. Use ${kinds}.`;
+}
+
+function examine(entry, ctx) {
+  const early = [...setByJudgmentProblem(entry), ...completenessProblems(entry), ...originProblems(entry, ctx.flow)];
+  const judgment = JUDGMENTS.find((candidate) => candidate.id === entry.judgment);
+  if (!judgment) return { problems: [...early, unknownJudgment(entry.judgment)] };
+  const recognized = recognize(entry.target, ctx);
+  if (!recognized && entry.target === PLAN_TARGET) return { problems: [...early, planTargetOutsidePlanReview()] };
+  if (!recognized) return { problems: [...early, unknownTarget(entry.target)] };
+  const row = escalationRow(recognized, entry.target, judgment);
+  const problems = [
+    ...early,
+    ...fitProblems(entry, judgment, recognized, ctx),
+    ...scopeProblems(entry, recognized, ctx),
+    ...inheritedProblems(entry, recognized, ctx),
+    ...liftProblems(entry, ctx),
+    ...evidenceProblemsOf(entry, ctx),
+  ];
+  return { problems, judgment, row };
+}
+
+function labelOf({ entry, index, file }) {
+  return `${file}: findings[${index}] (${entry.target ?? entry.judgment ?? "no target"})`;
+}
+
+function refuse(problems) {
+  throw new UsageError(
+    `judged findings were refused and nothing was stored:\n${problems.map((p) => `  ${p}`).join("\n")}\n` +
+      "Correct the judged findings file and run arch findings add again.",
+  );
+}
+
+function entriesOf(documents) {
+  return documents.flatMap(({ file, document }) => document.findings.map((entry, index) => ({ entry, index, file })));
+}
+
+function documentShapeProblems(documents) {
+  return documents.flatMap(({ file, document }) => shapeProblems(document).map((problem) => `${file}: ${problem}`));
+}
+
+const DROP_REASONS = { off: "rule off", covered: "covered by an exception" };
+
+function judgedOutcome(judgment, row, context) {
+  const isOff = (rules) => statusForRow(context.model, rules, rowComponents(row, context)) === "off";
+  if (isOff(judgment.rules)) return { reason: DROP_REASONS.off };
+  const rules = rulesLeftUncovered({ ...row, rules: judgment.rules }, context);
+  if (rules.length === 0) return { reason: DROP_REASONS.covered };
+  return isOff(rules) ? { reason: DROP_REASONS.off } : { rules };
+}
+
+export function judgedFindings({ documents, flow, plan, root, model, graph, scope, upcoming }) {
+  const shape = documentShapeProblems(documents);
+  if (shape.length > 0) refuse(shape);
+  const context = createContext({ graph, model });
+  const ctx = { flow, plan, root, graph, model, scope, upcoming, context };
+  const located = entriesOf(documents);
+  const examined = located.map(({ entry }) => examine(entry, ctx));
+  const disputes = disputesOf(documents);
+  const problems = [
+    ...examined.flatMap((result, position) =>
+      result.problems.map((problem) => `${labelOf(located[position])} ${problem}`),
+    ),
+    ...disputeProblems(disputes, graph),
+  ];
+  if (problems.length > 0) refuse(problems);
+  const findings = [];
+  const dropped = [];
+  examined.forEach(({ judgment, row }, position) => {
+    const { entry, file } = located[position];
+    const { reason, rules } = judgedOutcome(judgment, row, context);
+    if (reason) dropped.push({ target: entry.target, judgment: judgment.id, reason });
+    else findings.push(buildFinding({ entry, file, judgment: { ...judgment, rules }, row, context, flow, graph }));
+  });
+  return { findings, dropped, disputes: disputes.map(({ dispute }) => dispute) };
+}

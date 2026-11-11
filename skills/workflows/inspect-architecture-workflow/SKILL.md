@@ -1,13 +1,14 @@
 ---
 name: inspect-architecture-workflow
 description: >-
-  For the architecture-coordinator agent, or another architect agent, in a
-  dedicated architecture audit, a change review of a diff, or a review of an
-  implementation plan before its approval. Not for implementers or planners.
+  Use to record a project's architecture baseline, or for a dedicated architecture audit, an
+  architecture review of a diff, or an architecture review of an implementation plan or spec before
+  approval, passing the flow name `baseline`, `audit`, `change-review`, or `plan-review`.
 compatibility: >-
-  Requires dispatching read-only agents as subagents, and write access to the committed
-  architecture folder and an ignored ledger folder. Change and plan review need
-  a committed baseline; when none exists the coordinator produces one first.
+  Dispatches the architecture-reviewer and architecture-classifier agents as subagents; in a
+  harness without them, dispatch a generic read-only subagent given that agent's prompt instead.
+  Runs the bundled command with Node and git. The inspected project must provide an adapter
+  command that prints its dependency facts, as the adapter contract reference describes.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -15,136 +16,36 @@ metadata:
 
 # Inspect Architecture Workflow
 
-## Purpose
+This skill tells a team whether a change, a plan, or a codebase makes the next reasonable change
+harder, and names the smallest correction. A bundled command decides every condition it can from
+the project's dependency facts, and a reviewer agent judges only the rest by reading the code or
+the plan. Each project records which rules apply to it in one model file.
 
-Turn a codebase, a diff, or an implementation plan into an evidenced
-architecture assessment. The coordinator slices the work, dispatches read-only
-subagents, merges their rows, and owns two artifact sets: the committed
-architecture record, the project's architecture documentation, and the
-uncommitted refactoring ledger, the agents' working memory. It never edits
-production code.
-
-## Choose the mode, then follow its file
-
-| Mode | Use when | Procedure |
+| Flow | Use it for | Follow |
 |---|---|---|
-| Audit | Mapping a repository or a named area for the first time, or refreshing the baseline | `references/audit.md` |
-| Change review | Reviewing a diff against the committed baseline | `references/change-review.md` |
-| Plan review | Reviewing a written implementation plan before it is approved | `references/plan-review.md` |
+| `baseline` | Creating or refreshing the model and collecting the current picture; reviews nothing | [baseline](references/flows/baseline.md) |
+| `audit` | A deliberate review of a whole codebase against its model | [audit](references/flows/audit.md) |
+| `change-review` | A diff against a base commit; the routine path | [change review](references/flows/change-review.md) |
+| `plan-review` | A plan or spec before approval, before any code exists | [plan review](references/flows/plan-review.md) |
 
-Change review and plan review need a committed baseline for their scope. When
-none exists, run the audit procedure on the affected scope first, then
-continue, and report that the record must be committed with the PR. Never
-review a diff or plan against a graph that exists only in memory.
+The three review flows need a baseline: without a model each stops right after its first step, the
+model probe, runs nothing more, and asks for the `baseline` flow. Open only the flow you were given;
+it carries every command it runs. Each subcommand has its own page, such as
+[the check page](references/commands/check.md), read only when a command fails or a model edit is
+needed. The record path is `docs/architecture/` unless `--record` or
+`ARCH_RECORD_DIR` names another.
 
-Every mode ends with the verdict rules and return contract in
-`references/verdicts.md`.
+| Artifact | Holds | Notes |
+|---|---|---|
+| `architecture.json` | The whole model: components and their classification, ports, rule statuses with reasons, thresholds, forbidden edges, exceptions | In the record path. Edited only through `arch model` |
+| `current.md` | Counts, metrics, the component graph, threshold breaches | In the record path. Rewritten whole by `arch collect` |
+| `decisions.md` | Longer explanations for people | Optional. Nothing reads it |
+| `.architecture/graph/` | The graph cache | Never committed, disposable |
+| `.architecture/findings.json` | Open findings | Never committed. A resolved or accepted finding is removed |
+| `.architecture/work/` | A flow's working files | Never committed |
 
-## Artifacts
-
-**Committed record** at `docs/architecture/` in the inspected project, unless
-the project's agent instructions name another path. It holds judged facts
-only; everything derivable from the code is derived by the skill's command
-and never committed.
-
-| File | Holds |
-|---|---|
-| `model/components.json` | Tooling settings; components as path globs with enforcement mode, release unit, and entry-point globs |
-| `model/rules.json` | Ring order, framework names, and classification rules: glob to ring, kind, actors; first match wins |
-| `model/overrides.json` | Per-path exceptions to the rules |
-| `model/boundaries.json` | Declared ports (path, symbol, owner, humble side), shared data shapes, and cohesion groups (name, components, what kind of change it absorbs) |
-| `decisions.md` | Only decisions the workflows consume, at component or boundary level: deferred decisions and their ports, each cohesion group's explaining paragraph, cohesion position and cost per component, intended exceptions. Never a row per finding or per ticket |
-| `README.md` | Three paragraphs on the shape, how to read the folder, and a generated summary block the command fills |
-
-Agents change the model only through `model add-override`, `model add-port`,
-`model add-component`, `model add-rule`, and their removals, which write the
-files canonically; never by editing JSON text.
-
-**Derived graph** at `.architecture/graph/<commit>.json`, written by
-`node <skill>/scripts/arch.mjs graph` from the project root: units with
-component, ring, kind, actors, and export counts; edges with direction and
-crossings; externals; component metrics; component edges; cycles; uncovered
-modules. Deterministic from a commit, regenerated when missing, never
-committed. The command needs the project's language tooling installed; a
-language with no adapter stops the run with an escalation naming it.
-
-**Uncommitted ledger** at `.architecture/` in the inspected project. Confirm
-it is ignored before writing; if not, add it to the repository's local exclude
-file, never to a tracked ignore file.
-
-| File | Holds |
-|---|---|
-| `ledger.md` | Run log, change definitions, findings rows, acceptances, improvement map, pending record updates |
-| `change-history.md` | Per touched unit, the reason and actor of each recent change |
-| `slices/` | Raw subagent returns of the latest run |
-
-Every artifact opens with one header line. In the record it names the last
-full audit (date, commit, scope) and the last update (date, commit, mode); a
-write replaces that line in place, never adds one. The record carries no
-history of its own, since git and the ledger's run log do; nothing is ever
-appended to a record file outside its tables, and no model entry names a
-ticket, a PR, a plan step, a run, or a finding. A moved or renamed unit is the
-same unit under its new path; a vanished unit or edge simply leaves the graph.
-The ledger is derived state: start one when none exists; only the committed
-record is a required baseline. Ledger IDs and run numbers are transitory and
-never appear in a committed file; the record names a finding only by its target
-(a unit path, an edge as paths, a port as path:symbol, or a component ID) and
-the rule number.
-
-## Shared references
-
-- `references/rules/preface.md`: the catalog preface and vocabulary, read
-  before any rule file. `references/rules/cross-cutting.md` holds R1 to R3;
-  `references/rules/w1.md` through `references/rules/w8.md` hold each
-  evaluation workflow's rules.
-- `references/workflows/preamble.md`: shared row columns and severity scale;
-  `references/workflows/w1.md` through `references/workflows/w8.md` hold each
-  workflow's inputs, procedure, and decision table.
-- `references/mapping.md`: how classification rules and overrides cover every module.
-- `references/slicing.md`: subagent packets, returns, and merge rules.
-- `references/command.md`: the arch command's subcommands, flags, and queries.
-- `references/metrics.md`: instability, abstractness, distance.
-- `references/verdicts.md`: row verdicts, severity escalation, return contract.
-- Templates: `assets/docs/README.md`, `assets/docs/decisions.md`,
-  `assets/docs/model/components.json`, `assets/docs/model/rules.json`,
-  `assets/docs/model/overrides.json`, `assets/docs/model/boundaries.json`,
-  `assets/ledger/ledger.md`, `assets/ledger/change-history.md`.
-
-## Cost
-
-A run's cost is agent sessions, not skill text.
-
-- Callers run the structural precheck before dispatching a review, by hand,
-  with no command: they match the plan's or diff's file list against the globs
-  in `docs/architecture/model/components.json`. A plan or diff whose files all
-  fall in one component, adding no package, port, cross-component import, or
-  external dependency, is not reviewed. `arch query touched` belongs to change
-  review.
-- Mapping is a command, not an agent: `arch graph`, `arch diff`, and
-  `arch uncovered`. A mapping agent is dispatched only for uncovered modules.
-- `arch assess` decides the structural decision-table rows that are a
-  function of the graph alone before the evaluator runs, so an evaluator
-  judges only what it leaves unmarked.
-- Packets name skill files by absolute path and carry query output, never
-  pasted graph rows.
-- Audit fans out one evaluator per workflow; change and plan review dispatch
-  one evaluator for every applicable workflow.
-- Evaluators judge query output and open no project file.
-- The history slice is `arch query volatility`, not an agent.
-- The ledger is kept by `arch ledger` subcommands; the coordinator never
-  edits its tables by hand.
-- The return contract reports agents dispatched and tokens when the harness
-  shows them.
-
-## Discipline
-
-- No verdict without a query result and a rule number; evidence is a target
-  and the rule.
-- Subagents never write artifacts; the coordinator merges and writes.
-- Structural findings are added to functional findings a caller also asked
-  for, never substituted for them.
-- Do not invent boundaries the code does not have; when it draws none, the
-  record says so and W5 and W8 report it.
-- Do not propose restructuring beyond the scope unless the scope's own edges
-  create the problem; report wider observations in the return contract's
-  out-of-scope line. Only an audit writes open questions to `decisions.md`.
+- Never propose a service split, a tier, or another deployment-topology change unless the scope asks for one.
+- Never propose more than the smallest correction that removes the named consequence, or a refactor only to match a pattern.
+- Never report a check that lacks a fact, or a missing classification, as passing.
+- Never let a finding's severity depend on whether a check or a reviewer produced it.
+- Never let the artifacts grow with the number of runs, tickets, or findings resolved.

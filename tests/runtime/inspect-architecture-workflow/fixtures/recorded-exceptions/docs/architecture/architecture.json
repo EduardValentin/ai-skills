@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "adapter": "cat adapter.json",
+  "record": "committed",
+  "components": [
+    { "name": "lending", "paths": ["src/lending/**"], "enforcement": "boundary-lint", "classify": [
+        ["loan-period.ts", "mixed", { "ring": "entities", "valueType": true }],
+        ["loan-store.ts", "port"],
+        ["**", "entity"] ] },
+    { "name": "storage", "paths": ["src/storage/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "adapter"] ] },
+    { "name": "web", "paths": ["src/web/**"], "classify": [
+        ["**", "controller"] ] },
+    { "name": "catalog", "paths": ["src/catalog/**"], "published": ["api/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "entity"] ] },
+    { "name": "reports", "paths": ["src/reports/**"], "classify": [
+        ["**", "entity"] ] }
+  ],
+  "ports": [
+    { "at": "src/lending/loan-store.ts#LoanStore", "owner": "lending" }
+  ],
+  "rules": {
+    "R27": ["advisory", "the catalog surface is still being settled, so thin use is reported but does not gate"],
+    "R38@reports": ["off", "reports is a read-only module reviewed by hand, with no build enforcement planned"]
+  },
+  "thresholds": { "componentUseShare": 0.6, "distanceDeviations": 10, "distanceMinComponents": 5 },
+  "exceptions": [
+    { "from": "src/lending/overdue-fee.ts", "to": "src/lending/loan-store.ts", "rule": "R17",
+      "reason": "the fee reads the loan count through the store until fees move to a use case" },
+    { "from": "lending", "to": "external:orm", "reason": "the mapping library is accepted for member identity" },
+    { "from": "src/catalog/api/search.ts#SuggestionSource", "to": "*", "reason": "published for a partner integration" },
+    { "from": "src/catalog/api/browse.ts", "to": "*", "reason": "browse is published ahead of its first consumer" }
+  ]
+}

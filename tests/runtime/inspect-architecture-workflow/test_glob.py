@@ -38,3 +38,19 @@ def test_suffix_pattern():
 def test_regex_characters_are_literal():
     assert matches("a/b.c/d.ts", "a/b.c/*.ts")
     assert not matches("a/bxc/d.ts", "a/b.c/*.ts")
+
+
+def test_compiled_glob_is_cached_per_glob():
+    script = (
+        f"import {{ compileGlob }} from '{GLOB.as_posix()}';"
+        "process.stdout.write(String(compileGlob('src/**') === compileGlob('src/**')"
+        " && compileGlob('src/**') !== compileGlob('lib/**')));"
+    )
+    result = run_node(script, Path.cwd())
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "true"
+
+
+def test_a_lone_double_star_matches_every_path():
+    assert matches("employee.ts", "**")
+    assert matches("nested/deep/employee.ts", "**")

@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "adapter": "cat adapter.json",
+  "record": "committed",
+  "components": [
+    { "name": "lending", "paths": ["src/lending/**"], "enforcement": "boundary-lint", "classify": [
+        ["loan-period.ts", "mixed", { "ring": "entities", "valueType": true }],
+        ["loan-store.ts", "port"],
+        ["loan-request.ts", "boundary-data"],
+        ["**/*-use-case.ts", "use-case"],
+        ["**", "entity"] ] },
+    { "name": "storage", "paths": ["src/storage/**"], "enforcement": "boundary-lint", "classify": [
+        ["**/*.test.ts", "test"],
+        ["**", "adapter"] ] },
+    { "name": "notify", "paths": ["src/notify/**"], "classify": [
+        ["notifier.ts", "port", { "ring": "adapters" }],
+        ["**", "adapter"] ] },
+    { "name": "web", "paths": ["src/web/**"], "classify": [
+        ["ui-shell.ts", "ui"],
+        ["loan-presenter.ts", "presenter"],
+        ["**", "controller"] ] },
+    { "name": "catalog", "paths": ["src/catalog/**"], "published": ["api/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "entity"] ] },
+    { "name": "reports", "paths": ["src/reports/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "entity"] ] },
+    { "name": "archive", "paths": ["src/archive/**"], "classify": [
+        ["**", "entity"] ] },
+    { "name": "kiosk", "paths": ["src/kiosk/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "controller"] ] }
+  ],
+  "ports": [
+    { "at": "src/lending/loan-store.ts#LoanStore", "owner": "lending" },
+    { "at": "src/notify/notifier.ts#Notifier", "owner": "notify" }
+  ],
+  "thresholds": { "componentUseShare": 0.6, "distanceMinComponents": 5 },
+  "forbidden": [
+    { "from": "web", "to": "notify", "reason": "delivery code reaches notifications through a use case" }
+  ]
+}

@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "capabilities": {
+    "exports": true,
+    "implements": true,
+    "constructs": true,
+    "signatures": true,
+    "symbolImports": true,
+    "typeChecks": true
+  },
+  "modules": [
+    {
+      "path": "src/catalog/api/browse.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "BrowseIndex",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/catalog/api/search.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "SearchIndex",
+          "types": []
+        },
+        {
+          "symbol": "SuggestionSource",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan-period.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanPeriod",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan-store.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanStore",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Loan",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/member.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Member",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/overdue-fee.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "OverdueFee",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/reports/monthly-report.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 25
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "MonthlyReport",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/sql-loan-store.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "LoanStore"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "SqlLoanStore",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/web/catalog-page.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "CatalogPage",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/web/report-controller.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "ReportController",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/lending/loan.ts",
+      "to": "src/lending/loan-period.ts",
+      "kind": "import",
+      "symbols": [
+        "LoanPeriod"
+      ]
+    },
+    {
+      "from": "src/lending/member.ts",
+      "external": {
+        "name": "orm",
+        "tag": "framework"
+      }
+    },
+    {
+      "from": "src/lending/overdue-fee.ts",
+      "to": "src/lending/loan-store.ts",
+      "kind": "import",
+      "symbols": [
+        "LoanStore"
+      ]
+    },
+    {
+      "from": "src/storage/sql-loan-store.ts",
+      "to": "src/lending/loan-store.ts",
+      "kind": "type-import",
+      "symbols": [
+        "LoanStore"
+      ]
+    },
+    {
+      "from": "src/web/catalog-page.ts",
+      "to": "src/catalog/api/search.ts",
+      "kind": "import",
+      "symbols": [
+        "SearchIndex"
+      ]
+    },
+    {
+      "from": "src/web/report-controller.ts",
+      "to": "src/reports/monthly-report.ts",
+      "kind": "import",
+      "symbols": [
+        "MonthlyReport"
+      ]
+    }
+  ],
+  "warnings": []
+}

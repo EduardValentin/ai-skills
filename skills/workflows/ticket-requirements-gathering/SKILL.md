@@ -2,7 +2,7 @@
 name: ticket-requirements-gathering
 description: Use when gathering, clarifying, documenting, and approving requirements and an implementation plan for one standalone implementation ticket.
 compatibility: >-
-  Full operation requires ticket-tracker and repository access, and the `architecture-coordinator` agent when the user selects architecture plan review; if that review is selected and the agent is unavailable, plan approval is blocked and the handoff names the missing collaborator. Read-only discovery agents are optional. `ticket-workflow` may consume the approved handoff. Stop only when missing access could materially change scope, behavior, acceptance criteria, or the plan.
+  Requires tracker and repository access and, for a selected architecture plan review, the `inspect-architecture-workflow` skill's `architecture-reviewer` and `architecture-classifier`; a missing agent is replaced by a fresh generic read-only subagent given its prompt, and a missing skill blocks plan approval. Discovery agents are optional. `ticket-workflow` may consume the handoff. Stop only when missing access could materially change scope, behavior, acceptance criteria, or the plan.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -73,11 +73,10 @@ unavailable.
 6. Ask the user once which reviewers this ticket runs, covering both the plan
    gate and the implementation review gate, and record the answer as the
    reviewer selection. Present the list with these defaults: selected,
-   `acceptance-criteria-reviewer` and `code-cleanliness-reviewer`; selected
-   when the repository keeps a design system and the ticket touches UI,
-   `design-system-reviewer`; not selected, `security-reviewer`,
-   `performance-reviewer`, architecture plan review, and architecture change
-   review (both run by `architecture-coordinator`). The user may change any
+   `code-cleanliness-reviewer`; not selected, `acceptance-criteria-reviewer`,
+   `design-system-reviewer`, `security-reviewer`, `performance-reviewer`,
+   architecture plan review, and architecture change review (both run
+   through the `inspect-architecture-workflow` skill). The user may change any
    default. The selection travels in the handoff and is reused for reruns and
    remediation rounds; it is asked again only when the user asks to change
    it.
@@ -111,34 +110,32 @@ Write an implementation plan grounded in the approved spec/design, ticket
 context, relevant repository evidence, and verification surfaces. Do not edit
 product code or tests.
 
-Before dispatching, run the structural precheck at no agent cost: list the
-files the plan creates or edits and place each in components by matching
-paths against the globs in `docs/architecture/model/components.json`.
-Dispatch only when the files fall in two or more components, or the plan adds
-a package, a port, an import between components, or an external dependency,
-or no committed record exists. Otherwise record `architecture plan review:
-skipped, single-component plan` in the handoff and present the plan without
-it.
+When the reviewer selection includes architecture plan review, invoke the
+`inspect-architecture-workflow` skill with `plan-review` before presenting the
+plan and follow its flow yourself, with the written plan's path and the
+upcoming changes the plan states. The plan need not use architecture
+vocabulary: the flow's `architecture-reviewer` turns it into concrete files
+and imports, then reviews the plan whenever any judgment rule applies to it,
+however small the plan; only a plan that touches no code and changes no
+dependency gets no agent, and the result says so. No precheck can skip that
+review. The flow prints a verdict, findings with corrections phrased
+for the plan, clarification requests where the plan is not concrete enough,
+and questions for the user; put the questions to the user.
 
-When the reviewer selection includes architecture plan review and the precheck
-passes, dispatch the
-`architecture-coordinator` agent in plan-review mode before presenting the
-plan, with the written plan, the approved spec/design, the ticket context, and
-repository instructions. The plan need not use architecture vocabulary: the
-coordinator reads it for concrete file, import, and test facts and derives the
-rest from the committed architecture record. It returns a verdict, findings by
-rule phrased in the plan's own terms, clarification requests where the plan is
-not concrete enough, and the direction. A
-`SHOULD_CHANGE` verdict or an open clarification blocks approval: answer the
-clarifications, revise the plan for every blocker and major finding, and
-re-dispatch with the revised sections, the prior findings and their
-dispositions, asking the coordinator to confirm each finding is resolved and
-review only the revision; or present a finding to the user, who may
-explicitly accept it with a reason that the coordinator records. When the coordinator reports that no committed
-architecture baseline existed and it created one, the handoff states that the
-baseline must be committed with the ticket's PR. When the selection excludes
-plan review, record `architecture plan review: not selected` in the handoff
-and present the plan without it.
+`OK` passes. When the project has no architecture model, the flow stops
+before any review and asks for the baseline flow. Stop at that gate and ask
+the user to choose: run `inspect-architecture-workflow` with `baseline` now
+and then continue with the plan review, or continue without an architecture
+plan review. That choice removes architecture plan review from this plan
+gate's selection, so plan revisions neither re-enter the flow nor ask again,
+and the handoff records `architecture review: not run, no baseline`. Never
+pass that gate silently, and never create the model on your own initiative. `SHOULD_CHANGE` or `INCOMPLETE` blocks approval: answer the
+clarifications and revise the plan within the revisions the flow allows, or
+present a finding to the user, who may accept it with a reason through the
+model edit the flow names. Only the user accepts a finding. When the
+selection excludes plan review, no architecture plan review runs: record
+`architecture plan review: not selected` in the handoff and present the plan
+without it.
 
 Present the plan, together with the plan-review return when one exists, and
 obtain separate explicit approval of the plan.
@@ -157,11 +154,12 @@ After plan approval, return:
 - written spec/design and its explicit approval evidence;
 - written implementation plan and its separate approval evidence;
 - the reviewer selection for both gates;
-- architecture plan-review evidence when selected: verdict, ledger path,
-  findings the user explicitly accepted with reasons, and whether
-  a baseline was created that must be committed with the PR; otherwise
-  `architecture plan review: not selected` or `architecture plan review:
-  skipped, single-component plan`;
+- architecture plan-review evidence when selected: the printed verdict line,
+  `.architecture/findings.json`, the clarification requests, the revisions
+  made, and the model edits by which the user accepted findings, with their
+  reasons; or `architecture review: not run, no baseline` when the user chose
+  to continue without a model; otherwise `architecture plan review: not
+  selected`;
 - accepted assumptions, remaining open questions, and material risks;
 - required verification surfaces.
 

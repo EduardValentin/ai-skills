@@ -1,0 +1,272 @@
+{
+  "version": 1,
+  "capabilities": {
+    "exports": true,
+    "implements": true,
+    "constructs": true,
+    "signatures": true,
+    "symbolImports": true,
+    "typeChecks": true
+  },
+  "modules": [
+    {
+      "path": "src/app/cli.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "runCli",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/app/config.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "storageFolder",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/app/main.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [
+        {
+          "symbol": "FileInvoiceStore",
+          "path": "src/storage/file-invoice-store.ts"
+        },
+        {
+          "symbol": "IssueInvoiceUseCase",
+          "path": "src/billing/issue-invoice-use-case.ts"
+        }
+      ],
+      "signatures": [
+        {
+          "symbol": "main",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/billing/invoice-store.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "InvoiceStore",
+          "types": [
+            {
+              "symbol": "Invoice",
+              "path": "src/billing/invoice.ts"
+            }
+          ]
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/billing/invoice.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Invoice",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/billing/issue-invoice-use-case.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "IssueInvoiceUseCase",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/billing/line-item.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LineItem",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/billing/money.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Money",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/file-invoice-store.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "InvoiceStore"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "FileInvoiceStore",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/app/cli.ts",
+      "to": "src/billing/issue-invoice-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "IssueInvoiceUseCase"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/app/config.ts",
+      "kind": "import",
+      "symbols": [
+        "storageFolder"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/billing/issue-invoice-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "IssueInvoiceUseCase"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/storage/file-invoice-store.ts",
+      "kind": "import",
+      "symbols": [
+        "FileInvoiceStore"
+      ]
+    },
+    {
+      "from": "src/billing/invoice-store.ts",
+      "to": "src/billing/invoice.ts",
+      "kind": "type-import",
+      "symbols": [
+        "Invoice"
+      ]
+    },
+    {
+      "from": "src/billing/invoice.ts",
+      "to": "src/billing/money.ts",
+      "kind": "import",
+      "symbols": [
+        "Money"
+      ]
+    },
+    {
+      "from": "src/billing/issue-invoice-use-case.ts",
+      "to": "src/billing/invoice-store.ts",
+      "kind": "type-import",
+      "symbols": [
+        "InvoiceStore"
+      ]
+    },
+    {
+      "from": "src/billing/issue-invoice-use-case.ts",
+      "to": "src/billing/invoice.ts",
+      "kind": "import",
+      "symbols": [
+        "Invoice"
+      ]
+    },
+    {
+      "from": "src/billing/issue-invoice-use-case.ts",
+      "to": "src/billing/line-item.ts",
+      "kind": "import",
+      "symbols": [
+        "LineItem"
+      ]
+    },
+    {
+      "from": "src/billing/line-item.ts",
+      "to": "src/billing/money.ts",
+      "kind": "import",
+      "symbols": [
+        "Money"
+      ]
+    },
+    {
+      "from": "src/storage/file-invoice-store.ts",
+      "to": "src/billing/invoice-store.ts",
+      "kind": "type-import",
+      "symbols": [
+        "InvoiceStore"
+      ]
+    },
+    {
+      "from": "src/storage/file-invoice-store.ts",
+      "to": "src/billing/invoice.ts",
+      "kind": "import",
+      "symbols": [
+        "Invoice"
+      ]
+    }
+  ],
+  "warnings": []
+}

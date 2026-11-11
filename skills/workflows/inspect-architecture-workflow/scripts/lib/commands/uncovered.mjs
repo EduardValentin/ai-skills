@@ -1,13 +1,14 @@
-import { parseFlags, savedInputs } from "../args.mjs";
-import { loadOrBuildGraph } from "../graph.mjs";
+import { parseArgs } from "../cli/flags.mjs";
+import { loadGraph } from "../graph/load.mjs";
+import { requireModel } from "../model/load.mjs";
 
-export async function run(args, ctx) {
-  const { flags } = parseFlags(args);
-  const graph = await loadOrBuildGraph(ctx.root, savedInputs(flags));
-  if (flags.json) {
-    console.log(JSON.stringify(graph.uncovered));
-  } else {
-    for (const path of graph.uncovered) console.log(path);
-  }
+export const UNCOVERED_SPEC = { flags: {}, positional: { min: 0, max: 0 } };
+
+export async function run(args, { root }) {
+  const { flags } = parseArgs(UNCOVERED_SPEC, args);
+  const model = requireModel(root, flags);
+  const graph = await loadGraph(root, model, { flags });
+  if (flags.json) console.log(JSON.stringify(graph.uncovered));
+  else for (const path of graph.uncovered) console.log(path);
   return graph.uncovered.length > 0 ? 1 : 0;
 }

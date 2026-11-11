@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "adapter": "cat adapter.json",
+  "record": "committed",
+  "components": [
+    { "name": "billing", "paths": ["src/billing/**"], "enforcement": "boundary-lint",
+      "published": ["invoice.ts", "invoice-store.ts", "issue-invoice-use-case.ts"], "classify": [
+        ["invoice-store.ts", "port"],
+        ["**/*-use-case.ts", "use-case"],
+        ["**", "entity"] ] },
+    { "name": "storage", "paths": ["src/storage/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "adapter"] ] },
+    { "name": "app", "paths": ["src/app/**"], "enforcement": "boundary-lint", "entry": ["main.ts"], "classify": [
+        ["main.ts", "composition-root"],
+        ["config.ts", "config"],
+        ["**", "entry-point"] ] }
+  ],
+  "ports": [
+    { "at": "src/billing/invoice-store.ts#InvoiceStore", "owner": "billing", "humble": "adapters" }
+  ]
+}

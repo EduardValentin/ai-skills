@@ -1,0 +1,86 @@
+import { ToolingError, UsageError } from "../cli/errors.mjs";
+import { parseArgs } from "../cli/flags.mjs";
+import { concernsEnforcedRule } from "../checks/status.mjs";
+import { renderCheckMarkdown } from "../checks/render.mjs";
+import { proposalComparison } from "../checks/proposal.mjs";
+import { runChecks } from "../checks/run.mjs";
+import { touchedScope } from "../checks/scope.mjs";
+import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
+import { runRecord } from "../findings/binding.mjs";
+import { STOPPING } from "../findings/verdict.mjs";
+import { loadGraph } from "../graph/load.mjs";
+import { requireModel } from "../model/load.mjs";
+import { componentCommitCounts } from "../queries/history.mjs";
+
+export const CHECK_EXCLUSIVE = ["base", "proposal"];
+
+export const CHECK_SPEC = {
+  flags: { base: "git-ref", out: "value", proposal: "value", strict: "boolean" },
+  positional: { min: 0, max: 0 },
+};
+
+function printWarnings(graph) {
+  for (const warning of graph.warnings) console.error(warning);
+}
+
+async function historyOf(root, model, upTo = "HEAD") {
+  try {
+    return await componentCommitCounts({ model, root, upTo });
+  } catch (error) {
+    if (error instanceof ToolingError) return null;
+    throw error;
+  }
+}
+
+async function subjectOf(root, model, flags) {
+  if (flags.proposal) {
+    const comparison = await proposalComparison({ root, model, file: flags.proposal });
+    return { ...comparison, history: await historyOf(root, model) };
+  }
+  const graph = await loadGraph(root, model, { flags });
+  if (!flags.base) return { graph, clarifications: [] };
+  const baseGraph = await loadGraph(root, model, { ref: flags.base, flags });
+  const touched = await touchedScope(root, graph, flags.base);
+  return { graph, baseGraph, touched, history: await historyOf(root, model, flags.base), clarifications: [] };
+}
+
+function countedRows(result, flags) {
+  const compared = flags.base || flags.proposal;
+  return result.rows.filter((row) => row.status === "enforced" && (!compared || row.origin === "introduced"));
+}
+
+function breaches(result, flags) {
+  return countedRows(result, flags).some((row) => flags.strict || STOPPING.includes(row.severity));
+}
+
+function leavesEnforcedRuleUndecided(result, model, flags) {
+  return flags.strict && result.incomplete.some((entry) => concernsEnforcedRule(model, entry.rules));
+}
+
+async function emit(output, flags, root) {
+  if (!flags.out) {
+    console.log(flags.json ? JSON.stringify(output, null, 2) : renderCheckMarkdown(output));
+    return;
+  }
+  await writeWorkFile(root, flags.out, `${JSON.stringify(output, null, 2)}\n`);
+  console.log(`wrote ${flags.out}: ${output.rows.length} findings, ${output.incomplete.length} incomplete`);
+}
+
+export async function run(args, { root }) {
+  const { flags } = parseArgs(CHECK_SPEC, args);
+  for (const name of ["proposal", "out"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
+  if (CHECK_EXCLUSIVE.every((name) => flags[name])) {
+    throw new UsageError(
+      "--proposal cannot be combined with --base: a plan has no commits to compare with. " +
+        "Use --base to review a diff, or --proposal to review a plan.",
+    );
+  }
+  const model = requireModel(root, flags);
+  const { clarifications, ...subject } = await subjectOf(root, model, flags);
+  printWarnings(subject.graph);
+  const result = runChecks({ model, ...subject });
+  const incomplete = [...result.incomplete, ...clarifications];
+  const output = { run: await runRecord({ root, model, flags }), ...result, incomplete };
+  await emit(output, flags, root);
+  return breaches(result, flags) || leavesEnforcedRuleUndecided(output, model, flags) ? 1 : 0;
+}

@@ -1,0 +1,673 @@
+{
+  "version": 1,
+  "capabilities": {
+    "exports": true,
+    "implements": true,
+    "constructs": true,
+    "signatures": true,
+    "symbolImports": true,
+    "typeChecks": true
+  },
+  "modules": [
+    {
+      "path": "src/archive/retention-policy.ts",
+      "exports": {
+        "abstract": 2,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "RetentionPolicy",
+          "types": []
+        },
+        {
+          "symbol": "RetentionWindow",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/catalog/api/search.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "SearchIndex",
+          "types": []
+        },
+        {
+          "symbol": "SuggestionSource",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/catalog/internal/index-builder.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "IndexBuilder",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/kiosk/loan-command.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanCommand",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan-period.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanPeriod",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan-request.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanRequest",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan-store.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanStore",
+          "types": [
+            {
+              "symbol": "SqlRow",
+              "path": "src/storage/sql-row.ts"
+            }
+          ]
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan-use-case.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanUseCase",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/loan.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Loan",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/member.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Member",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/overdue-fee.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "OverdueFee",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/penalty.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Penalty",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/renewal-use-case.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "RenewalUseCase",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/reservation.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Reservation",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/lending/waiver.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Waiver",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/notify/mail-notifier.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "Notifier"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "MailNotifier",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/notify/notifier.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Notifier",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/reports/monthly-report.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 25
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "MonthlyReport",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/audit-log.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "AuditLog",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/loan-store.test.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "loanStoreFixture",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/sql-loan-store.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "LoanStore"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "SqlLoanStore",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/sql-row.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "SqlRow",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/web/catalog-page.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "CatalogPage",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/web/loan-controller.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [
+        {
+          "symbol": "SqlLoanStore",
+          "path": "src/storage/sql-loan-store.ts"
+        }
+      ],
+      "signatures": [
+        {
+          "symbol": "LoanController",
+          "types": []
+        }
+      ],
+      "typeChecks": [
+        {
+          "symbol": "SqlLoanStore",
+          "path": "src/storage/sql-loan-store.ts",
+          "line": 6
+        }
+      ]
+    },
+    {
+      "path": "src/web/loan-presenter.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanPresenter",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/web/report-controller.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "ReportController",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/web/ui-shell.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "renderShell",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/lending/loan-request.ts",
+      "to": "src/lending/loan.ts",
+      "kind": "import",
+      "symbols": [
+        "Loan"
+      ]
+    },
+    {
+      "from": "src/lending/loan-store.ts",
+      "to": "src/storage/sql-row.ts",
+      "kind": "type-import",
+      "symbols": [
+        "SqlRow"
+      ]
+    },
+    {
+      "from": "src/lending/loan-use-case.ts",
+      "to": "src/storage/sql-loan-store.ts",
+      "kind": "import",
+      "symbols": [
+        "SqlLoanStore"
+      ]
+    },
+    {
+      "from": "src/lending/loan-use-case.ts",
+      "external": {
+        "name": "pg",
+        "tag": "vendor"
+      }
+    },
+    {
+      "from": "src/lending/loan.ts",
+      "to": "src/lending/loan-period.ts",
+      "kind": "import",
+      "symbols": [
+        "LoanPeriod"
+      ]
+    },
+    {
+      "from": "src/lending/member.ts",
+      "external": {
+        "name": "orm",
+        "tag": "framework"
+      }
+    },
+    {
+      "from": "src/lending/overdue-fee.ts",
+      "to": "src/lending/loan-store.ts",
+      "kind": "import",
+      "symbols": [
+        "LoanStore"
+      ]
+    },
+    {
+      "from": "src/lending/penalty.ts",
+      "to": "src/lending/waiver.ts",
+      "kind": "import",
+      "symbols": [
+        "Waiver"
+      ]
+    },
+    {
+      "from": "src/lending/renewal-use-case.ts",
+      "to": "src/storage/audit-log.ts",
+      "kind": "import",
+      "symbols": [
+        "AuditLog"
+      ]
+    },
+    {
+      "from": "src/lending/renewal-use-case.ts",
+      "to": "src/notify/notifier.ts",
+      "kind": "import",
+      "symbols": [
+        "Notifier"
+      ]
+    },
+    {
+      "from": "src/lending/reservation.ts",
+      "to": "src/lending/renewal-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "RenewalUseCase"
+      ]
+    },
+    {
+      "from": "src/lending/waiver.ts",
+      "to": "src/lending/penalty.ts",
+      "kind": "import",
+      "symbols": [
+        "Penalty"
+      ]
+    },
+    {
+      "from": "src/notify/mail-notifier.ts",
+      "to": "src/storage/audit-log.ts",
+      "kind": "import",
+      "symbols": [
+        "AuditLog"
+      ]
+    },
+    {
+      "from": "src/storage/sql-loan-store.ts",
+      "to": "src/lending/loan-store.ts",
+      "kind": "type-import",
+      "symbols": [
+        "LoanStore"
+      ]
+    },
+    {
+      "from": "src/storage/sql-loan-store.ts",
+      "to": "src/notify/mail-notifier.ts",
+      "kind": "import",
+      "symbols": [
+        "MailNotifier"
+      ]
+    },
+    {
+      "from": "src/storage/sql-loan-store.ts",
+      "to": "src/storage/loan-store.test.ts",
+      "kind": "import",
+      "symbols": [
+        "loanStoreFixture"
+      ]
+    },
+    {
+      "from": "src/web/catalog-page.ts",
+      "to": "src/catalog/api/search.ts",
+      "kind": "import",
+      "symbols": [
+        "SearchIndex"
+      ]
+    },
+    {
+      "from": "src/web/catalog-page.ts",
+      "to": "src/catalog/internal/index-builder.ts",
+      "kind": "import",
+      "symbols": [
+        "IndexBuilder"
+      ]
+    },
+    {
+      "from": "src/web/loan-controller.ts",
+      "to": "src/lending/loan-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "LoanUseCase"
+      ]
+    },
+    {
+      "from": "src/web/loan-controller.ts",
+      "to": "src/storage/sql-loan-store.ts",
+      "kind": "import",
+      "symbols": [
+        "SqlLoanStore"
+      ]
+    },
+    {
+      "from": "src/web/loan-presenter.ts",
+      "to": "src/web/ui-shell.ts",
+      "kind": "import",
+      "symbols": [
+        "renderShell"
+      ]
+    },
+    {
+      "from": "src/web/loan-presenter.ts",
+      "to": "src/notify/mail-notifier.ts",
+      "kind": "import",
+      "symbols": [
+        "MailNotifier"
+      ]
+    },
+    {
+      "from": "src/web/loan-presenter.ts",
+      "external": {
+        "name": "react",
+        "tag": "framework"
+      }
+    },
+    {
+      "from": "src/web/report-controller.ts",
+      "to": "src/reports/monthly-report.ts",
+      "kind": "import",
+      "symbols": [
+        "MonthlyReport"
+      ]
+    },
+    {
+      "from": "src/kiosk/loan-command.ts",
+      "to": "src/lending/loan-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "LoanUseCase"
+      ]
+    }
+  ],
+  "warnings": []
+}

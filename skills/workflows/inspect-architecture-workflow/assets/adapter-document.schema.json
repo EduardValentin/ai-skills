@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Adapter document",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "enum": [1] },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exports": { "type": "boolean" },
+        "implements": { "type": "boolean" },
+        "constructs": { "type": "boolean" },
+        "signatures": { "type": "boolean" },
+        "symbolImports": { "type": "boolean" },
+        "typeChecks": { "type": "boolean" }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "exports": {
+            "type": "object",
+            "required": ["abstract", "concrete"],
+            "additionalProperties": false,
+            "properties": {
+              "abstract": { "type": "integer", "minimum": 0 },
+              "concrete": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "implements": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "constructs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["symbol", "path"],
+              "additionalProperties": false,
+              "properties": {
+                "symbol": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "signatures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["symbol", "types"],
+              "additionalProperties": false,
+              "properties": {
+                "symbol": { "type": "string", "minLength": 1 },
+                "types": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["symbol", "path"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "symbol": { "type": "string", "minLength": 1 },
+                      "path": { "type": "string", "minLength": 1 }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "typeChecks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["symbol", "path", "line"],
+              "additionalProperties": false,
+              "properties": {
+                "symbol": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 },
+                "line": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from"],
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "enum": ["import", "type-import", "dynamic", "constructs"] },
+          "symbols": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "external": {
+            "type": "object",
+            "required": ["name", "tag"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "tag": { "type": "string", "enum": ["vendor", "framework", "runtime"] }
+            }
+          }
+        }
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

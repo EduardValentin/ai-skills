@@ -14,8 +14,9 @@ function segmentToRegExp(segment) {
     .replace(/\?/g, "[^/]");
 }
 
-export function globToRegExp(glob) {
+function buildRegExp(glob) {
   const sources = expandBraces(glob).map((variant) => {
+    if (variant === "**") return ".*";
     const parts = variant.split("/").map((segment) => {
       if (segment === "**") return "(?:.*/)?";
       return `${segmentToRegExp(segment)}/`;
@@ -26,6 +27,17 @@ export function globToRegExp(glob) {
   return new RegExp(`^(?:${sources.join("|")})$`);
 }
 
+const compiled = new Map();
+
+export function compileGlob(glob) {
+  if (!compiled.has(glob)) compiled.set(glob, buildRegExp(glob));
+  return compiled.get(glob);
+}
+
+export function globToRegExp(glob) {
+  return compileGlob(glob);
+}
+
 export function matchesAny(path, globs) {
-  return globs.some((glob) => globToRegExp(glob).test(path));
+  return globs.some((glob) => compileGlob(glob).test(path));
 }

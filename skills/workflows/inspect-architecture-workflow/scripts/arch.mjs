@@ -1,29 +1,43 @@
 #!/usr/bin/env node
 import process from "node:process";
-
-const USAGE = "usage: arch <graph|diff|query|assess|uncovered|model|ledger|readme-summary> [options]";
+import { ArchError, UsageError } from "./lib/cli/errors.mjs";
+import { run as runApplicable } from "./lib/commands/applicable.mjs";
+import { run as runCheck } from "./lib/commands/check.mjs";
+import { run as runCollect } from "./lib/commands/collect.mjs";
+import { run as runFindings } from "./lib/commands/findings.mjs";
+import { run as runModel } from "./lib/commands/model.mjs";
+import { run as runQuery } from "./lib/commands/query.mjs";
+import { run as runUncovered } from "./lib/commands/uncovered.mjs";
 
 const handlers = {
-  async graph(args, ctx) { const m = await import("./lib/commands/graph.mjs"); return m.run(args, ctx); },
-  async diff(args, ctx) { const m = await import("./lib/commands/diff.mjs"); return m.run(args, ctx); },
-  async query(args, ctx) { const m = await import("./lib/commands/query.mjs"); return m.run(args, ctx); },
-  async assess(args, ctx) { const m = await import("./lib/commands/assess.mjs"); return m.run(args, ctx); },
-  async uncovered(args, ctx) { const m = await import("./lib/commands/uncovered.mjs"); return m.run(args, ctx); },
-  async model(args, ctx) { const m = await import("./lib/commands/model.mjs"); return m.run(args, ctx); },
-  async ledger(args, ctx) { const m = await import("./lib/commands/ledger.mjs"); return m.run(args, ctx); },
-  async "readme-summary"(args, ctx) { const m = await import("./lib/commands/readme.mjs"); return m.run(args, ctx); },
+  collect: runCollect,
+  check: runCheck,
+  applicable: runApplicable,
+  findings: runFindings,
+  query: runQuery,
+  uncovered: runUncovered,
+  model: runModel,
 };
 
+function usageText() {
+  return `usage: arch <${Object.keys(handlers).join("|")}> [options]`;
+}
+
+function selectHandler(name) {
+  if (!name) throw new UsageError(`missing subcommand. ${usageText()}`);
+  if (!Object.hasOwn(handlers, name)) {
+    throw new UsageError(`unknown subcommand: ${name}. Known subcommands: ${Object.keys(handlers).join(", ")}.`);
+  }
+  return handlers[name];
+}
+
 async function main() {
-  const [sub, ...rest] = process.argv.slice(2);
-  if (!sub) { console.error(USAGE); return 1; }
-  const handler = handlers[sub];
-  if (!handler) { console.error(`unknown subcommand: ${sub}\n${USAGE}`); return 1; }
+  const [name, ...rest] = process.argv.slice(2);
   try {
-    return await handler(rest, { root: process.cwd() });
+    return await selectHandler(name)(rest, { root: process.cwd() });
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-    return 1;
+    return error instanceof ArchError ? error.exitCode : 2;
   }
 }
 

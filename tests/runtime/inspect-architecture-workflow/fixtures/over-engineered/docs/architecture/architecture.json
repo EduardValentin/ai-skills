@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "adapter": "cat adapter.json",
+  "record": "committed",
+  "components": [
+    { "name": "domain", "paths": ["src/domain/**"], "enforcement": "boundary-lint", "classify": [
+        ["note-validator.ts", "port"],
+        ["note-mapper.ts", "port"],
+        ["note-store.ts", "port"],
+        ["default-note-validator.ts", "use-case"],
+        ["**/*-use-case.ts", "use-case"],
+        ["**", "entity"] ] },
+    { "name": "facade", "paths": ["src/facade/**"], "enforcement": "boundary-lint", "classify": [
+        ["note-facade.ts", "port"],
+        ["**", "use-case"] ] },
+    { "name": "storage", "paths": ["src/storage/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "adapter"] ] },
+    { "name": "contracts", "paths": ["src/contracts/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "entity"] ] },
+    { "name": "hooks", "paths": ["src/hooks/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "entity"] ] },
+    { "name": "app", "paths": ["src/app/**"], "enforcement": "boundary-lint", "entry": ["main.ts"], "classify": [
+        ["main.ts", "composition-root"],
+        ["**", "entry-point"] ] }
+  ],
+  "ports": [
+    { "at": "src/domain/note-validator.ts#NoteValidator", "owner": "domain" },
+    { "at": "src/domain/note-mapper.ts#NoteMapper", "owner": "domain", "humble": "adapters" },
+    { "at": "src/domain/note-store.ts#NoteStore", "owner": "domain", "humble": "adapters" },
+    { "at": "src/facade/note-facade.ts#NoteFacade", "owner": "facade" }
+  ]
+}

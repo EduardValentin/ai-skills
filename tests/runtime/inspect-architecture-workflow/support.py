@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -14,7 +15,6 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_DIR = REPO_ROOT / "skills" / "workflows" / "inspect-architecture-workflow"
 ARCH = SKILL_DIR / "scripts" / "arch.mjs"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-FIXTURE_FLAGS = ["--dependencies-json", "cruise.json", "--facts-json", "facts.json"]
 
 
 def node_path() -> str:
@@ -38,9 +38,9 @@ def run_arch(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> s
     )
 
 
-def run_node(script: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+def run_node(script: str, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [node_path(), "--input-type=module", "-e", script],
+        [node_path(), "--input-type=module", "-e", script, *args],
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -49,12 +49,23 @@ def run_node(script: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+NO_MODEL_FRAGMENTS = ("no architecture model at", "Run the baseline flow first", "the flow name baseline")
+
+
+def assert_needs_baseline(result: subprocess.CompletedProcess[str]) -> None:
+    """The command refused to run without a model and named the baseline flow."""
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert result.stdout == ""
+    for fragment in NO_MODEL_FRAGMENTS:
+        assert fragment in result.stderr, result.stderr
+
+
 def copy_fixture(name: str, dest: Path) -> Path:
     shutil.copytree(FIXTURES / name, dest, dirs_exist_ok=True)
     return dest
 
 
-def git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args],
         cwd=cwd,
@@ -63,7 +74,7 @@ def git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         timeout=60,
         check=True,
         env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"},
+             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", **(env or {})},
     )
 
 

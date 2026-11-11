@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Architecture model",
+  "type": "object",
+  "required": ["version", "adapter", "components"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "enum": [2] },
+    "adapter": { "type": "string", "minLength": 1 },
+    "record": { "type": "string", "enum": ["committed", "local"] },
+    "rings": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "kinds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["role"],
+        "additionalProperties": false,
+        "properties": {
+          "role": { "type": "string", "enum": ["policy", "detail", "wiring", "neutral"] },
+          "ring": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "frameworks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "paths"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "paths": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "classify": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 3,
+              "prefixItems": [
+                { "type": "string", "minLength": 1 },
+                { "type": "string", "minLength": 1 },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "ring": { "type": "string", "minLength": 1 },
+                    "actors": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                    "reason": { "type": "string", "minLength": 1 },
+                    "valueType": { "type": "boolean" }
+                  }
+                }
+              ]
+            }
+          },
+          "entry": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "published": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "enforcement": { "type": "string" },
+          "release": { "type": "string" }
+        }
+      }
+    },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at", "owner"],
+        "additionalProperties": false,
+        "properties": {
+          "at": { "type": "string", "pattern": "^[^#]+#[^#]+$" },
+          "owner": { "type": "string", "minLength": 1 },
+          "humble": { "type": "string", "minLength": 1 },
+          "defers": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "shapes": { "type": "array", "items": { "type": "object" } },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "members", "absorbs"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "members": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "absorbs": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "prefixItems": [
+          { "type": "string", "enum": ["enforced", "advisory", "off"] },
+          { "type": "string", "minLength": 1 }
+        ]
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "properties": {
+        "interfaceUseShare": { "type": "number", "minimum": 0, "maximum": 1 },
+        "componentUseShare": { "type": "number", "minimum": 0, "maximum": 1 },
+        "painMaxInstability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "painMaxAbstractness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "uselessMinAbstractness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "uselessMinInstability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "distanceJump": { "type": "number", "minimum": 0, "maximum": 1 },
+        "detailReasonChanges": { "type": "integer", "minimum": 1 },
+        "escalationFanIn": { "type": "integer", "minimum": 1 },
+        "painMinFanIn": { "type": "integer", "minimum": 1 },
+        "painMinChanges": { "type": "integer", "minimum": 1 },
+        "planFixRounds": { "type": "integer", "minimum": 1 },
+        "distanceMinComponents": { "type": "integer", "minimum": 1 },
+        "distanceDeviations": { "type": "number", "exclusiveMinimum": 0 },
+        "historyWindow": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": { "type": ["number", "string"] }
+    },
+    "forbidden": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "pattern": "^R[0-9]+$" },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "upcoming": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}
