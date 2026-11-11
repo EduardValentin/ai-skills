@@ -220,32 +220,60 @@ def test_empty_finding_sections_are_left_out(tmp_path):
         assert heading not in result.stdout
 
 
-def test_findings_of_one_unit_with_different_corrections_are_grouped_as_overlapping(tmp_path):
+REMOVE_BASE = "Remove the framework base class from the entity."
+
+
+def audit_with_files(root: Path, tmp_path: Path, *documents: list[dict]):
+    check = check_file(root, tmp_path)
+    files = [write_json(tmp_path / f"judged-{index}.json", {"findings": findings, "questions": []})
+             for index, findings in enumerate(documents)]
+    judged_args = [arg for path in files for arg in ("--judged", str(path))]
+    return add(root, "audit", check, *judged_args), files
+
+
+def no_overlaps(result, root: Path) -> None:
+    assert result.returncode == 0, result.stderr
+    assert "Overlapping findings:" not in result.stdout
+    assert json.loads(run_arch(["findings", "list", "--json"], root).stdout)["overlaps"] == []
+
+
+def test_judged_findings_of_one_unit_from_two_reviewers_are_grouped_as_overlapping(tmp_path):
     root = workspace(tmp_path)
     seed_policy_to_detail_edge(root)
-    touch(root, EMPLOYEE)
-    result = change_review(root, tmp_path, finding())
+    traits = finding("entity-carries-framework-traits", correction=REMOVE_BASE)
+    result, files = audit_with_files(root, tmp_path, [finding()], [traits])
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
     start = lines.index("Overlapping findings:")
     assert lines[start + 1] == f"- {EMPLOYEE}:"
-    group = lines[start + 2:start + 4]
-    assert group[0].startswith("  - R4 Dependencies point toward policy; ")
-    assert f": {EMPLOYEE_TO_CLOCK}: Fix: Depend on the existing port `Clock`" in group[0]
-    assert group[1] == f"  - R10 One actor per module: {EMPLOYEE}: Fix: {SPLIT}"
+    assert lines[start + 2] == f"  - R10 One actor per module: {EMPLOYEE}: Fix: {SPLIT} (from {files[0]})"
+    assert lines[start + 3].endswith(f": {EMPLOYEE}: Fix: {REMOVE_BASE} (from {files[1]})")
+    assert not lines[start + 4].startswith("  - "), "a check row is listed among the overlapping findings"
     overlaps = json.loads(run_arch(["findings", "list", "--json"], root).stdout)["overlaps"]
     assert [entry["unit"] for entry in overlaps] == [EMPLOYEE]
-    assert [f["target"] for f in overlaps[0]["findings"]] == [EMPLOYEE_TO_CLOCK, EMPLOYEE]
+    assert [(f["target"], f["files"]) for f in overlaps[0]["findings"]] == [
+        (EMPLOYEE, [str(files[0])]), (EMPLOYEE, [str(files[1])]),
+    ]
 
 
-def test_findings_of_one_unit_with_the_same_correction_do_not_overlap(tmp_path):
+def test_a_check_row_and_a_judged_finding_of_one_unit_do_not_overlap(tmp_path):
     root = workspace(tmp_path)
+    seed_policy_to_detail_edge(root)
     touch(root, EMPLOYEE)
-    second = finding("entity-carries-framework-traits", EMPLOYEE)
-    result = change_review(root, tmp_path, finding(), second)
-    assert result.returncode == 0, result.stderr
-    assert "Overlapping findings:" not in result.stdout
-    assert json.loads(run_arch(["findings", "list", "--json"], root).stdout)["overlaps"] == []
+    no_overlaps(change_review(root, tmp_path, finding()), root)
+
+
+def test_judged_findings_of_one_unit_from_one_file_do_not_overlap(tmp_path):
+    root = workspace(tmp_path)
+    traits = finding("entity-carries-framework-traits", correction=REMOVE_BASE)
+    result, _ = audit_with_files(root, tmp_path, [finding(), traits])
+    no_overlaps(result, root)
+
+
+def test_judged_findings_of_one_unit_with_the_same_correction_do_not_overlap(tmp_path):
+    root = workspace(tmp_path)
+    result, _ = audit_with_files(root, tmp_path, [finding()], [finding("entity-carries-framework-traits")])
+    no_overlaps(result, root)
 
 
 def test_lift_needs_a_confirmed_upcoming_change(tmp_path):

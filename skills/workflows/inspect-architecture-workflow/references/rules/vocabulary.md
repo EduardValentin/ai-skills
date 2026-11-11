@@ -115,7 +115,7 @@ whenever a rule or a flow uses a word in a sense that seems narrower than everyd
 | Decisions file | An optional `decisions.md` beside the model, holding longer explanations for people, such as the cost each component's cohesion position accepts. No check reads it. |
 | Smallest correction | The least change inside the scope that removes the finding's consequence. |
 | Wider observation | A finding whose target lies outside the scope, or whose only correction is larger than the smallest change inside the scope. It keeps its target, consequence, and evidence, is reported apart, and never blocks. |
-| Overlapping findings | Findings of one run that name the same unit, as their target or as an edge end, with different corrections. `arch findings add` and `arch findings list` group them per unit so the fixes are weighed together and not applied one by one. |
+| Overlapping findings | Judged findings of one run, from two or more reviewers' judged files, that name the same unit, as their target or as an edge end, with different corrections. `arch findings add` and `arch findings list` group them per unit, and one reviewer reconciles them into one correction per unit, or states that they are independent. Check findings never overlap, since their corrections are fixed. |
 
 ## Flows and their files
 

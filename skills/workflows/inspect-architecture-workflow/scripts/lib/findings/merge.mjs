@@ -39,6 +39,7 @@ function mergeGroup(group) {
   const origin = (group.find((finding) => finding.provenance === "check") ?? first).origin;
   const provenances = new Set(group.map((finding) => finding.provenance));
   const liftedBy = group.find((finding) => finding.liftedBy)?.liftedBy;
+  const judgedFiles = union(group.map((finding) => finding.judgedFiles ?? []));
   return {
     ...first,
     rules: union(group.map((finding) => finding.rules)).sort((a, b) => ruleNumber(a) - ruleNumber(b)),
@@ -52,6 +53,7 @@ function mergeGroup(group) {
     evidence: union(group.map((finding) => finding.evidence)),
     wider: group.every((finding) => finding.wider),
     ...(liftedBy && { liftedBy }),
+    ...(judgedFiles.length > 0 && { judgedFiles }),
   };
 }
 

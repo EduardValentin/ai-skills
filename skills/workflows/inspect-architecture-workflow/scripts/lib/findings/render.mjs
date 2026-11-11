@@ -52,16 +52,32 @@ function runFindings(store) {
 }
 
 function overlapEntry(finding) {
-  return { target: finding.target, defect: finding.defect, rules: finding.rules, correction: finding.correction };
+  return {
+    target: finding.target,
+    defect: finding.defect,
+    rules: finding.rules,
+    correction: finding.correction,
+    files: finding.judgedFiles,
+  };
+}
+
+function isOnlyJudged(finding) {
+  return finding.provenance === "judged";
+}
+
+function comesFromParallelReviewers(group) {
+  const files = new Set(group.flatMap((finding) => finding.judgedFiles));
+  const corrections = new Set(group.map((finding) => finding.correction));
+  return files.size > 1 && corrections.size > 1;
 }
 
 function overlappingFindings(findings) {
   const byUnit = new Map();
-  for (const finding of findings) {
+  for (const finding of findings.filter(isOnlyJudged)) {
     for (const unit of finding.units ?? []) byUnit.set(unit, [...(byUnit.get(unit) ?? []), finding]);
   }
   return [...byUnit.entries()]
-    .filter(([, group]) => new Set(group.map((finding) => finding.correction)).size > 1)
+    .filter(([, group]) => comesFromParallelReviewers(group))
     .sort(([a], [b]) => naturalOrder(a, b))
     .map(([unit, group]) => ({ unit, findings: group.map(overlapEntry) }));
 }
@@ -122,7 +138,7 @@ function findingLine(finding) {
 }
 
 function overlapLine(entry) {
-  return `  - ${rulesText(entry.rules)}: ${entry.target}: Fix: ${entry.correction}`;
+  return `  - ${rulesText(entry.rules)}: ${entry.target}: Fix: ${entry.correction} (from ${entry.files.join(", ")})`;
 }
 
 function overlapLines(overlap) {

@@ -90,9 +90,11 @@ inherited counts, the incomplete conditions and why, the checks not run, the adv
 and the rules not enforced; then the corrections, grouped by correction and ordered by severity.
 Then come three sections, each left out when it is empty: `Inherited findings:` and `Wider
 observations:`, one line per finding in the form `<rule numbers and titles>: <target>:
-<consequence> Fix: <correction>`, and `Overlapping findings:`, one group per unit that two or more
-findings of this run name as their target or as an edge end with different corrections, so the
-fixes can be weighed together. Last come the questions for the user. The verdict is `OK`,
+<consequence> Fix: <correction>`, and `Overlapping findings:`, one group per unit that judged
+findings from two or more `--judged` files name as their target or as an edge end with different
+corrections, each followed by the file it came from. These are parallel reviewers proposing two
+fixes for one unit, to be reconciled into one. A check finding never overlaps, since its correction
+is fixed, and a single judged file never overlaps with itself. Last come the questions for the user. The verdict is `OK`,
 `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE`
 when none is and a condition of an enforced rule could not be decided. With `--rank`, a ranking
 follows; wider observations stay in their own section and are not ranked. Without a model, the result is the verdict `OK` and the line "no architecture model; run a
@@ -102,8 +104,8 @@ With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by
 `advisory`, `covered` (check findings an exception covered), `dropped` (each dropped judged finding
 with its `target`, `judgment`, and `reason`), `wider`, `incompleteCount`, `incompleteReasons`,
 `notRun`, `notEnforced`, `corrections`, `questions`, `overlaps` (each overlapping `unit` with its
-`findings`, each with `target`, `defect`, `rules`, and `correction`), `findings`, and with `--rank`
-a `ranking`.
+`findings`, each with `target`, `defect`, `rules`, `correction`, and `files`, the judged files it
+came from), `findings`, and with `--rank` a `ranking`.
 
 ## Example
 
@@ -126,16 +128,12 @@ Corrections:
 5. R23 Defer unforced decisions: src/domain/payroll-use-case.ts: Swapping the clock for tests or another runtime means editing the use case. Fix: Take the Clock port in the constructor and drop the SystemClock import.
 Inherited findings:
 - R38 Enforce boundaries with the build: domain: Nothing stops code from reaching into domain, so its boundary erodes unnoticed and its internals become hard to change. Fix: Enforce the boundary of domain with the compiler or the build, then record how in its enforcement field
-Overlapping findings:
-- src/domain/payroll-use-case.ts:
-  - R4 Dependencies point toward policy; R5 The consumer owns the port: src/domain/payroll-use-case.ts -> src/adapters/system-clock.ts: Fix: Depend on the existing port `Clock` in `src/domain/clock.ts` instead of src/adapters/system-clock.ts, and have the composition root pass src/adapters/system-clock.ts to src/domain/payroll-use-case.ts
-  - R23 Defer unforced decisions: src/domain/payroll-use-case.ts: Fix: Take the Clock port in the constructor and drop the SystemClock import.
 Questions for the user: 1
 - Will payroll run in a second time zone this year?
 ```
 
-Corrections 2 and 4 are left out here for length. The overlapping group shows that the check's
-correction and the reviewer's describe one fix.
+Corrections 2 and 4 are left out here for length. Correction 5 repeats what correction 3, from the
+check, already says; a reviewer should not have raised it.
 
 Accepting a judged finding: on the payroll fixture after a commit that makes the payroll controller
 import a new external, a reviewer judged `handler-holds-business-logic` (R20) on
@@ -162,19 +160,16 @@ Inherited findings:
 Questions for the user: 0
 ```
 
-The Overlapping findings section, which groups the two construction findings of
-`src/web/payroll-controller.ts`, is left out here for length.
-
 The verdict is `INCOMPLETE` because the adapter does not provide `typeChecks`, which an enforced
 condition of R13 needs.
 
-An audit of the known-defects fixture with one file per reviewer, one holding a finding and the
-other only a question, stores both files' content in one result:
+An audit of the known-defects fixture with one file per reviewer, where two reviewers judged the
+same use case and proposed two fixes:
 
 ```
-$ arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-deferral-and-boundaries.json --judged .architecture/work/judged-tests.json
+$ arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-dependency-direction.json --judged .architecture/work/judged-deferral-and-boundaries.json
 # Architecture audit: all components
-Verdict: SHOULD_CHANGE: 19 blocker, 10 major, 3 minor blocking
+Verdict: SHOULD_CHANGE: 20 blocker, 10 major, 3 minor blocking
 Inherited: 0 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 0 conditions
 Not run: zone-of-pain (needs --base), no-cohesion-groups (needs --base), change-spans-groups (needs --base)
@@ -182,10 +177,15 @@ Advisory: 0 findings
 Dropped: 0
 Rules not enforced: none
 Corrections:
-20. R23 Defer unforced decisions: src/lending/loan-use-case.ts: Moving loans to another store means editing the lending rules. Fix: Take the LoanStore port in the constructor instead of the SQL store.
-Questions for the user: 1
-- Will a second team own the storage component this year?
+7. R6 Use cases own their boundaries: src/lending/loan-use-case.ts: Moving loans to another store means editing the lending rules. Fix: Depend on the existing LoanStore port instead of the SQL store.
+21. R26 Demonstrate the model without I/O: src/lending/loan-use-case.ts: The lending rules cannot run in a test without a database pool. Fix: Have the composition root create the pool and pass the store in.
+Overlapping findings:
+- src/lending/loan-use-case.ts:
+  - R6 Use cases own their boundaries: src/lending/loan-use-case.ts: Fix: Depend on the existing LoanStore port instead of the SQL store. (from .architecture/work/judged-dependency-direction.json)
+  - R26 Demonstrate the model without I/O: src/lending/loan-use-case.ts: Fix: Have the composition root create the pool and pass the store in. (from .architecture/work/judged-deferral-and-boundaries.json)
+Questions for the user: 0
 ```
 
-Twenty-nine of the thirty corrections, and the Overlapping findings section, which groups the
-findings of nine units, are left out here for length.
+Twenty-nine of the thirty-one corrections are left out here for length. The two findings on the use
+case are one fix: the audit flow sends them, with both judged files, to one reviewer for a single
+reconciled file.

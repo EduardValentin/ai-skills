@@ -170,7 +170,7 @@ function originOf(entry, flow) {
   return flow === "audit" ? "none" : entry.origin;
 }
 
-function buildFinding({ entry, judgment, row, context, flow, graph }) {
+function buildFinding({ entry, file, judgment, row, context, flow, graph }) {
   const escalated = escalateRow(row, context);
   const { severity, lifts } = entry.liftedBy ? liftedToBlocker(escalated) : escalated;
   return {
@@ -183,6 +183,7 @@ function buildFinding({ entry, judgment, row, context, flow, graph }) {
     status: statusForRow(context.model, judgment.rules, rowComponents(row, context)),
     origin: originOf(entry, flow),
     provenance: "judged",
+    judgedFiles: [file],
     consequence: entry.consequence.trim(),
     correction: entry.correction.trim(),
     evidence: entry.evidence,
@@ -272,10 +273,10 @@ export function judgedFindings({ documents, flow, plan, root, model, graph, scop
   const findings = [];
   const dropped = [];
   examined.forEach(({ judgment, row }, position) => {
-    const { entry } = located[position];
+    const { entry, file } = located[position];
     const { reason, rules } = judgedOutcome(judgment, row, context);
     if (reason) dropped.push({ target: entry.target, judgment: judgment.id, reason });
-    else findings.push(buildFinding({ entry, judgment: { ...judgment, rules }, row, context, flow, graph }));
+    else findings.push(buildFinding({ entry, file, judgment: { ...judgment, rules }, row, context, flow, graph }));
   });
   return { findings, dropped };
 }
