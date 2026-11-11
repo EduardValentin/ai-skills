@@ -33,7 +33,7 @@ defined in `references/rules/vocabulary.md`.
    before this pass: then stop and show them to the user.
 8. Run `arch collect`. It rewrites `current.md` in the record path.
 9. Run `arch check --out .architecture/work/check.json`; exit 1, an enforced blocker or major, continues.
-10. Run `arch applicable --all --out .architecture/work/applicable.json`; its `groups` name the reviewers.
+10. Run `arch applicable --all --out .architecture/work/applicable.json`; `groups` names the reviewers, none if `inScope` is 0.
 11. Dispatch, in parallel, one `architecture-reviewer` per rule group in `groups` other than
     `cross-cutting`, or one for `cross-cutting` when it is the only group. Each packet: the flow
     `audit` and the scope, the whole project; `.architecture/work/check.json`;
@@ -60,7 +60,7 @@ defined in `references/rules/vocabulary.md`.
 14. Run `arch findings add --flow audit --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged-<group>.json --upcoming "<upcoming change>"`,
     with `--judged` once per judged file and `--upcoming` once per confirmed answer. A refusal names
     the file and the finding: send each problem to that reviewer, write its fresh file, and run this
-    step again. If it says the check is stale, run step 9 again, then this step.
+    step again. If it says the check or the applicable file is stale, run steps 9 and 10, then this step.
 15. Reconcile before any acceptance. If the output has an `Overlapping findings` section and these
     judged files were not reconciled yet, give a fresh `architecture-reviewer`, same prompt, the
     section as printed, `.architecture/work/check.json`, `references/rules/vocabulary.md`, and each
@@ -69,8 +69,8 @@ defined in `references/rules/vocabulary.md`.
     correction per overlapping unit, or the findings unchanged when independent. Write it to
     `.architecture/work/judged-reconciled.json`, which replaces the files it covers, and run step 14.
 16. Run `arch findings list --rank`: findings by consequence within the most-changed components.
-17. To accept a finding, run the edit the user chooses, then `arch model validate`, then steps 8, 9, 14,
-    and 16 again: `arch model add-exception <from> <to> rule=<R> reason="<text>"` for an edge other
+17. To accept a finding, run the edit the user chooses, then `arch model validate`, then steps 8, 9, 10,
+    14, and 16 again: `arch model add-exception <from> <to> rule=<R> reason="<text>"` for an edge other
     than a cycle; `arch model add-exception <target> '*' rule=<R> reason="<text>"` for a unit, a port
     (`<path>#<Symbol>`), or a component; `arch model set-rule <R>[@<component>] off reason="<text>"`,
     or `advisory`, for a rule, the only way to accept a cycle; `arch model set-threshold <knob> <value>`,

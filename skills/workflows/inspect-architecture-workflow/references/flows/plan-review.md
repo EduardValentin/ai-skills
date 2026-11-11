@@ -41,8 +41,8 @@ defined in `references/rules/vocabulary.md`.
    continue either way. If it refuses the proposal, give its message to the reviewer, write the
    corrected proposal, and run this step again.
 6. Run `arch applicable --proposal .architecture/work/proposal.json --out .architecture/work/applicable.json`.
-   It lists the judgment conditions in scope, the plan's own among them.
-7. Ask the same reviewer to judge, always, with `.architecture/work/check.json`,
+   If `inScope` in that file is 0, no judgment condition applies: dispatch nobody; run step 9 without `--judged`.
+7. Ask the same reviewer to judge, with `.architecture/work/check.json`,
    `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, the file of every other
    group in `groups`, such as `references/rules/dependency-direction.md`, each with its `judgments`
    entries as printed (`id`, `targets`, `condition`), and the upcoming changes the plan states, word
@@ -70,8 +70,8 @@ defined in `references/rules/vocabulary.md`.
 9. Run `arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`.
    Give `--upcoming` once for every upcoming change the plan states and every confirmed answer. It
    prints the result and its verdict. If it refuses judged findings, send the listed problems to
-   the reviewer, write its fresh judged file, and run this step again; if it says the check is
-   stale or made from another proposal, run step 5 again, then this step.
+   the reviewer, write its fresh judged file, and run this step again; if it says the check or the
+   applicable file is stale or made from another proposal, run steps 5 and 6 again, then this step.
 10. The printed result lists each clarification request under `Incomplete:` on its own
     `- clarification: <task>: <reason>` line, naming the fact the task leaves open; report them apart.
 11. If the verdict is `SHOULD_CHANGE` or `INCOMPLETE` and fewer than `planFixRounds` revisions have

@@ -68,7 +68,7 @@ export function contractData(store) {
     incompleteReasons: incompleteReasons(lastRun.incomplete),
     incomplete: lastRun.incomplete,
     notRun: lastRun.notRun,
-    judgmentConditions: lastRun.judgmentConditions ?? null,
+    judgmentConditions: lastRun.judgmentConditions,
     notEnforced: lastRun.skipped.map(notEnforcedEntry),
     corrections: groupCorrections(groups.blocking),
     questions: lastRun.questions,
@@ -151,7 +151,6 @@ function droppedLine(data) {
 }
 
 function judgmentConditionsLine(counts) {
-  if (!counts) return "Judgment conditions: not reported";
   return `Judgment conditions: ${counts.inScope} in scope, ${counts.reviewed} reviewed`;
 }
 

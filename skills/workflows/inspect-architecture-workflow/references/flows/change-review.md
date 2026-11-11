@@ -1,7 +1,7 @@
 # Change review
 
 The procedure for reviewing a diff against a base commit: the command decides every condition it
-can, one reviewer always judges the rest, and the command stores and prints the findings. Follow
+can, one reviewer judges the rest, and the command stores and prints the findings. Follow
 it step by step when the skill is invoked with `change-review` or a calling workflow names this flow.
 
 Inputs: the base ref the diff is compared with, written `<ref>` below, and the upcoming changes the
@@ -23,10 +23,10 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
    module still uncovered after that is reported incomplete, never as passing.
 5. Run `arch check --base <ref> --out .architecture/work/check.json`. It exits 1 only when the change
    introduces a blocker or major finding of an enforced rule; continue either way.
-6. If `units` and `uncovered` in `applicable.json` are both empty, the change touches no unit and
-   there is no code to review: dispatch nobody, run step 10 without `--judged`, and return its
-   result with the line "no unit touched; no code to review". Otherwise the reviewer runs, however
-   small the change.
+6. If `inScope` in `applicable.json` is 0, no judgment condition applies: the diff touches no code
+   and changes no dependency, or every such rule is `off`. Dispatch nobody, run step 10 without
+   `--judged`, and return its result with the line "no judgment condition in scope; no reviewer
+   dispatched". Otherwise the reviewer runs, however small the change.
 7. Dispatch one `architecture-reviewer`, once, with this packet:
    - the flow `change-review`, the base ref, and the scope: the diff against `<ref>`;
    - the check output `.architecture/work/check.json`, whose findings it does not repeat;
@@ -62,7 +62,7 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
     It prints the result and its verdict.
     - If it refuses judged findings, it names the file and the finding: send the problems to the
       reviewer, write its fresh judged file, and run this step again.
-    - If it says the check is stale or made with another base, run step 5 again, then this step.
+    - If the check or the applicable file is stale or made with another base, run steps 3 and 5, then this step.
 11. If the user accepts a finding instead of fixing it, run the edit the user chooses:
     - an edge other than a cycle: `arch model add-exception <from> <to> rule=<R> reason="<text>"`;
     - a unit, a port (`<path>#<Symbol>`), or a component:
@@ -72,14 +72,14 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
       `advisory` in place of `off`;
     - a number: `arch model set-threshold <knob> <value>`, with a knob `arch model explain-thresholds` lists.
 
-    Then run `arch model validate`, and steps 5 and 10 again. An exception or `off` covering every
+    Then run `arch model validate`, and steps 3, 5, and 10 again. An exception or `off` covering every
     rule of a finding moves it to `Dropped:`, `advisory` to `Advisory:`; covering some rules leaves
     it with the rest. After a threshold, a finding from `check` no longer appears on the rerun, and a
     judged finding whose condition names that knob is judged again by the same reviewer, in a fresh
     `judged.json`, beforehand.
-12. After a fix to the code or to the classification, run steps 3, 5, and 6 again. The same reviewer
-    judges again against the new `judgments`, writes a fresh `judged.json`, and steps 9 and 10
-    follow. Never pass judged findings written before the fix.
+12. After a fix to the code or to the classification, run steps 3 and 5 again. If `inScope` is now 0,
+    run step 10 without `--judged`; otherwise the same reviewer judges again against the new `judgments`
+    in a fresh `judged.json`, then steps 9 and 10 follow. Never pass judged findings from before the fix.
 13. For a judged finding the fix resolved, offer a check that catches it next time:
     `arch model add-forbidden-edge <from> <to> reason="<text>"` for an edge, or
     `arch model set-threshold <knob> <value>` for a number. Run it only if the user agrees.

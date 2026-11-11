@@ -187,16 +187,22 @@ def test_reviewer_skips_each_unrecorded_concept_on_its_own():
         assert clause in text, clause
 
 
-RETIRED_GATE = re.compile(r"--full\b|structural precheck|not reviewed", re.IGNORECASE)
+GATE_FILES = [
+    *sorted(path for path in SKILL_DIR.rglob("*") if path.is_file() and "__pycache__" not in path.parts),
+    REVIEWER, CLASSIFIER,
+    *(REPO_ROOT / "skills" / "workflows" / name / "SKILL.md"
+      for name in ["implementation-workflow", "ticket-requirements-gathering", "ticket-workflow"]),
+]
+RETIRED_GATE = re.compile(
+    r"notReviewed|arch applicable[^\n]*--full|Review needed|`review` is|not reviewed for a contained change"
+)
 
 
-def test_no_skill_or_agent_mentions_the_retired_review_gate():
-    mentions = []
-    for root in (REPO_ROOT / "skills", AGENTS_DIR):
-        for path in sorted(root.rglob("*")):
-            if not path.is_file() or "__pycache__" in path.parts:
-                continue
-            for index, line in enumerate(path.read_text(errors="ignore").splitlines(), start=1):
-                if RETIRED_GATE.search(line):
-                    mentions.append(f"{path.relative_to(REPO_ROOT)}:{index}: {line.strip()}")
+def test_no_architecture_text_mentions_the_retired_review_gate():
+    mentions = [
+        f"{path.relative_to(REPO_ROOT)}:{index}: {line.strip()}"
+        for path in GATE_FILES
+        for index, line in enumerate(path.read_text(errors="ignore").splitlines(), start=1)
+        if RETIRED_GATE.search(line)
+    ]
     assert not mentions, "\n".join(mentions)

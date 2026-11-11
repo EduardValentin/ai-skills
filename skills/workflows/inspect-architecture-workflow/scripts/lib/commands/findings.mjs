@@ -6,7 +6,7 @@ import { touchedScope } from "../checks/scope.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
-import { checkBinding } from "../findings/binding.mjs";
+import { requireBinding } from "../findings/binding.mjs";
 import { requireWorkPlacement } from "../findings/placement.mjs";
 import { judgmentConditions, readApplicable, reviewNotDone } from "../findings/applicable.mjs";
 import { judgedFindings, judgedQuestions, readJudged } from "../findings/intake.mjs";
@@ -31,6 +31,18 @@ export const LIST_SPEC = { flags: { rank: "boolean" }, positional: { min: 0, max
 function requireFlag(flags, name, reason) {
   if (flags[name]) return;
   throw new UsageError(`--${name} is required ${reason}. Pass --${name} <value>.`);
+}
+
+export const ADD_REQUIRED_WITH_MODEL = ["applicable"];
+
+const APPLICABLE_COMMAND = "arch applicable <the same scope flags> --out .architecture/work/applicable.json";
+
+function requireApplicable(flags) {
+  if (flags.applicable) return;
+  throw new UsageError(
+    "--applicable is required when a model exists: it names the judgment conditions the review covers. " +
+      `Create it with ${APPLICABLE_COMMAND}, then pass --applicable .architecture/work/applicable.json.`,
+  );
 }
 
 export const ADD_REQUIRED = {
@@ -121,12 +133,14 @@ async function add(args, { root }) {
     print(noModelData(flags.flow), flags);
     return 0;
   }
-  const applicable = flags.applicable ? readApplicable(flags.applicable, flags.flow) : null;
+  requireApplicable(flags);
+  const applicable = readApplicable(flags.applicable, flags.flow);
   const model = loadModel(root, flags);
   if (!model) {
     throw new ModelError(`${flags.check} was made with a model, but none is found now. Run from the same project.`);
   }
-  await checkBinding({ check, flags, root, model });
+  await requireBinding({ output: check, kind: "check", flags, root, model });
+  await requireBinding({ output: applicable, kind: "applicable", flags, root, model });
   const subject = await reviewSubject({ root, model, flags });
   const upcoming = confirmedUpcoming(model, flags);
   const documents = readJudged(flags.judged ?? []);

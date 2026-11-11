@@ -74,7 +74,42 @@ def with_origin(findings: tuple[dict, ...], origin: str | None) -> tuple[dict, .
     return tuple({k: v for k, v in f.items() if v is not None} for f in stated)
 
 
+SCOPE_FLAG = {"change-review": "--base", "plan-review": "--proposal"}
+
+
+def scope_of(flow: str, args: tuple[str, ...]) -> list[str] | None:
+    if flow == "audit":
+        return ["--all"]
+    flag = SCOPE_FLAG.get(flow)
+    if flag not in args or args.index(flag) + 1 >= len(args):
+        return None
+    return [flag, args[args.index(flag) + 1]]
+
+
+def reviewed_scope(root: Path, flow: str, args: tuple[str, ...]) -> list[str]:
+    scope = scope_of(flow, args)
+    if scope is None:
+        return []
+    made = run_arch(["applicable", *scope, "--json"], root)
+    assert made.returncode == 0, made.stderr
+    applicable = write_json_in(root, "applicable-of-the-run.json", json.loads(made.stdout))
+    reviewer = [] if "--judged" in args else ["--judged", str(write_json_in(root, "nothing-judged.json", {"findings": []}))]
+    return ["--applicable", str(applicable), *reviewer]
+
+
+def write_json_in(root: Path, name: str, document: dict) -> Path:
+    path = root / ".architecture" / "work" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return write_json(path, document)
+
+
 def add(root: Path, flow: str, check: Path, *args: str):
+    """Runs findings add as a flow does: with the run's applicable file and, unless given, a reviewer's empty reply."""
+    scope = [] if "--applicable" in args else reviewed_scope(root, flow, args)
+    return run_arch(["findings", "add", "--flow", flow, "--check", str(check), *args, *scope], root)
+
+
+def add_without_applicable(root: Path, flow: str, check: Path, *args: str):
     return run_arch(["findings", "add", "--flow", flow, "--check", str(check), *args], root)
 
 
@@ -813,6 +848,12 @@ def work_check(root: Path, *args: str):
     return result
 
 
+def work_applicable(root: Path, *args: str) -> str:
+    result = run_arch(["applicable", *args, "--out", f"{WORK}/applicable.json"], root)
+    assert result.returncode == 0, result.stderr
+    return f"{WORK}/applicable.json"
+
+
 def write_work(root: Path, name: str, document: dict) -> str:
     path = root / WORK / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -824,9 +865,10 @@ def test_change_review_round_trip_inside_the_repository(tmp_path):
     root = workspace(tmp_path)
     touch(root, EMPLOYEE)
     work_check(root, "--base", "main")
+    scope = work_applicable(root, "--base", "main")
     judged_path = write_work(root, "judged.json", {"findings": [{**finding(), "origin": "introduced"}]})
     added = run_arch(["findings", "add", "--flow", "change-review", "--check", f"{WORK}/check.json",
-                      "--judged", judged_path, "--base", "main"], root)
+                      "--judged", judged_path, "--base", "main", "--applicable", scope], root)
     assert added.returncode == 0, added.stderr
     listed = run_arch(["findings", "list"], root)
     assert listed.returncode == 0 and "Verdict: SHOULD_CHANGE" in listed.stdout
@@ -838,10 +880,11 @@ def test_plan_review_round_trip_inside_the_repository(tmp_path):
     plan = write_plan(root)
     proposal = write_work(root, "proposal.json", {"version": 1, "modules": [{"path": "src/domain/overtime-rule.ts"}]})
     work_check(root, "--proposal", proposal)
+    scope = work_applicable(root, "--proposal", proposal)
     entry = {**finding(target="src/domain/overtime-rule.ts", evidence=[f"{plan}#Rule storage"]), "origin": "introduced"}
     judged_path = write_work(root, "judged.json", {"findings": [entry]})
     added = run_arch(["findings", "add", "--flow", "plan-review", "--check", f"{WORK}/check.json",
-                      "--judged", judged_path, "--plan", plan, "--proposal", proposal], root)
+                      "--judged", judged_path, "--plan", plan, "--proposal", proposal, "--applicable", scope], root)
     assert added.returncode == 0, added.stderr
     assert stored(root, "src/domain/overtime-rule.ts")["scope"] == f"plan:{plan}"
 
@@ -865,9 +908,10 @@ def test_source_edit_between_check_and_add_is_still_stale_with_work_files(tmp_pa
     root = workspace(tmp_path)
     touch(root, EMPLOYEE)
     work_check(root, "--base", "main")
+    scope = work_applicable(root, "--base", "main")
     touch(root, EMPLOYEE)
     result = run_arch(["findings", "add", "--flow", "change-review", "--check", f"{WORK}/check.json",
-                       "--base", "main"], root)
+                       "--base", "main", "--applicable", scope], root)
     assert_refused(result, root, "stale")
 
 
@@ -1131,12 +1175,41 @@ def test_no_condition_in_scope_needs_no_judged_file(tmp_path):
     assert "Judgment conditions: 0 in scope, 0 reviewed" in result.stdout
 
 
-def test_without_applicable_the_judgment_conditions_are_not_reported(tmp_path):
+def test_findings_add_requires_the_applicable_file_when_a_model_exists(tmp_path):
+    root = workspace(tmp_path)
+    result = add_without_applicable(root, "audit", check_file(root, tmp_path))
+    assert_refused(result, root, "--applicable is required", "arch applicable",
+                   "--out .architecture/work/applicable.json")
+
+
+def test_a_stale_applicable_file_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    scope = applicable_file(root, tmp_path, "--base", "main")
+    touch(root, EMPLOYEE)
+    check = check_file(root, tmp_path, "--base", "main")
+    result = add(root, "change-review", check, "--base", "main", "--applicable", str(scope))
+    assert_refused(result, root, "applicable file does not match this run", "stale", "Rerun arch applicable")
+
+
+def test_an_applicable_file_of_another_proposal_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    plan = write_plan(root)
+    first = write_json(tmp_path / "first.json", {"version": 1})
+    second = write_json(tmp_path / "second.json", {"version": 1})
+    scope = applicable_file(root, tmp_path, "--proposal", str(first))
+    check = check_file(root, tmp_path, "--proposal", str(second))
+    result = add(root, "plan-review", check, "--plan", plan, "--proposal", str(second), "--applicable", str(scope))
+    assert_refused(result, root, "applicable file does not match this run", "same --proposal",
+                   "Rerun arch applicable")
+
+
+def test_the_judgment_line_is_always_reported(tmp_path):
     root = workspace(tmp_path)
     result = audit(root, tmp_path)
     assert result.returncode == 0, result.stderr
-    assert "Judgment conditions: not reported" in result.stdout
-    assert store(root)["lastRun"]["judgmentConditions"] is None
+    assert "Judgment conditions: not reported" not in result.stdout
+    assert store(root)["lastRun"]["judgmentConditions"]["inScope"] > 0
 
 
 def test_an_applicable_file_of_another_scope_or_shape_is_refused(tmp_path):

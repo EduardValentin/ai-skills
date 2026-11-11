@@ -42,7 +42,7 @@ import { GLOBAL_FLAGS } from "./scripts/lib/cli/flags.mjs";
 import { APPLICABLE_MODES, APPLICABLE_SPEC } from "./scripts/lib/commands/applicable.mjs";
 import { CHECK_EXCLUSIVE, CHECK_SPEC } from "./scripts/lib/commands/check.mjs";
 import { COLLECT_SPEC } from "./scripts/lib/commands/collect.mjs";
-import { ADD_REQUIRED, ADD_SPEC, LIST_SPEC } from "./scripts/lib/commands/findings.mjs";
+import { ADD_REQUIRED, ADD_REQUIRED_WITH_MODEL, ADD_SPEC, LIST_SPEC } from "./scripts/lib/commands/findings.mjs";
 import { MODEL_SPEC, MODEL_SUBCOMMANDS } from "./scripts/lib/commands/model.mjs";
 import { QUERY_SPEC } from "./scripts/lib/commands/query.mjs";
 import { QUERY_FLAGS, QUERY_REQUIRED_FLAGS } from "./scripts/lib/queries/index.mjs";
@@ -60,6 +60,7 @@ console.log(JSON.stringify({
   queryFlags: QUERY_FLAGS,
   queryRequired: QUERY_REQUIRED_FLAGS,
   addRequired: Object.fromEntries(Object.entries(ADD_REQUIRED).map(([key, flags]) => [key, Object.keys(flags)])),
+  addRequiredWithModel: ADD_REQUIRED_WITH_MODEL,
   applicableModes: APPLICABLE_MODES,
   checkExclusive: CHECK_EXCLUSIVE,
 }));
@@ -165,6 +166,7 @@ def check_findings_line(rest: list[str]) -> list[str]:
     if rest[0] == "add" and len(rest) > 1:
         required = specs()["addRequired"]
         problems += missing(required["always"], given)
+        problems += missing(specs()["addRequiredWithModel"], given)
         problems += missing(required.get(given.get("flow"), {}), given)
     return problems
 
@@ -521,12 +523,14 @@ def test_the_change_review_flow_runs_as_written_through_acceptances(tmp_path):
     star = flow.command_in(11, "'*'")
     assert flow.run(star, **{"<target>": "src/web/payroll-controller.ts", "<R>": "R20"}).returncode == 0
     assert flow.run(star, **{"<target>": "src/domain/clock.ts#Clock", "<R>": "R13"}).returncode == 0
+    flow.run_step(3)
     flow.run_step(5)
     accepted = flow.run_step(10).stdout
     assert "Dropped: 2 (2 covered by an exception)" in accepted
     assert "Verdict: INCOMPLETE" in accepted
 
     assert flow.run(flow.command_in(11, "set-rule"), **{"<R>": "R13"}).returncode == 0
+    flow.run_step(3)
     flow.run_step(5)
     assert "Verdict: OK" in flow.run_step(10).stdout
 
@@ -540,9 +544,26 @@ def change_inside_one_component(tmp_path):
     return root
 
 
+STOP_CONDITION = "If `inScope` in `applicable.json` is 0"
+
+
 def flow_reaches_the_reviewer(step: str, applicable: dict) -> bool:
-    assert "If `units` and `uncovered` in `applicable.json` are both empty" in step, step
-    return bool(applicable["units"] or applicable["uncovered"])
+    assert STOP_CONDITION in step, step
+    return applicable["inScope"] > 0
+
+
+def without_judged(args: list[str]) -> list[str]:
+    index = args.index("--judged")
+    return args[:index] + args[index + 2:]
+
+
+def assert_reviewed(flow: FlowRunner, applicable: dict) -> None:
+    assert flow_reaches_the_reviewer(flow.steps[6], applicable)
+    assert flow.steps[7].startswith("7. Dispatch one `architecture-reviewer`, once")
+    assert flow.run_step(5).returncode in (0, 1)
+    flow.judged_path(10).write_text(json.dumps({"findings": [], "questions": []}))
+    reviewed = flow.run_step(10).stdout
+    assert f"Judgment conditions: {applicable['inScope']} in scope, {applicable['inScope']} reviewed" in reviewed
 
 
 def test_the_change_review_flow_reaches_the_reviewer_for_a_change_inside_one_component(tmp_path):
@@ -551,32 +572,49 @@ def test_the_change_review_flow_reaches_the_reviewer_for_a_change_inside_one_com
     assert flow.run_step(3).returncode == 0
     applicable = json.loads((root / APPLICABLE_FILE).read_text())
     assert applicable["components"] == ["domain"] and not any(applicable["adds"].values())
-    assert flow_reaches_the_reviewer(flow.steps[6], applicable)
-    assert flow.steps[7].startswith("7. Dispatch one `architecture-reviewer`, once")
     assert "shape-mismatch-hidden" in [entry["id"] for entry in applicable["judgments"]["cross-cutting"]]
-    assert flow.run_step(5).returncode in (0, 1)
-    flow.judged_path(10).write_text(json.dumps({"findings": [], "questions": []}))
-    reviewed = flow.run_step(10).stdout
-    assert f"Judgment conditions: {applicable['inScope']} in scope, {applicable['inScope']} reviewed" in reviewed
+    assert_reviewed(flow, applicable)
 
 
-def test_the_change_review_flow_dispatches_nobody_when_no_unit_is_touched(tmp_path):
+def test_the_change_review_flow_reaches_the_reviewer_when_only_a_dependency_changes(tmp_path):
+    root = payroll_repository(tmp_path)
+    git(["checkout", "-q", "-b", "feature"], root)
+    add_to_adapter(root, edges=[{"from": "src/adapters/system-clock.ts", "to": "src/web/main.ts", "kind": "import"}])
+    git(["commit", "-q", "-am", "an import alias now resolves the clock to the web entry point"], root)
+    flow = FlowRunner("change-review", root, {"<ref>": "main", "<upcoming change>": "a second payroll form"})
+    assert flow.run_step(3).returncode == 0
+    applicable = json.loads((root / APPLICABLE_FILE).read_text())
+    assert applicable["units"] == [] and applicable["uncovered"] == []
+    assert applicable["adds"]["componentEdges"] == ["adapters -> web"]
+    assert_reviewed(flow, applicable)
+
+
+def test_the_change_review_flow_dispatches_nobody_when_no_condition_applies(tmp_path):
     root = payroll_repository(tmp_path)
     git(["checkout", "-q", "-b", "feature"], root)
     (root / "NOTES.md").write_text("release notes\n")
     git(["add", "NOTES.md"], root)
     git(["commit", "-q", "-m", "notes only"], root)
-    flow = FlowRunner("change-review", root, {"<ref>": "main"})
+    flow = FlowRunner("change-review", root, {"<ref>": "main", "<upcoming change>": "a second payroll form"})
     assert flow.run_step(3).returncode == 0
     applicable = json.loads((root / APPLICABLE_FILE).read_text())
     assert not flow_reaches_the_reviewer(flow.steps[6], applicable)
-    assert "no unit touched; no code to review" in flow.steps[6]
+    assert "no judgment condition in scope; no reviewer dispatched" in flow.steps[6]
+    assert flow.run_step(5).returncode == 0
+    result = run_arch(without_judged(flow.substituted(flow.command_in(10, "--judged"), {})), root)
+    assert result.returncode == 0, result.stderr
+    assert "Judgment conditions: 0 in scope, 0 reviewed" in result.stdout and "judgment-review" not in result.stdout
+
+
+def test_the_change_review_flow_judges_again_only_while_a_condition_applies():
+    step = " ".join(numbered_steps(flow_file("change-review").read_text())[12].split())
+    assert "If `inScope` is now 0" in step and "the same reviewer judges again" in step
 
 
 def test_no_flow_lets_a_precheck_skip_the_selected_review():
     for name in FLOW_NAMES:
         text = flow_text(name)
-        for phrase in ["`review` is", "skip to step", "leave out `--judged`", "notReviewed", "--full"]:
+        for phrase in ["`review` is", "skip to step", "notReviewed", "--full", "units` and `uncovered"]:
             assert phrase not in text, f"{name}: {phrase}"
 
 
@@ -727,8 +765,8 @@ def test_every_flow_hands_the_applicable_counts_to_findings_add():
 
 
 def test_an_acceptance_by_model_edit_validates_the_model_before_the_rerun():
-    assert "then `arch model validate`, then steps 8, 9, 14, and 16 again" in flow_text("audit")
-    assert "Then run `arch model validate`, and steps 5 and 10 again" in flow_text("change-review")
+    assert "then `arch model validate`, then steps 8, 9, 10, 14, and 16 again" in flow_text("audit")
+    assert "Then run `arch model validate`, and steps 3, 5, and 10 again" in flow_text("change-review")
 
 
 def test_the_audit_classify_loop_stops_when_a_pass_makes_no_progress():

@@ -20,7 +20,7 @@ function isCount(value) {
 
 export function readApplicable(file, flow) {
   const output = readJson(file);
-  if (output.model !== true || !isCount(output.inScope) || !Array.isArray(output.units)) {
+  if (output.model !== true || !isCount(output.inScope) || !(isCount(output.units) || Array.isArray(output.units))) {
     throw new UsageError(
       `applicable file ${file} is not arch applicable output. Create it with ${APPLICABLE_COMMAND}.`,
     );
@@ -36,14 +36,13 @@ export function readApplicable(file, flow) {
 }
 
 export function judgmentConditions(applicable, judgedFiles = []) {
-  if (!applicable) return null;
   return { inScope: applicable.inScope, reviewed: judgedFiles.length > 0 ? applicable.inScope : 0 };
 }
 
 export const REVIEW_NOT_DONE = "judgment-review";
 
 export function reviewNotDone(applicable, judgedFiles = []) {
-  if (!applicable || applicable.inScope === 0 || judgedFiles.length > 0) return [];
+  if (applicable.inScope === 0 || judgedFiles.length > 0) return [];
   return [{
     check: REVIEW_NOT_DONE,
     rules: [],

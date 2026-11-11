@@ -10,9 +10,9 @@ prints that result again.
 
 ```
 arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json
-arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json
-arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-tests.json --judged .architecture/work/judged-humble-objects.json
-arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --upcoming "<confirmed upcoming change>"
+arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json --applicable .architecture/work/applicable.json
+arch findings add --flow audit --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged-tests.json --judged .architecture/work/judged-humble-objects.json
+arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --applicable .architecture/work/applicable.json --upcoming "<confirmed upcoming change>"
 arch findings list
 arch findings list --rank
 ```
@@ -25,11 +25,11 @@ arch findings list --rank
 |---|---|---|
 | `--flow` | `audit`, `change-review`, or `plan-review` | Required: which flow produced the findings. |
 | `--check` | the `arch check` JSON file | Required. It must come from the same mode, base, or proposal as this run, and no source file may have changed since it ran. |
-| `--judged` | a judged findings file | One reviewer's findings and questions. Repeat the flag once per reviewer; the files are read in the order given and their findings and questions joined. Leave it out only when the scope touches no unit, so no reviewer had code to judge. |
+| `--judged` | a judged findings file | One reviewer's findings and questions. Repeat the flag once per reviewer; the files are read in the order given and their findings and questions joined. Leave it out only when `arch applicable` put no judgment condition in scope, so no reviewer was dispatched. |
 | `--base` | a branch, tag, or commit | Required in `change-review`: the ref the check compared with. |
 | `--plan` | the plan file | Required in `plan-review`: plan evidence cites its headings. |
 | `--proposal` | the proposal file | Required in `plan-review`: the file the check ran on. |
-| `--applicable` | the `arch applicable` JSON file | Made with `--out` for the same scope: `--all` in an audit, `--base` in a change review, `--proposal` in a plan review. Its count gives the line `Judgment conditions: <n> in scope, <m> reviewed`. |
+| `--applicable` | the `arch applicable` JSON file | Required when a model exists. Made with `--out` for the same scope: `--all` in an audit, `--base` in a change review, `--proposal` in a plan review. Like the check file, it must come from the same mode, base, or proposal as this run, and no source file may have changed since it ran. Its count gives the line `Judgment conditions: <n> in scope, <m> reviewed`. |
 | `--upcoming` | text | A named upcoming change the user confirmed; repeat the flag for each. A finding's `liftedBy` must equal one of them or one recorded with `arch model add-upcoming`. |
 | `--json` | none | Print the result as JSON. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
@@ -50,7 +50,7 @@ under `.architecture/work/`; the command refuses a working file elsewhere inside
 | Code | Meaning |
 |---|---|
 | 0 | The findings were stored and the result printed, whatever its verdict. |
-| 2 | A usage error, a check file that is missing, does not match this run, or is stale, or judged findings refused; nothing is stored. A missing check file's message names the `arch check` command, with `--out`, that creates it. |
+| 2 | A usage error, a check or applicable file that is missing, does not match this run, or is stale, or judged findings refused; nothing is stored. A missing file's message names the `arch check` or `arch applicable` command, with `--out`, that creates it. |
 
 ## Output
 
@@ -100,8 +100,7 @@ and the rules not enforced. The judgment line counts the conditions `arch applic
 and those a reviewer judged: all of them when a `--judged` file was given, none otherwise. Judgment
 conditions in scope with no `--judged` file mean the selected review was not done: they add the
 incomplete line `- judgment-review: <n> judgment conditions in scope: <reason>`, which says to
-dispatch the reviewer, and make the verdict `INCOMPLETE` when nothing blocks. Without
-`--applicable` it reads `Judgment conditions: not reported`.
+dispatch the reviewer, and make the verdict `INCOMPLETE` when nothing blocks.
 Then come the corrections, grouped by correction and ordered by severity.
 A finding keeps every distinct correction of the check rows and judged findings merged into it, a
 check row's first, printed as `Fix: <a> | <b>`.
@@ -124,7 +123,7 @@ baseline audit to enable the full review".
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
 `advisory`, `covered` (check findings an exception covered), `incomplete` (each incomplete entry
 with its `check`, `rules`, `target`, `reason`, and `enforced`), `judgmentConditions` (`inScope` and
-`reviewed`, or `null` without `--applicable`), `dropped` (each dropped judged finding
+`reviewed`), `dropped` (each dropped judged finding
 with its `target`, `judgment`, and `reason`), `wider`, `incompleteCount`, `incompleteReasons`,
 `notRun`, `notEnforced`, `corrections` (each group's `severity`, `rules`, `targets`,
 `consequence`, `corrections`, and `findings` count), `questions`, `disputes` (each `path` and
@@ -167,10 +166,13 @@ check, already says; a reviewer should not have raised it.
 Accepting a judged finding: on the payroll fixture after a commit that makes the payroll controller
 import a new external, a reviewer judged `handler-holds-business-logic` (R20) on
 `src/web/payroll-controller.ts`, and the verdict was `SHOULD_CHANGE: 0 blocker, 1 major`. The user
-accepted it with an exception, and `check` and `add` ran again with the same judged file:
+accepted it with an exception, and `applicable`, `check`, and `add` ran again with the same judged
+file, since the model edit makes both working files stale:
 
 ```
 $ arch model add-exception src/web/payroll-controller.ts '*' rule=R20 reason="validation stays here until the second form arrives"
+$ arch applicable --base main --out .architecture/work/applicable.json
+wrote .architecture/work/applicable.json: 1 unit in 1 component (web); 18 judgment conditions in 8 rule groups
 $ arch check --base main --out .architecture/work/check.json
 wrote .architecture/work/check.json: 2 findings, 1 incomplete
 $ arch findings add --flow change-review --base main --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json

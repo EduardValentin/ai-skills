@@ -33,10 +33,13 @@ const STORE_SCHEMA = {
     },
     lastRun: {
       type: ["object", "null"],
-      required: ["flow", "scope", "incomplete", "skipped", "notRun", "upcoming", "questions", "findingKeys"],
+      required: [
+        "flow", "scope", "incomplete", "skipped", "notRun", "judgmentConditions", "upcoming", "questions",
+        "findingKeys",
+      ],
       properties: {
-        flow: TEXT, scope: TEXT, incomplete: LIST, skipped: LIST, notRun: LIST, upcoming: LIST, questions: LIST,
-        findingKeys: LIST,
+        flow: TEXT, scope: TEXT, incomplete: LIST, skipped: LIST, notRun: LIST, judgmentConditions: { type: "object" },
+        upcoming: LIST, questions: LIST, findingKeys: LIST,
       },
     },
   },

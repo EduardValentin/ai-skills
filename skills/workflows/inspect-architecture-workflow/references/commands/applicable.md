@@ -4,8 +4,9 @@ What `arch applicable` does, its flags, exit codes, and output. Read it when `ap
 when reading its JSON. It reports the scope of a review: the touched units and components, the
 uncovered files, what the change adds, and the judgment conditions that apply, grouped by rule
 group, so a flow hands its reviewer exactly those conditions and names only the rule-group files it
-needs. It never decides whether a review runs: once a review is selected, the reviewer judges what
-this command lists. Without a model it says so, which is how every flow learns there is no model
+needs. It never weighs whether a change is worth a review: once a review is selected, a reviewer
+judges whatever this command lists, and only a scope with no judgment condition, one that touches
+no code and changes no dependency, gets none. Without a model it says so, which is how every flow learns there is no model
 before doing anything else.
 
 ## Synopsis
@@ -47,8 +48,8 @@ The targets are the kinds of the touched units, `test-suite` for a touched test,
 component the scope adds or links by a new component edge, every component with `--all`, and `plan`
 with `--proposal`. Whenever at least one unit is touched, covered or not, the cross-cutting conditions
 that apply to every unit kind are in scope too, so a reviewer always has the conditions every change
-is judged against. A scope that touches no unit has no unit conditions; a flow then has no code to
-review.
+is judged against. A scope that touches no unit can still add a component edge or an external,
+which brings conditions into scope; only `inScope` 0 leaves a flow nothing to review.
 
 The report opens with `Scope of the review: <n> units in <m> components (<names>)`, the count of
 uncovered files when there are any, and the count of judgment conditions and rule groups; a scope
@@ -57,7 +58,10 @@ component, port, component edge, or external the change adds, each rule group wi
 conditions and its rules, and the uncovered files.
 
 The JSON output has `model`; `mode`, the scope flag given (`base`, `files`, `proposal`, or `all`);
-`units`, each touched unit the model covers with its `path`, `kind`, and `component`; `components`,
+`run`, the record `arch findings add` binds the file to, as it binds the check file: the `mode`
+(`audit` for `--all`), the resolved `base`, the `proposal` path, and the working-tree `state`;
+`units`, each touched unit the model covers with its `path`, `kind`, and `component`, or with
+`--all` only their count; `components`,
 the touched components; `uncovered`, the paths in scope no pattern covers; `adds`, the plain facts of
 what the change adds: `components`, `ports` (each `<path>#<Symbol>`), `componentEdges` (each
 `<from> -> <to>`), and `externals`, all empty with `--files` and `--all`; `groups`, the rule-group

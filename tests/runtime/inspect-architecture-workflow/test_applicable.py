@@ -2,7 +2,7 @@ import json
 import re
 from pathlib import Path
 
-from support import SKILL_DIR, copy_fixture, init_repo, run_arch, run_node
+from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
 CHECKS_DIR = SKILL_DIR / "scripts" / "lib" / "checks"
 REGISTRY_MODULE = (CHECKS_DIR / "registry.mjs").as_uri()
@@ -388,7 +388,8 @@ def test_all_puts_every_unit_and_component_in_scope(tmp_path: Path):
     root = repo(tmp_path)
     out = applicable(root, "--all")
     assert set(out["groups"]) == set(out["judgments"]) and len(out["groups"]) > 0
-    assert EMPLOYEE in [unit["path"] for unit in out["units"]]
+    modules = [module["path"] for module in json.loads((root / ADAPTER).read_text())["modules"]]
+    assert out["units"] == len(applicable(root, "--files", ",".join(modules))["units"]) > 0
     assert out["components"] == ["domain", "adapters", "web"] and out["adds"] == NO_ADDS
     assert "entity-carries-framework-traits" in judgment_ids(out, "business-rule-placement")
     assert "handler-holds-business-logic" in judgment_ids(out, "humble-objects")
@@ -478,3 +479,13 @@ def test_out_writes_the_json_and_prints_the_scope(tmp_path: Path):
 def test_in_scope_counts_the_listed_judgments(tmp_path: Path):
     out = applicable(repo(tmp_path), "--all")
     assert out["inScope"] == condition_count(out)
+
+
+def test_the_output_records_the_run_it_was_made_for(tmp_path: Path):
+    root = repo(tmp_path)
+    touch(root, EMPLOYEE)
+    run = applicable(root, "--base", "HEAD")["run"]
+    assert run["mode"] == "base" and run["proposal"] is None
+    assert run["base"] == git(["rev-parse", "HEAD"], root).stdout.strip()
+    assert run["state"]
+    assert applicable(root, "--all")["run"]["mode"] == "audit"

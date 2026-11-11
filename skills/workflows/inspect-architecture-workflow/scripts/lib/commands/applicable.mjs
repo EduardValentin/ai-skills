@@ -11,6 +11,7 @@ import { proposalComparison } from "../checks/proposal.mjs";
 import { UsageError } from "../cli/errors.mjs";
 import { parseArgs } from "../cli/flags.mjs";
 import { loadGraph } from "../graph/load.mjs";
+import { runRecord } from "../findings/binding.mjs";
 import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
 import { createClassifier } from "../model/classify.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
@@ -94,12 +95,18 @@ function unitEntry(unit) {
   return { path: unit.path, kind: unit.kind ?? null, component: unit.component ?? null };
 }
 
-function jsonOutput(scope, groups, flags) {
+function unitsOutput(scope, flags) {
   const uncovered = new Set(scope.uncovered);
+  const covered = scope.units.filter((unit) => !uncovered.has(unit.path));
+  return flags.all ? covered.length : covered.map(unitEntry);
+}
+
+function jsonOutput({ scope, groups, flags, run }) {
   return {
     model: true,
     mode: APPLICABLE_MODES.find((mode) => flags[mode]),
-    units: scope.units.filter((unit) => !uncovered.has(unit.path)).map(unitEntry),
+    run,
+    units: unitsOutput(scope, flags),
     components: scope.components,
     uncovered: scope.uncovered,
     adds: plainAdditions(scope.additions),
@@ -114,10 +121,15 @@ function componentsText(components) {
   return `${plural(components.length, "component")}${names}`;
 }
 
+function unitCount(output) {
+  return Array.isArray(output.units) ? output.units.length : output.units;
+}
+
 function touchedText(output) {
-  if (output.units.length === 0 && output.uncovered.length === 0) return "no unit touched";
+  const units = unitCount(output);
+  if (units === 0 && output.uncovered.length === 0) return "no unit touched";
   const uncovered = output.uncovered.length > 0 ? `, ${plural(output.uncovered.length, "uncovered file")}` : "";
-  return `${plural(output.units.length, "unit")} in ${componentsText(output.components)}${uncovered}`;
+  return `${plural(units, "unit")} in ${componentsText(output.components)}${uncovered}`;
 }
 
 function scopeSummary(output) {
@@ -181,7 +193,8 @@ export async function run(args, { root }) {
   }
   const scope = await scopeOf(root, model, flags);
   const groups = judgmentScope(model, judgmentTargets(model, scope));
-  const output = jsonOutput(scope, groups, flags);
+  const run = await runRecord({ root, model, flags });
+  const output = jsonOutput({ scope, groups, flags, run });
   await emit(output, renderProse(output, groups), { root, flags });
   return 0;
 }
