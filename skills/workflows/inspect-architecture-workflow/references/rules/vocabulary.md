@@ -114,7 +114,7 @@ whenever a rule or a flow uses a word in a sense that seems narrower than everyd
 | Guidance | A rule about sequencing, topology, or practice that is advisory by default in every project. |
 | Decisions file | An optional `decisions.md` beside the model, holding longer explanations for people, such as the cost each component's cohesion position accepts. No check reads it. |
 | Smallest correction | The least change inside the scope that removes the finding's consequence. |
-| Wider observation | Something worth saying that lies outside the scope or needs more than the smallest correction. It is reported apart and never blocks. |
+| Wider observation | A finding whose target lies outside the scope, or whose only correction is larger than the smallest change inside the scope. It keeps its target, consequence, and evidence, is reported apart, and never blocks. |
 
 ## Flows and their files
 

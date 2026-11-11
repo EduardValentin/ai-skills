@@ -2,7 +2,7 @@
 name: implementation-workflow
 description: Use when an approved implementation plan or plan slice is ready for code changes and the work must continue through specialized independent review, manual QA, rendered visual verification, remediation, reruns, and reporting.
 compatibility: >-
-  Requires fresh-context dispatch of the reviewer agents (acceptance-criteria, code-cleanliness, security, performance, and design-system when styling changes), `qa-verifier`, `visual-verifier`, and for architecture review the `inspect-architecture-workflow` skill's `architecture-reviewer` and `architecture-classifier`. A missing agent may be replaced by a fresh generic subagent given its prompt and preloaded skill; without the skill or fresh-context dispatch, return `IMPLEMENTATION BLOCKED`.
+  Requires fresh-context dispatch of reviewer agents (acceptance-criteria, code-cleanliness, security, performance, design-system), `qa-verifier`, `visual-verifier`, and for selected architecture review the `inspect-architecture-workflow` skill's `architecture-reviewer` and `architecture-classifier`. A missing agent may be replaced by a fresh generic subagent given its prompt and skill, read-only for a reviewer; without that dispatch, or the selected skill, return `IMPLEMENTATION BLOCKED`.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -160,7 +160,8 @@ by the delta since the previous round.
    move code and can void other findings.
    Record every rejected finding with its reason; a finding is rejected only
    when it is technically wrong, outside the approved scope, or overridden by
-   repository instructions.
+   repository instructions. An architecture finding is never rejected: it is
+   fixed or accepted by the user, as step 2 says.
 4. Address every accepted blocker and major finding. Add or update a
    meaningful failing test first when the issue is automatable. Rerun focused
    and affected regression checks.

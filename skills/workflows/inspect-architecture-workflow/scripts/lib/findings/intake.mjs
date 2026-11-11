@@ -13,6 +13,8 @@ import { componentOfTarget, isInScope, recognizeTarget } from "./targets.mjs";
 const TEXT = { type: "string" };
 const SET_BY_JUDGMENT = ["rules", "defect", "severity"];
 const LIFT_RULE = 2;
+const PLAN_TARGET = "plan";
+const PLAN_RECOGNIZED = { kind: PLAN_TARGET, units: [], components: [], edge: null };
 
 export const JUDGED_SCHEMA = {
   type: "object",
@@ -101,15 +103,9 @@ function escalationRow(recognized, target, judgment) {
   };
 }
 
-function scopeProblems(entry, ctx) {
-  const inScope = isInScope(ctx.scope, entry.target);
-  if (inScope && entry.wider) {
-    return [`is inside the reviewed scope, so it cannot be "wider": true. Remove "wider" and state its origin.`];
-  }
-  if (!inScope && !entry.wider) {
-    return [`is outside the reviewed scope. Mark it "wider": true to report it as a wider observation.`];
-  }
-  return [];
+function scopeProblems(entry, recognized, ctx) {
+  if (recognized.kind === PLAN_TARGET || entry.wider || isInScope(ctx.scope, entry.target)) return [];
+  return [`is outside the reviewed scope. Mark it "wider": true to report it as a wider observation.`];
 }
 
 function originProblems(entry, flow) {
@@ -135,7 +131,8 @@ function unitFits(unit, targets, model) {
 
 function fitsJudgment(recognized, judgment, ctx) {
   const { targets } = judgment;
-  if (targets.includes("plan") && ctx.flow === "plan-review") return true;
+  if (recognized.kind === PLAN_TARGET) return targets.includes(PLAN_TARGET);
+  if (targets.includes(PLAN_TARGET) && ctx.flow === "plan-review") return true;
   if (recognized.components.length > 0) return targets.includes("component");
   if (recognized.kind === "port" && targets.includes("port")) return true;
   const kindOf = new Map(ctx.graph.units.map((unit) => [unit.path, unit]));
@@ -155,7 +152,7 @@ function liftProblems(entry, ctx) {
   if (!entry.liftedBy || ctx.upcoming.includes(entry.liftedBy)) return [];
   return [
     `lifts for "${entry.liftedBy}", which nobody confirmed. ` +
-      "Ask the owner, then pass the answer with --upcoming, or record it in the model.",
+      "Ask the user, then pass the answer with --upcoming, or record it in the model.",
   ];
 }
 
@@ -199,6 +196,15 @@ function unknownJudgment(id) {
   return `names the judgment "${id}", which does not exist. Use a judgment id from the rule group files.`;
 }
 
+function planTargetOutsidePlanReview() {
+  return 'has the target "plan", which only a plan-review finding may use. Name the unit, edge, port, or component.';
+}
+
+function recognize(target, ctx) {
+  if (target !== PLAN_TARGET) return recognizeTarget(ctx.graph, target);
+  return ctx.flow === "plan-review" ? PLAN_RECOGNIZED : null;
+}
+
 function unknownTarget(target) {
   const kinds = "a unit path, an edge <from> -> <to>, a port <path>#<Symbol>, a component name, or a proposed unit";
   return `has the target "${target}", which the graph does not know. Use ${kinds}.`;
@@ -208,13 +214,14 @@ function examine(entry, ctx) {
   const early = [...setByJudgmentProblem(entry), ...completenessProblems(entry), ...originProblems(entry, ctx.flow)];
   const judgment = JUDGMENTS.find((candidate) => candidate.id === entry.judgment);
   if (!judgment) return { problems: [...early, unknownJudgment(entry.judgment)] };
-  const recognized = recognizeTarget(ctx.graph, entry.target);
+  const recognized = recognize(entry.target, ctx);
+  if (!recognized && entry.target === PLAN_TARGET) return { problems: [...early, planTargetOutsidePlanReview()] };
   if (!recognized) return { problems: [...early, unknownTarget(entry.target)] };
   const row = escalationRow(recognized, entry.target, judgment);
   const problems = [
     ...early,
     ...fitProblems(entry, judgment, recognized, ctx),
-    ...scopeProblems(entry, ctx),
+    ...scopeProblems(entry, recognized, ctx),
     ...liftProblems(entry, ctx),
     ...evidenceProblemsOf(entry, ctx),
   ];

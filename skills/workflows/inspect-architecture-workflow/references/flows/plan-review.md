@@ -45,25 +45,27 @@ and paths that start with `references` are inside that folder. Working files liv
    `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, the file of every other
    rule group in `groups` (for example `references/rules/dependency-direction.md`) with its ids
    from `judgments`, and the upcoming changes the plan states, word for word. A classification
-   dispute goes once to `architecture-classifier`; tell the owner its proposed `arch model`
+   dispute goes once to `architecture-classifier`; tell the user its proposed `arch model`
    commands for after this review, and the same reviewer continues. It returns judged findings:
 
    ```json
    { "findings": [ { "judgment": "<judgment id>", "target": "<unit, edge, port, or component>",
        "consequence": "<one sentence>", "correction": "<smallest change to the plan>",
        "evidence": ["<plan>#<heading>"], "origin": "introduced", "liftedBy": "<upcoming change>" } ],
-     "questions": ["<question for the owner>"] }
+     "questions": ["<question for the user>"] }
    ```
 
-   `origin` is `inherited` for a defect the plan leaves in place. A target outside the plan adds
-   `"wider": true`. `liftedBy` is optional. `rules`, `defect`, and `severity` are never set.
+   A judgment that applies to the plan as a whole takes the target `plan`. `origin` is `inherited`
+   for a defect the plan leaves in place. A target outside the plan adds `"wider": true`, as does a
+   finding whose correction cannot be made smaller under R8 (Constraints need a named reason).
+   `liftedBy` is optional. `rules`, `defect`, and `severity` are never set.
 8. Put each question to the user, or return the questions to the calling workflow to ask. Give each
    confirmed answer to the same reviewer, which sets `liftedBy` to that exact text where the answer
    makes a finding heavier. Drop answered questions; an unanswered one changes nothing. This flow
-   never writes the model: tell the owner that the `add-upcoming` model edit remembers an answer.
+   never writes the model: tell the user that the `add-upcoming` model edit remembers an answer.
    Write the judged findings to `.architecture/work/judged.json`.
 9. Run `arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`.
-   Give `--upcoming` once for every upcoming change the plan states and every answer the owner
+   Give `--upcoming` once for every upcoming change the plan states and every answer the user
    confirmed. A `liftedBy` that names neither one of those nor a change recorded with
    `add-upcoming` is refused. It prints the result and its verdict. If it refuses judged findings,
    send the listed problems to the reviewer and run this step again; if it says the check is stale

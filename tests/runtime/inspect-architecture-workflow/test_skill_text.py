@@ -505,7 +505,7 @@ class FlowRunner:
 def test_the_change_review_flow_runs_as_written_through_acceptances(tmp_path):
     root = change_with_a_new_external(tmp_path)
     flow = FlowRunner("change-review", root, {
-        "<ref>": "main", "<upcoming change>": "a second payroll form", "<text>": "accepted by the owner",
+        "<ref>": "main", "<upcoming change>": "a second payroll form", "<text>": "accepted by the user",
     })
     assert json.loads(flow.run_step(1).stdout)["model"] is True
     applicable = json.loads(flow.run_step(3).stdout)

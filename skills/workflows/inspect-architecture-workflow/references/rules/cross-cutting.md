@@ -29,7 +29,8 @@ Read this file before any other rule group, and read the vocabulary first if a t
 ## Corrections are held to R8 (Constraints need a named reason)
 
 A correction that adds an interface, layer, or component states what it forbids or which decision
-it defers. One that cannot is rewritten smaller, or the finding becomes a wider observation. No
+it defers. One that cannot is rewritten smaller, or the finding becomes a wider observation that
+keeps its target, consequence, and evidence, with the larger correction; it is never dropped. No
 correction proposes a service split, a tier, or another topology change unless the session's scope
 includes a design or topology decision, and none asks for restructuring only so the code matches a
 pattern.

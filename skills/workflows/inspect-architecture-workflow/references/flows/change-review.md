@@ -42,20 +42,21 @@ and paths that start with `references` are inside that folder. Working files liv
    { "findings": [ { "judgment": "<judgment id>", "target": "<unit, edge, port, or component>",
        "consequence": "<one sentence>", "correction": "<smallest change inside the diff>",
        "evidence": ["<path>:<line>"], "origin": "introduced", "liftedBy": "<upcoming change>" } ],
-     "questions": ["<question for the owner>"] }
+     "questions": ["<question for the user>"] }
    ```
 
    `origin` is `inherited` for a defect the diff leaves in place. A target outside the diff adds
-   `"wider": true`. `liftedBy` is optional. `rules`, `defect`, and `severity` are never set.
+   `"wider": true`, as does a finding whose correction cannot be made smaller under R8 (Constraints
+   need a named reason). `liftedBy` is optional. `rules`, `defect`, and `severity` are never set.
 8. If there are disputes, dispatch `architecture-classifier` once with the disputed paths and the
    reviewer's reasons, run the commands it returns, then follow step 12; no second reviewer.
 9. Put each question to the user, or return the questions to the calling workflow to ask. Give each
    confirmed answer to the same reviewer, which sets `liftedBy` to that exact text where the answer
    makes a finding heavier. Drop answered questions; an unanswered one changes nothing and stays.
-   If the owner wants an answer remembered, run `arch model add-upcoming "<text>"`. Write the
+   If the user wants an answer remembered, run `arch model add-upcoming "<text>"`. Write the
    judged findings to `.architecture/work/judged.json`.
 10. Run `arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`.
-    Give `--upcoming` once for every upcoming change the packet stated and every answer the owner
+    Give `--upcoming` once for every upcoming change the packet stated and every answer the user
     confirmed. A `liftedBy` that names neither one of those nor a change recorded with
     `add-upcoming` is refused. It prints the result and its verdict.
     - If it refuses judged findings, it names the file and the finding of each problem: send them

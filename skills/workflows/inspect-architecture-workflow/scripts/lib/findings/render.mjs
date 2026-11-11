@@ -134,7 +134,7 @@ export function renderContract(data) {
     `Rules not enforced: ${listOrNone(data.notEnforced.map(notEnforcedLine))}`,
     corrections.length > 0 ? ["Corrections:", ...corrections].join("\n") : "Corrections: none",
     `Wider observations: ${data.wider}`,
-    `Questions for the owner: ${data.questions.length}`,
+    `Questions for the user: ${data.questions.length}`,
     ...data.questions.map((question) => `- ${question}`),
   ].join("\n");
 }

@@ -48,7 +48,7 @@ Rule statuses, thresholds, and accepted findings:
 - `arch model remove-forbidden-edge <from> <to>`
 - `arch model add-exception <from> <to> [rule=<R>] reason=<text>`: accept a finding by recording an intended dependency, for one target or generalized to a component or ring pair. Ends are matched exactly, never as globs: a unit path, `<path>#<Symbol>` (a port), a component name, or `ring:<name>`; `to` may also be `external:<name>`, or the literal `*` to accept a finding about one target instead of an edge. With `*`, `from` names that target: a unit path covers the unit and its ports, a `<path>#<Symbol>` covers only that port, a component name covers the component, and `ring:<name>` covers every unit of the ring. A `*` exception never covers a dependency cycle. Without `rule=` it covers every rule. `arch findings add` drops a judged finding that an exception covers, and `arch check` counts a covered row in `covered`.
 - `arch model remove-exception <from> <to> [rule=<R>]`
-- `arch model add-upcoming <text>`: remember an upcoming change the owner confirmed, so every later review counts it as a named upcoming change, as `--upcoming` does for one run of `arch findings add`. Refused when the same text is already recorded.
+- `arch model add-upcoming <text>`: remember an upcoming change the user confirmed, so every later review counts it as a named upcoming change, as `--upcoming` does for one run of `arch findings add`. Refused when the same text is already recorded.
 - `arch model remove-upcoming <text>`: forget a recorded upcoming change once it has shipped or been dropped.
 - `arch model set-adapter <command>`: set the command that prints the adapter document.
 

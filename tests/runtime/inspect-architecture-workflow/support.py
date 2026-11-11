@@ -38,9 +38,9 @@ def run_arch(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> s
     )
 
 
-def run_node(script: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+def run_node(script: str, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [node_path(), "--input-type=module", "-e", script],
+        [node_path(), "--input-type=module", "-e", script, *args],
         cwd=cwd,
         capture_output=True,
         text=True,

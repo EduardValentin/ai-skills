@@ -27,7 +27,7 @@ SCHEMA_SCRIPT = """
 import { JUDGED_SCHEMA } from "./scripts/lib/findings/intake.mjs";
 import { proposalSchema } from "./scripts/lib/checks/proposal.mjs";
 import { validateShape } from "./scripts/lib/model/validate-shape.mjs";
-const documents = JSON.parse(process.argv[1] ?? "[]");
+const documents = JSON.parse(process.argv[1]);
 const schemaOf = (document) => ("findings" in document ? JUDGED_SCHEMA : proposalSchema());
 console.log(JSON.stringify({
   findingFields: Object.keys(JUDGED_SCHEMA.properties.findings.items.properties),
@@ -37,8 +37,7 @@ console.log(JSON.stringify({
 
 
 def schema_report(documents: list[dict]) -> dict:
-    script = SCHEMA_SCRIPT.replace('process.argv[1] ?? "[]"', json.dumps(json.dumps(documents)))
-    result = run_node(script, SKILL_DIR)
+    result = run_node(SCHEMA_SCRIPT, SKILL_DIR, json.dumps(documents))
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
 
@@ -59,6 +58,11 @@ def test_both_agents_name_no_language_or_tool():
     for path in [REVIEWER, CLASSIFIER]:
         for index, line in enumerate(path.read_text().splitlines(), start=1):
             assert not WORD_PATTERN.search(line), f"{path.name}:{index}: {line.strip()}"
+
+
+def test_both_agents_find_their_queries_on_the_query_page():
+    for path in [REVIEWER, CLASSIFIER]:
+        assert "`references/commands/query.md`" in path.read_text(), path.name
 
 
 def test_reviewer_shapes_are_the_ones_the_command_reads():

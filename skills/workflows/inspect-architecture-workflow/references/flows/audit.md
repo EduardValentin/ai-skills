@@ -21,8 +21,8 @@ under `.architecture/work/`. Terms are defined in `references/rules/vocabulary.m
    template folder for its language from the skill's `adapter-templates` assets into the project,
    follow its README, and check its output against `references/adapter-contract.md`.
 4. Run `arch model init --start <greenfield|legacy> --adapter "<command>"`, where `<command>` runs
-   the adapter, with `--record-mode local` if the user does not want the record committed. A project with the four
-   model files of the earlier format runs `arch model migrate`, then
+   the adapter, with `--record-mode local` if the user does not want the record committed. A
+   project with the four model files of the earlier format runs `arch model migrate`, then
    `arch model set-adapter "<command>"`, instead.
 5. Run `arch model validate`. Exit 0: continue. Exit 2 with `model does not fit the code:` or "the
    model has no components": keep the message and continue. Any other exit 2 is a failure.
@@ -51,11 +51,13 @@ under `.architecture/work/`. Terms are defined in `references/rules/vocabulary.m
     { "findings": [ { "judgment": "<judgment id>", "target": "<unit, edge, port, or component>",
         "consequence": "<one sentence>", "correction": "<smallest change inside the project>",
         "evidence": ["<path>:<line>"] } ],
-      "questions": ["<question for the owner>"] }
+      "questions": ["<question for the user>"] }
     ```
 
-    An audit finding has no `origin` or `wider` and never sets `rules`, `defect`, or `severity`. A
-    classification dispute goes once to `architecture-classifier`; run its commands, then step 16.
+    An audit finding has no `origin` and never sets `rules`, `defect`, or `severity`; it is
+    `"wider": true` only when its correction cannot be made smaller under R8 (Constraints need a
+    named reason). A classification dispute goes once to `architecture-classifier`; run its
+    commands, then step 16.
 12. Put the questions to the user. Give each confirmed answer to the reviewer that asked; it sets
     `liftedBy` to that exact text where the answer makes a finding heavier. To remember an answer,
     run `arch model add-upcoming "<text>"`. Drop answered questions. Write each reviewer's judged
@@ -78,8 +80,7 @@ under `.architecture/work/`. Terms are defined in `references/rules/vocabulary.m
 16. After a fix to the code or the classification, run steps 8, 9, and 10 again. Each reviewer whose
     group is still in `groups` judges again against the new `judgments`, and its fresh file replaces
     the old one; drop the file of a group that left scope, and dispatch a reviewer for a group that
-    entered it. Then run steps 13 and 14. Never pass
-    judged findings written before the fix.
+    entered it. Then run steps 13 and 14. Never pass judged findings written before the fix.
 17. Read `record` in `architecture.json` in the record path (`docs/architecture/` unless the
     project names another). If it is `committed`, tell the user to commit `architecture.json`,
     `current.md`, and the copied adapter; if `local`, nothing. `.architecture/` is never committed.

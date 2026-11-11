@@ -488,11 +488,35 @@ def test_inherited_judged_finding_with_a_confirmed_lift_blocks(tmp_path):
     assert "Verdict: SHOULD_CHANGE: 1 blocker, 0 major, 0 minor blocking" in result.stdout
 
 
-def test_wider_on_an_in_scope_target_is_refused(tmp_path):
+def test_wider_on_an_in_scope_target_is_reported_apart_and_never_blocks(tmp_path):
     root = workspace(tmp_path)
     touch(root, EMPLOYEE)
+    blocking = change_review(root, tmp_path, finding())
+    assert "Verdict: SHOULD_CHANGE" in blocking.stdout, blocking.stdout + blocking.stderr
     result = change_review(root, tmp_path, finding(wider=True))
-    assert_refused(result, root, EMPLOYEE, "inside the reviewed scope")
+    assert result.returncode == 0, result.stderr
+    assert "Wider observations: 1" in result.stdout
+    assert "Verdict: OK" in result.stdout
+    assert stored(root, EMPLOYEE)["wider"] is True
+
+
+def test_plan_judgment_takes_the_literal_plan_target_in_plan_review(tmp_path):
+    root = workspace(tmp_path)
+    plan = write_plan(root)
+    plan_finding = finding("structure-consequence-unstated", "plan", evidence=[f"{plan}#Rule storage"])
+    accepted = plan_review(root, tmp_path, plan, plan_finding)
+    assert accepted.returncode == 0, accepted.stderr
+    assert stored(root, "plan")["defect"] == "structure-consequence-unstated"
+    unit_judgment = finding("unit-serves-several-actors", "plan", evidence=[f"{plan}#Rule storage"])
+    refused = plan_review(root, tmp_path, plan, unit_judgment)
+    assert refused.returncode == 2 and "does not apply to" in refused.stderr, refused.stderr
+
+
+def test_plan_target_outside_plan_review_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path, finding("structure-consequence-unstated", "plan"))
+    assert_refused(result, root, '"plan"', "plan-review")
 
 
 def test_missing_origin_in_change_review_is_refused(tmp_path):
@@ -728,7 +752,7 @@ def blocked_change_review(root: Path, tmp_path: Path):
 def test_exception_for_a_unit_with_star_target_drops_the_judged_finding(tmp_path):
     root = workspace(tmp_path)
     blocked_change_review(root, tmp_path)
-    accepted = run_arch(["model", "add-exception", EMPLOYEE, "*", "reason=accepted by the owner"], root)
+    accepted = run_arch(["model", "add-exception", EMPLOYEE, "*", "reason=accepted by the user"], root)
     assert accepted.returncode == 0, accepted.stderr
     rerun = change_review(root, tmp_path, finding())
     assert rerun.returncode == 0, rerun.stderr
