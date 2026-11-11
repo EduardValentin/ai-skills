@@ -50,7 +50,7 @@ Check questions:
 - Can the use case be stated as input, output, and ordered steps?
 
 Examples:
-```ts
+```
 // bad: the use case computes interest
 loan.balance = loan.balance * (1 + loan.rate / 12);
 // good: the entity owns the rule; the use case sequences it
@@ -81,7 +81,7 @@ Check questions:
 - Does any adapter branch on which shape of data it received?
 
 Examples:
-```ts
+```
 // bad
 class GatherContactInfoRequest extends HttpRequest {}
 interface CreateLoanResponse { loan: Loan }

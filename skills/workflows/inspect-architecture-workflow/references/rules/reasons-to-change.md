@@ -27,7 +27,7 @@ Check questions:
 - Does the change history show unrelated features editing this unit?
 
 Examples:
-```ts
+```
 // bad: three actors in one class
 class Employee { calculatePay() {}  reportHours() {}  save() {} }
 // good: one unit per actor over a shared plain data type
@@ -71,7 +71,7 @@ Check questions:
 - Does a class extend another only to reuse a method?
 
 Examples:
-```ts
+```
 // bad: every new kind edits Billing
 if (l.kind === "personal") ... else if (l.kind === "business") ... else if (l.kind === "edu") ...
 // good: Billing calls license.calcFee(); a new kind is class EduLicense implements License
@@ -96,7 +96,7 @@ Check questions:
   interface exposes?
 
 Examples:
-```ts
+```
 // bad
 fee = l instanceof BusinessLicense ? l.calcFee() * l.users : l.calcFee();
 // good: BusinessLicense.calcFee() already accounts for users
@@ -121,7 +121,7 @@ Check questions:
   exposed?
 
 Examples:
-```ts
+```
 // bad
 export const cart = { items: [] as Item[] };   // callers push into items
 // good
@@ -145,7 +145,7 @@ Check questions:
 - Does each unit have a predictable exit?
 
 Examples:
-```ts
+```
 // bad: control flow driven by flags across a large body
 let done = false; while (!done) { ... if (x) { done = true; continue; } ... }
 // good: decomposed

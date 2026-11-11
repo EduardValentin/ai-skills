@@ -86,7 +86,7 @@ Check questions:
 - Is an ORM-annotated class doubling as the domain model?
 
 Examples:
-```ts
+```
 // good
 interface Users { lastNamesOfUsersWhoLoggedInAfter(since: Date): Promise<string[]> }
 // bad

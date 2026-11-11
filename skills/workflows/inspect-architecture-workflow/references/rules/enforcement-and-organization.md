@@ -29,7 +29,7 @@ Check questions:
 - Does a deep import into another component resolve?
 
 Examples:
-```ts
+```
 // bad: everything published; the package is a folder
 export interface OrdersComponent {}   export class OrdersComponentImpl {}
 export interface Orders {}            export class SqlOrders {}
@@ -93,7 +93,7 @@ Check questions:
   tied to the team?
 
 Examples:
-```ts
+```
 // orders/        OrdersComponent (published), OrdersComponentImpl, Orders port, SqlOrders gateway (private)
 // web/           OrdersController imports only OrdersComponent
 // app/wiring.ts  createOrdersComponent(...) handed to the controller

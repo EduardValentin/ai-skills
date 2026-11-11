@@ -32,8 +32,8 @@ needs a model of its own: `arch` applies the current model to the document.
 
 ```json
 { "version": 1,
-  "frameworks": ["express"],
-  "ports": [ { "path": "src/domain/clock.ts", "symbol": "Clock" } ] }
+  "frameworks": ["<framework>"],
+  "ports": [ { "path": "src/domain/clock", "symbol": "Clock" } ] }
 ```
 
 | Field | Meaning |
@@ -48,12 +48,12 @@ needs a model of its own: `arch` applies the current model to the document.
 { "version": 1,
   "capabilities": { "exports": true, "implements": true, "constructs": true, "signatures": true,
                     "symbolImports": false, "typeChecks": false },
-  "modules": [ { "path": "src/a.ts", "exports": { "abstract": 0, "concrete": 1 }, "implements": [],
-                 "constructs": [ { "symbol": "S", "path": "src/b.ts" } ],
-                 "signatures": [ { "symbol": "S", "types": [ { "symbol": "T", "path": "src/b.ts" } ] } ],
-                 "typeChecks": [ { "symbol": "S", "path": "src/b.ts", "line": 12 } ] } ],
-  "edges": [ { "from": "src/a.ts", "to": "src/b.ts", "kind": "import", "symbols": ["S"] },
-             { "from": "src/a.ts", "external": { "name": "pg", "tag": "vendor" } } ],
+  "modules": [ { "path": "src/a", "exports": { "abstract": 0, "concrete": 1 }, "implements": [],
+                 "constructs": [ { "symbol": "S", "path": "src/b" } ],
+                 "signatures": [ { "symbol": "S", "types": [ { "symbol": "T", "path": "src/b" } ] } ],
+                 "typeChecks": [ { "symbol": "S", "path": "src/b", "line": 12 } ] } ],
+  "edges": [ { "from": "src/a", "to": "src/b", "kind": "import", "symbols": ["S"] },
+             { "from": "src/a", "external": { "name": "<vendor-library>", "tag": "vendor" } } ],
   "warnings": [] }
 ```
 
@@ -78,7 +78,8 @@ passing.
 
 ### Modules
 
-`path` is relative to the working directory, with forward slashes. List every analysed source file
+`path` is relative to the working directory, with forward slashes, and names the file as it is on
+disk, extension included; the examples above leave the extension out. List every analysed source file
 once. Every other field is optional and read only when its capability is true.
 
 ### Edges

@@ -106,7 +106,7 @@ function blank(text) {
 
 function completenessProblems(entry) {
   return [
-    ...(entry.evidence?.length > 0 ? [] : ["has no evidence. Add at least one src/file.ts:12 line that shows it."]),
+    ...(entry.evidence?.length > 0 ? [] : ["has no evidence. Add at least one <path>:<line> entry that shows it."]),
     ...(blank(entry.consequence) ? ["has no consequence. State in one sentence what it costs to maintain."] : []),
     ...(blank(entry.correction) ? ["has no correction. State the smallest change inside the scope."] : []),
   ];

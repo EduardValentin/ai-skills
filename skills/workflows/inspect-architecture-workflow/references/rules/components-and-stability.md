@@ -114,7 +114,7 @@ Check questions:
 - Drawn with volatile components on top, does any arrow point up?
 
 Examples:
-```ts
+```
 // before: entities -> authorizer (User imports Permissions) -> interactors -> entities
 // after:  entities/Permissions.ts       export interface Permissions { allows(action: string): boolean }
 //         authorizer/PermissionsImpl.ts import { Permissions } from "entities"; class PermissionsImpl implements Permissions {}

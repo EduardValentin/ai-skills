@@ -51,7 +51,7 @@ Check questions:
   not?
 
 Examples:
-```ts
+```
 // bad: rule reached through login and navigation
 await page.goto("/login"); await login(page); await page.click("#loans"); await page.click("#new");
 expect(await page.textContent("#interest")).toBe("12.50");

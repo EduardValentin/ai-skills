@@ -30,7 +30,7 @@ Check questions:
 - In the change history, did a policy unit change for a detail reason?
 
 Examples:
-```ts
+```
 // bad: the highest-level unit imports the I/O it is farthest from
 import { PgClient } from "../persistence/PgClient";
 class PayrollService { private db = new PgClient(); }
@@ -89,7 +89,7 @@ Check questions:
 - Are the boundaries declared in the use-case component?
 
 Examples:
-```ts
+```
 // usecases/place-order/
 export interface PlaceOrderInput  { customerId: string; lines: Line[] }
 export interface PlaceOrderOutput { orderId: string; total: string }

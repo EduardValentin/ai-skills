@@ -20,7 +20,7 @@ function lineCount(text) {
 
 function codeEvidenceProblem(root, entry) {
   const match = CODE_EVIDENCE.exec(entry);
-  if (!match) return `evidence "${entry}" is not path:line. Cite it as src/file.ts:12.`;
+  if (!match) return `evidence "${entry}" is not path:line. Cite it as <path>:<line>, the file and the line number.`;
   const [, file, lineText] = match;
   const line = Number(lineText);
   const text = readFileInside(root, file);
