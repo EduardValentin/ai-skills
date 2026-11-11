@@ -37,23 +37,10 @@ def edit_json(path: Path, change) -> None:
     path.write_text(json.dumps(document))
 
 
-QUIETED_RULES = {
-    "R38": "payroll records no enforcement; the old-check tests below do not read it",
-}
-
-
-def quiet_payroll(dest: Path) -> Path:
-    """The payroll fixture with the later-added conditions silenced, so these tests see only the old checks."""
+def typed_payroll(dest: Path) -> Path:
+    """The payroll fixture with an adapter that also reports type checks, so no check is left undecided."""
     root = copy_fixture("payroll", dest)
-
-    def quiet_model(document: dict) -> None:
-        document.setdefault("rules", {}).update({rule: ["off", reason] for rule, reason in QUIETED_RULES.items()})
-
-    def provide_type_checks(document: dict) -> None:
-        document["capabilities"].update(typeChecks=True)
-
-    edit_json(root / MODEL, quiet_model)
-    edit_json(root / ADAPTER, provide_type_checks)
+    edit_json(root / ADAPTER, lambda document: document["capabilities"].update(typeChecks=True))
     return root
 
 
@@ -67,7 +54,7 @@ def touch(root: Path, *paths: str) -> None:
 
 
 def repo(tmp_path: Path) -> Path:
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     (root / ".gitignore").write_text(".architecture/\n")
     return root
 
@@ -187,7 +174,7 @@ def test_every_rule_has_a_short_plain_title():
 
 
 def test_unseeded_fixture_has_only_the_construction_rows_without_a_base(tmp_path: Path):
-    out = check_output(quiet_payroll(tmp_path / "p"), exit_code=1)
+    out = check_output(typed_payroll(tmp_path / "p"), exit_code=1)
     assert keys(out["rows"]) == CONSTRUCTION_ROWS
     row = out["rows"][0]
     assert (row["check"], row["defect"], row["severity"], row["baseSeverity"]) == (
@@ -198,12 +185,11 @@ def test_unseeded_fixture_has_only_the_construction_rows_without_a_base(tmp_path
     assert out["skipped"] == [
         {"rule": "R6", "status": "off", "component": None,
          "reason": "one delivery mechanism; controllers call use cases directly"},
-        *[{"rule": rule, "status": "off", "component": None, "reason": reason} for rule, reason in QUIETED_RULES.items()],
     ]
 
 
 def test_markdown_table_has_the_documented_columns_and_titled_rules(tmp_path: Path):
-    result = run_arch(["check"], quiet_payroll(tmp_path / "p"))
+    result = run_arch(["check"], typed_payroll(tmp_path / "p"))
     assert result.returncode == 1, result.stderr
     lines = result.stdout.splitlines()
     assert lines[0] == COLUMNS
@@ -213,7 +199,7 @@ def test_markdown_table_has_the_documented_columns_and_titled_rules(tmp_path: Pa
 
 
 def test_printed_rule_carries_its_title(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CONTROLLER)
     result = run_arch(["check"], root)
     assert "R4 Dependencies point toward policy" in result.stdout
@@ -221,7 +207,7 @@ def test_printed_rule_carries_its_title(tmp_path: Path):
 
 
 def test_markdown_says_none_for_empty_sections(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     model_edit(root, "add-exception", "web", "adapters", "reason=tolerated for now")
     result = run_arch(["check"], root)
     assert result.returncode == 0, result.stderr
@@ -229,7 +215,7 @@ def test_markdown_says_none_for_empty_sections(tmp_path: Path):
 
 
 def test_seeded_component_cycle_yields_cycle_rows(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CONTROLLER)
     rows = check_rows(root)
     component_cycle = find(rows, "adapters -> domain -> web", "R30")
@@ -246,14 +232,14 @@ def test_cycle_targets_sort_members_numerically(tmp_path: Path):
 
 
 def test_blocker_rows_record_no_lift(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, USE_CASE)
     row = find(check_rows(root), f"{EMPLOYEE} -> {USE_CASE}", "R4")
     assert row["severity"] == "blocker" and row["lifts"] == [] and row["defect"] == "outward-dependency"
 
 
 def test_outward_edge_between_components_yields_the_stability_row(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, CLOCK, MAIN)
     rows = check_rows(root)
     assert find(rows, f"{CLOCK} -> {MAIN}", "R4")["lifts"] == []
@@ -261,7 +247,7 @@ def test_outward_edge_between_components_yields_the_stability_row(tmp_path: Path
 
 
 def test_policy_role_comes_from_the_model(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, USE_CASE, PG)
     target = f"{USE_CASE} -> {PG}"
     assert find(check_rows(root), target, "R4")["defect"] == "policy-depends-on-detail"
@@ -444,7 +430,7 @@ def test_rows_outside_the_change_are_not_emitted_with_a_base(tmp_path: Path):
 
 
 def test_a_base_that_predates_the_model_is_compared_with_the_current_model(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     saved = tmp_path / "docs"
     shutil.move(root / "docs", saved)
     init_repo(root)
@@ -460,7 +446,7 @@ def test_a_base_that_predates_the_model_is_compared_with_the_current_model(tmp_p
 
 
 def test_rule_off_drops_its_rows_and_is_listed_as_skipped(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7", "off", "reason=composition happens in the controller on purpose")
     out = check_output(root, exit_code=0)
     assert out["rows"] == []
@@ -469,7 +455,7 @@ def test_rule_off_drops_its_rows_and_is_listed_as_skipped(tmp_path: Path):
 
 
 def test_advisory_row_is_printed_and_exits_0(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7", "advisory", "reason=under review")
     out = check_output(root, exit_code=0)
     assert keys(out["rows"]) == CONSTRUCTION_ROWS and {r["status"] for r in out["rows"]} == {"advisory"}
@@ -477,7 +463,7 @@ def test_advisory_row_is_printed_and_exits_0(tmp_path: Path):
 
 
 def test_rule_off_for_one_component_only(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7@adapters", "off", "reason=adapters are built anywhere")
     assert keys(check_rows(root)) == CONSTRUCTION_ROWS
     model_edit(root, "set-rule", "R7@web", "off", "reason=the controller composes on purpose")
@@ -488,7 +474,7 @@ def test_rule_off_for_one_component_only(tmp_path: Path):
 
 
 def test_a_component_cycle_is_as_strict_as_its_strictest_member(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CONTROLLER)
     cycle = "adapters -> domain -> web"
     model_edit(root, "set-rule", "R30@domain", "off", "reason=legacy cycle")
@@ -501,14 +487,14 @@ def test_a_component_cycle_is_as_strict_as_its_strictest_member(tmp_path: Path):
 
 
 def test_exception_covers_a_row(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     model_edit(root, "add-exception", "web", "adapters", "reason=composition happens in the controller")
     out = check_output(root, exit_code=0)
     assert out["rows"] == [] and out["covered"] == 2
 
 
 def test_an_exception_with_a_rule_covers_only_rows_carrying_it(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     model_edit(root, "add-exception", "web", "ring:adapters", "rule=R4", "reason=not about construction")
     assert check_output(root)["covered"] == 0
     model_edit(root, "remove-exception", "web", "ring:adapters", "rule=R4")
@@ -518,7 +504,7 @@ def test_an_exception_with_a_rule_covers_only_rows_carrying_it(tmp_path: Path):
 
 
 def test_missing_fact_is_incomplete_not_passing(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(constructs=False))
     out = check_output(root, exit_code=0)
     assert out["rows"] == []
@@ -527,7 +513,7 @@ def test_missing_fact_is_incomplete_not_passing(tmp_path: Path):
 
 
 def test_strict_fails_on_incomplete_enforced_rule(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(constructs=False))
     assert run_arch(["check", "--strict"], root).returncode == 1
     model_edit(root, "set-rule", "R7", "advisory", "reason=construction is not reported yet")
@@ -535,7 +521,7 @@ def test_strict_fails_on_incomplete_enforced_rule(tmp_path: Path):
 
 
 def test_a_rule_that_is_off_does_not_report_a_missing_fact(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(constructs=False))
     model_edit(root, "set-rule", "R7", "off", "reason=not applicable")
     assert check_output(root, exit_code=0)["incomplete"] == []
@@ -721,7 +707,7 @@ def test_construction_of_a_unit_that_is_not_a_detail_kind_is_not_a_row(tmp_path:
 
 
 def test_corrections_name_the_move(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CLOCK)
     seed_edge(root, "src/domain/clock.ts", CLOCK)
     rows = check_rows(root)
@@ -740,13 +726,13 @@ BARREL = "src/domain/index.ts"
 
 
 def test_an_outward_edge_through_a_barrel_is_not_a_crossing(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, BARREL, "src/adapters/memory-payroll-repository.ts")
     assert not any("R4" in r["rules"] and BARREL in r["target"] for r in check_rows(root))
 
 
 def test_an_outward_edge_not_through_a_barrel_is_still_a_crossing(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, "src/adapters/memory-payroll-repository.ts")
     target = f"{EMPLOYEE} -> src/adapters/memory-payroll-repository.ts"
     assert find(check_rows(root), target, "R4")["severity"] == "blocker"
@@ -870,7 +856,7 @@ def test_a_merged_row_is_introduced_when_any_contributing_row_is(tmp_path: Path)
 
 
 def test_a_check_runs_when_a_rule_is_off_for_the_project_but_enforced_for_a_component(tmp_path: Path):
-    root = quiet_payroll(tmp_path / "p")
+    root = typed_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7", "off", "reason=not applicable")
     model_edit(root, "set-rule", "R7@web", "enforced", "reason=the web component must stay clean")
     out = check_output(root, exit_code=1)

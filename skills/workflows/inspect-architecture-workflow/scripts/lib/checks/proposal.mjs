@@ -121,8 +121,9 @@ function classificationsFor(model, proposal) {
   return result;
 }
 
-function touchedByProposal(graph, proposal) {
+function touchedByProposal(graph, baseGraph, proposal) {
   const known = new Map(graph.units.map((unit) => [unit.path, unit]));
+  const existing = new Set(baseGraph.units.map((unit) => unit.path));
   const added = (proposal.modules ?? []).map((module) => module.path);
   const paths = [...added, ...(proposal.edges ?? []).map((edge) => edge.from)];
   const units = [...new Set(paths)].filter((path) => known.has(path));
@@ -132,6 +133,7 @@ function touchedByProposal(graph, proposal) {
     components: [...new Set(units.map((path) => known.get(path).component).filter(Boolean))],
     uncovered: units.filter((path) => uncovered.has(path)),
     renames: new Map(),
+    created: added.filter((path) => known.has(path) && !existing.has(path)),
   };
 }
 
@@ -153,10 +155,11 @@ export async function proposalComparison({ root, model, file }) {
   const graph = buildGraph(model, mergedDocument(document, proposal), {
     classifications: classificationsFor(model, proposal),
   });
+  const baseGraph = buildGraph(model, document);
   return {
     graph,
-    baseGraph: buildGraph(model, document),
-    touched: touchedByProposal(graph, proposal),
+    baseGraph,
+    touched: touchedByProposal(graph, baseGraph, proposal),
     clarifications: clarificationEntries(proposal),
   };
 }

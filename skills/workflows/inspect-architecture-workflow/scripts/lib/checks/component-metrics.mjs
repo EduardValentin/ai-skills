@@ -15,7 +15,8 @@ const CORRECTIONS = {
     "move what changes out of it; if it holds abstractions nothing uses, delete them; if no cost can be named, " +
     `record that with arch model add-exception ${name} '*' rule=R32 reason=...`,
   thin: (from, to) =>
-    `Narrow what ${to} publishes to what ${from} uses, or move what ${from} uses into ${from}`,
+    `Narrow what ${to} publishes to what ${from} uses and record the narrower surface with ` +
+    `arch model set-component ${to} published=<globs>, or move what ${from} uses into ${from}`,
 };
 
 const CONSEQUENCES = {

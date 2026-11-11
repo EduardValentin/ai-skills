@@ -3,14 +3,14 @@
   "adapter": "cat adapter.json",
   "record": "committed",
   "components": [
-    { "name": "domain", "paths": ["src/domain/**"], "classify": [
+    { "name": "domain", "paths": ["src/domain/**"], "enforcement": "boundary-lint", "classify": [
         ["**/*-use-case.ts", "use-case"],
         ["**/*-repository.ts", "port"],
         ["clock.ts", "port"],
         ["index.ts", "barrel", { "ring": "entities" }],
         ["**", "entity"] ] },
-    { "name": "adapters", "paths": ["src/adapters/**"], "classify": [["**", "adapter"]] },
-    { "name": "web", "paths": ["src/web/**"], "entry": ["main.ts"], "classify": [
+    { "name": "adapters", "paths": ["src/adapters/**"], "enforcement": "boundary-lint", "classify": [["**", "adapter"]] },
+    { "name": "web", "paths": ["src/web/**"], "entry": ["main.ts"], "enforcement": "boundary-lint", "classify": [
         ["main.ts", "composition-root"],
         ["**", "controller"] ] }
   ],

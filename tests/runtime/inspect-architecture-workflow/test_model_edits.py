@@ -150,8 +150,9 @@ def test_edit_writes_one_entry_per_line_and_omits_defaults(tmp_path: Path):
     assert text.endswith("}\n") and not text.endswith("\n\n")
     port_lines = [line for line in text.splitlines() if '"at":' in line]
     assert len(port_lines) == 3
-    for omitted in ["valueType", "enforcement", "release", '"rings"', '"thresholds"', '"entry": []']:
+    for omitted in ["valueType", "release", '"rings"', '"thresholds"', '"entry": []']:
         assert omitted not in text
+    assert '{ "name": "reports", "paths": ["src/reports/**"] }' in text
     keys = list(json.loads(text))
     assert keys == ["version", "adapter", "record", "components", "ports", "rules"]
     assert edit(root, "validate").returncode == 0
@@ -475,3 +476,72 @@ def test_status_reports_an_absent_model_with_exit_zero(tmp_path: Path):
     as_json = json.loads(edit(tmp_path, "status", "--json").stdout)
     assert as_json == {"model": False, "path": str(model_file(tmp_path))}
 
+
+
+def test_set_component_records_and_removes_component_fields(tmp_path: Path):
+    root = payroll(tmp_path)
+    result = edit(root, "set-component", "adapters", "enforcement=import rules fail the build", "release=payroll-app",
+                  "published=memory-payroll-repository.ts,system-clock.ts", "entry=system-clock.ts")
+    assert result.returncode == 0, result.stderr
+    adapters = document(root)["components"][1]
+    assert adapters["enforcement"] == "import rules fail the build" and adapters["release"] == "payroll-app"
+    assert adapters["published"] == ["memory-payroll-repository.ts", "system-clock.ts"]
+    assert adapters["entry"] == ["system-clock.ts"]
+    assert edit(root, "set-component", "adapters", "release=", "entry=").returncode == 0
+    adapters = document(root)["components"][1]
+    assert "release" not in adapters and "entry" not in adapters
+    assert adapters["enforcement"] == "import rules fail the build"
+    assert edit(root, "validate").returncode == 0
+
+
+def test_set_component_refuses_an_unknown_component_or_no_field(tmp_path: Path):
+    root = payroll(tmp_path)
+    before = model_file(root).read_bytes()
+    unknown = edit(root, "set-component", "ghost", "enforcement=x")
+    assert unknown.returncode == 2 and "ghost" in unknown.stderr and "domain" in unknown.stderr
+    nothing = edit(root, "set-component", "web")
+    assert nothing.returncode == 2 and "enforcement=" in nothing.stderr
+    assert model_file(root).read_bytes() == before
+
+
+def test_add_component_takes_the_same_optional_fields(tmp_path: Path):
+    root = payroll(tmp_path)
+    result = edit(root, "add-component", "reports", "paths=src/reports/**", "enforcement=import rules fail the build",
+                  "published=index.ts")
+    assert result.returncode == 0, result.stderr
+    assert document(root)["components"][-1] == {
+        "name": "reports", "paths": ["src/reports/**"], "published": ["index.ts"],
+        "enforcement": "import rules fail the build",
+    }
+
+
+SOUND_SMALL_EDITS = [
+    ["add-component", "billing", "paths=src/billing/**", "enforcement=boundary-lint",
+     "published=invoice.ts,invoice-store.ts,issue-invoice-use-case.ts"],
+    ["classify", "billing", "invoice-store.ts", "port"],
+    ["classify", "billing", "**/*-use-case.ts", "use-case"],
+    ["classify", "billing", "**", "entity"],
+    ["add-component", "storage", "paths=src/storage/**"],
+    ["classify", "storage", "**", "adapter"],
+    ["add-component", "app", "paths=src/app/**", "entry=main.ts"],
+    ["classify", "app", "main.ts", "composition-root"],
+    ["classify", "app", "config.ts", "config"],
+    ["classify", "app", "**", "entry-point"],
+    ["add-port", "src/billing/invoice-store.ts#InvoiceStore", "owner=billing", "humble=adapters"],
+    ["set-component", "storage", "enforcement=boundary-lint"],
+    ["set-component", "app", "enforcement=boundary-lint"],
+    ["validate"],
+]
+
+
+def test_a_model_built_only_by_init_and_edits_reaches_a_clean_strict_check(tmp_path: Path):
+    root = copy_fixture("sound-small", tmp_path / "p")
+    model_file(root).unlink()
+    assert edit(root, "init", "--start", "greenfield", "--adapter", "cat adapter.json").returncode == 0
+    for step in SOUND_SMALL_EDITS:
+        result = edit(root, *step)
+        assert result.returncode == 0, f"{step}: {result.stderr}"
+    result = run_arch(["check", "--strict", "--json"], root)
+    assert result.returncode == 0, result.stdout + result.stderr
+    out = json.loads(result.stdout)
+    assert out["rows"] == [] and out["incomplete"] == []

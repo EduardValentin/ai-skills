@@ -10,18 +10,20 @@ const NOT_ENFORCING = new Set(["none", "review"]);
 
 const CORRECTIONS = {
   enforcement: (name) =>
-    `If something already stops code outside ${name} from importing its internals, record that mechanism in the ` +
-    `enforcement field of ${name}; otherwise add the cheapest enforcement the project has, such as a visibility ` +
-    "rule, an export list, or an import rule that fails the build, and record it there; make it a separate build " +
-    "unit only when none of those is available",
-  deepImport: (from, component, globs) =>
-    `Import through the published surface of ${component} (${globs}) instead of from ${from}, ` +
-    "or publish the module on purpose by adding it to published",
+    `If something already stops code outside ${name} from importing its internals, record that mechanism with ` +
+    `arch model set-component ${name} enforcement="<mechanism>"; otherwise add the cheapest enforcement the ` +
+    "project has, such as a visibility rule, an export list, or an import rule that fails the build, and record " +
+    "it the same way; make it a separate build unit only when none of those is available",
+  deepImport: (from, component) =>
+    `Import through the published surface of ${component.name} (${component.published.join(", ")}) instead of ` +
+    `from ${from}, or publish the module on purpose with arch model set-component ${component.name} ` +
+    `published=${[...component.published, relativeToComponent(component, from)].join(",")}`,
   forbidden: (from, to) =>
     `Remove the dependency of ${from} on ${to}, which the model forbids, and make the edge uncompilable`,
   unconsumed: (symbol, component) =>
-    `Stop publishing ${symbol} from ${component}: drop it from the published surface, or delete it if nothing ` +
-    `inside ${component} uses it`,
+    `Stop publishing ${symbol} from ${component}: drop it from the published surface, and when that leaves a ` +
+    `file out of it, record the narrower surface with arch model set-component ${component} published=<globs>; ` +
+    `or delete it if nothing inside ${component} uses it`,
 };
 
 const CONSEQUENCES = {
@@ -85,7 +87,7 @@ function deepImport(context) {
         evidence:
           `${pair.from} reaches ${pair.to} in ${component.name}, ` +
           `outside its published surface ${component.published.join(", ")}`,
-        correction: CORRECTIONS.deepImport(pair.to, component.name, component.published.join(", ")),
+        correction: CORRECTIONS.deepImport(pair.to, component),
       });
     });
 }

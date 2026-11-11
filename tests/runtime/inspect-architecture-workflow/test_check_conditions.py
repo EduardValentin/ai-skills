@@ -467,3 +467,17 @@ def test_a_dependency_that_only_implements_declared_ports_is_kept(tmp_path: Path
     assert correction == (
         "Keep this dependency, since storage only implements the port `LoanStore` that lending declares; "
         "if anything is to change, reduce what lending depends on")
+
+
+def test_corrections_about_enforcement_or_the_published_surface_name_the_edit_that_records_it(tmp_path: Path):
+    rows = check_output(fixture_root(tmp_path))["rows"]
+    expected = {
+        "unenforced-component": "arch model set-component notify enforcement=",
+        "deep-import": "arch model set-component catalog published=",
+        "unconsumed-export": "arch model set-component catalog published=",
+        "thin-component-use": "arch model set-component catalog published=",
+    }
+    for check, edit in expected.items():
+        found = rows_of(rows, check)
+        assert found, check
+        assert all(edit in correction for row in found for correction in row["corrections"]), (check, found)

@@ -25,7 +25,6 @@ def edit_json(path: Path, change) -> None:
 
 def workspace(tmp_path: Path) -> Path:
     root = copy_fixture("payroll", tmp_path / "p")
-    edit_json(root / MODEL, lambda d: d["rules"].update({"R38": ["off", "payroll records no enforcement"]}))
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(typeChecks=True))
     (root / ".gitignore").write_text(".architecture/\n")
     init_repo(root)
@@ -1024,3 +1023,59 @@ def test_ring_exception_covers_a_judged_unit_finding(tmp_path):
     blocked_change_review(root, tmp_path)
     assert run_arch(["model", "add-exception", "ring:entities", "*", "reason=accepted"], root).returncode == 0
     assert "Verdict: OK" in change_review(root, tmp_path, finding()).stdout
+
+
+ADDED = "src/domain/bonus-rule.ts"
+
+
+def add_new_unit(root: Path) -> None:
+    (root / ADDED).write_text("export class BonusRule {}\n")
+    edit_json(root / ADAPTER, lambda d: d["modules"].append({"path": ADDED, "exports": {"abstract": 0, "concrete": 1}}))
+
+
+def blocker_on(target: str, origin: str) -> dict:
+    return finding("entity-carries-framework-traits", target, evidence=[f"{ADDED}:1"], origin=origin)
+
+
+def test_inherited_origin_on_a_unit_the_change_adds_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    add_new_unit(root)
+    check = check_file(root, tmp_path, "--base", "main")
+    refused = add(root, "change-review", check, "--base", "main",
+                  "--judged", str(judged(tmp_path, blocker_on(ADDED, "inherited"))))
+    assert_refused(refused, root, ADDED, "the change created it", '"introduced"')
+    accepted = add(root, "change-review", check, "--base", "main",
+                   "--judged", str(judged(tmp_path, blocker_on(ADDED, "introduced"))))
+    assert accepted.returncode == 0, accepted.stderr
+    assert "Verdict: SHOULD_CHANGE: 1 blocker" in accepted.stdout
+
+
+def test_inherited_origin_on_an_edge_needs_one_end_that_existed_at_the_base(tmp_path):
+    root = workspace(tmp_path)
+    add_new_unit(root)
+    check = check_file(root, tmp_path, "--base", "main")
+    edge = blocker_on(f"{ADDED} -> {EMPLOYEE}", "inherited")
+    accepted = add(root, "change-review", check, "--base", "main", "--judged", str(judged(tmp_path, edge)))
+    assert accepted.returncode == 0, accepted.stderr
+    assert stored(root, f"{ADDED} -> {EMPLOYEE}")["origin"] == "inherited"
+
+
+def test_inherited_origin_on_a_proposed_module_is_refused_in_plan_review(tmp_path):
+    root = workspace(tmp_path)
+    plan = write_plan(root)
+    proposed = "src/domain/overtime-rule.ts"
+    proposal = write_json(tmp_path / "proposal.json", {"version": 1, "modules": [{"path": proposed}]})
+    check = check_file(root, tmp_path, "--proposal", str(proposal))
+    inherited = finding("entity-carries-framework-traits", proposed, evidence=[f"{plan}#Rule storage"],
+                        origin="inherited")
+    refused = add(root, "plan-review", check, "--plan", plan, "--proposal", str(proposal),
+                  "--judged", str(judged(tmp_path, inherited)))
+    assert_refused(refused, root, proposed, "the change created it", '"introduced"')
+
+
+def test_a_plan_only_judgment_refuses_a_unit_target_in_plan_review(tmp_path):
+    root = workspace(tmp_path)
+    plan = write_plan(root)
+    on_unit = finding("structure-consequence-unstated", "src/domain/overtime-rule.ts", evidence=[f"{plan}#Rule storage"])
+    refused = plan_review(root, tmp_path, plan, on_unit)
+    assert_refused(refused, root, "structure-consequence-unstated", "does not apply to", "plan (plan-review only)")

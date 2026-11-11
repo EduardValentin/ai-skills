@@ -293,9 +293,9 @@ def test_components_query_lists_the_component_record(tmp_path: Path):
     out = q(payroll(tmp_path), "components")
     assert out["columns"] == ["Component", "Enforcement", "Release", "Entry points", "Published", "Units"]
     assert out["rows"] == [
-        ["domain", "none", "", [], [], 5],
-        ["adapters", "none", "", [], [], 3],
-        ["web", "none", "", ["main.ts"], [], 3],
+        ["domain", "boundary-lint", "", [], [], 5],
+        ["adapters", "boundary-lint", "", [], [], 3],
+        ["web", "boundary-lint", "", ["main.ts"], [], 3],
     ]
 
 

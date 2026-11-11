@@ -42,11 +42,41 @@ function findComponent(doc, name) {
   throw new UsageError(`there is no component "${name}". Components: ${names(doc.components)}.`);
 }
 
-function addComponent(doc, [name], { paths }) {
+const COMPONENT_TEXT_FIELDS = ["enforcement", "release"];
+const COMPONENT_LIST_FIELDS = ["published", "entry"];
+const COMPONENT_FIELDS = [...COMPONENT_TEXT_FIELDS, ...COMPONENT_LIST_FIELDS];
+const COMPONENT_FIELD_USAGE = "[enforcement=<text>] [release=<text>] [published=<glob,...>] [entry=<glob,...>]";
+
+function fieldValue(key, text) {
+  return COMPONENT_LIST_FIELDS.includes(key) ? splitList(text) : text.trim();
+}
+
+function setFields(component, keys) {
+  for (const key of COMPONENT_FIELDS.filter((field) => Object.hasOwn(keys, field))) {
+    const value = fieldValue(key, keys[key]);
+    if (value.length === 0) delete component[key];
+    else component[key] = value;
+  }
+}
+
+function addComponent(doc, [name], { paths, ...fields }) {
   if (doc.components.some((component) => component.name === name)) {
     throw new UsageError(`component "${name}" already exists. Choose another name or remove it first.`);
   }
-  doc.components.push({ name, paths: splitList(paths), classify: [] });
+  const component = { name, paths: splitList(paths), classify: [] };
+  setFields(component, fields);
+  doc.components.push(component);
+}
+
+function setComponent(doc, [name], keys) {
+  const component = findComponent(doc, name);
+  if (!COMPONENT_FIELDS.some((field) => Object.hasOwn(keys, field))) {
+    throw new UsageError(
+      `name at least one field to set: ${COMPONENT_FIELDS.map((field) => `${field}=`).join(", ")}. ` +
+        "An empty value removes the field.",
+    );
+  }
+  setFields(component, keys);
 }
 
 function removeComponent(doc, [name]) {
@@ -247,7 +277,18 @@ function edit(usage, positional, keys, apply) {
 }
 
 export const EDITS = {
-  "add-component": edit("arch model add-component <name> paths=<globs>", 1, { required: ["paths"] }, addComponent),
+  "add-component": edit(
+    `arch model add-component <name> paths=<globs> ${COMPONENT_FIELD_USAGE}`,
+    1,
+    { required: ["paths"], optional: COMPONENT_FIELDS },
+    addComponent,
+  ),
+  "set-component": edit(
+    `arch model set-component <name> ${COMPONENT_FIELD_USAGE}`,
+    1,
+    { optional: COMPONENT_FIELDS },
+    setComponent,
+  ),
   "remove-component": edit("arch model remove-component <name>", 1, {}, removeComponent),
   classify: edit(
     "arch model classify <component> <pattern> <kind> [ring=<ring>] [actors=<a,b>] [reason=<text>] " +

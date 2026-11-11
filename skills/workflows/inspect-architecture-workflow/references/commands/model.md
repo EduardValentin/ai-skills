@@ -29,7 +29,8 @@ Create and check the model:
 
 Components and classification:
 
-- `arch model add-component <name> paths=<globs>`: add a component owning the comma-separated globs.
+- `arch model add-component <name> paths=<globs> [enforcement=<text>] [release=<text>] [published=<glob,...>] [entry=<glob,...>]`: add a component owning the comma-separated globs, with the optional fields `set-component` sets.
+- `arch model set-component <name> [enforcement=<text>] [release=<text>] [published=<glob,...>] [entry=<glob,...>]`: set fields of an existing component; an empty value, such as `release=`, removes the field. `enforcement` names what makes the build fail when code outside the component imports its internals, such as an import rule or a visibility rule; without it, or with `none` or `review`, R38 reports the component once others depend on it. `release` names the release unit. `published` and `entry` are globs relative to the component's paths: the published surface other components may import, and the entry points.
 - `arch model remove-component <name>`
 - `arch model classify <component> <pattern> <kind> [ring=<ring>] [actors=<a,b>] [reason=<text>] [value-type=true] [before=<pattern>]`: add or replace a pair; the pattern is relative to the component's paths, and the first matching pair wins. `before=` inserts the pair ahead of an existing pattern; `ring=`, `actors=`, `reason=`, and `value-type=true` record what differs from the kind's default.
 - `arch model unclassify <component> <pattern>`

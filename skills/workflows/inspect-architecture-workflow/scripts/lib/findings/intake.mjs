@@ -147,6 +147,23 @@ function originProblems(entry, flow) {
   ];
 }
 
+function existedAtBase(recognized, ctx) {
+  const created = new Set(ctx.scope?.created ?? []);
+  if (recognized.components.length > 0) {
+    const unitsOf = (name) => ctx.graph.units.filter((unit) => unit.component === name);
+    return recognized.components.some((name) => unitsOf(name).some((unit) => !created.has(unit.path)));
+  }
+  return recognized.units.length === 0 || recognized.units.some((path) => !created.has(path));
+}
+
+function inheritedProblems(entry, recognized, ctx) {
+  if (entry.origin !== "inherited" || existedAtBase(recognized, ctx)) return [];
+  return [
+    `states "origin": "inherited", but ${entry.target} did not exist at the base of the review: the change ` +
+      'created it, so the defect is "introduced". State "origin": "introduced".',
+  ];
+}
+
 function unitFits(unit, targets, model) {
   if (targets.includes(unit.kind)) return true;
   if (targets.includes("test-suite") && unit.kind === "test") return true;
@@ -158,7 +175,6 @@ function unitFits(unit, targets, model) {
 function fitsJudgment(recognized, judgment, ctx) {
   const { targets } = judgment;
   if (recognized.kind === PLAN_TARGET) return targets.includes(PLAN_TARGET);
-  if (targets.includes(PLAN_TARGET) && ctx.flow === "plan-review") return true;
   if (recognized.components.length > 0) return targets.includes("component");
   if (recognized.kind === "port" && targets.includes("port")) return true;
   const kindOf = new Map(ctx.graph.units.map((unit) => [unit.path, unit]));
@@ -250,6 +266,7 @@ function examine(entry, ctx) {
     ...early,
     ...fitProblems(entry, judgment, recognized, ctx),
     ...scopeProblems(entry, recognized, ctx),
+    ...inheritedProblems(entry, recognized, ctx),
     ...liftProblems(entry, ctx),
     ...evidenceProblemsOf(entry, ctx),
   ];

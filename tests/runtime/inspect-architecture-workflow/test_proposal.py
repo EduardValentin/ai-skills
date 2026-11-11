@@ -17,7 +17,6 @@ def edit_json(path: Path, change) -> None:
 
 def workspace(tmp_path: Path) -> Path:
     root = copy_fixture("payroll", tmp_path / "p")
-    edit_json(root / MODEL, lambda d: d["rules"].update({"R38": ["off", "payroll records no enforcement"]}))
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(typeChecks=True))
     (root / ".gitignore").write_text(".architecture/\n")
     init_repo(root)

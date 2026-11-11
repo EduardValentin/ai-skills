@@ -1,5 +1,7 @@
 import { changedPaths } from "../git/changes.mjs";
 
+const CREATING_STATUSES = new Set(["A", "C"]);
+
 function renameMap(changes) {
   return new Map(changes.filter((change) => change.status === "R").map((change) => [change.oldPath, change.path]));
 }
@@ -14,5 +16,6 @@ export async function touchedScope(root, graph, base) {
     components: [...new Set(touchedUnits.map((change) => unitOf.get(change.path).component).filter(Boolean))],
     uncovered: touchedUnits.map((change) => change.path).filter((path) => uncovered.has(path)),
     renames: renameMap(changes),
+    created: touchedUnits.filter((change) => CREATING_STATUSES.has(change.status)).map((change) => change.path),
   };
 }
