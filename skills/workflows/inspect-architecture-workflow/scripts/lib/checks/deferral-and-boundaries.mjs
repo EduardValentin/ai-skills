@@ -1,5 +1,6 @@
 import { touchesBarrel } from "./context.mjs";
-import { implementedPorts } from "./ports.mjs";
+import { removeForExistingPort } from "./corrections.mjs";
+import { implementedPorts, portsImplementedBy } from "./ports.mjs";
 import { unitEdgeRow } from "./rows.mjs";
 import { describeUnit, edgePairs } from "./targets.mjs";
 
@@ -26,9 +27,7 @@ function pluginImportsPlugin(context) {
           `${describeUnit(context.unitOf(pair.from))} implements ${implementedPorts(context, pair.from).join(", ")} ` +
           `and depends on ${describeUnit(context.unitOf(pair.to))}, which implements ` +
           `${implementedPorts(context, pair.to).join(", ")}`,
-        correction:
-          `Make ${pair.from} and ${pair.to} meet only through a port the policy side owns, ` +
-          "so neither plugin knows the other exists",
+        correction: removeForExistingPort(portsImplementedBy(context, pair.to)[0], pair.from, pair.to),
       }),
     );
 }
@@ -43,5 +42,7 @@ export const DEFERRAL_AND_BOUNDARIES_CHECKS = [
     facts: ["implements"],
     needsBase: false,
     run: pluginImportsPlugin,
+    consequence: ({ edge }) =>
+      `Replacing or removing ${edge.to} forces a change to ${edge.from}, so the two plugins cannot change apart.`,
   },
 ];

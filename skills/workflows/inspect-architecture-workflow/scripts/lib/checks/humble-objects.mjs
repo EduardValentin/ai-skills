@@ -1,3 +1,4 @@
+import { externalName } from "./corrections.mjs";
 import { externalEdgeRow } from "./rows.mjs";
 import { describeUnit } from "./targets.mjs";
 
@@ -32,5 +33,7 @@ export const HUMBLE_OBJECTS_CHECKS = [
     facts: [],
     needsBase: false,
     run: presenterImportsUiFramework,
+    consequence: ({ edge }) =>
+      `Testing ${edge.from} needs ${externalName(edge.to)}, and an upgrade of it changes presentation logic.`,
   },
 ];

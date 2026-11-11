@@ -401,10 +401,12 @@ def test_list_prints_the_stored_contract_with_titled_rules(tmp_path):
 
 def test_corrections_group_identical_text_and_order_by_severity(tmp_path):
     root = workspace(tmp_path)
-    assert audit(root, tmp_path, finding()).returncode == 0
+    use_case = "src/domain/payroll-use-case.ts"
+    second = finding(target=use_case, evidence=[f"{use_case}:1"])
+    assert audit(root, tmp_path, finding(), second).returncode == 0
     corrections = json.loads(run_arch(["findings", "list", "--json"], root).stdout)["corrections"]
-    assert [c["severity"] for c in corrections] == ["blocker", "major"]
-    assert corrections[0]["findings"] == 2 and len(corrections[0]["targets"]) == 2
+    assert [c["severity"] for c in corrections] == ["blocker", "blocker", "major"]
+    assert corrections[-1]["findings"] == 2 and corrections[-1]["targets"] == [EMPLOYEE, use_case]
 
 
 def test_findings_store_holds_no_dates_or_run_numbers(tmp_path):

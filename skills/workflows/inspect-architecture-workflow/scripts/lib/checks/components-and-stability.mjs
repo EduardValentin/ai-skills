@@ -1,6 +1,8 @@
+import { plural } from "../text.mjs";
 import { COMPONENT_METRIC_CHECKS } from "./component-metrics.mjs";
 import { componentRow } from "./rows.mjs";
-import { cycleTarget, edgeTarget, naturalOrder, pairTargetsWhere } from "./targets.mjs";
+import { portDeclaredIn } from "./ports.mjs";
+import { cycleTarget, edgePairs, edgeTarget, naturalOrder, pairTargetsWhere } from "./targets.mjs";
 import { unitsWithoutExports } from "./undecided.mjs";
 
 const GROUP = "components-and-stability";
@@ -8,18 +10,48 @@ const GROUPS_TARGET = "groups";
 
 const CORRECTIONS = {
   cycle: (target) =>
-    `Break the cycle ${target}: define the needed interface in the side that needs it and have the other ` +
-    "implement it, or extract a cohesive leaf both depend on",
+    `Break the cycle ${target} by removing one of its edges: move what that edge uses into the depending side, ` +
+    "or merge the members if they always change together; only if the dependency must stay, have the side that " +
+    "needs it declare an interface the other side implements",
   stability: (from, to) =>
-    `Reverse the dependency ${from} -> ${to} through a port ${from} owns, ` +
-    `or move what ${from} needs into a component at least as stable`,
-  pain: (name) =>
-    `Shield the dependents of ${name} behind a port ${name} owns, or move them onto an interface-only component`,
-  unused: (name) => `Delete the unused abstractions of ${name} or fold them into their one consumer`,
+    `Remove the dependency of ${from} on ${to}: move what ${from} uses from ${to} into ${from}, or into a component ` +
+    `at least as stable as ${from}`,
+  implementsPorts: (from, to, symbols, dependents) =>
+    `Keep this dependency, since ${from} only implements ${symbols} that ${to} declares; make ${from} less ` +
+    `depended on instead, by removing the dependencies of ${dependents} on it`,
+  pain: (name, fanIn) =>
+    `Move the part of ${name} that keeps changing out of it, into the component whose needs drive those changes, ` +
+    `so its ${plural(fanIn, "dependent module")} stop re-verifying on every change; only if that part must stay ` +
+    `shared, have the dependents use it through a port ${name} owns`,
+  unused: (name) =>
+    `Delete the abstract types in ${name} that nothing implements or uses, and inline any that one unit inside ` +
+    `${name} uses`,
   groups: "Record the cohesion groups with arch model add-group, proposed from the change history",
   spread: (components) =>
-    `Split the change along the recorded groups, or record a group covering ${components.join(", ")} ` +
-    "if they change together",
+    `If ${components.join(", ")} change together on purpose, record a group covering them with arch model ` +
+    "add-group; otherwise split the change along the recorded groups",
+};
+
+const CONSEQUENCES = {
+  componentCycle: ({ target }) =>
+    `A change to any component in ${target} can force a change to all of them, so none can be released or tested ` +
+    "alone.",
+  moduleCycle: ({ target }) =>
+    `A change to any unit in ${target} can force a change to all of them, so none can be tested or reused alone.`,
+  unstableDependency: ({ edge }) =>
+    `Each change to ${edge.to}, which changes more easily, reaches ${edge.from} and everything that depends on ` +
+    `${edge.from}.`,
+  zoneOfPain: ({ target }) =>
+    `${target} is concrete, depended on, and changes often, so each change re-verifies every module that depends ` +
+    "on it.",
+  unusedAbstraction: ({ target }) =>
+    `The abstract types of ${target} must be read and kept in step although nothing outside ${target} uses them.`,
+  noCohesionGroups: () =>
+    "Without recorded groups nobody can tell whether a change that spans components is expected or a sign the " +
+    "boundaries are wrong.",
+  changeSpansGroups: ({ target }) =>
+    `This change spreads over ${target} and components the model says change for other reasons, so each such ` +
+    "change costs more places to edit and review.",
 };
 
 function componentCycleRows(context) {
@@ -60,21 +92,37 @@ function moduleCycleRows(context) {
   });
 }
 
+function crossingPairs(context, edge) {
+  return edgePairs(context.graph).filter(
+    (pair) => context.componentOf(pair.from) === edge.from && context.componentOf(pair.to) === edge.to,
+  );
+}
+
+function dependentsOf(context, name) {
+  return context.graph.componentEdges.filter((edge) => edge.to === name).map((edge) => edge.from);
+}
+
+function stabilityCorrection(context, edge, pairs) {
+  const ports = pairs.map((pair) => portDeclaredIn(context, pair.to));
+  if (ports.some((port) => port === null)) return CORRECTIONS.stability(edge.from, edge.to);
+  const symbols = [...new Set(ports.map((port) => `\`${port.symbol}\``))];
+  const named = `${symbols.length === 1 ? "the port" : "the ports"} ${symbols.join(", ")}`;
+  return CORRECTIONS.implementsPorts(edge.from, edge.to, named, dependentsOf(context, edge.from).join(", "));
+}
+
 function unstableDependencyRows(context) {
   const byName = new Map(context.graph.components.map((component) => [component.name, component]));
   return context.graph.componentEdges.flatMap((edge) => {
     const from = byName.get(edge.from);
     const to = byName.get(edge.to);
     if (from?.instability == null || to?.instability == null || from.instability >= to.instability) return [];
-    const importers = pairTargetsWhere(
-      context.graph,
-      (pair) => context.componentOf(pair.from) === edge.from && context.componentOf(pair.to) === edge.to,
-    );
+    const pairs = crossingPairs(context, edge);
+    const importers = pairs.map((pair) => edgeTarget(pair.from, pair.to));
     return [
       {
         target: edgeTarget(edge.from, edge.to),
         evidence: `I(${edge.from}) ${from.instability} < I(${edge.to}) ${to.instability}: ${importers.join(", ")}`,
-        correction: CORRECTIONS.stability(edge.from, edge.to),
+        correction: stabilityCorrection(context, edge, pairs),
         units: [],
         components: [edge.from, edge.to],
         edge: { level: "component", from: edge.from, to: edge.to },
@@ -101,9 +149,9 @@ function zoneOfPainRows(context) {
       componentRow(
         component.name,
         `zone of pain and changed by this change: concrete (A ${component.abstractness}), ` +
-          `depended on by ${component.fanIn} modules (I ${component.instability}), ` +
-          `changed in ${context.history.get(component.name)} commits within ${window}`,
-        CORRECTIONS.pain(component.name),
+          `depended on by ${plural(component.fanIn, "module")} (I ${component.instability}), ` +
+          `changed in ${plural(context.history.get(component.name), "commit")} within ${window}`,
+        CORRECTIONS.pain(component.name, component.fanIn),
       ),
     );
 }
@@ -121,7 +169,7 @@ function unusedAbstractionRows(context) {
     return [
       componentRow(
         component.name,
-        `${abstractExports} abstract exports and no consumer outside the component (fan-in 0)`,
+        `${plural(abstractExports, "abstract export")} and no consumer outside the component (fan-in 0)`,
         CORRECTIONS.unused(component.name),
       ),
     ];
@@ -200,6 +248,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: [],
     needsBase: false,
     run: componentCycleRows,
+    consequence: CONSEQUENCES.componentCycle,
   },
   {
     id: "module-cycle",
@@ -210,6 +259,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: [],
     needsBase: false,
     run: moduleCycleRows,
+    consequence: CONSEQUENCES.moduleCycle,
   },
   {
     id: "unstable-dependency",
@@ -220,6 +270,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: [],
     needsBase: false,
     run: unstableDependencyRows,
+    consequence: CONSEQUENCES.unstableDependency,
   },
   {
     id: "zone-of-pain",
@@ -230,6 +281,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: ["exports"],
     needsBase: true,
     run: zoneOfPainRows,
+    consequence: CONSEQUENCES.zoneOfPain,
     undecided: zoneOfPainUndecided,
   },
   {
@@ -241,6 +293,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: ["exports"],
     needsBase: false,
     run: unusedAbstractionRows,
+    consequence: CONSEQUENCES.unusedAbstraction,
     undecided: unusedAbstractionUndecided,
   },
   {
@@ -252,6 +305,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: [],
     needsBase: true,
     run: noCohesionGroupsRows,
+    consequence: CONSEQUENCES.noCohesionGroups,
   },
   {
     id: "change-spans-groups",
@@ -262,6 +316,7 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     facts: [],
     needsBase: true,
     run: changeSpansGroupsRows,
+    consequence: CONSEQUENCES.changeSpansGroups,
   },
   ...COMPONENT_METRIC_CHECKS,
 ];

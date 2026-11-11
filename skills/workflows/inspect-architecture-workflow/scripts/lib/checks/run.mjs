@@ -78,6 +78,7 @@ function runCheck(check, context) {
     defect: raw.defect ?? check.defect,
     rules: check.rules,
     severity: check.severity,
+    consequence: check.consequence(raw),
   }));
   return { rows, incomplete: undecidedEntries(check, context), notRun: [] };
 }
@@ -106,6 +107,7 @@ function finalRow(row, context) {
     status: statusForRow(context.model, row.rules, rowComponents(row, context)),
     origin: row.origin,
     evidence: row.evidence,
+    consequence: row.consequence,
     correction: row.correction,
   };
 }

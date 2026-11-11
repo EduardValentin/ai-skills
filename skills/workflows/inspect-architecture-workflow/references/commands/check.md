@@ -53,7 +53,8 @@ The JSON output has `model`; `run` (`mode` of `audit`, `base`, or `proposal`, th
 commit, the `proposal` path, and the `state` it ran on, which `arch findings add` compares to
 refuse a stale check); `rows`, one per finding (`check`, `target`, `defect`, `rules`, `severity`,
 `baseSeverity`, `lifts`, `status`, `origin` of `introduced`, `inherited`, or `none`, `evidence`,
-`correction`); `incomplete` (`check`, `rules`, `target`, `reason`, and for a plan's open fact
+`consequence`, one sentence saying what the finding makes harder to change, and `correction`, the
+smallest fix first); `incomplete` (`check`, `rules`, `target`, `reason`, and for a plan's open fact
 `clarification`, `task`, and `fact`); `notRun` (`check`, `rules`, `reason`); `skipped` (`rule`,
 `status`, `reason`, `component`); and `covered`, the count of findings recorded exceptions covered.
 With `--out`, the one printed line is `wrote <file>: <n> findings, <n> incomplete`, or
@@ -83,7 +84,7 @@ From the payroll fixture, whose model sets R6 off:
 $ arch check
 | Rule | Target | Severity | Status | Origin | Evidence | Correction |
 |---|---|---|---|---|---|---|
-| R7 Lower-level components are plugins | src/web/payroll-controller.ts -> src/adapters/system-clock.ts | blocker | enforced | none | concrete detail constructed outside a composition root: src/web/payroll-controller.ts (adapters, controller) constructs src/adapters/system-clock.ts (adapters, adapter) | Move the construction in src/web/payroll-controller.ts into a composition root and hand the details in through ports src/web/payroll-controller.ts declares |
+| R7 Lower-level components are plugins | src/web/payroll-controller.ts -> src/adapters/system-clock.ts | blocker | enforced | none | concrete detail constructed outside a composition root: src/web/payroll-controller.ts (adapters, controller) constructs src/adapters/system-clock.ts (adapters, adapter) | Move the construction of src/adapters/system-clock.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `Clock` in `src/domain/clock.ts` |
 | R38 Enforce boundaries with the build | domain | major | enforced | none | domain has enforcement "none", which the build does not check, and adapters, web depend on it | Enforce the boundary of domain with the compiler or the build, then record how in its enforcement field |
 
 ## Incomplete

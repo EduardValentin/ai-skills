@@ -81,6 +81,67 @@ def test_over_engineered_asks_for_no_more_structure(tmp_path: Path):
     assert {"abstraction-without-reason", "boundary-defers-nothing"} <= listed
 
 
+CORRECTION_FIXTURES = ["sound-small", "known-defects", "over-engineered", "payroll"]
+NEW_PORT = re.compile(
+    r"\b(a|an|new|separate)\s+(?:[\w-]+\s+)?(port|interface|boundary)\b|\bports?\b[^;]*\bdeclares\b",
+    re.IGNORECASE,
+)
+ABSTRACT_ONLY = re.compile(r"\bmore abstract\b|\bshield", re.IGNORECASE)
+EXTERNAL_END = "external:"
+
+
+def adapter_facts(root: Path) -> tuple[dict[str, list[str]], dict[str, set[str]]]:
+    document = json.loads((root / ADAPTER).read_text())
+    implements = {module["path"]: module.get("implements") or [] for module in document["modules"]}
+    importers: dict[str, set[str]] = {}
+    for edge in document["edges"]:
+        if "external" in edge:
+            importers.setdefault(edge["external"]["name"], set()).add(edge["from"])
+    return implements, importers
+
+
+def existing_ports(row: dict, root: Path) -> list[str]:
+    declared = {port["at"].split("#")[1] for port in json.loads((root / MODEL).read_text()).get("ports", [])}
+    implements, importers = adapter_facts(root)
+    ends = row["target"].split(" -> ")
+    if len(ends) != 2:
+        return []
+    detail = ends[1]
+    holders = importers.get(detail[len(EXTERNAL_END):], set()) if detail.startswith(EXTERNAL_END) else {detail}
+    return sorted({symbol for path in holders for symbol in implements.get(path, []) if symbol in declared})
+
+
+@pytest.mark.parametrize("fixture", CORRECTION_FIXTURES)
+def test_no_correction_proposes_a_new_port_where_one_exists(tmp_path: Path, fixture: str):
+    root = copy_fixture(fixture, tmp_path / "p")
+    _, out = check_json(root)
+    for row in out["rows"]:
+        existing = existing_ports(row, root)
+        assert not ABSTRACT_ONLY.search(row["correction"]), row
+        if not existing:
+            continue
+        assert not NEW_PORT.search(row["correction"]), row
+        if re.search(r"\bport\b", row["correction"]):
+            assert any(f"`{symbol}`" in row["correction"] for symbol in existing), row
+
+
+@pytest.mark.parametrize("fixture", CORRECTION_FIXTURES)
+def test_every_row_states_its_consequence_in_one_sentence(tmp_path: Path, fixture: str):
+    _, out = check_json(copy_fixture(fixture, tmp_path / "p"))
+    for row in out["rows"]:
+        consequence = row.get("consequence", "")
+        assert consequence.endswith(".") and consequence.count(". ") == 0, row
+
+
+def test_an_external_import_is_removed_or_recorded_before_a_port_is_proposed(tmp_path: Path):
+    _, out = check_json(copy_fixture("known-defects", tmp_path / "p"))
+    (row,) = [r for r in out["rows"] if r["target"] == "src/lending/loan-use-case.ts -> external:pg"]
+    correction = row["correction"]
+    assert correction.startswith("Remove the import of pg from src/lending/loan-use-case.ts")
+    assert "arch model add-exception lending external:pg reason=" in correction
+    assert correction.index("add-exception") < re.search(r"\bport\b", correction).start()
+
+
 def recorded_root(tmp_path: Path) -> Path:
     return copy_fixture("recorded-exceptions", tmp_path / "p")
 

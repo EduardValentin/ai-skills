@@ -6,8 +6,8 @@ function renderValue(value, missing) {
   return String(value);
 }
 
-function renderTable({ columns, rows, undefinedColumns = [] }) {
-  const missing = columns.map((column) => (undefinedColumns.includes(column) ? "undefined" : ""));
+function renderTable({ columns, rows, notDefinedColumns = [] }) {
+  const missing = columns.map((column) => (notDefinedColumns.includes(column) ? "not defined" : ""));
   const header = `| ${columns.join(" | ")} |`;
   const separator = `|${columns.map(() => "---").join("|")}|`;
   const body = rows.map((row) => `| ${row.map((value, i) => renderValue(value, missing[i])).join(" | ")} |`);

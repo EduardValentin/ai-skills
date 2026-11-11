@@ -54,6 +54,15 @@ def test_collect_writes_current_md_without_dates_or_run_numbers(tmp_path: Path):
     assert not any(word in text.lower() for word in ["generated at", "run ", "previous", "commit", "202"])
 
 
+def test_current_md_says_not_defined_for_a_metric_without_a_value(tmp_path: Path):
+    root = repo(tmp_path)
+    edit_json(root / "adapter.json", lambda d: d["capabilities"].update(exports=False))
+    summary(root)
+    text = (root / CURRENT).read_text()
+    assert "| domain | 5 | 4 | 0 | 0 | not defined | not defined | none |" in text
+    assert "undefined" not in text
+
+
 def test_current_md_lists_zone_breaches(tmp_path: Path):
     root = repo(tmp_path)
     assert run_arch(["model", "set-threshold", "painMaxAbstractness", "0.5"], root).returncode == 0

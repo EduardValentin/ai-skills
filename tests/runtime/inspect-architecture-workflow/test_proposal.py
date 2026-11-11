@@ -62,7 +62,7 @@ def test_proposal_unknown_becomes_a_clarification(tmp_path):
     output = json.loads(check_proposal(root, file).stdout)
     entry = next(e for e in output["incomplete"] if e.get("clarification"))
     assert entry["task"] == "Task 3" and entry["fact"] == "which store keeps the rules"
-    assert "Task 3" in entry["reason"] and "which store keeps the rules" in entry["reason"]
+    assert entry["reason"].startswith("Task 3 does not state: which store keeps the rules.")
 
 
 def test_proposal_classify_entry_covers_a_module_the_model_does_not(tmp_path):

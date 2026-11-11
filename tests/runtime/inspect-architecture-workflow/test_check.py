@@ -655,6 +655,9 @@ def test_abstract_component_without_outside_consumers_is_a_minor_row(tmp_path: P
     row = find(run_checks(tmp_path, graph)["rows"], "svc", "R31")
     assert row["severity"] == "minor" and row["lifts"] == [] and row["defect"] == "unused-abstraction"
     assert "3 abstract exports" in row["evidence"]
+    graph["units"][0]["exports"] = {"abstract": 1, "concrete": 0}
+    row = find(run_checks(tmp_path, graph)["rows"], "svc", "R31")
+    assert row["evidence"].startswith("1 abstract export and ")
 
 
 def test_construction_of_a_policy_kind_is_not_a_row_under_custom_rings(tmp_path: Path):
@@ -689,10 +692,14 @@ def test_corrections_name_the_move(tmp_path: Path):
     seed_edge(root, EMPLOYEE, CLOCK)
     seed_edge(root, "src/domain/clock.ts", CLOCK)
     rows = check_rows(root)
-    ring_corrections = {r["correction"] for r in rows if "R4" in r["rules"] and r["target"].endswith(f"-> {CLOCK}")}
-    assert len(ring_corrections) == 1 and CLOCK in ring_corrections.pop()
-    construction = {r["correction"] for r in rows if "R7" in r["rules"]}
-    assert len(construction) == 1 and CONTROLLER in construction.pop()
+    ring = [r for r in rows if "R4" in r["rules"] and r["target"].endswith(f"-> {CLOCK}")]
+    assert len(ring) == 2
+    for row in ring:
+        assert row["correction"].startswith("Depend on the existing port `Clock` in `src/domain/clock.ts`"), row
+        assert CLOCK in row["correction"] and row["target"].split(" -> ")[0] in row["correction"]
+    construction = [r["correction"] for r in rows if "R7" in r["rules"]]
+    assert len(construction) == 2 and all(CONTROLLER in correction for correction in construction)
+    assert all("into the composition root" in correction for correction in construction)
 
 
 BARREL = "src/domain/index.ts"

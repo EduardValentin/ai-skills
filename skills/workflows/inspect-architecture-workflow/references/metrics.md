@@ -47,7 +47,7 @@ For a component C:
 
 A barrel adds nothing to either export count, since its exports are other modules' declarations
 published again. The export counts need the adapter fact `exports`; without it abstractness and
-distance are undefined, and the conditions that need them are incomplete.
+distance are not defined, and the conditions that need them are incomplete.
 
 Worked count: component `Cc` holds modules `t` and `u`. Modules `q`, `r`, and `s`, each in some
 other component, depend on `t` or `u`, so fan-in is 3. Module `u` depends on `v` in another
@@ -59,7 +59,7 @@ component, so fan-out is 1.
 |---|---|---|
 | Instability (I) | fan-out / (fan-in + fan-out) | fan-in and fan-out are both zero |
 | Abstractness (A) | abstract exports / total exports | C has no exports, or the adapter gives no `exports` fact |
-| Distance (D) | abs(A + I - 1) | I or A is undefined |
+| Distance (D) | abs(A + I - 1) | I or A is not defined |
 
 Every value is rounded to two decimals.
 
@@ -105,8 +105,8 @@ after a refactor.
 - In words: each reported component gets a sentence saying which side of the line it fell to,
   whether it changes, and what the harm is, for example "concrete, depended on by nine components,
   changed in most recent commits, so every change re-verifies nine components". Only then does it
-  become a finding under R32 (Use metrics as a screen), with the correction that moves it: own a port, extract an
-  interface-only component, or delete unused abstractions.
+  become a finding under R32 (Use metrics as a screen), with the smallest correction that moves it:
+  move the changing part out, delete unused abstractions, or record why the position costs nothing.
 - What the numbers cannot see: shared data shapes, run-time coupling through a message bus, and a
   boundary that exists in a diagram but not in the code. R41 (Verify the real dependency graph)
   covers those.
@@ -115,5 +115,5 @@ after a refactor.
 
 `arch collect` writes the metrics table and any zone or distance breach into the current picture.
 `arch query metrics` prints the same table, with `none` in the zone column when no zone applies
-and `undefined` in a column whose value is undefined. `arch query volatility` counts the commits
+and `not defined` in a column that has no value. `arch query volatility` counts the commits
 that touched each component within {historyWindow}. Nothing is written by hand.

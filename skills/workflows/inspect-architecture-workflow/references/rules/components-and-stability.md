@@ -156,10 +156,11 @@ Guidance: advisory by default.
 {distanceMinComponents} components, compare each component's distance with the rest of the graph:
 the metrics page defines instability, abstractness, distance, and the bounds of the zones. Two
 positions are harmful. In the zone of pain, every change ripples outward and the component cannot
-be extended without editing; the canonical case is a schema every service imports. Fix it by
-shielding the dependents behind a port the component owns, or by moving them onto an
-interface-only component. In the zone of uselessness, abstraction was paid for and is unused:
-delete it or fold it into its one consumer. Examine components far from the balanced line relative
+be extended without editing; the canonical case is a schema every service imports. Fix it first by
+moving the part that keeps changing out of the component, into the component whose needs drive
+those changes; only a part that must stay shared is reached through a port the component owns. In
+the zone of uselessness, abstraction was paid for and is unused: delete it or fold it into its one
+consumer. Examine components far from the balanced line relative
 to the rest of the graph, and any whose distance rose between the base and head of the change
 under review. A flagged number is a measurement against a chosen pattern: say in words why the
 position is harmful, volatile and depended on or abstract and unused, before asking for a

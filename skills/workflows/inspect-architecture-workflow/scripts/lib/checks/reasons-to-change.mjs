@@ -1,12 +1,16 @@
-import { implementedPorts } from "./ports.mjs";
+import { existingPort, portsImplementedBy } from "./ports.mjs";
 import { unitEdgeRow } from "./rows.mjs";
 import { edgeTarget } from "./targets.mjs";
 
 const GROUP = "reasons-to-change";
 
+function typeCheckConsequence({ edge }) {
+  return `Adding or changing an implementation of the port means editing ${edge.from}, which checks for ${edge.to}.`;
+}
+
 function typeCheckSites(context) {
   return context.graph.units.flatMap((unit) =>
-    (unit.typeChecks ?? []).map((site) => ({ unit, site, ports: implementedPorts(context, site.path) })),
+    (unit.typeChecks ?? []).map((site) => ({ unit, site, ports: portsImplementedBy(context, site.path) })),
   );
 }
 
@@ -24,13 +28,14 @@ function typeCheckOnImplementation(context) {
   return groupedByEdge(onImplementations).map((entries) => {
     const [{ unit, site, ports }] = entries;
     const where = entries.map((entry) => `${entry.unit.path}:${entry.site.line} (${entry.site.symbol})`);
+    const symbols = ports.map((port) => port.symbol).join(", ");
     return unitEdgeRow({
       from: unit.path,
       to: site.path,
-      evidence: `type check for an implementation of ${ports.join(", ")} at ${where.join(", ")}`,
+      evidence: `type check for an implementation of ${symbols} at ${where.join(", ")}`,
       correction:
-        `Remove the type check in ${unit.path}: let the implementation carry the behavior behind ${ports[0]}, ` +
-        "or give consumers a separate port for the special case",
+        `Remove the type check for ${site.symbol} in ${unit.path}, and move the special-case behavior into ` +
+        `${site.path} behind ${existingPort(ports[0])}`,
     });
   });
 }
@@ -45,5 +50,6 @@ export const REASONS_TO_CHANGE_CHECKS = [
     facts: ["typeChecks", "implements"],
     needsBase: false,
     run: typeCheckOnImplementation,
+    consequence: typeCheckConsequence,
   },
 ];

@@ -2,9 +2,10 @@ import { distanceOutliers } from "./metrics.mjs";
 
 const TITLE = "# Architecture: current picture";
 const NOTE = "This file is rewritten by `arch collect` and is never edited by hand.";
+const NOT_DEFINED = "not defined";
 
 function cell(value) {
-  return value === null ? "undefined" : String(value);
+  return value === null ? NOT_DEFINED : String(value);
 }
 
 function table(header, rows) {

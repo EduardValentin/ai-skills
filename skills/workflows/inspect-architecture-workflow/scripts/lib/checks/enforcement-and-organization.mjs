@@ -14,9 +14,24 @@ const CORRECTIONS = {
   deepImport: (from, component, globs) =>
     `Import through the published surface of ${component} (${globs}) instead of from ${from}, ` +
     "or publish the module on purpose by adding it to published",
-  forbidden: (from, to) => `Remove the dependency of ${from} on ${to}, and make the edge uncompilable`,
+  forbidden: (from, to) =>
+    `Remove the dependency of ${from} on ${to}, which the model forbids, and make the edge uncompilable`,
   unconsumed: (symbol, component) =>
-    `Stop publishing ${symbol}, or add the consumer that needs it; ${component} publishes only what is used`,
+    `Stop publishing ${symbol} from ${component}: drop it from the published surface, or delete it if nothing ` +
+    `inside ${component} uses it`,
+};
+
+const CONSEQUENCES = {
+  unenforced: ({ target }) =>
+    `Nothing stops code from reaching into ${target}, so its boundary erodes unnoticed and its internals become ` +
+    "hard to change.",
+  deepImport: ({ edge }) =>
+    `${edge.from} depends on an internal module of another component, ${edge.to}, so internal changes there ` +
+    "break it.",
+  forbidden: ({ edge }) =>
+    `A change to ${edge.to} reaches ${edge.from}, which the model meant to keep apart from it.`,
+  unconsumed: ({ target }) =>
+    `${target} must stay stable for consumers that do not exist, which makes changing it harder for no gain.`,
 };
 
 function componentNamed(context, name) {
@@ -156,6 +171,7 @@ export const ENFORCEMENT_AND_ORGANIZATION_CHECKS = [
     facts: [],
     needsBase: false,
     run: unenforcedComponent,
+    consequence: CONSEQUENCES.unenforced,
   },
   {
     id: "deep-import",
@@ -166,6 +182,7 @@ export const ENFORCEMENT_AND_ORGANIZATION_CHECKS = [
     facts: [],
     needsBase: false,
     run: deepImport,
+    consequence: CONSEQUENCES.deepImport,
   },
   {
     id: "forbidden-edge-present",
@@ -176,6 +193,7 @@ export const ENFORCEMENT_AND_ORGANIZATION_CHECKS = [
     facts: [],
     needsBase: false,
     run: forbiddenEdgePresent,
+    consequence: CONSEQUENCES.forbidden,
   },
   {
     id: "unconsumed-export",
@@ -187,6 +205,7 @@ export const ENFORCEMENT_AND_ORGANIZATION_CHECKS = [
     needsBase: false,
     applies: (context) => publishingComponents(context).length > 0,
     run: unconsumedExport,
+    consequence: CONSEQUENCES.unconsumed,
     undecided: unconsumedExportUndecided,
   },
 ];

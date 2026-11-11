@@ -33,5 +33,7 @@ export const TESTS_CHECKS = [
     facts: [],
     needsBase: false,
     run: productionImportsTest,
+    consequence: ({ edge }) =>
+      `Shipped code depends on ${edge.to}, so a change to the tests can break production and the test code ships.`,
   },
 ];

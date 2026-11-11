@@ -1,4 +1,5 @@
 import { touchesBarrel } from "./context.mjs";
+import { externalName, removeExternalImport } from "./corrections.mjs";
 import { describedPair, externalEdgeRow, unitEdgeRow } from "./rows.mjs";
 import { describeUnit, edgePairs } from "./targets.mjs";
 
@@ -8,10 +9,20 @@ const ENTITY_NEIGHBOURS = new Set(["entity", "barrel"]);
 const CORRECTIONS = {
   entity: (from, to) =>
     `Keep ${from} free of ${to}: pass what it needs as plain values, or move the rule that needs ${to} to a use case`,
-  external: (from, name) =>
-    `Remove external:${name} from ${from}: the entity states the rule, and a use case calls the outside world`,
-  useCase: (from, to) => `Invert the dependency: have ${to} call ${from}, never the reverse`,
-  boundaryData: (from, to) => `Keep ${from} plain data: remove its dependency on ${to}`,
+  useCase: (from, to) => `Remove the dependency of ${from} on ${to}: have ${to} call ${from} and pass it what it needs`,
+  boundaryData: (from, to) =>
+    `Keep ${from} plain data: copy the fields it needs from ${to} as plain values and remove the dependency`,
+};
+
+const CONSEQUENCES = {
+  entity: ({ edge }) =>
+    `A change to ${externalName(edge.to)} can force a change to the entity ${edge.from}, the code that should change ` +
+    "least.",
+  useCase: ({ edge }) =>
+    `A change to the application rules in ${edge.to} can force a change to the entity ${edge.from}.`,
+  boundaryData: ({ edge }) =>
+    `A change to ${externalName(edge.to)} changes the data ${edge.from} carries across the boundary, and every side ` +
+    "that reads it.",
 };
 
 function isEntityNeighbour(unit) {
@@ -46,7 +57,7 @@ function entityImportsNonEntity(context) {
           from: importer,
           name: entry.name,
           evidence: `entity imports the ${entry.tag} external ${entry.name}: ${describeUnit(context.unitOf(importer))}`,
-          correction: CORRECTIONS.external(importer, entry.name),
+          correction: removeExternalImport(context, importer, entry.name),
         }),
         defect: "policy-depends-on-detail",
       })),
@@ -107,6 +118,7 @@ export const BUSINESS_RULE_PLACEMENT_CHECKS = [
     facts: [],
     needsBase: false,
     run: entityImportsNonEntity,
+    consequence: CONSEQUENCES.entity,
   },
   {
     id: "entity-imports-use-case",
@@ -117,6 +129,7 @@ export const BUSINESS_RULE_PLACEMENT_CHECKS = [
     facts: [],
     needsBase: false,
     run: entityImportsUseCase,
+    consequence: CONSEQUENCES.useCase,
   },
   {
     id: "boundary-data-imports",
@@ -127,5 +140,6 @@ export const BUSINESS_RULE_PLACEMENT_CHECKS = [
     facts: [],
     needsBase: false,
     run: (context) => [...boundaryDataImports(context), ...boundaryDataImportsExternal(context)],
+    consequence: CONSEQUENCES.boundaryData,
   },
 ];

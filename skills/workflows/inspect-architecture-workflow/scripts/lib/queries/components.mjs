@@ -5,7 +5,7 @@ export function metrics({ graph }) {
     c.name, c.units, c.fanIn, c.fanOut, c.instability, c.abstractness, c.distance, c.zone ?? "none",
   ]);
   return table(["Component", "Units", "Fan-in", "Fan-out", "I", "A", "D", "Zone"], rows, {
-    undefinedColumns: ["I", "A", "D"],
+    notDefinedColumns: ["I", "A", "D"],
   });
 }
 

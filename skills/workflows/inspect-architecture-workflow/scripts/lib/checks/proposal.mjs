@@ -143,7 +143,7 @@ function clarificationEntries(proposal) {
     clarification: true,
     task,
     fact,
-    reason: `${task} does not state ${fact}. Ask the plan author to state it, then review the plan again.`,
+    reason: `${task} does not state: ${fact}. Ask the plan author to state it, then review the plan again.`,
   }));
 }
 

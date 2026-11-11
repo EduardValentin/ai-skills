@@ -11,9 +11,20 @@ const TOLERANCE = 1e-9;
 
 const CORRECTIONS = {
   distance: (name) =>
-    `Move ${name} toward the main sequence: make it more abstract if it is stable, or more concrete if it is not`,
+    `Say in words what the position of ${name} costs before changing it: if it is depended on and changes often, ` +
+    "move what changes out of it; if it holds abstractions nothing uses, delete them; if no cost can be named, " +
+    `record that with arch model add-exception ${name} '*' rule=R32 reason=...`,
   thin: (from, to) =>
-    `Narrow what ${to} publishes to what ${from} uses, or fold what ${from} uses into ${from}`,
+    `Narrow what ${to} publishes to what ${from} uses, or move what ${from} uses into ${from}`,
+};
+
+const CONSEQUENCES = {
+  distance: ({ target }) =>
+    `${target} sits far from the balance of stability and abstraction, so changes to it either ripple to many ` +
+    "dependents or maintain abstractions nobody uses.",
+  thin: ({ edge }) =>
+    `${edge.from} depends on all of ${edge.to} while using little of it, so changes to the parts it does not use ` +
+    "still reach it.",
 };
 
 function movedComponents(context) {
@@ -138,6 +149,7 @@ export const COMPONENT_METRIC_CHECKS = [
     needsBase: false,
     notRunReason: fewerComponentsThanCompared,
     run: distanceOverThreshold,
+    consequence: CONSEQUENCES.distance,
     undecided: distanceUndecided,
   },
   {
@@ -150,6 +162,7 @@ export const COMPONENT_METRIC_CHECKS = [
     needsBase: false,
     applies: (context) => publishingComponents(context).length > 0,
     run: thinComponentUse,
+    consequence: CONSEQUENCES.thin,
     undecided: thinComponentUseUndecided,
   },
 ];

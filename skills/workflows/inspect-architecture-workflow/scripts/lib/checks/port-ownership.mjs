@@ -1,4 +1,5 @@
 import { touchesBarrel } from "./context.mjs";
+import { dependOnExistingPort, movePortBesideConsumer } from "./corrections.mjs";
 import { portSymbolsOwnedBy } from "./ports.mjs";
 import { unitEdgeRow } from "./rows.mjs";
 import { describeUnit, edgePairs } from "./targets.mjs";
@@ -6,12 +7,18 @@ import { describeUnit, edgePairs } from "./targets.mjs";
 const GROUP = "dependency-direction";
 
 const CORRECTIONS = {
-  owner: (port, consumerRing) =>
-    `Declare ${port.symbol} in the component of its consumers, or in a ring at least as inner as ${consumerRing}`,
   signature: (port, type) =>
-    `Replace ${type.symbol} in the signature of ${port.symbol} with a type declared on the policy side`,
-  beside: (from, to, shared) =>
-    `Have ${from} depend on the port ${shared} and let ${to} be handed in through it`,
+    `Replace \`${type.symbol}\` in the signature of \`${port.symbol}\` with an entity or a plain value the policy ` +
+    "side declares",
+};
+
+const CONSEQUENCES = {
+  ownerBelowConsumer: ({ edge }) =>
+    `The port ${edge.to} changes with code in an outer ring, and each such change reaches its consumer ${edge.from}.`,
+  signatureDetailType: ({ edge }) =>
+    `A change to ${edge.to} changes the port in ${edge.from} and every consumer and implementation of it.`,
+  edgeBesidePort: ({ edge }) =>
+    `${edge.from} still changes when ${edge.to} changes, although a port already separates them.`,
 };
 
 function ringIndex(context, ring) {
@@ -43,7 +50,7 @@ function portOwnerBelowConsumer(context) {
           evidence:
             `port ${port.at} is owned by ${port.owner}, whose innermost ring is ${context.graph.rings[ownerRing]}, ` +
             `outside the ring of its consumer ${describeUnit(consumer)}`,
-          correction: CORRECTIONS.owner(port, consumer.ring),
+          correction: movePortBesideConsumer(port, consumer.path, consumer.ring),
         });
       });
   });
@@ -79,6 +86,7 @@ function policyDetailEdgeBesidePort(context) {
       const owned = portSymbolsOwnedBy(context, context.componentOf(pair.from));
       const shared = (context.unitOf(pair.to).implements ?? []).filter((symbol) => owned.has(symbol));
       if (shared.length === 0) return [];
+      const port = context.model.ports.find((candidate) => candidate.symbol === shared[0]);
       return [
         unitEdgeRow({
           ...pair,
@@ -86,7 +94,7 @@ function policyDetailEdgeBesidePort(context) {
             `${describeUnit(context.unitOf(pair.from))} depends directly on ` +
             `${describeUnit(context.unitOf(pair.to))}, which implements ${shared.join(", ")}, ` +
             `a port ${context.componentOf(pair.from)} owns`,
-          correction: CORRECTIONS.beside(pair.from, pair.to, shared[0]),
+          correction: dependOnExistingPort(port, pair.from, pair.to),
         }),
       ];
     });
@@ -102,6 +110,7 @@ export const PORT_OWNERSHIP_CHECKS = [
     facts: [],
     needsBase: false,
     run: portOwnerBelowConsumer,
+    consequence: CONSEQUENCES.ownerBelowConsumer,
   },
   {
     id: "port-signature-detail-type",
@@ -112,6 +121,7 @@ export const PORT_OWNERSHIP_CHECKS = [
     facts: ["signatures"],
     needsBase: false,
     run: portSignatureDetailType,
+    consequence: CONSEQUENCES.signatureDetailType,
   },
   {
     id: "policy-detail-edge-beside-port",
@@ -122,5 +132,6 @@ export const PORT_OWNERSHIP_CHECKS = [
     facts: ["implements"],
     needsBase: false,
     run: policyDetailEdgeBesidePort,
+    consequence: CONSEQUENCES.edgeBesidePort,
   },
 ];

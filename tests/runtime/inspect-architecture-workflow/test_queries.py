@@ -218,11 +218,11 @@ def test_null_cells_render_empty_except_metric_columns(tmp_path: Path):
     island = {"name": "island", "paths": ["src/island/**"], "classify": [["**", "entity"]]}
     edit_json(root / MODEL, lambda d: d["components"].append(island))
     metrics = run_arch(["query", "metrics"], root)
-    assert "| island | 0 | 0 | 0 | undefined | undefined | undefined | none |" in metrics.stdout.splitlines()
+    assert "| island | 0 | 0 | 0 | not defined | not defined | not defined | none |" in metrics.stdout.splitlines()
     ports = run_arch(["query", "ports"], root)
     clock = next(line for line in ports.stdout.splitlines() if line.startswith("| src/domain/clock.ts:Clock"))
     assert clock.startswith("| src/domain/clock.ts:Clock | domain |  | ")
-    assert "undefined" not in ports.stdout
+    assert "not defined" not in ports.stdout
     as_json = q(root, "metrics")
     assert set(as_json) == {"columns", "rows"}
     assert next(r for r in as_json["rows"] if r[0] == "island")[4:7] == [None, None, None]
