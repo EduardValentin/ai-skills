@@ -593,3 +593,71 @@ def test_run_findings_are_matched_by_scope_too(tmp_path):
     (root / STORE).write_text(json.dumps(data))
     listed = json.loads(run_arch(["findings", "list", "--json"], root).stdout)
     assert len(listed["findings"]) == 1 and listed["findings"][0]["scope"] == "code"
+
+
+WORK = ".architecture/work"
+
+
+def work_check(root: Path, *args: str):
+    result = run_arch(["check", *args, "--out", f"{WORK}/check.json"], root)
+    assert result.returncode in (0, 1), result.stderr
+    assert result.stdout.startswith(f"wrote {WORK}/check.json: "), result.stdout
+    return result
+
+
+def write_work(root: Path, name: str, document: dict) -> str:
+    path = root / WORK / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document))
+    return f"{WORK}/{name}"
+
+
+def test_change_review_round_trip_inside_the_repository(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    work_check(root, "--base", "main")
+    judged_path = write_work(root, "judged.json", {"findings": [{**finding(), "origin": "introduced"}]})
+    added = run_arch(["findings", "add", "--flow", "change-review", "--check", f"{WORK}/check.json",
+                      "--judged", judged_path, "--base", "main"], root)
+    assert added.returncode == 0, added.stderr
+    listed = run_arch(["findings", "list"], root)
+    assert listed.returncode == 0 and "Verdict: SHOULD_CHANGE" in listed.stdout
+    assert git(["status", "--porcelain", "--", ".architecture"], root).stdout == ""
+
+
+def test_plan_review_round_trip_inside_the_repository(tmp_path):
+    root = workspace(tmp_path)
+    plan = write_plan(root)
+    proposal = write_work(root, "proposal.json", {"version": 1, "modules": [{"path": "src/domain/overtime-rule.ts"}]})
+    work_check(root, "--proposal", proposal)
+    entry = {**finding(target="src/domain/overtime-rule.ts", evidence=[f"{plan}#Rule storage"]), "origin": "introduced"}
+    judged_path = write_work(root, "judged.json", {"findings": [entry]})
+    added = run_arch(["findings", "add", "--flow", "plan-review", "--check", f"{WORK}/check.json",
+                      "--judged", judged_path, "--plan", plan, "--proposal", proposal], root)
+    assert added.returncode == 0, added.stderr
+    assert stored(root, "src/domain/overtime-rule.ts")["scope"] == f"plan:{plan}"
+
+
+def test_files_inside_the_project_outside_the_work_directory_are_refused(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    work_check(root, "--base", "main")
+    (root / "judged.json").write_text(json.dumps({"findings": []}))
+    result = run_arch(["findings", "add", "--flow", "change-review", "--check", f"{WORK}/check.json",
+                       "--judged", "judged.json", "--base", "main"], root)
+    assert_refused(result, root, "--judged judged.json", ".architecture/work/", "reviewed state")
+    (root / "proposal.json").write_text(json.dumps({"version": 1}))
+    proposal = run_arch(["check", "--proposal", "proposal.json"], root)
+    assert proposal.returncode == 2 and ".architecture/work/" in proposal.stderr
+    out = run_arch(["check", "--out", "check.json"], root)
+    assert out.returncode == 2 and ".architecture/work/" in out.stderr
+
+
+def test_source_edit_between_check_and_add_is_still_stale_with_work_files(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    work_check(root, "--base", "main")
+    touch(root, EMPLOYEE)
+    result = run_arch(["findings", "add", "--flow", "change-review", "--check", f"{WORK}/check.json",
+                       "--base", "main"], root)
+    assert_refused(result, root, "stale")

@@ -7,6 +7,7 @@ import { loadGraph } from "../graph/load.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
 import { checkBinding } from "../findings/binding.mjs";
+import { requireWorkPlacement } from "../findings/placement.mjs";
 import { judgedFindings, readJudged } from "../findings/intake.mjs";
 import { checkFinding, mergeFindings, replaceStored, scopeTag } from "../findings/merge.mjs";
 import { contractData, noModelData, rankData, renderContract, renderRank } from "../findings/render.mjs";
@@ -29,7 +30,7 @@ function requireFlag(flags, name, reason) {
   throw new UsageError(`--${name} is required ${reason}. Pass --${name} <value>.`);
 }
 
-function checkAddFlags(flags) {
+function checkAddFlags(flags, root) {
   requireFlag(flags, "flow", "to say which review this is");
   if (!FLOWS.includes(flags.flow)) {
     throw new UsageError(`--flow ${flags.flow} is not a flow. Use one of: ${FLOWS.join(", ")}.`);
@@ -40,6 +41,7 @@ function checkAddFlags(flags) {
     requireFlag(flags, "plan", "in plan-review, the plan file that was reviewed");
     requireFlag(flags, "proposal", "in plan-review, the proposal file the check ran on");
   }
+  for (const name of ["check", "judged", "proposal"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
 }
 
 function readCheckOutput(file) {
@@ -94,7 +96,7 @@ function print(data, flags) {
 
 async function add(args, { root }) {
   const { flags } = parseArgs(ADD_SPEC, args);
-  checkAddFlags(flags);
+  checkAddFlags(flags, root);
   const check = readCheckOutput(flags.check);
   if (check.model === false) {
     print(noModelData(flags.flow), flags);
