@@ -6,6 +6,7 @@ import { touchedScope } from "../checks/scope.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
+import { checkBinding } from "../findings/binding.mjs";
 import { judgedFindings, readJudged } from "../findings/intake.mjs";
 import { checkFinding, mergeFindings, replaceStored, scopeTag } from "../findings/merge.mjs";
 import { contractData, noModelData, rankData, renderContract, renderRank } from "../findings/render.mjs";
@@ -72,7 +73,7 @@ function confirmedUpcoming(model, flags) {
   return [...new Set([...model.upcoming, ...(flags.upcoming ?? [])])];
 }
 
-function lastRunOf({ flags, subject, check, model, judged, findings, upcoming }) {
+function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, tag }) {
   return {
     flow: flags.flow,
     scope: subject.scopeLabel,
@@ -83,7 +84,7 @@ function lastRunOf({ flags, subject, check, model, judged, findings, upcoming })
     notRun: check.notRun,
     upcoming,
     questions: judged.questions ?? [],
-    findingKeys: findings.map((finding) => [finding.target, finding.defect]),
+    findingKeys: findings.map((finding) => [finding.target, finding.defect, tag]),
   };
 }
 
@@ -103,6 +104,7 @@ async function add(args, { root }) {
   if (!model) {
     throw new ModelError(`${flags.check} was made with a model, but none is found now. Run from the same project.`);
   }
+  await checkBinding({ check, flags, root, model });
   const subject = await reviewSubject({ root, model, flags });
   const upcoming = confirmedUpcoming(model, flags);
   const judged = flags.judged ? readJudged(flags.judged) : { findings: [] };
@@ -110,14 +112,15 @@ async function add(args, { root }) {
     ? judgedFindings({ document: judged, ...flags, root, model, graph: subject.graph, scope: subject.scope, upcoming })
     : [];
   const merged = mergeFindings([...check.rows.map((row) => checkFinding(row, subject.graph)), ...fromJudgment]);
+  const tag = scopeTag(flags.flow, flags.plan);
   const stored = replaceStored({
     stored: readStore(root).findings,
     incoming: merged,
     flow: flags.flow,
-    tag: scopeTag(flags.flow, flags.plan),
+    tag,
     scope: subject.scope,
   });
-  const store = storeOf(stored, lastRunOf({ flags, subject, check, model, judged, findings: merged, upcoming }));
+  const store = storeOf(stored, lastRunOf({ flags, subject, check, model, judged, findings: merged, upcoming, tag }));
   await writeStore(root, store);
   print(contractData(store), flags);
   return 0;
@@ -128,6 +131,7 @@ async function ranking(root, store, flags) {
     throw new UsageError("--rank applies to an audit. Run arch findings add --flow audit first.");
   }
   const model = loadModel(root, flags);
+  if (!model) throw new UsageError("--rank needs the architecture model. Run arch model init, then rank again.");
   const commits = await componentCommitCounts({ model, root });
   return rankData({ findings: contractData(store).findings, commits, window: model.thresholds.historyWindow });
 }

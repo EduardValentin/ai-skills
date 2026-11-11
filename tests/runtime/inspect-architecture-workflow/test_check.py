@@ -190,7 +190,7 @@ def test_unseeded_fixture_has_only_the_construction_rows_without_a_base(tmp_path
     assert (row["check"], row["defect"], row["severity"], row["baseSeverity"]) == (
         "detail-constructed-outside-root", "detail-constructed-outside-root", "blocker", "blocker")
     assert (row["status"], row["origin"], row["lifts"]) == ("enforced", "none", [])
-    assert set(out) == {"model", "rows", "incomplete", "notRun", "skipped", "covered"}
+    assert set(out) == {"model", "run", "rows", "incomplete", "notRun", "skipped", "covered"}
     assert out["model"] is True and out["incomplete"] == [] and out["covered"] == 0
     assert out["skipped"] == [
         {"rule": "R6", "status": "off", "component": None,

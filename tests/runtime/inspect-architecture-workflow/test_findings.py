@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from support import copy_fixture, git, init_repo, run_arch
+from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
 MODEL = "docs/architecture/architecture.json"
 ADAPTER = "adapter.json"
@@ -68,13 +68,19 @@ def finding(judgment: str = "unit-serves-several-actors", target: str = EMPLOYEE
     return {**base, **overrides}
 
 
+def with_origin(findings: tuple[dict, ...], origin: str | None) -> tuple[dict, ...]:
+    stated = [{"origin": origin, **f} for f in findings]
+    return tuple({k: v for k, v in f.items() if v is not None} for f in stated)
+
+
 def add(root: Path, flow: str, check: Path, *args: str):
     return run_arch(["findings", "add", "--flow", flow, "--check", str(check), *args], root)
 
 
 def change_review(root: Path, tmp_path: Path, *findings: dict, base: str = "main", extra: tuple[str, ...] = ()):
     check = check_file(root, tmp_path, "--base", base)
-    args = ["--judged", str(judged(tmp_path, *findings)), "--base", base, *extra] if findings else ["--base", base]
+    stated = with_origin(findings, "introduced")
+    args = ["--judged", str(judged(tmp_path, *stated)), "--base", base, *extra] if findings else ["--base", base]
     return add(root, "change-review", check, *args)
 
 
@@ -143,7 +149,8 @@ def plan_review(root: Path, tmp_path: Path, plan: str, *findings: dict):
          "edges": [{"from": "src/domain/overtime-rule.ts", "to": "src/domain/employee.ts", "kind": "import"}]},
     )
     check = check_file(root, tmp_path, "--proposal", str(proposal))
-    return add(root, "plan-review", check, "--judged", str(judged(tmp_path, *findings)), "--plan", plan,
+    return add(root, "plan-review", check, "--judged", str(judged(tmp_path, *with_origin(findings, "introduced"))),
+               "--plan", plan,
                "--proposal", str(proposal))
 
 
@@ -170,9 +177,9 @@ def test_finding_for_a_rule_that_is_off_is_refused(tmp_path):
 def test_out_of_scope_finding_needs_the_wider_mark(tmp_path):
     root = workspace(tmp_path)
     touch(root, EMPLOYEE)
-    refused = change_review(root, tmp_path, finding(target=MAIN))
-    assert_refused(refused, root, MAIN, "wider")
-    accepted = change_review(root, tmp_path, finding(target=MAIN, wider=True))
+    refused = change_review(root, tmp_path, finding(target=CONTROLLER))
+    assert_refused(refused, root, CONTROLLER, "wider")
+    accepted = change_review(root, tmp_path, finding(target=CONTROLLER, wider=True))
     assert accepted.returncode == 0, accepted.stderr
     assert "Wider observations: 1" in accepted.stdout
     assert "Verdict: OK" in accepted.stdout
@@ -443,3 +450,146 @@ def test_add_without_a_subcommand_or_flow_is_a_usage_error(tmp_path):
     assert missing_flow.returncode == 2 and "--flow" in missing_flow.stderr
     bad_flow = run_arch(["findings", "add", "--flow", "review", "--check", "x.json"], root)
     assert bad_flow.returncode == 2 and "audit, change-review, plan-review" in bad_flow.stderr
+
+
+def test_inherited_judged_finding_in_scope_does_not_block(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path, finding(origin="inherited"))
+    assert result.returncode == 0, result.stderr
+    assert stored(root, EMPLOYEE)["origin"] == "inherited"
+    assert "Verdict: OK" in result.stdout and "Inherited: 0 blocker, 1 major, 0 minor" in result.stdout
+
+
+def test_inherited_judged_finding_with_a_confirmed_lift_blocks(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    lifted = finding(origin="inherited", liftedBy="a second payroll country")
+    result = change_review(root, tmp_path, lifted, extra=("--upcoming", "a second payroll country"))
+    assert result.returncode == 0, result.stderr
+    assert "Verdict: SHOULD_CHANGE: 1 blocker, 0 major, 0 minor blocking" in result.stdout
+
+
+def test_wider_on_an_in_scope_target_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path, finding(wider=True))
+    assert_refused(result, root, EMPLOYEE, "inside the reviewed scope")
+
+
+def test_missing_origin_in_change_review_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path, finding(origin=None))
+    assert_refused(result, root, "no origin", "introduced", "inherited")
+
+
+def test_origin_in_an_audit_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    check = check_file(root, tmp_path)
+    judged_file = judged(tmp_path, finding(origin="introduced"))
+    result = add(root, "audit", check, "--judged", str(judged_file))
+    assert_refused(result, root, "origin", "audit")
+
+
+def test_merged_finding_with_a_wider_judged_part_is_not_wider_and_keeps_the_check_origin(tmp_path):
+    merge = (SKILL_DIR / "scripts" / "lib" / "findings" / "merge.mjs").as_uri()
+    common = {"target": "t", "defect": "d", "rules": ["R4"], "severity": "major", "baseSeverity": "major",
+              "lifts": [], "status": "enforced", "correction": "c", "evidence": ["e"], "component": None}
+    checked = {**common, "provenance": "check", "origin": "inherited", "consequence": "", "wider": False}
+    judged_part = {**common, "provenance": "judged", "origin": "introduced", "consequence": "x", "wider": True}
+    script = (f"import {{ mergeFindings }} from {json.dumps(merge)};"
+              f"console.log(JSON.stringify(mergeFindings({json.dumps([checked, judged_part])})));")
+    result = run_node(script, tmp_path)
+    assert result.returncode == 0, result.stderr
+    [merged] = json.loads(result.stdout)
+    assert merged["wider"] is False and merged["origin"] == "inherited" and merged["provenance"] == "both"
+
+
+def test_check_without_the_same_base_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    audit_check = check_file(root, tmp_path)
+    no_base = add(root, "change-review", audit_check, "--base", "main")
+    assert_refused(no_base, root, "not made with --base", "arch check --base")
+    check = check_file(root, tmp_path, "--base", "main")
+    git(["add", "-A"], root)
+    git(["commit", "-q", "-m", "second"], root)
+    other = add(root, "change-review", check, "--base", "HEAD")
+    assert_refused(other, root, "compared against", "same --base")
+
+
+def test_check_without_the_same_proposal_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    plan = write_plan(root)
+    first = write_json(tmp_path / "first.json", {"version": 1})
+    second = write_json(tmp_path / "second.json", {"version": 1})
+    check = check_file(root, tmp_path, "--proposal", str(first))
+    other = add(root, "plan-review", check, "--plan", plan, "--proposal", str(second))
+    assert_refused(other, root, "ran on proposal", "same --proposal")
+    plain = check_file(root, tmp_path)
+    missing = add(root, "plan-review", plain, "--plan", plan, "--proposal", str(first))
+    assert_refused(missing, root, "not made with --proposal")
+
+
+def test_audit_with_a_base_check_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    check = check_file(root, tmp_path, "--base", "main")
+    result = add(root, "audit", check)
+    assert_refused(result, root, "whole codebase", "without --base")
+
+
+def test_stale_check_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    check = check_file(root, tmp_path)
+    touch(root, EMPLOYEE)
+    result = add(root, "audit", check)
+    assert_refused(result, root, "stale", "Rerun arch check")
+
+
+def test_judgment_applies_only_to_its_target_kinds(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    component = change_review(root, tmp_path, finding("unit-serves-several-actors", "domain"))
+    assert_refused(component, root, "does not apply to", "It applies to:")
+    unit_for_component = change_review(root, tmp_path, finding("zone-of-pain-changing", EMPLOYEE))
+    assert unit_for_component.returncode == 2 and "does not apply to" in unit_for_component.stderr
+    plan_judgment = change_review(root, tmp_path, finding("structure-consequence-unstated", EMPLOYEE))
+    assert_refused(plan_judgment, root, "plan (plan-review only)")
+    test_suite = change_review(root, tmp_path, finding("tests-change-without-behavior-change", EMPLOYEE))
+    assert_refused(test_suite, root, "test-suite")
+
+
+def test_judgment_for_a_component_accepts_a_component_name(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path, finding("zone-of-pain-changing", "domain"))
+    assert result.returncode == 0, result.stderr
+
+
+def test_invalid_store_is_refused_with_the_way_out(tmp_path):
+    root = workspace(tmp_path)
+    assert audit(root, tmp_path).returncode == 0
+    (root / STORE).write_text(json.dumps({"version": 1, "findings": [{"target": "x"}], "lastRun": None}))
+    result = run_arch(["findings", "list"], root)
+    assert result.returncode == 2
+    assert "Delete .architecture/findings.json and rerun the flow" in result.stderr
+
+
+def test_rank_without_a_model_says_to_init(tmp_path):
+    root = workspace(tmp_path)
+    assert audit(root, tmp_path).returncode == 0
+    (root / MODEL).unlink()
+    result = run_arch(["findings", "list", "--rank"], root)
+    assert result.returncode == 2 and "arch model init" in result.stderr
+
+
+def test_run_findings_are_matched_by_scope_too(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    assert change_review(root, tmp_path, finding()).returncode == 0
+    data = store(root)
+    data["findings"].append({**data["findings"][0], "scope": "plan:docs/plans/other.md"})
+    (root / STORE).write_text(json.dumps(data))
+    listed = json.loads(run_arch(["findings", "list", "--json"], root).stdout)
+    assert len(listed["findings"]) == 1 and listed["findings"][0]["scope"] == "code"

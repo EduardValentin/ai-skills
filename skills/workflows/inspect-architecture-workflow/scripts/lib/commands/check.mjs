@@ -5,6 +5,7 @@ import { renderCheckMarkdown } from "../checks/render.mjs";
 import { proposalComparison } from "../checks/proposal.mjs";
 import { runChecks } from "../checks/run.mjs";
 import { touchedScope } from "../checks/scope.mjs";
+import { runRecord } from "../findings/binding.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 
@@ -50,7 +51,8 @@ export async function run(args, { root }) {
   const { clarifications, ...subject } = await subjectOf(root, model, flags);
   printWarnings(subject.graph);
   const result = runChecks({ model, ...subject });
-  const output = { model: true, ...result, incomplete: [...result.incomplete, ...clarifications] };
+  const incomplete = [...result.incomplete, ...clarifications];
+  const output = { model: true, run: await runRecord({ root, model, flags }), ...result, incomplete };
   console.log(flags.json ? JSON.stringify(output, null, 2) : renderCheckMarkdown(output));
   return breaches(result, flags) || leavesEnforcedRuleUndecided(output, model, flags) ? 1 : 0;
 }

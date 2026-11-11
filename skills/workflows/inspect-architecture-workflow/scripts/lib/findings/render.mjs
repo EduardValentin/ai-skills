@@ -1,7 +1,6 @@
 import { highestSeverity } from "../checks/escalate.mjs";
 import { ruleNumber, titledRule } from "../checks/rule-titles.mjs";
 import { naturalOrder } from "../checks/targets.mjs";
-import { findingKey } from "./merge.mjs";
 import { SEVERITIES, classifyFindings, computeVerdict } from "./verdict.mjs";
 
 export const NO_COMPONENT = "no component";
@@ -50,8 +49,8 @@ function notEnforcedEntry(entry) {
 }
 
 function runFindings(store) {
-  const keys = new Set(store.lastRun.findingKeys.map(([target, defect]) => findingKey({ target, defect })));
-  return store.findings.filter((finding) => keys.has(findingKey(finding)));
+  const keys = new Set(store.lastRun.findingKeys.map((key) => JSON.stringify(key)));
+  return store.findings.filter((finding) => keys.has(JSON.stringify([finding.target, finding.defect, finding.scope])));
 }
 
 export function contractData(store) {

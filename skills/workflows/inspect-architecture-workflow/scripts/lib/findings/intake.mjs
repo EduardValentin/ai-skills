@@ -4,6 +4,7 @@ import { createContext, rowComponents } from "../checks/context.mjs";
 import { escalateRow, highestSeverity } from "../checks/escalate.mjs";
 import { JUDGMENTS } from "../checks/registry.mjs";
 import { statusForRow } from "../checks/status.mjs";
+import { DEFAULT_KINDS } from "../model/defaults.mjs";
 import { validateShape } from "../model/validate-shape.mjs";
 import { evidenceProblems } from "./evidence.mjs";
 import { componentOfTarget, isInScope, recognizeTarget } from "./targets.mjs";
@@ -30,6 +31,7 @@ const JUDGED_SCHEMA = {
           correction: TEXT,
           evidence: { type: "array", items: TEXT },
           wider: { type: "boolean" },
+          origin: { type: "string", enum: ["introduced", "inherited"] },
           liftedBy: { type: "string", minLength: 1 },
         },
       },
@@ -100,8 +102,53 @@ function offRuleProblems(judgment, row, context) {
 }
 
 function scopeProblems(entry, ctx) {
-  if (entry.wider || isInScope(ctx.scope, entry.target)) return [];
-  return [`is outside the reviewed scope. Mark it "wider": true to report it as a wider observation.`];
+  const inScope = isInScope(ctx.scope, entry.target);
+  if (inScope && entry.wider) {
+    return [`is inside the reviewed scope, so it cannot be "wider": true. Remove "wider" and state its origin.`];
+  }
+  if (!inScope && !entry.wider) {
+    return [`is outside the reviewed scope. Mark it "wider": true to report it as a wider observation.`];
+  }
+  return [];
+}
+
+function originProblems(entry, flow) {
+  if (flow === "audit") {
+    return Object.hasOwn(entry, "origin")
+      ? ["sets origin, which an audit does not have. Remove it: an audit has no base to compare with."]
+      : [];
+  }
+  if (entry.origin) return [];
+  return [
+    'has no origin. State "origin": "introduced" if the change creates the defect, or "inherited" if it leaves ' +
+      "a defect that was already there in place.",
+  ];
+}
+
+function unitFits(unit, targets, model) {
+  if (targets.includes(unit.kind)) return true;
+  if (targets.includes("test-suite") && unit.kind === "test") return true;
+  if (DEFAULT_KINDS[unit.kind]) return false;
+  const role = model.kinds[unit.kind]?.role;
+  return targets.some((target) => DEFAULT_KINDS[target] && DEFAULT_KINDS[target].role === role);
+}
+
+function fitsJudgment(recognized, judgment, ctx) {
+  const { targets } = judgment;
+  if (targets.includes("plan") && ctx.flow === "plan-review") return true;
+  if (recognized.components.length > 0) return targets.includes("component");
+  if (recognized.kind === "port" && targets.includes("port")) return true;
+  const kindOf = new Map(ctx.graph.units.map((unit) => [unit.path, unit]));
+  return recognized.units.some((path) => unitFits(kindOf.get(path), targets, ctx.model));
+}
+
+function fitProblems(entry, judgment, recognized, ctx) {
+  if (fitsJudgment(recognized, judgment, ctx)) return [];
+  const applies = judgment.targets.map((target) => (target === "plan" ? "plan (plan-review only)" : target));
+  return [
+    `has the target "${entry.target}", which the judgment "${judgment.id}" does not apply to. ` +
+      `It applies to: ${applies.join(", ")}. Pick a target of that kind or another judgment.`,
+  ];
 }
 
 function liftProblems(entry, ctx) {
@@ -123,8 +170,7 @@ function liftedToBlocker({ severity, lifts }) {
 }
 
 function originOf(entry, flow) {
-  if (flow === "audit") return "none";
-  return entry.wider ? "inherited" : "introduced";
+  return flow === "audit" ? "none" : entry.origin;
 }
 
 function buildFinding({ entry, judgment, row, context, flow, graph }) {
@@ -159,7 +205,7 @@ function unknownTarget(target) {
 }
 
 function examine(entry, ctx) {
-  const early = [...setByJudgmentProblem(entry), ...completenessProblems(entry)];
+  const early = [...setByJudgmentProblem(entry), ...completenessProblems(entry), ...originProblems(entry, ctx.flow)];
   const judgment = JUDGMENTS.find((candidate) => candidate.id === entry.judgment);
   if (!judgment) return { problems: [...early, unknownJudgment(entry.judgment)] };
   const recognized = recognizeTarget(ctx.graph, entry.target);
@@ -167,6 +213,7 @@ function examine(entry, ctx) {
   const row = escalationRow(recognized, entry.target, judgment);
   const problems = [
     ...early,
+    ...fitProblems(entry, judgment, recognized, ctx),
     ...offRuleProblems(judgment, row, ctx.context),
     ...scopeProblems(entry, ctx),
     ...liftProblems(entry, ctx),
@@ -190,7 +237,7 @@ export function judgedFindings({ document, flow, plan, root, model, graph, scope
   const shape = shapeProblems(document);
   if (shape.length > 0) refuse(shape);
   const context = createContext({ graph, model });
-  const ctx = { flow, plan, root, graph, scope, upcoming, context };
+  const ctx = { flow, plan, root, graph, model, scope, upcoming, context };
   const examined = document.findings.map((entry) => examine(entry, ctx));
   const problems = examined.flatMap((result, index) =>
     result.problems.map((problem) => `${labelOf(document.findings[index], index)} ${problem}`),
