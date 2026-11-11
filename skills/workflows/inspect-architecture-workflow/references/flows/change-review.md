@@ -14,8 +14,9 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
 ## Steps
 
 1. Run `arch model status --json`; its `path` is the model path.
-2. If `model` is `false`, return `Verdict: OK` with the line
-   "no architecture model; run a baseline audit to enable the full review", and stop with `OK`.
+2. If `model` is `false`, stop here: run no other command, dispatch no agent, give no verdict, and
+   return to the caller only this message: "There is no architecture model for this project. Run the
+   baseline flow first (`inspect-architecture-workflow` with the flow name `baseline`), then run this review again."
 3. Run `arch applicable --base <ref> --out .architecture/work/applicable.json` and read that file.
 4. If `uncovered` lists modules, dispatch `architecture-classifier` with them,
    `references/classification.md`, and `references/rules/vocabulary.md`. It returns `arch model`
@@ -80,9 +81,8 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
 12. After a fix to the code or to the classification, run steps 3 and 5 again. If `inScope` is now 0,
     run step 10 without `--judged`; otherwise the same reviewer judges again against the new `judgments`
     in a fresh `judged.json`, then steps 9 and 10 follow. Never pass judged findings from before the fix.
-13. For a judged finding the fix resolved, offer a check that catches it next time:
-    `arch model add-forbidden-edge <from> <to> reason="<text>"` for an edge, or
-    `arch model set-threshold <knob> <value>` for a number. Run it only if the user agrees.
+13. For a judged finding the fix resolved, offer a check that catches it next time: for an edge,
+    `arch model add-forbidden-edge <from> <to> reason="<text>"`, or for a number, `arch model set-threshold <knob> <value>`. Run it only if the user agrees.
 14. Return the printed result and any open question. Show the user the `Inherited findings` and
     `Wider observations` lines as non-blocking. The verdict line is what the caller returns: `OK`
     passes a gate; `SHOULD_CHANGE` and `INCOMPLETE` block it until the findings are fixed or accepted.

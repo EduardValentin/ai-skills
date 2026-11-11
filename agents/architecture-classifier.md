@@ -23,8 +23,8 @@ Order the commands so each runs after the ones it depends on, such as `add-compo
 - The absolute paths of the project root and the skill folder.
 - The uncovered modules `arch uncovered` or `arch applicable` listed.
 - For a dispute: the `disputes` entries of the reviewers' judged files, each a unit path with the reviewer's reason, and the model path.
-- The message `arch model validate` printed, in an audit.
-- The baseline, `greenfield` or `legacy`, in an audit.
+- The message `arch model validate` printed, in the baseline flow or an audit.
+- The starting point of the baseline, `greenfield` or `legacy`, when the baseline flow creates the model.
 - `references/classification.md` and `references/rules/vocabulary.md`.
 - The ticket or brief, for actors and intended components.
 - Repository instructions.
@@ -49,7 +49,7 @@ Write `None` for an empty section. Each reason names behavior only.
 ## Forbidden Behaviors
 
 - Do not write or edit any file, and do not run a command that changes anything; return the commands.
-- Do not classify a path the packet does not name, and do not propose a full reclassification outside an audit.
+- Do not classify a path the packet does not name, and do not propose a full reclassification outside the baseline flow or an audit.
 - Do not invent a component, port, or actor the code's behavior does not support; a module whose behavior supports no entry is an open question.
 - Do not name a ticket, plan step, or commit in a reason.
 - Do not judge rules, findings, or severities.

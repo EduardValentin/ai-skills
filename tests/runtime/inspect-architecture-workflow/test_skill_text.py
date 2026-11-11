@@ -3,6 +3,7 @@
 import json
 import re
 import shlex
+import shutil
 from functools import cache
 
 from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
@@ -11,16 +12,21 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 REFERENCES = SKILL_DIR / "references"
 FLOWS_DIR = REFERENCES / "flows"
 COMMANDS_DIR = REFERENCES / "commands"
-FLOW_NAMES = ["audit", "change-review", "plan-review"]
-REVIEW_FLOWS = ["change-review", "plan-review"]
+FLOW_NAMES = ["baseline", "audit", "change-review", "plan-review"]
+REVIEW_FLOWS = ["audit", "change-review", "plan-review"]
+COMPARING_FLOWS = ["change-review", "plan-review"]
 PAGE_NAMES = ["collect", "check", "applicable", "query", "uncovered", "model", "findings"]
 PAGE_SECTIONS = ["## Synopsis", "## Flags", "## Exit codes", "## Output", "## Example"]
 MAX_BODY_LINES = 45
 MAX_FLOW_LINES = 90
-NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review"
+STOP_MESSAGE = (
+    "There is no architecture model for this project. Run the baseline flow first "
+    "(`inspect-architecture-workflow` with the flow name `baseline`), then run this review again."
+)
 DESCRIPTION = (
-    "Use for a dedicated architecture audit, an architecture review of a diff, or an architecture review of an "
-    "implementation plan or spec before approval, passing the flow name `audit`, `change-review`, or `plan-review`."
+    "Use to record a project's architecture baseline, or for a dedicated architecture audit, an architecture review "
+    "of a diff, or an architecture review of an implementation plan or spec before approval, passing the flow name "
+    "`baseline`, `audit`, `change-review`, or `plan-review`."
 )
 READ_ONLY_MODEL_SUBCOMMANDS = {"explain", "explain-thresholds", "validate", "status"}
 FAILURE_LINE = "If a command fails"
@@ -31,7 +37,7 @@ LINK = re.compile(r"\]\(([^)\s]+)\)")
 SKILL_PATH = re.compile(r"`((?:scripts|references|assets)/[^`\s]+)`")
 NUMBERED_STEP = re.compile(r"^(\d+)\. ")
 JSON_BLOCK = re.compile(r"^ *```json\n(.*?)^ *```", re.MULTILINE | re.DOTALL)
-PLACEHOLDER = re.compile(r"<[A-Za-z][A-Za-z ]*>")
+PLACEHOLDER = re.compile(r"<[A-Za-z][A-Za-z |]*>")
 OLD_FILES = [
     "references/audit.md", "references/change-review.md", "references/plan-review.md", "references/slicing.md",
     "references/verdicts.md", "references/command.md", "assets/docs", "assets/ledger",
@@ -81,8 +87,8 @@ def page_file(name: str):
     return COMMANDS_DIR / f"{name}.md"
 
 
-def flow_files() -> list:
-    return [flow_file(name) for name in FLOW_NAMES]
+def flow_files(names=FLOW_NAMES) -> list:
+    return [flow_file(name) for name in names]
 
 
 def page_files() -> list:
@@ -277,12 +283,19 @@ def test_each_flow_fits_its_budget():
         assert numbered_steps(path.read_text()), f"{path.name} has no numbered steps"
 
 
-def test_flows_do_not_reference_each_other():
+def mentions_of_flow(text: str, name: str) -> list[str]:
+    pattern = rf"`{re.escape(name)}`|{re.escape(name)}\.md|\b{re.escape(name)} flow\b"
+    return re.findall(pattern, text, re.IGNORECASE)
+
+
+def test_a_flow_names_another_flow_only_in_the_stop_message():
     for path in flow_files():
-        lines = [line for line in path.read_text().splitlines() if line.strip()]
+        text = " ".join(path.read_text().split())
+        outside_stop = text.replace(STOP_MESSAGE, "")
         for other in FLOW_NAMES:
             if other != path.stem:
-                assert f"{other}.md" not in path.read_text(), f"{path.name} names {other}.md"
+                assert not mentions_of_flow(outside_stop, other), f"{path.name} names the {other} flow"
+        lines = [line for line in path.read_text().splitlines() if line.strip()]
         for line in lines[:-1]:
             assert "commands/" not in line, f"{path.name} names a command page outside its last line: {line}"
         assert lines[-1].startswith(FAILURE_LINE), f"{path.name} does not end with '{FAILURE_LINE}'"
@@ -293,10 +306,13 @@ def test_flow_command_lines_use_declared_flags():
     assert not problems, "\n".join(problems)
 
 
-def test_review_flows_never_run_model_init_or_collect():
+def test_review_flows_never_create_a_model():
     for name in REVIEW_FLOWS:
         for line in command_lines(flow_file(name)):
-            assert not line.startswith(("arch model init", "arch model migrate", "arch collect")), f"{name}: {line}"
+            assert not line.startswith(("arch model init", "arch model migrate", "arch model set-adapter")), line
+    for name in COMPARING_FLOWS:
+        for line in command_lines(flow_file(name)):
+            assert not line.startswith("arch collect"), f"{name}: {line}"
 
 
 def test_plan_review_never_edits_the_model():
@@ -307,17 +323,29 @@ def test_plan_review_never_edits_the_model():
         assert tokens[1] != "collect", f"plan review rewrites the current picture: {line}"
 
 
-def test_review_flows_stop_with_ok_without_a_model():
+def test_every_review_flow_probes_the_model_first_and_stops_without_one(tmp_path):
+    root = tmp_path / "bare"
+    root.mkdir()
     for name in REVIEW_FLOWS:
-        step = numbered_steps(flow_file(name).read_text()).get(2, "")
-        assert NO_MODEL_LINE in step and "`OK`" in step, f"{name}: step 2 does not stop with OK without a model"
+        steps = numbered_steps(flow_file(name).read_text())
+        assert COMMAND_SPAN.findall(steps[1]) == ["arch model status --json"], name
+        probe = FlowRunner(name, root, {}).run_step(1)
+        assert probe.returncode == 0 and json.loads(probe.stdout)["model"] is False, name
+        stop = " ".join(steps[2].split())
+        assert stop.startswith("2. If `model` is `false`, stop here"), name
+        assert f'"{STOP_MESSAGE}"' in stop, name
+        assert not COMMAND_SPAN.findall(stop), f"{name}: the no-model branch runs a command"
+        for word in ["`architecture-reviewer`", "`architecture-classifier`", "go to step", "Verdict", "`OK`"]:
+            assert word not in stop, f"{name}: the no-model branch mentions {word}"
+    assert list((root).iterdir()) == []
 
 
 def test_flows_name_their_agents():
-    for name in FLOW_NAMES:
+    for name in REVIEW_FLOWS:
         assert "architecture-reviewer" in flow_file(name).read_text(), name
-    for name in ["audit", "change-review"]:
+    for name in ["baseline", "audit", "change-review"]:
         assert "architecture-classifier" in flow_file(name).read_text(), name
+    assert "architecture-reviewer" not in flow_file("baseline").read_text()
     plan = flow_file("plan-review").read_text()
     assert "planFixRounds" in plan and "arch model explain-thresholds" in plan
 
@@ -413,8 +441,8 @@ def test_every_json_example_matches_the_schema_the_command_reads():
     assert not problems, "\n".join(problems)
 
 
-def test_every_flow_shows_judged_findings_in_a_code_block():
-    for path in flow_files():
+def test_every_review_flow_shows_judged_findings_in_a_code_block():
+    for path in flow_files(REVIEW_FLOWS):
         blocks = [json.loads(block) for block in JSON_BLOCK.findall(path.read_text())]
         assert any("findings" in block for block in blocks), f"{path.name} shows no judged findings shape"
 
@@ -623,25 +651,80 @@ def test_the_audit_flow_classifies_every_module_before_collecting(tmp_path):
         "<kind>": "presenter", "<group>": "humble-objects", "<upcoming change>": "a second payroll form",
     })
     assert json.loads(flow.run_step(1).stdout)["model"] is True
-    assert flow.run_step(5).returncode == 0, "validate passes although a module is unclassified"
-    uncovered = flow.run_step(6)
+    assert flow.run_step(3).returncode == 0, "validate passes although a module is unclassified"
+    uncovered = flow.run_step(4)
     assert uncovered.returncode == 1 and uncovered.stdout.split() == ["src/reports/summary.ts"]
 
     for fragment in ["add-component", "classify"]:
-        assert flow.run(flow.command_in(7, fragment)).returncode == 0
-    assert flow.run_step(5).returncode == 0
-    reclassified = flow.run_step(6)
+        assert flow.run(flow.command_in(5, fragment)).returncode == 0
+    assert flow.run_step(3).returncode == 0
+    reclassified = flow.run_step(4)
     assert reclassified.returncode == 0 and reclassified.stdout.strip() == ""
 
+    assert flow.run_step(6).returncode == 0
+    assert flow.run_step(7).returncode in (0, 1)
     assert flow.run_step(8).returncode == 0
-    assert flow.run_step(9).returncode in (0, 1)
-    assert flow.run_step(10).returncode == 0
     assert json.loads((root / APPLICABLE_FILE).read_text())["inScope"] > 0
-    flow.judged_path(14).write_text(json.dumps({"findings": [], "questions": []}))
-    audited = flow.run_step(14).stdout
+    flow.judged_path(12).write_text(json.dumps({"findings": [], "questions": []}))
+    audited = flow.run_step(12).stdout
     assert "# Architecture audit" in audited and "Judgment conditions: " in audited
     assert "Judgment conditions: not reported" not in audited
-    assert "## Ranked by change volatility" in flow.run_step(16).stdout
+    assert "## Ranked by change volatility" in flow.run_step(14).stdout
+
+
+SOUND_SMALL_CLASSIFICATION = {
+    "billing": ("src/billing/**", [("invoice-store.ts", "port"), ("**/*-use-case.ts", "use-case"), ("**", "entity")]),
+    "storage": ("src/storage/**", [("**", "adapter")]),
+    "app": ("src/app/**", [("main.ts", "composition-root"), ("config.ts", "config"), ("**", "entry-point")]),
+}
+
+
+def project_without_a_model(tmp_path):
+    root = copy_fixture("sound-small", tmp_path / "sound-small")
+    shutil.rmtree(root / "docs")
+    init_repo(root)
+    return root
+
+
+def test_the_baseline_flow_runs_as_written_and_records_no_findings(tmp_path):
+    root = project_without_a_model(tmp_path)
+    flow = FlowRunner("baseline", root, {
+        "<greenfield|legacy>": "legacy", "<committed|local>": "committed", "<command>": "cat adapter.json",
+    })
+    assert json.loads(flow.run_step(1).stdout)["model"] is False
+    assert flow.run(flow.command_in(4, "arch model init")).returncode == 0
+    assert flow.run(flow.command_in(4, "arch model set-adapter")).returncode == 0
+    empty = flow.run_step(5)
+    assert empty.returncode == 2 and "the model has no components" in empty.stderr
+    assert flow.run_step(6).returncode == 1
+
+    for component, (globs, pairs) in SOUND_SMALL_CLASSIFICATION.items():
+        named = {"<name>": component, "<globs>": globs, "<component>": component}
+        assert flow.run(flow.command_in(7, "add-component"), **named).returncode == 0
+        for pattern, kind in pairs:
+            classified = flow.run(flow.command_in(7, "classify"), **named, **{"<pattern>": pattern, "<kind>": kind})
+            assert classified.returncode == 0, classified.stderr
+    assert flow.run_step(5).returncode == 0
+    covered = flow.run_step(6)
+    assert covered.returncode == 0 and covered.stdout.strip() == ""
+
+    collected = flow.run_step(8)
+    assert collected.returncode == 0 and collected.stdout.startswith("collect: 9 units")
+    assert (root / "docs/architecture/current.md").is_file()
+    checked = flow.run_step(9)
+    assert checked.returncode in (0, 1) and "## Rules not enforced" in checked.stdout
+    assert not (root / ".architecture/findings.json").exists()
+    assert not (root / ".architecture/work").exists()
+    assert json.loads((root / "docs/architecture/architecture.json").read_text())["record"] == "committed"
+
+
+def test_the_baseline_flow_says_its_check_is_not_a_review():
+    text = flow_text("baseline")
+    assert "dispatches no reviewer and records no findings" in text
+    step = " ".join(numbered_steps(flow_file("baseline").read_text())[9].split())
+    assert "this is not a review" in step and "no agent judged anything" in step
+    assert not [line for line in command_lines(flow_file("baseline")) if line.startswith(
+        ("arch findings", "arch applicable"))]
 
 
 EMPLOYEE = "src/domain/employee.ts"
@@ -657,14 +740,14 @@ def audit_judged(judgment: str, correction: str) -> dict:
 def test_the_audit_flow_reconciles_overlapping_findings_of_parallel_reviewers(tmp_path):
     root = payroll_repository(tmp_path)
     flow = FlowRunner("audit", root, {"<upcoming change>": "a second payroll form"})
-    assert flow.run_step(9).returncode in (0, 1)
-    assert flow.run_step(10).returncode == 0
+    assert flow.run_step(7).returncode in (0, 1)
+    assert flow.run_step(8).returncode == 0
     parallel = {
         "reasons-to-change": audit_judged("unit-serves-several-actors", "Split the reporting behavior out."),
         "business-rule-placement": audit_judged("entity-carries-framework-traits", "Remove the framework base class."),
     }
-    command = flow.command_in(14, "--judged")
-    paths = [flow.judged_path(14, **{"<group>": group}) for group in parallel]
+    command = flow.command_in(12, "--judged")
+    paths = [flow.judged_path(12, **{"<group>": group}) for group in parallel]
     for path, document in zip(paths, parallel.values()):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(document))
@@ -674,11 +757,11 @@ def test_the_audit_flow_reconciles_overlapping_findings_of_parallel_reviewers(tm
     assert "Overlapping findings:" in overlapping
     assert all(f"(from {path.relative_to(root)})" in overlapping for path in paths)
 
-    reconciled = flow.judged_path(14, **{"<group>": "reconciled"})
+    reconciled = flow.judged_path(12, **{"<group>": "reconciled"})
     shared = "Move the reporting behavior and its framework base class out of the entity."
     findings = [{**document["findings"][0], "correction": shared} for document in parallel.values()]
     reconciled.write_text(json.dumps({"findings": findings, "questions": []}))
-    assert reconciled.name in numbered_steps(flow_file("audit").read_text())[15]
+    assert reconciled.name in numbered_steps(flow_file("audit").read_text())[13]
     rerun = flow.run(command, **{"<group>": "reconciled"}).stdout
     assert "Overlapping findings:" not in rerun
     assert f"{EMPLOYEE}; {EMPLOYEE}: Payroll and reporting changes edit the same unit. Fix: {shared}" in rerun
@@ -688,7 +771,7 @@ WORKING_FILES_SENTENCE = "Working files live under `.architecture/work/`"
 
 
 def test_flows_and_pages_state_where_working_files_live_in_one_sentence():
-    for path in [*flow_files(), page_file("findings"), page_file("check"), page_file("applicable")]:
+    for path in [*flow_files(REVIEW_FLOWS), page_file("findings"), page_file("check"), page_file("applicable")]:
         text = " ".join(path.read_text().split())
         assert WORKING_FILES_SENTENCE in text, f"{path.name} does not say: {WORKING_FILES_SENTENCE}"
 
@@ -701,17 +784,19 @@ def flow_text(name: str) -> str:
     return " ".join(flow_file(name).read_text().split())
 
 
-def test_every_flow_names_the_packet_paths_and_the_judgment_conditions():
+def test_every_flow_names_the_packet_paths_and_every_review_flow_the_judgment_conditions():
     for name in FLOW_NAMES:
         text = flow_text(name)
         assert PACKET_PATHS in text and "two levels above this file" in text, name
+    for name in REVIEW_FLOWS:
+        text = flow_text(name)
         assert CONDITION_FIELDS in text, f"{name} does not pass the judgment conditions"
         assert "Never edit a judged file by hand" in text, name
         assert "open question" in text, f"{name} does not return a late classification dispute"
 
 
 def test_only_the_first_audit_reviewer_judges_the_cross_cutting_conditions():
-    step = numbered_steps(flow_file("audit").read_text())[11]
+    step = numbered_steps(flow_file("audit").read_text())[9]
     assert "Only the first reviewer dispatched also gets `references/rules/cross-cutting.md`" in step
 
 
@@ -727,7 +812,7 @@ def test_accepting_by_threshold_drops_check_findings_and_has_judged_ones_judged_
 
 
 def test_every_reviewer_reply_is_one_json_object_carrying_its_disputes():
-    for name in FLOW_NAMES:
+    for name in REVIEW_FLOWS:
         text = flow_text(name)
         assert "returns one JSON object" in text, name
         assert "returns classification disputes, if any, then" not in text, name
@@ -739,23 +824,23 @@ def test_every_reviewer_reply_is_one_json_object_carrying_its_disputes():
 
 
 def test_the_audit_flow_names_the_reconciliation_packet_and_its_order():
-    step = " ".join(numbered_steps(flow_file("audit").read_text())[15].split())
+    step = " ".join(numbered_steps(flow_file("audit").read_text())[13].split())
     for part in ["Reconcile before any acceptance", "a fresh `architecture-reviewer`, same prompt",
                  "the section as printed", "`.architecture/work/check.json`", "with its group's file",
                  "Its one JSON object"]:
         assert part in step, part
 
 
-def test_every_flow_shows_the_non_blocking_sections():
-    for name in FLOW_NAMES:
-        assert "`Wider observations`" in flow_text(name) and "non-blocking" in flow_text(name), name
+def test_every_review_flow_shows_the_non_blocking_sections():
     for name in REVIEW_FLOWS:
+        assert "`Wider observations`" in flow_text(name) and "non-blocking" in flow_text(name), name
+    for name in COMPARING_FLOWS:
         assert "`Inherited findings`" in flow_text(name), name
         assert "The verdict line is what the caller returns" in flow_text(name), name
 
 
-def test_every_flow_hands_the_applicable_counts_to_findings_add():
-    for name in FLOW_NAMES:
+def test_every_review_flow_hands_the_applicable_counts_to_findings_add():
+    for name in REVIEW_FLOWS:
         lines = command_lines(flow_file(name))
         assert any(line.startswith("arch applicable") and f"--out {APPLICABLE_FILE}" in line for line in lines), name
         adds = [line for line in lines if line.startswith("arch findings add --flow")]
@@ -763,14 +848,17 @@ def test_every_flow_hands_the_applicable_counts_to_findings_add():
 
 
 def test_an_acceptance_by_model_edit_validates_the_model_before_the_rerun():
-    assert "then `arch model validate`, then steps 8, 9, 10, 14, and 16 again" in flow_text("audit")
+    assert "then `arch model validate`, then steps 6, 7, 8, 12, and 14 again" in flow_text("audit")
     assert "Then run `arch model validate`, and steps 3, 5, and 10 again" in flow_text("change-review")
 
 
-def test_the_audit_classify_loop_stops_when_a_pass_makes_no_progress():
-    step = " ".join(numbered_steps(flow_file("audit").read_text())[7].split())
-    assert "lists the same modules as before this pass" in step and "show them to the user" in step
-    assert "`warning:`" in " ".join(numbered_steps(flow_file("audit").read_text())[5].split())
+def test_the_classify_loops_stop_when_a_pass_makes_no_progress():
+    for name, loop, validate in [("baseline", 7, 5), ("audit", 5, 3)]:
+        steps = numbered_steps(flow_file(name).read_text())
+        step = " ".join(steps[loop].split())
+        assert "lists the same modules as before this pass" in step and "show them to the user" in step, name
+        assert f"go back to step {validate}" in step, name
+        assert "`warning:`" in " ".join(steps[validate].split()), name
 
 
 def test_plan_review_reads_clarification_requests_from_the_printed_result():

@@ -1,9 +1,9 @@
 ---
 name: inspect-architecture-workflow
 description: >-
-  Use for a dedicated architecture audit, an architecture review of a diff, or an architecture
-  review of an implementation plan or spec before approval, passing the flow name `audit`,
-  `change-review`, or `plan-review`.
+  Use to record a project's architecture baseline, or for a dedicated architecture audit, an
+  architecture review of a diff, or an architecture review of an implementation plan or spec before
+  approval, passing the flow name `baseline`, `audit`, `change-review`, or `plan-review`.
 compatibility: >-
   Dispatches the architecture-reviewer and architecture-classifier agents as subagents; in a
   harness without them, dispatch a generic read-only subagent given that agent's prompt instead.
@@ -23,13 +23,16 @@ the plan. Each project records which rules apply to it in one model file.
 
 | Flow | Use it for | Follow |
 |---|---|---|
-| `audit` | A deliberate baseline of a whole codebase; builds the model | [audit](references/flows/audit.md) |
+| `baseline` | Creating or refreshing the model and collecting the current picture; reviews nothing | [baseline](references/flows/baseline.md) |
+| `audit` | A deliberate review of a whole codebase against its model | [audit](references/flows/audit.md) |
 | `change-review` | A diff against a base commit; the routine path | [change review](references/flows/change-review.md) |
 | `plan-review` | A plan or spec before approval, before any code exists | [plan review](references/flows/plan-review.md) |
 
-Open only the flow you were given; it carries every command it runs. Each subcommand has its own
-page, such as [the check page](references/commands/check.md), read only when a command fails or a
-model edit is needed. The record path is `docs/architecture/` unless `--record` or
+The three review flows need a baseline: without a model each stops right after its first step, the
+model probe, runs nothing more, and asks for the `baseline` flow. Open only the flow you were given;
+it carries every command it runs. Each subcommand has its own page, such as
+[the check page](references/commands/check.md), read only when a command fails or a model edit is
+needed. The record path is `docs/architecture/` unless `--record` or
 `ARCH_RECORD_DIR` names another.
 
 | Artifact | Holds | Notes |

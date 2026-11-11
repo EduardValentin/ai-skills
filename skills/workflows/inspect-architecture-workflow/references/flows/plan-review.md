@@ -16,10 +16,10 @@ defined in `references/rules/vocabulary.md`.
 ## Steps
 
 1. Run `arch model status --json`; its `path` is the model path.
-2. If `model` is `false`, return `Verdict: OK` with the line
-   "no architecture model; run a baseline audit to enable the full review", and stop with `OK`.
-3. Run `arch model explain-thresholds --json` and note the `project` value of `planFixRounds`, the
-   number of revisions this review allows. No revision has been made yet.
+2. If `model` is `false`, stop here: run no other command, dispatch no agent, give no verdict, and
+   return to the caller only this message: "There is no architecture model for this project. Run the
+   baseline flow first (`inspect-architecture-workflow` with the flow name `baseline`), then run this review again."
+3. Run `arch model explain-thresholds --json`; the `project` value of `planFixRounds` is the number of revisions allowed.
 4. Dispatch one `architecture-reviewer` to write the proposal, with the flow `plan-review`, the
    plan path, `references/adapter-contract.md` for the module and edge shapes, and
    `references/classification.md`. It may run `arch model explain <path>` to see how the model
@@ -80,9 +80,9 @@ defined in `references/rules/vocabulary.md`.
     steps 8 and 9 follow; never pass judged findings from before the revision. After `planFixRounds`
     revisions, hand the remaining findings and clarification requests to the user instead.
 12. This flow only reports findings. The user accepts one after it with a model edit: an exception
-    (`add-exception`, `'*'` as the `to` end for a unit, port, or component), a rule status
-    (`set-rule` `advisory` or `off`, the only way to accept a cycle), or a threshold, after which a
-    judged finding whose condition names that knob needs the same reviewer to judge it again.
+    (`add-exception`, `'*'` as the `to` end for a unit, port, or component), a rule status (`set-rule`
+    `advisory` or `off`, the only way to accept a cycle), or a threshold, after which a judged finding
+    whose condition names that knob needs the same reviewer to judge it again.
 13. Return the printed result, the clarification requests, the open questions, and the revision
     count; show `Inherited findings` and `Wider observations` to the user as non-blocking. The
     verdict line is what the caller returns: `OK` passes a gate; `SHOULD_CHANGE` and `INCOMPLETE` block it.
