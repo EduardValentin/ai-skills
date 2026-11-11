@@ -136,9 +136,11 @@ by the delta since the previous round.
    change review is not one agent: when the selection includes it, the main
    agent invokes the `inspect-architecture-workflow` skill with
    `change-review` and follows its flow over the frozen diff, with the diff's
-   base ref and the upcoming changes the plan states. The flow has
-   `architecture-reviewer` review the diff however small it is; no precheck
-   can skip that review. It dispatches `architecture-classifier` only for
+   base ref and the upcoming changes the plan states. In that flow an agent,
+   `architecture-reviewer`, reviews the diff whenever any judgment rule
+   applies to it, however small the diff; only a diff that touches no code
+   and changes no dependency gets no agent, and the result says so. No
+   precheck can skip that review. It dispatches `architecture-classifier` only for
    modules the model does not cover. It counts as `CLEAN` when its printed
    verdict is `OK`, including the result with the line "no architecture
    model; run a baseline audit to enable the full review", which goes into the
@@ -203,7 +205,7 @@ shape.
 | `security-reviewer` | touches authentication, authorization, input parsing or validation, persistence, data exposure, redirects, files, external requests, privileged actions, dependencies, logging, serialization, or raw HTML rendering. |
 | `performance-reviewer` | touches data fetching, queries, caching, loops or list rendering over collections, memoization, dependencies, background work, or a hot path the demand profile names. |
 | `design-system-reviewer` | touches styles, tokens, UI primitives, or component markup. |
-| architecture change review | adds or edits source code or a dependency manifest. Re-enter the flow after a fix as it describes: `architecture-reviewer` reviews the revised diff again against the judgment conditions the flow lists. |
+| architecture change review | adds or edits source code or a dependency manifest. Re-enter the flow after a fix as it describes: `architecture-reviewer` reviews the revised diff again whenever any judgment rule still applies to it. |
 
 ## Verification Gate
 

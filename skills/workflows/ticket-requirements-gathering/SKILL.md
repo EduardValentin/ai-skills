@@ -117,8 +117,10 @@ When the reviewer selection includes architecture plan review, invoke the
 plan and follow its flow yourself, with the written plan's path and the
 upcoming changes the plan states. The plan need not use architecture
 vocabulary: the flow's `architecture-reviewer` turns it into concrete files
-and imports, then reviews the plan however small it is; no precheck can skip
-that review. The flow prints a verdict, findings with corrections phrased
+and imports, then reviews the plan whenever any judgment rule applies to it,
+however small the plan; only a plan that touches no code and changes no
+dependency gets no agent, and the result says so. No precheck can skip that
+review. The flow prints a verdict, findings with corrections phrased
 for the plan, clarification requests where the plan is not concrete enough,
 and questions for the user; put the questions to the user.
 
