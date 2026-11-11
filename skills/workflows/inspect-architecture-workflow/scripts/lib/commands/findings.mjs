@@ -16,14 +16,14 @@ import { withEnforcement } from "../findings/verdict.mjs";
 
 const FLOWS = ["audit", "change-review", "plan-review"];
 const SUBCOMMANDS = ["add", "list"];
-const ADD_SPEC = {
+export const ADD_SPEC = {
   flags: {
     flow: "value", check: "value", judged: "value", base: "git-ref", plan: "value", proposal: "value",
     upcoming: "list",
   },
   positional: { min: 0, max: 0 },
 };
-const LIST_SPEC = { flags: { rank: "boolean" }, positional: { min: 0, max: 0 } };
+export const LIST_SPEC = { flags: { rank: "boolean" }, positional: { min: 0, max: 0 } };
 
 function requireFlag(flags, name, reason) {
   if (flags[name]) return;

@@ -1,4 +1,4 @@
-"""Generic skill text names no concrete tool or language."""
+"""Generic skill text names no concrete tool or language; only the adapter templates may."""
 
 import re
 
@@ -25,57 +25,28 @@ WORD_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-COMMAND_MD = SKILL_DIR / "references" / "command.md"
-START_MARKER = "<!-- adapters -->"
-END_MARKER = "<!-- /adapters -->"
 
-TEMPLATES_DIR = SKILL_DIR / "assets" / "adapter-templates"
-GENERIC_SCRIPTS = sorted((SKILL_DIR / "scripts").rglob("*.mjs"))
+def _files_under(directory) -> list:
+    return sorted(path for path in directory.rglob("*") if path.is_file() and "__pycache__" not in path.parts)
 
+
+GENERIC_SCRIPTS = _files_under(SKILL_DIR / "scripts")
+SKILL_TEXT = [SKILL_DIR / "SKILL.md", *_files_under(SKILL_DIR / "references")]
 AGENT_FILES = sorted((REPO_ROOT / "agents").glob("architecture-*.md"))
-
-
-def _allowed_line_numbers(path) -> set[int]:
-    """Lines inside the adapter markers of command.md; empty for every other file."""
-    if path != COMMAND_MD:
-        return set()
-    lines = path.read_text().splitlines()
-    allowed: set[int] = set()
-    inside = False
-    for index, line in enumerate(lines, start=1):
-        if line.strip() == START_MARKER:
-            inside = True
-            allowed.add(index)
-            continue
-        if line.strip() == END_MARKER:
-            inside = False
-            allowed.add(index)
-            continue
-        if inside:
-            allowed.add(index)
-    return allowed
-
-
-def _md_files() -> list:
-    files = [path for path in sorted(SKILL_DIR.rglob("*.md")) if TEMPLATES_DIR not in path.parents]
-    return files + AGENT_FILES
 
 
 def _violations(paths) -> list[str]:
     violations = []
     for path in paths:
-        allowed = _allowed_line_numbers(path)
         for index, line in enumerate(path.read_text().splitlines(), start=1):
-            if index in allowed:
-                continue
             if WORD_PATTERN.search(line):
                 violations.append(f"{path.relative_to(REPO_ROOT)}:{index}: {line.strip()}")
     return violations
 
 
 def test_generic_text_names_no_tool_or_language():
-    violations = _violations(_md_files())
-    assert not violations, "tool or language name outside the adapter markers:\n" + "\n".join(violations)
+    violations = _violations([*SKILL_TEXT, *AGENT_FILES])
+    assert not violations, "tool or language name in generic skill text:\n" + "\n".join(violations)
 
 
 def test_generic_scripts_name_no_tool_or_language():

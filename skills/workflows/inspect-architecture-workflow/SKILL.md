@@ -1,13 +1,14 @@
 ---
 name: inspect-architecture-workflow
 description: >-
-  For the architecture-coordinator agent, or another architect agent, in a
-  dedicated architecture audit, a change review of a diff, or a review of an
-  implementation plan before its approval. Not for implementers or planners.
+  Use for a dedicated architecture audit, an architecture review of a diff, or an architecture
+  review of an implementation plan or spec before approval, passing the flow name `audit`,
+  `change-review`, or `plan-review`.
 compatibility: >-
-  Requires dispatching read-only agents as subagents, and write access to the committed
-  architecture folder and an ignored ledger folder. Change and plan review need
-  a committed baseline; when none exists the coordinator produces one first.
+  Dispatches the architecture-reviewer and architecture-classifier agents as subagents; in a
+  harness without them, dispatch a generic read-only subagent given that agent's prompt instead.
+  Runs the bundled command with Node and git. The inspected project must provide an adapter
+  command that prints its dependency facts, as the adapter contract reference describes.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -15,24 +16,33 @@ metadata:
 
 # Inspect Architecture Workflow
 
-This skill is being reworked. The rule catalog, the classification guide, the metrics page, and
-the adapter contract are in place; the audit, change-review, and plan-review procedures are not
-yet written. Until they are, use the references below directly and run the command with
-`node scripts/arch.mjs <subcommand>` from the inspected project's root, resolving `scripts/arch.mjs`
-against this skill's folder.
+This skill tells a team whether a change, a plan, or a codebase makes the next reasonable change
+harder, and names the smallest correction. A bundled command decides every condition it can from
+the project's dependency facts, and a reviewer agent judges only the rest by reading the code or
+the plan. Each project records which rules apply to it in one model file.
 
-## References
+| Flow | Use it for | Follow |
+|---|---|---|
+| `audit` | A deliberate baseline of a codebase or named components; builds the model | [audit](references/flows/audit.md) |
+| `change-review` | A diff against a base commit; the routine path | [change review](references/flows/change-review.md) |
+| `plan-review` | A plan or spec before approval, before any code exists | [plan review](references/flows/plan-review.md) |
 
-- `references/rules/vocabulary.md`: every term the catalog uses, defined once.
-- `references/rules/cross-cutting.md`: R1 to R3, and how any rule is applied, graded, and corrected.
-- `references/rules/dependency-direction.md`: R4 to R9.
-- `references/rules/reasons-to-change.md`: R10 to R16.
-- `references/rules/business-rule-placement.md`: R17 to R19.
-- `references/rules/humble-objects.md`: R20 to R22.
-- `references/rules/deferral-and-boundaries.md`: R23 to R26.
-- `references/rules/components-and-stability.md`: R27 to R33.
-- `references/rules/tests.md`: R34 to R37.
-- `references/rules/enforcement-and-organization.md`: R38 to R41.
-- `references/classification.md`: how to classify modules into components, kinds, and rings.
-- `references/metrics.md`: the component metrics and every threshold knob.
-- `references/adapter-contract.md`: what the project's adapter receives and prints.
+Open only the flow you were given; it carries every command it runs. Each subcommand has its own
+page, such as [the check page](references/commands/check.md), read only when a command fails or a
+model edit is needed. The record path is `docs/architecture/` unless `--record` or
+`ARCH_RECORD_DIR` names another.
+
+| Artifact | Holds | Notes |
+|---|---|---|
+| `architecture.json` | The whole model: components and their classification, ports, rule statuses with reasons, thresholds, forbidden edges, exceptions | In the record path. Edited only through `arch model` |
+| `current.md` | Counts, metrics, the component graph, threshold breaches | In the record path. Rewritten whole by `arch collect` |
+| `decisions.md` | Longer explanations for people | Optional. Nothing reads it |
+| `.architecture/graph/` | The graph cache | Never committed, disposable |
+| `.architecture/findings.json` | Open findings | Never committed. A resolved or accepted finding is removed |
+| `.architecture/work/` | A flow's working files | Never committed |
+
+- Never propose a service split, a tier, or another deployment-topology change unless the scope asks for one.
+- Never propose more than the smallest correction that removes the named consequence, or a refactor only to match a pattern.
+- Never report a check that lacks a fact, or a missing classification, as passing.
+- Never let a finding's severity depend on whether a check or a reviewer produced it.
+- Never let the artifacts grow with the number of runs, tickets, or findings resolved.

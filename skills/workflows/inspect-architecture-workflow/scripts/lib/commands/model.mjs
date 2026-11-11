@@ -124,11 +124,11 @@ function editCommands() {
   );
 }
 
-const SUBCOMMANDS = { ...directCommands(), ...editCommands() };
+export const MODEL_SUBCOMMANDS = { ...directCommands(), ...editCommands() };
 
 function chooseSubcommand(name) {
-  if (Object.hasOwn(SUBCOMMANDS, name)) return SUBCOMMANDS[name];
-  const known = Object.keys(SUBCOMMANDS).join(", ");
+  if (Object.hasOwn(MODEL_SUBCOMMANDS, name)) return MODEL_SUBCOMMANDS[name];
+  const known = Object.keys(MODEL_SUBCOMMANDS).join(", ");
   throw new UsageError(`unknown model subcommand: ${name ?? "(none)"}. Known subcommands: ${known}.`);
 }
 
@@ -165,13 +165,13 @@ function checkArguments(subcommand, { positional, keys }) {
   }
 }
 
-const SPEC = {
+export const MODEL_SPEC = {
   flags: { start: "value", adapter: "value", "record-mode": "value" },
   positional: { min: 0, max: MAX_POSITIONAL },
 };
 
 export async function run(args, { root }) {
-  const { positional: all, flags } = parseArgs(SPEC, args);
+  const { positional: all, flags } = parseArgs(MODEL_SPEC, args);
   const [name, ...rest] = all;
   const subcommand = chooseSubcommand(name);
   rejectForeignFlags(subcommand, flags);
