@@ -167,11 +167,16 @@ def test_plan_review_evidence_must_be_an_existing_plan_heading(tmp_path):
     assert stored(root, target)["scope"] == f"plan:{plan}"
 
 
-def test_finding_for_a_rule_that_is_off_is_refused(tmp_path):
+def test_finding_for_a_rule_that_is_off_is_dropped_and_listed(tmp_path):
     root = workspace(tmp_path)
-    touch(root, EMPLOYEE)
+    touch(root, "src/domain/payroll-use-case.ts")
     result = change_review(root, tmp_path, finding("use-case-names-its-details", "src/domain/payroll-use-case.ts"))
-    assert_refused(result, root, "R6", "off")
+    assert result.returncode == 0, result.stderr
+    assert "Dropped: 1 (1 rule off)" in result.stdout
+    assert store(root)["lastRun"]["dropped"] == [
+        {"target": "src/domain/payroll-use-case.ts", "judgment": "use-case-names-its-details", "reason": "rule off"}
+    ]
+    assert store(root)["findings"] == []
 
 
 def test_out_of_scope_finding_needs_the_wider_mark(tmp_path):
@@ -204,6 +209,16 @@ def test_lift_may_name_an_upcoming_change_recorded_in_the_model(tmp_path):
     touch(root, EMPLOYEE)
     result = change_review(root, tmp_path, finding(liftedBy="a second payroll country"))
     assert result.returncode == 0, result.stderr
+
+
+def test_lift_accepts_an_upcoming_change_added_with_the_model_command(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    added = run_arch(["model", "add-upcoming", "a second payroll country"], root)
+    assert added.returncode == 0, added.stderr
+    result = change_review(root, tmp_path, finding(liftedBy="a second payroll country"))
+    assert result.returncode == 0, result.stderr
+    assert 2 in stored(root, EMPLOYEE)["lifts"]
 
 
 def test_severity_must_match_the_judgment_entry(tmp_path):
@@ -396,6 +411,7 @@ def test_findings_store_holds_no_dates_or_run_numbers(tmp_path):
     last_run = store(root)["lastRun"]
     assert set(last_run) == {
         "flow", "scope", "base", "plan", "incomplete", "skipped", "notRun", "upcoming", "questions", "findingKeys",
+        "covered", "dropped",
     }
     assert store(root)["version"] == 1
 
@@ -698,3 +714,71 @@ def test_missing_check_file_says_to_create_it_with_arch_check_out(tmp_path):
     assert result.returncode == 2
     assert "arch check" in result.stderr and "--out .architecture/work/check.json" in result.stderr
     assert "> <file>" not in result.stderr
+
+
+def blocked_change_review(root: Path, tmp_path: Path):
+    touch(root, EMPLOYEE)
+    first = change_review(root, tmp_path, finding())
+    assert "Verdict: SHOULD_CHANGE" in first.stdout, first.stdout + first.stderr
+    return first
+
+
+def test_exception_for_a_unit_with_star_target_drops_the_judged_finding(tmp_path):
+    root = workspace(tmp_path)
+    blocked_change_review(root, tmp_path)
+    accepted = run_arch(["model", "add-exception", EMPLOYEE, "*", "reason=accepted by the owner"], root)
+    assert accepted.returncode == 0, accepted.stderr
+    rerun = change_review(root, tmp_path, finding())
+    assert rerun.returncode == 0, rerun.stderr
+    assert "Verdict: OK" in rerun.stdout
+    assert "Dropped: 1 (1 covered by an exception)" in rerun.stdout
+    dropped = store(root)["lastRun"]["dropped"]
+    assert dropped == [{"target": EMPLOYEE, "judgment": "unit-serves-several-actors", "reason": "covered by an exception"}]
+    listed = run_arch(["findings", "list"], root)
+    assert "Dropped: 1 (1 covered by an exception)" in listed.stdout
+
+
+def test_exception_naming_the_component_and_rule_covers_a_judged_finding(tmp_path):
+    root = workspace(tmp_path)
+    blocked_change_review(root, tmp_path)
+    other = run_arch(["model", "add-exception", "domain", "*", "rule=R11", "reason=other rule"], root)
+    assert other.returncode == 0, other.stderr
+    assert "Verdict: SHOULD_CHANGE" in change_review(root, tmp_path, finding()).stdout
+    right = run_arch(["model", "add-exception", "domain", "*", "rule=R10", "reason=accepted"], root)
+    assert right.returncode == 0, right.stderr
+    assert "Verdict: OK" in change_review(root, tmp_path, finding()).stdout
+
+
+def test_exception_with_a_real_destination_does_not_cover_a_unit_finding(tmp_path):
+    root = workspace(tmp_path)
+    blocked_change_review(root, tmp_path)
+    assert run_arch(["model", "add-exception", EMPLOYEE, CLOCK, "reason=an edge only"], root).returncode == 0
+    assert "Verdict: SHOULD_CHANGE" in change_review(root, tmp_path, finding()).stdout
+
+
+def test_rule_set_off_drops_the_judged_finding_on_rerun(tmp_path):
+    root = workspace(tmp_path)
+    blocked_change_review(root, tmp_path)
+    assert run_arch(["model", "set-rule", "R10", "off", "reason=accepted"], root).returncode == 0
+    rerun = change_review(root, tmp_path, finding())
+    assert rerun.returncode == 0, rerun.stderr
+    assert "Verdict: OK" in rerun.stdout and "Dropped: 1 (1 rule off)" in rerun.stdout
+
+
+def test_rule_set_advisory_reports_the_judged_finding_without_blocking(tmp_path):
+    root = workspace(tmp_path)
+    blocked_change_review(root, tmp_path)
+    assert run_arch(["model", "set-rule", "R10", "advisory", "reason=migrating"], root).returncode == 0
+    rerun = change_review(root, tmp_path, finding())
+    assert rerun.returncode == 0, rerun.stderr
+    assert "Verdict: OK" in rerun.stdout and "Advisory: 1 finding" in rerun.stdout
+    assert "Dropped: 0" in rerun.stdout
+
+
+def test_dropped_count_includes_the_check_rows_covered_by_exceptions(tmp_path):
+    root = workspace(tmp_path)
+    seed_policy_to_detail_edge(root)
+    assert run_arch(["model", "add-exception", EMPLOYEE, CLOCK, "reason=intended"], root).returncode == 0
+    result = audit(root, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "Dropped: 1 (1 covered by an exception)" in result.stdout

@@ -1,5 +1,5 @@
 import { UsageError } from "../cli/errors.mjs";
-import { DEFAULT_THRESHOLDS } from "./defaults.mjs";
+import { ANY_DESTINATION, DEFAULT_THRESHOLDS } from "./defaults.mjs";
 
 function splitList(text) {
   return text.split(",").map((item) => item.trim()).filter((item) => item.length > 0);
@@ -183,6 +183,12 @@ function removeForbiddenEdge(doc, [from, to]) {
 const EXTERNAL_PREFIX = "external:";
 
 function requireValidExceptionEnds(from, to) {
+  if (from === ANY_DESTINATION) {
+    throw new UsageError(
+      `an exception cannot start at "${ANY_DESTINATION}": only its "to" end may be "${ANY_DESTINATION}". ` +
+        "Put the unit, port, component, or ring it accepts first.",
+    );
+  }
   if (from.startsWith(EXTERNAL_PREFIX)) {
     throw new UsageError(
       `an exception cannot start at ${from}: only its "to" end may be an external. ` +

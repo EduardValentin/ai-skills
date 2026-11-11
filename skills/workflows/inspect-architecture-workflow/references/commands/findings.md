@@ -71,12 +71,16 @@ port `<path>#<Symbol>`, or a component, of a kind that judgment applies to. `evi
 naming headings of the plan. `origin` is `introduced` or `inherited`, required in a change or plan
 review and absent in an audit. `"wider": true` marks a target outside the reviewed scope and is
 refused inside it; an audit's scope is the whole codebase, so an audit finding never sets it. `liftedBy` names the confirmed upcoming change that makes the finding a blocker.
-When any finding breaks these rules or names a rule whose status is `off`, `add` stores nothing
+A judged finding whose rules are all `off` for its target's component, or that a recorded
+exception covers, is dropped rather than refused. Such a finding is listed in `dropped` with its
+target, judgment id, and reason (`rule off` or `covered by an exception`). When any finding breaks
+the rules above, `add` stores nothing
 and lists every problem, each prefixed with its file and its place in that file, such as
 `.architecture/work/judged.json: findings[0] (src/domain/payroll-use-case.ts)`.
 
 The printed result has one line each for the verdict with its blocking counts by severity, the
-inherited counts, the incomplete conditions and why, the checks not run, the advisory findings, and
+inherited counts, the incomplete conditions and why, the checks not run, the advisory findings, the
+dropped findings with their reasons (counting the check's `covered` number), and
 the rules not enforced; then the corrections, grouped by correction and ordered by severity; then
 the count of wider observations and each question for the owner. The verdict is `OK`,
 `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE`
@@ -85,7 +89,7 @@ Without a model, the result is the verdict `OK` and the line "no architecture mo
 audit to enable the full review".
 
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
-`advisory`, `wider`, `incompleteCount`, `incompleteReasons`, `notRun`, `notEnforced`,
+`advisory`, `covered`, `dropped`, `wider`, `incompleteCount`, `incompleteReasons`, `notRun`, `notEnforced`,
 `corrections`, `questions`, `findings`, and with `--rank` a `ranking`.
 
 ## Example
@@ -101,6 +105,7 @@ Inherited: 0 blocker, 1 major, 0 minor (not blocking)
 Incomplete: 1 conditions (1 missing facts)
 Not run: distance-over-threshold (fewer than 8 components)
 Advisory: 0 findings
+Dropped: 0
 Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
 Corrections:
 1. R30 No dependency cycles: adapters -> domain: component cycle through ... Fix: Break the cycle adapters -> domain: define the needed interface in the side that needs it and have the other implement it, or extract a cohesive leaf both depend on
@@ -123,6 +128,7 @@ Inherited: 0 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 0 conditions
 Not run: zone-of-pain (needs --base), no-cohesion-groups (needs --base), change-spans-groups (needs --base)
 Advisory: 0 findings
+Dropped: 0
 Rules not enforced: none
 Corrections:
 21. R23 Defer unforced decisions: src/lending/loan-use-case.ts: Moving loans to another store means editing the lending rules. Fix: Take the LoanStore port in the constructor instead of the SQL store.

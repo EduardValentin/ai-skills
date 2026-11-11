@@ -16,6 +16,7 @@ const INIT_FLAGS = ["start", "adapter", "record-mode"];
 const INIT_USAGE =
   'arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]';
 const GLOBAL_FLAGS = ["json", "record"];
+const ABSENT_LINE = "model: absent; run a baseline audit";
 
 function missingModel(root, flags) {
   return new ModelError(
@@ -48,16 +49,34 @@ function print(flags, data, text) {
   console.log(flags.json ? JSON.stringify(data, null, 2) : text);
 }
 
+async function graphOf(root, model, flags) {
+  try {
+    return await loadGraph(root, model, { flags });
+  } catch (error) {
+    if (!flags.json) console.log("model file: ok");
+    throw error;
+  }
+}
+
 async function validate({ root, flags }) {
   const model = requireModel(root, flags);
   requireComponents(model);
-  print(flags, { ok: true }, "model: ok");
-  const graph = await loadGraph(root, model, { flags });
+  const graph = await graphOf(root, model, flags);
   const problems = graphProblems(model, graph);
-  if (problems.length === 0) return 0;
-  const listed = problems.join("\n- ");
-  const advice = "Fix these entries and run arch model validate again.";
-  throw new ModelError(`the model does not fit the code:\n- ${listed}\n${advice}`);
+  if (problems.length > 0) {
+    const listed = problems.join("\n- ");
+    const advice = "Fix these entries and run arch model validate again.";
+    throw new ModelError(`model does not fit the code:\n- ${listed}\n${advice}`);
+  }
+  print(flags, { ok: true }, "model: ok");
+  return 0;
+}
+
+function status({ root, flags }) {
+  const file = modelFile(root, flags);
+  const present = existsSync(file);
+  print(flags, { model: present, path: file }, present ? `model: present at ${file}` : ABSENT_LINE);
+  return 0;
 }
 
 function explain({ root, flags, positional: [path] }) {
@@ -121,6 +140,7 @@ function directCommands() {
   return {
     init: command(INIT_USAGE, 0, init, { flags: INIT_FLAGS }),
     validate: command("arch model validate", 0, validate),
+    status: command("arch model status", 0, status),
     explain: command("arch model explain <path>", 1, explain),
     "explain-thresholds": command("arch model explain-thresholds", 0, explainThresholds),
     migrate: command("arch model migrate", 0, migrate),

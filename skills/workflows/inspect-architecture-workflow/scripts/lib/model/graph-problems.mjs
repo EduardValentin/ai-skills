@@ -1,5 +1,6 @@
 import { compileGlob, matchesAny } from "../glob.mjs";
 import { relativeToComponent } from "./classify.mjs";
+import { ANY_DESTINATION } from "./defaults.mjs";
 
 const RING_PREFIX = "ring:";
 
@@ -80,6 +81,7 @@ function edgeEndProblems(model, paths) {
   ];
   return entries.flatMap(({ section, entry }) =>
     [entry.from, entry.to]
+      .filter((end) => end !== ANY_DESTINATION)
       .filter((end) => isPathEnd(model, end) && !paths.some((path) => compileGlob(end).test(path)))
       .map((end) => edgeEndProblem(section, entry, end)),
   );

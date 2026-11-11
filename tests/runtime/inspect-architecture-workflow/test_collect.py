@@ -229,4 +229,4 @@ def test_validate_reports_the_model_result_then_the_tooling_error(tmp_path: Path
     edit_json(root / MODEL, lambda d: d.update(adapter="exit 3"))
     result = validate(root)
     assert result.returncode == 2
-    assert "model: ok" in result.stdout and "adapter command" in result.stderr
+    assert "model file: ok" in result.stdout and "adapter command" in result.stderr

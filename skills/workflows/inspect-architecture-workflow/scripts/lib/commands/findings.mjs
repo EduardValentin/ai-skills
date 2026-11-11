@@ -78,7 +78,7 @@ function confirmedUpcoming(model, flags) {
   return [...new Set([...model.upcoming, ...(flags.upcoming ?? [])])];
 }
 
-function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, tag }) {
+function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, tag, dropped }) {
   return {
     flow: flags.flow,
     scope: subject.scopeLabel,
@@ -89,6 +89,8 @@ function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, t
     notRun: check.notRun,
     upcoming,
     questions: judged.questions ?? [],
+    covered: check.covered ?? 0,
+    dropped,
     findingKeys: findings.map((finding) => [finding.target, finding.defect, tag]),
   };
 }
@@ -113,7 +115,7 @@ async function add(args, { root }) {
   const subject = await reviewSubject({ root, model, flags });
   const upcoming = confirmedUpcoming(model, flags);
   const documents = readJudged(flags.judged ?? []);
-  const fromJudgment = judgedFindings({
+  const { findings: fromJudgment, dropped } = judgedFindings({
     documents, ...flags, root, model, graph: subject.graph, scope: subject.scope, upcoming,
   });
   const judged = { questions: judgedQuestions(documents) };
@@ -126,7 +128,8 @@ async function add(args, { root }) {
     tag,
     scope: subject.scope,
   });
-  const store = storeOf(stored, lastRunOf({ flags, subject, check, model, judged, findings: merged, upcoming, tag }));
+  const run = { flags, subject, check, model, judged, findings: merged, upcoming, tag, dropped };
+  const store = storeOf(stored, lastRunOf(run));
   await writeStore(root, store);
   print(contractData(store), flags);
   return 0;

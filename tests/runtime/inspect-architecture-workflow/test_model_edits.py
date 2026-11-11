@@ -402,3 +402,76 @@ def test_add_and_remove_upcoming(tmp_path: Path):
     assert edit(root, "remove-upcoming", "move payroll to a queue").returncode == 0
     assert "upcoming" not in document(root)
     assert edit(root, "remove-upcoming", "move payroll to a queue").returncode == 2
+
+
+def test_exception_to_star_is_accepted_for_a_unit_or_component_source(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-exception", "web", "*", "reason=accepted").returncode == 0
+    assert {"from": "web", "to": "*", "reason": "accepted"} in document(root)["exceptions"]
+
+
+def test_exception_cannot_start_at_star(tmp_path: Path):
+    result = edit(payroll(tmp_path), "add-exception", "*", "web", "reason=x")
+    assert result.returncode == 2 and '"*"' in result.stderr
+
+
+def test_validate_keeps_a_star_exception_whose_source_exists(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-exception", "web", "*", "reason=accepted").returncode == 0
+    assert edit(root, "validate").returncode == 0
+
+
+def test_validate_fails_on_a_star_exception_whose_source_matches_nothing(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-exception", "src/gone.ts", "*", "reason=x").returncode == 0
+    result = edit(root, "validate")
+    assert result.returncode == 2 and "src/gone.ts" in result.stderr
+
+
+def test_validate_prints_ok_only_when_the_graph_checks_pass(tmp_path: Path):
+    ok = edit(payroll(tmp_path / "ok"), "validate")
+    assert ok.returncode == 0 and ok.stdout.strip() == "model: ok"
+
+
+def test_validate_with_a_model_that_does_not_fit_the_code_does_not_print_ok(tmp_path: Path):
+    root = payroll(tmp_path)
+    doc = document(root)
+    doc["components"][1]["classify"].insert(0, ["nothing-*.ts", "gateway"])
+    model_file(root).write_text(json.dumps(doc))
+    result = edit(root, "validate")
+    assert result.returncode == 2
+    assert "model: ok" not in result.stdout
+    assert "model does not fit the code:" in result.stderr
+    assert "nothing-*.ts" in result.stderr
+
+
+def test_validate_with_a_failing_adapter_prints_model_file_ok_then_the_tooling_error(tmp_path: Path):
+    root = payroll(tmp_path)
+    doc = document(root)
+    doc["adapter"] = "exit 3"
+    model_file(root).write_text(json.dumps(doc))
+    result = edit(root, "validate")
+    assert result.returncode == 2
+    assert result.stdout.strip() == "model file: ok"
+    assert "adapter command" in result.stderr
+
+
+def test_status_reports_a_present_model_without_running_the_adapter(tmp_path: Path):
+    root = payroll(tmp_path)
+    doc = document(root)
+    doc["adapter"] = "exit 3"
+    model_file(root).write_text(json.dumps(doc))
+    result = edit(root, "status")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == f"model: present at {model_file(root)}"
+    as_json = json.loads(edit(root, "status", "--json").stdout)
+    assert as_json == {"model": True, "path": str(model_file(root))}
+
+
+def test_status_reports_an_absent_model_with_exit_zero(tmp_path: Path):
+    result = edit(tmp_path, "status")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "model: absent; run a baseline audit"
+    as_json = json.loads(edit(tmp_path, "status", "--json").stdout)
+    assert as_json == {"model": False, "path": str(model_file(tmp_path))}
+

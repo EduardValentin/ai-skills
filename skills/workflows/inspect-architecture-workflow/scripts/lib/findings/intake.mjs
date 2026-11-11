@@ -3,6 +3,7 @@ import { UsageError } from "../cli/errors.mjs";
 import { createContext, rowComponents } from "../checks/context.mjs";
 import { escalateRow, highestSeverity } from "../checks/escalate.mjs";
 import { JUDGMENTS } from "../checks/registry.mjs";
+import { isJudgedTargetCovered } from "../checks/exceptions.mjs";
 import { statusForRow } from "../checks/status.mjs";
 import { DEFAULT_KINDS } from "../model/defaults.mjs";
 import { validateShape } from "../model/validate-shape.mjs";
@@ -98,13 +99,6 @@ function escalationRow(recognized, target, judgment) {
     components: recognized.components,
     edge: recognized.edge,
   };
-}
-
-function offRuleProblems(judgment, row, context) {
-  const components = rowComponents(row, context);
-  return judgment.rules
-    .filter((rule) => statusForRow(context.model, [rule], components) === "off")
-    .map((rule) => `names rule ${rule}, whose status is off. Drop the finding or turn the rule on with arch model.`);
 }
 
 function scopeProblems(entry, ctx) {
@@ -220,7 +214,6 @@ function examine(entry, ctx) {
   const problems = [
     ...early,
     ...fitProblems(entry, judgment, recognized, ctx),
-    ...offRuleProblems(judgment, row, ctx.context),
     ...scopeProblems(entry, ctx),
     ...liftProblems(entry, ctx),
     ...evidenceProblemsOf(entry, ctx),
@@ -247,6 +240,14 @@ function documentShapeProblems(documents) {
   return documents.flatMap(({ file, document }) => shapeProblems(document).map((problem) => `${file}: ${problem}`));
 }
 
+const DROP_REASONS = { off: "rule off", covered: "covered by an exception" };
+
+function dropReason(judgment, row, context) {
+  if (statusForRow(context.model, judgment.rules, rowComponents(row, context)) === "off") return DROP_REASONS.off;
+  if (isJudgedTargetCovered(row, judgment.rules, context)) return DROP_REASONS.covered;
+  return null;
+}
+
 export function judgedFindings({ documents, flow, plan, root, model, graph, scope, upcoming }) {
   const shape = documentShapeProblems(documents);
   if (shape.length > 0) refuse(shape);
@@ -258,7 +259,13 @@ export function judgedFindings({ documents, flow, plan, root, model, graph, scop
     result.problems.map((problem) => `${labelOf(located[position])} ${problem}`),
   );
   if (problems.length > 0) refuse(problems);
-  return examined.map(({ judgment, row }, position) =>
-    buildFinding({ entry: located[position].entry, judgment, row, context, flow, graph }),
-  );
+  const findings = [];
+  const dropped = [];
+  examined.forEach(({ judgment, row }, position) => {
+    const { entry } = located[position];
+    const reason = dropReason(judgment, row, context);
+    if (reason) dropped.push({ target: entry.target, judgment: judgment.id, reason });
+    else findings.push(buildFinding({ entry, judgment, row, context, flow, graph }));
+  });
+  return { findings, dropped };
 }

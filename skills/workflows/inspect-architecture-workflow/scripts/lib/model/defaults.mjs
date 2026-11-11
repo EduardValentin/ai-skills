@@ -74,3 +74,5 @@ export const DEFAULT_STATUSES = {
   greenfield: statusesFor(ADVISORY_IN_BOTH),
   legacy: statusesFor([...ADVISORY_IN_BOTH, ...ADVISORY_IN_LEGACY]),
 };
+
+export const ANY_DESTINATION = "*";

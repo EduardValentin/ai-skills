@@ -1,3 +1,5 @@
+import { ANY_DESTINATION } from "../model/defaults.mjs";
+
 const RING_PREFIX = "ring:";
 
 export function subjectOf(level, name, context) {
@@ -21,4 +23,21 @@ function covers(exception, row, context) {
 export function isCoveredByException(row, context) {
   if (!row.edge) return false;
   return context.model.exceptions.some((exception) => covers(exception, row, context));
+}
+
+function coversTarget(exception, rules, subject) {
+  if (exception.to !== ANY_DESTINATION) return false;
+  if (exception.rule && !rules.includes(exception.rule)) return false;
+  return endMatches(exception.from, subject);
+}
+
+function targetSubject(row, context) {
+  if (row.components.length > 0) return subjectOf("component", row.components[0], context);
+  return subjectOf("unit", row.units[0], context);
+}
+
+export function isJudgedTargetCovered(row, rules, context) {
+  if (row.edge) return isCoveredByException({ ...row, rules }, context);
+  const subject = targetSubject(row, context);
+  return context.model.exceptions.some((exception) => coversTarget(exception, rules, subject));
 }

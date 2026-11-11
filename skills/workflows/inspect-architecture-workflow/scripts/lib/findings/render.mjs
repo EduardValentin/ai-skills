@@ -4,6 +4,7 @@ import { naturalOrder } from "../checks/targets.mjs";
 import { SEVERITIES, classifyFindings, computeVerdict } from "./verdict.mjs";
 
 export const NO_COMPONENT = "no component";
+const COVERED_REASON = "covered by an exception";
 
 function plural(count, noun) {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -69,6 +70,8 @@ export function contractData(store) {
     notEnforced: lastRun.skipped.map(notEnforcedEntry),
     corrections: groupCorrections(groups.blocking),
     questions: lastRun.questions,
+    covered: lastRun.covered ?? 0,
+    dropped: lastRun.dropped ?? [],
     findings,
   };
 }
@@ -96,6 +99,16 @@ function correctionLine(correction, index) {
   return `${index + 1}. ${rules}: ${where}: ${correction.consequence} Fix: ${correction.correction}`;
 }
 
+function droppedLine(data) {
+  const reasons = new Map();
+  const tally = (reason, count) => reasons.set(reason, (reasons.get(reason) ?? 0) + count);
+  tally(COVERED_REASON, data.covered);
+  for (const entry of data.dropped) tally(entry.reason, 1);
+  const parts = [...reasons.entries()].filter(([, count]) => count > 0).map(([reason, count]) => `${count} ${reason}`);
+  const total = data.covered + data.dropped.length;
+  return `Dropped: ${total}${parts.length > 0 ? ` (${parts.join(", ")})` : ""}`;
+}
+
 function listOrNone(items) {
   return items.length > 0 ? items.join(", ") : "none";
 }
@@ -117,6 +130,7 @@ export function renderContract(data) {
     `Incomplete: ${data.incompleteCount} conditions${reasons}`,
     `Not run: ${listOrNone(data.notRun.map(notRunLine))}`,
     `Advisory: ${plural(data.advisory, "finding")}`,
+    droppedLine(data),
     `Rules not enforced: ${listOrNone(data.notEnforced.map(notEnforcedLine))}`,
     corrections.length > 0 ? ["Corrections:", ...corrections].join("\n") : "Corrections: none",
     `Wider observations: ${data.wider}`,
