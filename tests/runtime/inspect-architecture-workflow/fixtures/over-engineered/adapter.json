@@ -221,7 +221,16 @@
       "implements": [
         "NoteFacade"
       ],
-      "constructs": [],
+      "constructs": [
+        {
+          "symbol": "Note",
+          "path": "src/domain/note.ts"
+        },
+        {
+          "symbol": "NoteTitle",
+          "path": "src/domain/note-title.ts"
+        }
+      ],
       "signatures": [
         {
           "symbol": "DefaultNoteFacade",
@@ -434,6 +443,22 @@
       "kind": "import",
       "symbols": [
         "AddNoteUseCase"
+      ]
+    },
+    {
+      "from": "src/facade/default-note-facade.ts",
+      "to": "src/domain/note.ts",
+      "kind": "import",
+      "symbols": [
+        "Note"
+      ]
+    },
+    {
+      "from": "src/facade/default-note-facade.ts",
+      "to": "src/domain/note-title.ts",
+      "kind": "import",
+      "symbols": [
+        "NoteTitle"
       ]
     },
     {

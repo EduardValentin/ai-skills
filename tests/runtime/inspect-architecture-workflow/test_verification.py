@@ -8,12 +8,12 @@ from support import FIXTURES, SKILL_DIR, copy_fixture, git, run_arch, run_node
 from test_check_conditions import ADAPTER, MODEL, edit_json, ids_of, seeded
 
 REGISTRY_MODULE = (SKILL_DIR / "scripts" / "lib" / "checks" / "registry.mjs").as_uri()
-ADDS_STRUCTURE = re.compile(
-    r"\b(add|introduce|create|define|extract|new)\b|\b(through|behind|via) an? (port|interface|layer)\b",
+STRUCTURE_REQUEST = re.compile(
+    r"\b(add|introduce|create|define|declare|extract)\s+(?:(?:a|an|one|the|new)\s+)?(?:[\w-]+\s+)?"
+    r"(port|interface|layer|component|factory|boundary)s?\b",
     re.IGNORECASE,
 )
-STRUCTURE_REQUEST = re.compile(r"\b(add|introduce|create|define|extract)\b.*\b(port|interface|layer|component)\b",
-                                re.IGNORECASE)
+OVER_ENGINEERED_TARGETS = ["contracts", "hooks"]
 FACTS = ["exports", "implements", "constructs", "signatures", "symbolImports", "typeChecks"]
 
 
@@ -27,7 +27,7 @@ def enforced_rows(rows: list[dict]) -> list[dict]:
     return [row for row in rows if row["status"] == "enforced"]
 
 
-def registry_entries() -> list[dict]:
+def registry_entries() -> dict[str, list]:
     script = (
         f"import {{ CHECKS, JUDGMENTS }} from {json.dumps(REGISTRY_MODULE)};"
         "console.log(JSON.stringify({ checks: CHECKS.map((c) => ({ id: c.id, facts: c.facts })),"
@@ -70,12 +70,16 @@ def test_known_defects_reports_each_defect_once(tmp_path: Path):
 
 def test_over_engineered_asks_for_no_more_structure(tmp_path: Path):
     root = copy_fixture("over-engineered", tmp_path / "p")
-    _, out = check_json(root)
-    checks = {check for row in out["rows"] for check in ids_of(row)}
-    assert "unused-abstractions" in checks
+    code, out = check_json(root)
+    assert code == 0
+    assert [(row["check"], row["target"], row["severity"]) for row in out["rows"]] == [
+        ("unused-abstractions", target, "minor") for target in OVER_ENGINEERED_TARGETS]
     assert out["incomplete"] == []
     for row in out["rows"]:
-        assert not ADDS_STRUCTURE.search(row["correction"]), row
+        assert not STRUCTURE_REQUEST.search(row["correction"]), row
+    assert check_json(root, "--strict")[0] == 1
+    facade = (root / "src/facade/default-note-facade.ts").read_text()
+    assert "this.useCase.add(" in facade
     readme = (FIXTURES / "over-engineered" / "README.md").read_text()
     listed = set(re.findall(r"`([a-z]+(?:-[a-z]+)+)`", readme)) & set(registry_entries()["judgments"])
     assert {"abstraction-without-reason", "boundary-defers-nothing"} <= listed

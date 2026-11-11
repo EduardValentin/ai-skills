@@ -117,7 +117,7 @@ function rulesText(rules) {
 }
 
 function findingLine(finding) {
-  const consequence = sentence(finding.consequence);
+  const consequence = sentence(finding.consequence || finding.evidence[0]);
   return `- ${rulesText(finding.rules)}: ${finding.target}: ${consequence} Fix: ${finding.correction}`;
 }
 
