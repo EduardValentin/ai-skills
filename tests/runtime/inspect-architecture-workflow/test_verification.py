@@ -76,7 +76,7 @@ def test_over_engineered_asks_for_no_more_structure(tmp_path: Path):
         ("unused-abstractions", target, "minor") for target in OVER_ENGINEERED_TARGETS]
     assert out["incomplete"] == []
     for row in out["rows"]:
-        assert not STRUCTURE_REQUEST.search(row["correction"]), row
+        assert not any(STRUCTURE_REQUEST.search(correction) for correction in row["corrections"]), row
     assert check_json(root, "--strict")[0] == 1
     facade = (root / "src/facade/default-note-facade.ts").read_text()
     assert "this.useCase.add(" in facade
@@ -121,12 +121,13 @@ def test_no_correction_proposes_a_new_port_where_one_exists(tmp_path: Path, fixt
     _, out = check_json(root)
     for row in out["rows"]:
         existing = existing_ports(row, root)
-        assert not ABSTRACT_ONLY.search(row["correction"]), row
-        if not existing:
-            continue
-        assert not NEW_PORT.search(row["correction"]), row
-        if re.search(r"\bport\b", row["correction"]):
-            assert any(f"`{symbol}`" in row["correction"] for symbol in existing), row
+        for correction in row["corrections"]:
+            assert not ABSTRACT_ONLY.search(correction), row
+            if not existing:
+                continue
+            assert not NEW_PORT.search(correction), row
+            if re.search(r"\bport\b", correction):
+                assert any(f"`{symbol}`" in correction for symbol in existing), row
 
 
 @pytest.mark.parametrize("fixture", CORRECTION_FIXTURES)
@@ -140,7 +141,7 @@ def test_every_row_states_its_consequence_in_one_sentence(tmp_path: Path, fixtur
 def test_an_external_import_is_removed_or_recorded_before_a_port_is_proposed(tmp_path: Path):
     _, out = check_json(copy_fixture("known-defects", tmp_path / "p"))
     (row,) = [r for r in out["rows"] if r["target"] == "src/lending/loan-use-case.ts -> external:pg"]
-    correction = row["correction"]
+    (correction,) = row["corrections"]
     assert correction.startswith("Remove the import of pg from src/lending/loan-use-case.ts")
     assert "arch model add-exception lending external:pg reason=" in correction
     assert correction.index("add-exception") < re.search(r"\bport\b", correction).start()
@@ -258,3 +259,26 @@ def test_no_model_in_an_empty_repository_reports_it_and_writes_only_inside_the_w
     assert "no architecture model" in added.stdout
     outside = [name for name in snapshot(tmp_path) if not name.startswith(".architecture/")]
     assert outside == []
+
+
+DIRECTION_FIXTURES = ["known-defects", "payroll", "sound-small", "over-engineered"]
+INWARD, OUTWARD = "inward", "outward"
+
+
+@pytest.mark.parametrize("fixture", DIRECTION_FIXTURES)
+def test_corrections_of_one_edge_never_move_code_both_inward_and_outward(tmp_path: Path, fixture: str):
+    _, out = check_json(copy_fixture(fixture, tmp_path / "p"))
+    rows_by_edge: dict[str, list[dict]] = {}
+    for row in out["rows"]:
+        if " -> " in row["target"]:
+            rows_by_edge.setdefault(row["target"], []).append(row)
+    contradictions = []
+    for edge, rows in sorted(rows_by_edge.items()):
+        print(edge)
+        for row in rows:
+            for correction in row["corrections"]:
+                print(f"  [{row['check']}] {correction}")
+        moves = {direction for row in rows for direction in row["moves"]}
+        if {INWARD, OUTWARD} <= moves:
+            contradictions.append(edge)
+    assert not contradictions, f"corrections move code both inward and outward on: {contradictions}"

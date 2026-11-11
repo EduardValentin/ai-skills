@@ -22,10 +22,12 @@ const STORE_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        required: ["target", "defect", "rules", "severity", "status", "origin", "provenance", "evidence", "scope"],
+        required: [
+          "target", "defect", "rules", "severity", "status", "origin", "provenance", "corrections", "evidence", "scope",
+        ],
         properties: {
           target: TEXT, defect: TEXT, rules: LIST, severity: TEXT, status: TEXT, origin: TEXT, provenance: TEXT,
-          evidence: LIST, scope: TEXT,
+          corrections: LIST, evidence: LIST, scope: TEXT,
         },
       },
     },

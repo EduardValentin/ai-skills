@@ -18,7 +18,7 @@ CLOCK = "src/adapters/system-clock.ts"
 MAIN = "src/web/main.ts"
 PG = "src/adapters/pg-payroll-repository.ts"
 USE_CASE = "src/domain/payroll-use-case.ts"
-COLUMNS = "| Rule | Target | Severity | Status | Origin | Evidence | Correction |"
+COLUMNS = "| Rule | Target | Severity | Status | Origin | Evidence | Corrections |"
 CONSTRUCTION_ROWS = [(f"{CONTROLLER} -> {PG}", "R7"), (f"{CONTROLLER} -> {CLOCK}", "R7")]
 CHECK_IDS = [
     "policy-imports-detail", "policy-imports-external", "outward-ring-edge", "detail-constructed-outside-root",
@@ -282,7 +282,7 @@ def test_same_defect_from_two_rules_is_one_row(tmp_path: Path):
     script = (
         f"import {{ mergeRows }} from {json.dumps(RUN_MODULE)};"
         "const row = (check, rule, severity, evidence) => ({ check, defect: 'policy-depends-on-detail', rules: [rule],"
-        " severity, target: 'a.ts -> b.ts', evidence, correction: 'route it', units: ['a.ts', 'b.ts'],"
+        " severity, target: 'a.ts -> b.ts', evidence, corrections: ['route it'], moves: [], units: ['a.ts', 'b.ts'],"
         " components: [], originKey: { type: 'edge', from: 'a.ts', to: 'b.ts' }, edge: null });"
         "console.log(JSON.stringify(mergeRows(["
         "row('one', 'R17', 'major', 'entity imports a detail'), row('two', 'R4', 'blocker', 'policy imports detail'),"
@@ -657,6 +657,22 @@ def test_a_sound_domain_touched_once_is_not_in_pain_and_one_changed_often_is(tmp
     assert row["check"] == "zone-of-pain" and "changed in 3 commits" in row["evidence"]
 
 
+def test_zone_of_pain_counts_the_history_up_to_the_base_not_the_change_itself(tmp_path: Path):
+    root = repo(tmp_path)
+    set_exports(root, {"src/domain/payroll-repository.ts": (0, 1), "src/domain/clock.ts": (0, 1)})
+    init_repo(root)
+    git(["checkout", "-qb", "feature"], root)
+    commit_change(root, EMPLOYEE, 3)
+    assert not [r for r in check_rows(root, "--base", "main") if r["check"] == "zone-of-pain"]
+    commit_change(root, EMPLOYEE, 2)
+    git(["checkout", "-q", "main"], root)
+    git(["merge", "-q", "--ff-only", "feature"], root)
+    git(["checkout", "-qb", "next"], root)
+    touch(root, EMPLOYEE)
+    row = find(check_rows(root, "--base", "main"), "domain", "R31")
+    assert "changed in 6 commits" in row["evidence"]
+
+
 def test_zone_of_pain_without_the_exports_fact_is_incomplete(tmp_path: Path):
     graph = empty_graph([component("domain", 5, 0, 0, 0.1, "pain")])
     graph["capabilities"]["exports"] = False
@@ -712,9 +728,10 @@ def test_corrections_name_the_move(tmp_path: Path):
     ring = [r for r in rows if "R4" in r["rules"] and r["target"].endswith(f"-> {CLOCK}")]
     assert len(ring) == 2
     for row in ring:
-        assert row["correction"].startswith("Depend on the existing port `Clock` in `src/domain/clock.ts`"), row
-        assert CLOCK in row["correction"] and row["target"].split(" -> ")[0] in row["correction"]
-    construction = [r["correction"] for r in rows if "R7" in r["rules"]]
+        correction = row["corrections"][0]
+        assert correction.startswith("Depend on the existing port `Clock` in `src/domain/clock.ts`"), row
+        assert CLOCK in correction and row["target"].split(" -> ")[0] in correction
+    construction = [correction for r in rows if "R7" in r["rules"] for correction in r["corrections"]]
     assert len(construction) == 2 and all(CONTROLLER in correction for correction in construction)
     assert all("into the composition root" in correction for correction in construction)
 
@@ -844,7 +861,7 @@ def test_a_merged_row_is_introduced_when_any_contributing_row_is(tmp_path: Path)
     script = (
         f"import {{ mergeRows }} from {json.dumps(RUN_MODULE)};"
         "const row = (rule, origin) => ({ check: rule, defect: 'd', rules: [rule], severity: 'major', target: 't',"
-        " evidence: rule, correction: 'c', units: [], components: [], origin });"
+        " evidence: rule, corrections: ['c'], moves: [], units: [], components: [], origin });"
         "console.log(JSON.stringify([mergeRows([row('R4', 'inherited'), row('R17', 'introduced')])[0].origin,"
         " mergeRows([row('R4', 'inherited'), row('R17', 'inherited')])[0].origin]));"
     )

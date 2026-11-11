@@ -405,8 +405,8 @@ const COMPONENTS_AND_STABILITY = [
     defect: "zone-of-pain",
     targets: ["component"],
     condition:
-      "In an audit, a component in the zone of pain changed within {historyWindow}, " +
-      "where no change under review touches it for the check to decide.",
+      "In an audit, a component in the zone of pain which at least {painMinChanges} commits touched within " +
+      "{historyWindow}, where no change under review touches it for the check to decide.",
   },
   {
     id: "abstractions-without-implementor",

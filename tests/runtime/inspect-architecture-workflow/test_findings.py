@@ -276,6 +276,73 @@ def test_judged_findings_of_one_unit_with_the_same_correction_do_not_overlap(tmp
     no_overlaps(result, root)
 
 
+MOVE_REPORTING = "Move the reporting behavior into the reporting component."
+
+
+def test_one_judgment_on_one_target_from_two_reviewers_keeps_both_corrections_and_overlaps(tmp_path):
+    root = workspace(tmp_path)
+    other = finding(correction=MOVE_REPORTING)
+    result, files = audit_with_files(root, tmp_path, [finding()], [other])
+    assert result.returncode == 0, result.stderr
+    assert stored(root, EMPLOYEE)["corrections"] == [SPLIT, MOVE_REPORTING]
+    assert f"Fix: {SPLIT} | {MOVE_REPORTING}" in result.stdout
+    lines = result.stdout.splitlines()
+    start = lines.index("Overlapping findings:")
+    assert lines[start + 1:start + 4] == [
+        f"- {EMPLOYEE}:",
+        f"  - R10 One actor per module: {EMPLOYEE}: Fix: {SPLIT} (from {files[0]})",
+        f"  - R10 One actor per module: {EMPLOYEE}: Fix: {MOVE_REPORTING} (from {files[1]})",
+    ]
+    listed = json.loads(run_arch(["findings", "list", "--json"], root).stdout)
+    assert [entry["corrections"] for entry in listed["overlaps"][0]["findings"]] == [[SPLIT], [MOVE_REPORTING]]
+
+
+def test_a_judged_finding_merged_with_a_check_row_keeps_both_corrections_check_first(tmp_path):
+    root = workspace(tmp_path)
+    seed_policy_to_detail_edge(root)
+    touch(root, EMPLOYEE)
+    judged_finding = finding("query-inside-policy", EMPLOYEE_TO_CLOCK, correction=MOVE_REPORTING)
+    result = change_review(root, tmp_path, judged_finding)
+    assert result.returncode == 0, result.stderr
+    check_rows = json.loads(check_file(root, tmp_path, "--base", "main").read_text())["rows"]
+    (row,) = [row for row in check_rows if row["target"] == EMPLOYEE_TO_CLOCK]
+    corrections = stored(root, EMPLOYEE_TO_CLOCK)["corrections"]
+    assert corrections == [*row["corrections"], MOVE_REPORTING]
+    assert f"Fix: {' | '.join(corrections)}" in result.stdout
+
+
+DISPUTE_REASON = "Its code formats payroll reports, which no entity does."
+
+
+def test_classification_disputes_are_stored_and_printed_one_line_each(tmp_path):
+    root = workspace(tmp_path)
+    document = {"findings": [], "questions": [], "disputes": [{"path": EMPLOYEE, "reason": DISPUTE_REASON}]}
+    check = check_file(root, tmp_path)
+    result = add(root, "audit", check, "--judged", str(write_json(tmp_path / "judged.json", document)))
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    start = lines.index("Classification disputes: 1")
+    assert lines[start + 1] == f"- {EMPLOYEE}: {DISPUTE_REASON}"
+    assert store(root)["lastRun"]["disputes"] == document["disputes"]
+    listed = json.loads(run_arch(["findings", "list", "--json"], root).stdout)
+    assert listed["disputes"] == document["disputes"]
+
+
+def test_a_judged_file_without_disputes_prints_none(tmp_path):
+    root = workspace(tmp_path)
+    result = audit(root, tmp_path, finding())
+    assert result.returncode == 0, result.stderr
+    assert "Classification disputes: 0" in result.stdout
+
+
+def test_a_dispute_about_a_path_that_is_not_a_unit_is_refused(tmp_path):
+    root = workspace(tmp_path)
+    document = {"findings": [], "disputes": [{"path": "src/domain/ghost.ts", "reason": DISPUTE_REASON}]}
+    check = check_file(root, tmp_path)
+    result = add(root, "audit", check, "--judged", str(write_json(tmp_path / "judged.json", document)))
+    assert_refused(result, root, "disputes[0]", "src/domain/ghost.ts", "not a unit")
+
+
 def test_lift_needs_a_confirmed_upcoming_change(tmp_path):
     root = workspace(tmp_path)
     touch(root, EMPLOYEE)
@@ -499,7 +566,7 @@ def test_findings_store_holds_no_dates_or_run_numbers(tmp_path):
     last_run = store(root)["lastRun"]
     assert set(last_run) == {
         "flow", "scope", "base", "plan", "incomplete", "skipped", "notRun", "upcoming", "questions", "findingKeys",
-        "covered", "dropped",
+        "covered", "dropped", "disputes", "overlaps",
     }
     assert store(root)["version"] == 1
 
@@ -637,7 +704,7 @@ def test_origin_in_an_audit_is_refused(tmp_path):
 def test_merged_finding_with_a_wider_judged_part_is_not_wider_and_keeps_the_check_origin(tmp_path):
     merge = (SKILL_DIR / "scripts" / "lib" / "findings" / "merge.mjs").as_uri()
     common = {"target": "t", "defect": "d", "rules": ["R4"], "severity": "major", "baseSeverity": "major",
-              "lifts": [], "status": "enforced", "correction": "c", "evidence": ["e"], "component": None}
+              "lifts": [], "status": "enforced", "corrections": ["c"], "evidence": ["e"], "component": None}
     checked = {**common, "provenance": "check", "origin": "inherited", "consequence": "", "wider": False}
     judged_part = {**common, "provenance": "judged", "origin": "introduced", "consequence": "x", "wider": True}
     script = (f"import {{ mergeFindings }} from {json.dumps(merge)};"

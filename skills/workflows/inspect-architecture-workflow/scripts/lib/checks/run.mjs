@@ -1,4 +1,5 @@
 import { createContext, rowComponents } from "./context.mjs";
+import { correctionParts } from "./corrections.mjs";
 import { escalateRow, highestSeverity } from "./escalate.mjs";
 import { rulesLeftUncovered } from "./exceptions.mjs";
 import { createOriginResolver } from "./origin.mjs";
@@ -23,6 +24,8 @@ function mergeGroup(rows) {
     severity: rows.map((row) => row.severity).reduce(highestSeverity),
     origin: rows.some((row) => row.origin === "introduced") ? "introduced" : first.origin,
     evidence: union(rows.map((row) => [row.evidence])).join("; "),
+    corrections: union(rows.map((row) => row.corrections)),
+    moves: union(rows.map((row) => row.moves)),
     units: union(rows.map((row) => row.units)),
     components: union(rows.map((row) => row.components)),
     parts: rows,
@@ -82,15 +85,23 @@ function runCheck(check, context) {
   if (reason) return { rows: [], incomplete: [], notRun: [notRunEntry(check, reason)] };
   const missing = check.facts.filter((fact) => !context.graph.capabilities?.[fact]);
   if (missing.length > 0) return { rows: [], incomplete: [missingFactEntry(check, missing)], notRun: [] };
-  const rows = check.run(context).map((raw) => ({
-    ...raw,
+  const rows = check.run(context).map((raw) => checkedRow(raw, check));
+  return { rows, incomplete: undecidedEntries(check, context), notRun: [] };
+}
+
+function checkedRow(raw, check) {
+  const { correction, ...found } = raw;
+  const { text, moves } = correctionParts(correction);
+  return {
+    ...found,
     check: check.id,
     defect: raw.defect ?? check.defect,
     rules: check.rules,
     severity: check.severity,
     consequence: check.consequence(raw),
-  }));
-  return { rows, incomplete: undecidedEntries(check, context), notRun: [] };
+    corrections: [text],
+    moves: moves ? [moves] : [],
+  };
 }
 
 function unclassifiedEntries(graph, touched) {
@@ -118,7 +129,8 @@ function finalRow(row, context) {
     origin: row.origin,
     evidence: row.evidence,
     consequence: row.consequence,
-    correction: row.correction,
+    corrections: row.corrections,
+    moves: row.moves,
   };
 }
 
@@ -147,6 +159,6 @@ export function runChecks({ graph, model, baseGraph = null, touched = null, hist
     incomplete: [...results.flatMap((result) => result.incomplete), ...unclassifiedEntries(graph, touched)],
     notRun: results.flatMap((result) => result.notRun),
     skipped: skippedRules(model),
-    covered: narrowed.filter((row) => row === null).length,
+    covered: decided.length - uncovered.length,
   };
 }

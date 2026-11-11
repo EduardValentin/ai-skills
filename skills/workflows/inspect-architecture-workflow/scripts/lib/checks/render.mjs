@@ -1,6 +1,7 @@
+import { alternatives } from "../text.mjs";
 import { titledRule } from "./rule-titles.mjs";
 
-const COLUMNS = ["Rule", "Target", "Severity", "Status", "Origin", "Evidence", "Correction"];
+const COLUMNS = ["Rule", "Target", "Severity", "Status", "Origin", "Evidence", "Corrections"];
 const NONE = "None";
 
 function cell(value) {
@@ -18,9 +19,10 @@ function ruleCell(rules) {
 function table(rows) {
   const header = tableRow(COLUMNS);
   const separator = `|${COLUMNS.map(() => "---").join("|")}|`;
-  const body = rows.map((row) =>
-    tableRow([ruleCell(row.rules), row.target, row.severity, row.status, row.origin, row.evidence, row.correction]),
-  );
+  const body = rows.map((row) => {
+    const { rules, target, severity, status, origin, evidence, corrections } = row;
+    return tableRow([ruleCell(rules), target, severity, status, origin, evidence, alternatives(corrections)]);
+  });
   return [header, separator, ...body].join("\n");
 }
 

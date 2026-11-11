@@ -3,9 +3,9 @@ import { logNames } from "../git/changes.mjs";
 import { createClassifier } from "../model/classify.mjs";
 import { table } from "./shared.mjs";
 
-function selectionFor(flags, model) {
+function selectionFor(flags, model, upTo) {
   if (flags.since) return [`${flags.since}..HEAD`];
-  return [`--since=${model.thresholds.historyWindow}`];
+  return [`--since=${model.thresholds.historyWindow}`, upTo];
 }
 
 async function readHistory(root, selection) {
@@ -34,13 +34,13 @@ function tally(commits, classify) {
   return { commitsOf, modulesOf };
 }
 
-async function tallyHistory({ model, root, flags }) {
-  const commits = await readHistory(root, selectionFor(flags, model));
+async function tallyHistory({ model, root, flags, upTo = "HEAD" }) {
+  const commits = await readHistory(root, selectionFor(flags, model, upTo));
   return tally(commits, createClassifier(model));
 }
 
-export async function componentCommitCounts({ model, root, flags = {} }) {
-  const { commitsOf } = await tallyHistory({ model, root, flags });
+export async function componentCommitCounts({ model, root, flags = {}, upTo = "HEAD" }) {
+  const { commitsOf } = await tallyHistory({ model, root, flags, upTo });
   return new Map(model.components.map((component) => [component.name, commitsOf.get(component.name)?.size ?? 0]));
 }
 

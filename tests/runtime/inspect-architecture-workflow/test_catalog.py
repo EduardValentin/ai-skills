@@ -447,3 +447,11 @@ def test_classification_commands_build_the_component_it_shows(tmp_path):
     model = json.loads((root / "docs/architecture/architecture.json").read_text())
     built = next(component for component in model["components"] if component["name"] == shown["name"])
     assert built == shown
+
+
+def test_the_audit_zone_of_pain_judgment_needs_the_changes_the_check_needs():
+    entries = {entry["id"]: entry for entry in registry()["entries"]}
+    for identifier in ["zone-of-pain", "zone-of-pain-changing"]:
+        row = condition_rows("components-and-stability")[identifier][0]
+        assert "at least {painMinChanges} commits touched within {historyWindow}" in row[1], identifier
+    assert "{painMinChanges}" in entries["zone-of-pain-changing"]["condition"]

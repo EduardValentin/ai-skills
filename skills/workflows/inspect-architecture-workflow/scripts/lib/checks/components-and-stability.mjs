@@ -1,5 +1,6 @@
 import { plural } from "../text.mjs";
 import { COMPONENT_METRIC_CHECKS } from "./component-metrics.mjs";
+import { movingInward, movingOutward } from "./corrections.mjs";
 import { componentRow } from "./rows.mjs";
 import { portDeclaredIn } from "./ports.mjs";
 import { cycleTarget, edgePairs, edgeTarget, naturalOrder, pairTargetsWhere } from "./targets.mjs";
@@ -14,15 +15,19 @@ const CORRECTIONS = {
     "or merge the members if they always change together; only if the dependency must stay, have the side that " +
     "needs it declare an interface the other side implements",
   stability: (from, to) =>
-    `Remove the dependency of ${from} on ${to}: move what ${from} uses from ${to} into ${from}, or into a component ` +
-    `at least as stable as ${from}`,
-  implementsPorts: (from, to, symbols, dependents) =>
-    `Keep this dependency, since ${from} only implements ${symbols} that ${to} declares; make ${from} less ` +
-    `depended on instead, by removing the dependencies of ${dependents} on it`,
+    movingInward(
+      `Remove the dependency of ${from} on ${to}: move what ${from} uses from ${to} into ${from}, or into a ` +
+        `component at least as stable as ${from}`,
+    ),
+  implementsPorts: (from, to, symbols) =>
+    `Keep this dependency, since ${from} only implements ${symbols} that ${to} declares; if anything is to ` +
+    `change, reduce what ${to} depends on`,
   pain: (name, fanIn) =>
-    `Move the part of ${name} that keeps changing out of it, into the component whose needs drive those changes, ` +
-    `so its ${plural(fanIn, "dependent module")} stop re-verifying on every change; only if that part must stay ` +
-    `shared, have the dependents use it through a port ${name} owns`,
+    movingOutward(
+      `Move the part of ${name} that keeps changing out of it, into the component whose needs drive those ` +
+        `changes, so its ${plural(fanIn, "dependent module")} stop re-verifying on every change; only if that ` +
+        `part must stay shared, have the dependents use it through a port ${name} owns`,
+    ),
   unused: (name) =>
     `Delete the abstract types in ${name} that nothing implements or uses, and inline any that one unit inside ` +
     `${name} uses`,
@@ -98,16 +103,12 @@ function crossingPairs(context, edge) {
   );
 }
 
-function dependentsOf(context, name) {
-  return context.graph.componentEdges.filter((edge) => edge.to === name).map((edge) => edge.from);
-}
-
 function stabilityCorrection(context, edge, pairs) {
   const ports = pairs.map((pair) => portDeclaredIn(context, pair.to));
   if (ports.some((port) => port === null)) return CORRECTIONS.stability(edge.from, edge.to);
   const symbols = [...new Set(ports.map((port) => `\`${port.symbol}\``))];
   const named = `${symbols.length === 1 ? "the port" : "the ports"} ${symbols.join(", ")}`;
-  return CORRECTIONS.implementsPorts(edge.from, edge.to, named, dependentsOf(context, edge.from).join(", "));
+  return CORRECTIONS.implementsPorts(edge.from, edge.to, named);
 }
 
 function unstableDependencyRows(context) {

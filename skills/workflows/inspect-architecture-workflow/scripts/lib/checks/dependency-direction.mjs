@@ -1,5 +1,5 @@
 import { touchesBarrel } from "./context.mjs";
-import { externalName, inwardDependencyCorrection, removeExternalImport } from "./corrections.mjs";
+import { externalName, inwardDependencyCorrection, movingOutward, removeExternalImport } from "./corrections.mjs";
 import { PORT_OWNERSHIP_CHECKS } from "./port-ownership.mjs";
 import { existingPort, portsImplementedBy } from "./ports.mjs";
 import { describedPair, externalEdgeRow, unitEdgeRow } from "./rows.mjs";
@@ -7,25 +7,33 @@ import { describeUnit, edgePairs } from "./targets.mjs";
 
 const GROUP = "dependency-direction";
 const DETAIL_SIDE_ROLES = new Set(["detail", "wiring"]);
+const DELIVERY_KINDS = new Set(["controller", "entry-point"]);
 
 const CORRECTIONS = {
   wiring: (from, to) => `Have the composition root pass ${from} what it reads from ${to}, and remove the import`,
   detail: (from, to) =>
     `If ${to} does no input or output, classify it as policy with arch model classify; otherwise declare a port ` +
     `beside ${from} for what it needs from ${to}, and have ${to} implement it`,
+  dataType: (from, to) =>
+    `Replace ${to} in ${from} with a plain value the policy side owns, or remove the import, or move it to the ` +
+    `detail code that converts ${to}; only otherwise declare a port beside ${from} for what it needs from ${to}`,
   outward: (from, to, ring) =>
-    `If ${to} belongs in ${ring} or further in, classify it there with arch model classify; otherwise move ` +
-    `what ${from} uses from ${to} into ${from}`,
+    `Remove the dependency of ${from} on ${to}: have ${to} call ${from} and pass it plain values, or remove the ` +
+    `import; if ${to} belongs in ${ring} or further in, classify it there with arch model classify instead`,
   boundary: (to, components) =>
-    `Declare one input boundary beside ${to} that it implements, and have the controllers of ` +
+    `Declare one input boundary beside ${to} that it implements, and have the delivery code of ` +
     `${components.join(", ")} call it instead of the class`,
   boundaryExists: (port, components) =>
-    `Have the controllers of ${components.join(", ")} call ${existingPort(port)} instead of the class`,
+    `Have the delivery code of ${components.join(", ")} call ${existingPort(port)} instead of the class`,
   construction: (from, to) =>
-    `Move the construction of ${to} from ${from} into the composition root and pass the instance to ${from}`,
+    movingOutward(
+      `Move the construction of ${to} from ${from} into the composition root and pass the instance to ${from}`,
+    ),
   constructionThroughPort: (from, to, port) =>
-    `Move the construction of ${to} from ${from} into the composition root and pass it to ${from} as ` +
-    existingPort(port),
+    movingOutward(
+      `Move the construction of ${to} from ${from} into the composition root and pass it to ${from} as ` +
+        existingPort(port),
+    ),
 };
 
 const CONSEQUENCES = {
@@ -40,7 +48,7 @@ const CONSEQUENCES = {
   detailConstructed: ({ edge }) =>
     `Replacing or reconfiguring ${edge.to} means editing ${edge.from}, which cannot be tested with a stand-in.`,
   controllerImportsUseCase: ({ edge }) =>
-    `Every change to the class ${edge.to} reaches the controllers of each delivery mechanism, so they cannot ` +
+    `Every change to the class ${edge.to} reaches the callers in each delivery mechanism, so they cannot ` +
     "change independently.",
 };
 
@@ -48,10 +56,15 @@ function isPolicyToDetail(context, pair) {
   return context.roleOf(pair.from) === "policy" && DETAIL_SIDE_ROLES.has(context.roleOf(pair.to));
 }
 
+function isDataType(unit) {
+  return unit.valueType === true || unit.exports?.concrete === 0;
+}
+
 function policyDetailCorrection(context, pair) {
   const throughPort = inwardDependencyCorrection(context, pair.from, pair.to);
   if (throughPort) return throughPort;
   if (context.roleOf(pair.to) === "wiring") return CORRECTIONS.wiring(pair.from, pair.to);
+  if (isDataType(context.unitOf(pair.to))) return CORRECTIONS.dataType(pair.from, pair.to);
   return CORRECTIONS.detail(pair.from, pair.to);
 }
 
@@ -125,10 +138,11 @@ function detailConstructedOutsideRoot(context) {
     );
 }
 
-function controllerCallsByUseCase(context) {
+function deliveryCallsByUseCase(context) {
   const calls = new Map();
   edgePairs(context.graph)
-    .filter((pair) => context.unitOf(pair.from)?.kind === "controller" && context.unitOf(pair.to)?.kind === "use-case")
+    .filter((pair) => DELIVERY_KINDS.has(context.unitOf(pair.from)?.kind))
+    .filter((pair) => context.unitOf(pair.to)?.kind === "use-case")
     .filter((pair) => pair.kinds.some((kind) => kind !== "type-import"))
     .forEach((pair) => calls.set(pair.to, [...(calls.get(pair.to) ?? []), pair]));
   return [...calls.values()];
@@ -144,14 +158,14 @@ function boundaryCorrection(context, useCase, components) {
 }
 
 function controllerImportsUseCase(context) {
-  return controllerCallsByUseCase(context).flatMap((calls) => {
+  return deliveryCallsByUseCase(context).flatMap((calls) => {
     const components = callingComponents(context, calls);
     if (components.length < 2) return [];
     return calls.map((pair) =>
       unitEdgeRow({
         ...pair,
         evidence:
-          `controllers of ${components.join(", ")} call ${pair.to} directly: ${describedPair(context, pair)}`,
+          `delivery code of ${components.join(", ")} calls ${pair.to} directly: ${describedPair(context, pair)}`,
         correction: boundaryCorrection(context, pair.to, components),
       }),
     );

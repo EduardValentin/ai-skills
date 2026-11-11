@@ -1,3 +1,4 @@
+import { movingOutward } from "./corrections.mjs";
 import { existingPort, portsImplementedBy } from "./ports.mjs";
 import { unitEdgeRow } from "./rows.mjs";
 import { edgeTarget } from "./targets.mjs";
@@ -33,9 +34,10 @@ function typeCheckOnImplementation(context) {
       from: unit.path,
       to: site.path,
       evidence: `type check for an implementation of ${symbols} at ${where.join(", ")}`,
-      correction:
+      correction: movingOutward(
         `Remove the type check for ${site.symbol} in ${unit.path}, and move the special-case behavior into ` +
-        `${site.path} behind ${existingPort(ports[0])}`,
+          `${site.path} behind ${existingPort(ports[0])}`,
+      ),
     });
   });
 }

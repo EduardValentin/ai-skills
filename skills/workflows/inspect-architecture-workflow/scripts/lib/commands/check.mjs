@@ -23,9 +23,9 @@ function printWarnings(graph) {
   for (const warning of graph.warnings) console.error(warning);
 }
 
-async function historyOf(root, model) {
+async function historyOf(root, model, upTo = "HEAD") {
   try {
-    return await componentCommitCounts({ model, root });
+    return await componentCommitCounts({ model, root, upTo });
   } catch (error) {
     if (error instanceof ToolingError) return null;
     throw error;
@@ -41,7 +41,7 @@ async function subjectOf(root, model, flags) {
   if (!flags.base) return { graph, clarifications: [] };
   const baseGraph = await loadGraph(root, model, { ref: flags.base, flags });
   const touched = await touchedScope(root, graph, flags.base);
-  return { graph, baseGraph, touched, history: await historyOf(root, model), clarifications: [] };
+  return { graph, baseGraph, touched, history: await historyOf(root, model, flags.base), clarifications: [] };
 }
 
 function countedRows(result, flags) {

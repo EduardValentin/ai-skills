@@ -22,7 +22,7 @@ export function checkFinding(row, graph) {
     origin: row.origin,
     provenance: "check",
     consequence: row.consequence,
-    correction: row.correction,
+    corrections: row.corrections,
     evidence: [row.evidence],
     wider: false,
     component: componentOfTarget(graph, row.target),
@@ -34,7 +34,13 @@ function union(lists) {
   return [...new Set(lists.flat())];
 }
 
-function mergeGroup(group) {
+function checkRowsFirst(group) {
+  const isCheck = (finding) => finding.provenance === "check";
+  return [...group.filter(isCheck), ...group.filter((finding) => !isCheck(finding))];
+}
+
+function mergeGroup(unordered) {
+  const group = checkRowsFirst(unordered);
   const [first] = group;
   const origin = (group.find((finding) => finding.provenance === "check") ?? first).origin;
   const provenances = new Set(group.map((finding) => finding.provenance));
@@ -50,6 +56,7 @@ function mergeGroup(group) {
     origin,
     provenance: provenances.size > 1 ? "both" : first.provenance,
     consequence: (group.find((finding) => finding.provenance === "judged") ?? first).consequence,
+    corrections: union(group.map((finding) => finding.corrections)),
     evidence: union(group.map((finding) => finding.evidence)),
     wider: group.every((finding) => finding.wider),
     ...(liftedBy && { liftedBy }),

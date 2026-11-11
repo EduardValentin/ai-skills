@@ -407,3 +407,63 @@ def test_distance_minimum_defaults_to_eight_components(tmp_path: Path):
     out = check_output(root)
     assert [e["reason"] for e in out["notRun"] if e["check"] == "distance-over-threshold"] == [
         "fewer than 8 components"]
+
+
+def test_an_entry_point_is_a_delivery_caller_of_a_use_case(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    model_edit(root, "classify", "kiosk", "**", "entry-point")
+    rows = rows_of(check_output(root)["rows"], "controller-imports-use-case")
+    assert sorted(row["target"] for row in rows) == [KIOSK_CALL, WEB_CALL]
+
+
+def test_a_row_whose_rule_left_after_an_exception_is_off_is_counted_as_covered(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    model_edit(root, "add-exception", "src/lending/member.ts", "external:orm", "rule=R4", "reason=not about direction")
+    model_edit(root, "set-rule", "R17@lending", "off", "reason=entities of lending may use the orm")
+    out = check_output(root)
+    assert not [r for r in out["rows"] if r["target"] == FRAMEWORK_ROW]
+    assert out["covered"] == 1
+
+
+def correction_of(root: Path, target: str, check: str) -> str:
+    (row,) = rows_at(check_output(root)["rows"], target, check)
+    (correction,) = row["corrections"]
+    return correction
+
+
+OUTWARD_EDGE = "src/web/loan-presenter.ts -> src/web/ui-shell.ts"
+DATA_TYPE_EDGE = "src/lending/loan-store.ts -> src/storage/sql-row.ts"
+
+
+def test_an_outward_edge_is_fixed_by_inverting_the_call_or_removing_the_import(tmp_path: Path):
+    correction = correction_of(fixture_root(tmp_path), OUTWARD_EDGE, "outward-ring-edge")
+    assert correction.startswith(
+        "Remove the dependency of src/web/loan-presenter.ts on src/web/ui-shell.ts: have src/web/ui-shell.ts call "
+        "src/web/loan-presenter.ts and pass it plain values, or remove the import")
+    assert "move what" not in correction.lower()
+
+
+def test_a_detail_data_type_is_replaced_by_a_plain_value_before_a_port(tmp_path: Path):
+    correction = correction_of(fixture_root(tmp_path), DATA_TYPE_EDGE, "policy-imports-detail")
+    assert correction.startswith(
+        "Replace src/storage/sql-row.ts in src/lending/loan-store.ts with a plain value the policy side owns")
+    assert correction.index("remove the import") < correction.index("port")
+
+
+def test_an_unenforced_boundary_is_recorded_then_cheaply_enforced_then_split(tmp_path: Path):
+    (row,) = rows_of(check_output(fixture_root(tmp_path))["rows"], "unenforced-component")
+    (correction,) = row["corrections"]
+    order = ["If something already stops", "a visibility rule, an export list, or an import rule that fails the build",
+             "a separate build unit"]
+    positions = [correction.find(part) for part in order]
+    assert all(position >= 0 for position in positions) and positions == sorted(positions), correction
+    assert row["consequence"] == (
+        "Nothing fails when code outside notify imports one of its internal modules, so such imports pile up "
+        "unnoticed and any internal change to notify can break code outside it.")
+
+
+def test_a_dependency_that_only_implements_declared_ports_is_kept(tmp_path: Path):
+    correction = correction_of(fixture_root(tmp_path), "storage -> lending", "unstable-dependency")
+    assert correction == (
+        "Keep this dependency, since storage only implements the port `LoanStore` that lending declares; "
+        "if anything is to change, reduce what lending depends on")

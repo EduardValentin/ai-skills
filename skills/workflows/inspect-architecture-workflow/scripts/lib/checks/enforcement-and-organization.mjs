@@ -10,7 +10,10 @@ const NOT_ENFORCING = new Set(["none", "review"]);
 
 const CORRECTIONS = {
   enforcement: (name) =>
-    `Enforce the boundary of ${name} with the compiler or the build, then record how in its enforcement field`,
+    `If something already stops code outside ${name} from importing its internals, record that mechanism in the ` +
+    `enforcement field of ${name}; otherwise add the cheapest enforcement the project has, such as a visibility ` +
+    "rule, an export list, or an import rule that fails the build, and record it there; make it a separate build " +
+    "unit only when none of those is available",
   deepImport: (from, component, globs) =>
     `Import through the published surface of ${component} (${globs}) instead of from ${from}, ` +
     "or publish the module on purpose by adding it to published",
@@ -23,8 +26,8 @@ const CORRECTIONS = {
 
 const CONSEQUENCES = {
   unenforced: ({ target }) =>
-    `Nothing stops code from reaching into ${target}, so its boundary erodes unnoticed and its internals become ` +
-    "hard to change.",
+    `Nothing fails when code outside ${target} imports one of its internal modules, so such imports pile up ` +
+    `unnoticed and any internal change to ${target} can break code outside it.`,
   deepImport: ({ edge }) =>
     `${edge.from} depends on an internal module of another component, ${edge.to}, so internal changes there ` +
     "break it.",

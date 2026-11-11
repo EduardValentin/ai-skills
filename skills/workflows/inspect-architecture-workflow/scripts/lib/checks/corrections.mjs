@@ -1,6 +1,20 @@
 import { existingPort, portDeclaredIn, portSymbolsOwnedBy, portsImplementedBy } from "./ports.mjs";
 
 const EXTERNAL_PREFIX = "external:";
+export const MOVES_INWARD = "inward";
+export const MOVES_OUTWARD = "outward";
+
+export function movingInward(text) {
+  return { text, moves: MOVES_INWARD };
+}
+
+export function movingOutward(text) {
+  return { text, moves: MOVES_OUTWARD };
+}
+
+export function correctionParts(correction) {
+  return typeof correction === "string" ? { text: correction, moves: null } : correction;
+}
 
 export function externalName(end) {
   return end.startsWith(EXTERNAL_PREFIX) ? end.slice(EXTERNAL_PREFIX.length) : end;
@@ -19,9 +33,9 @@ export function removeForExistingPort(port, from, to) {
 }
 
 export function movePortBesideConsumer(port, consumer, ring) {
-  return (
+  return movingInward(
     `Move the port \`${port.symbol}\` from ${port.path} beside its consumer ${consumer}, ` +
-    `into a ring at least as inner as ${ring}`
+      `into a ring at least as inner as ${ring}`,
   );
 }
 

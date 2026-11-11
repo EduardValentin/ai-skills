@@ -10,6 +10,7 @@ import { checkBinding } from "../findings/binding.mjs";
 import { requireWorkPlacement } from "../findings/placement.mjs";
 import { judgedFindings, judgedQuestions, readJudged } from "../findings/intake.mjs";
 import { checkFinding, mergeFindings, replaceStored, scopeTag } from "../findings/merge.mjs";
+import { overlappingFindings } from "../findings/overlaps.mjs";
 import { contractData, noModelData, rankData, renderContract, renderRank } from "../findings/render.mjs";
 import { readStore, storeOf, writeStore } from "../findings/store.mjs";
 import { withEnforcement } from "../findings/verdict.mjs";
@@ -86,7 +87,7 @@ function confirmedUpcoming(model, flags) {
   return [...new Set([...model.upcoming, ...(flags.upcoming ?? [])])];
 }
 
-function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, tag, dropped }) {
+function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, tag }) {
   return {
     flow: flags.flow,
     scope: subject.scopeLabel,
@@ -96,9 +97,11 @@ function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, t
     skipped: check.skipped,
     notRun: check.notRun,
     upcoming,
-    questions: judged.questions ?? [],
+    questions: judged.questions,
+    disputes: judged.disputes,
     covered: check.covered ?? 0,
-    dropped,
+    dropped: judged.dropped,
+    overlaps: judged.overlaps,
     findingKeys: findings.map((finding) => [finding.target, finding.defect, tag]),
   };
 }
@@ -123,10 +126,11 @@ async function add(args, { root }) {
   const subject = await reviewSubject({ root, model, flags });
   const upcoming = confirmedUpcoming(model, flags);
   const documents = readJudged(flags.judged ?? []);
-  const { findings: fromJudgment, dropped } = judgedFindings({
+  const { findings: fromJudgment, dropped, disputes } = judgedFindings({
     documents, ...flags, root, model, graph: subject.graph, scope: subject.scope, upcoming,
   });
-  const judged = { questions: judgedQuestions(documents) };
+  const overlaps = overlappingFindings(fromJudgment);
+  const judged = { questions: judgedQuestions(documents), disputes, dropped, overlaps };
   const merged = mergeFindings([...check.rows.map((row) => checkFinding(row, subject.graph)), ...fromJudgment]);
   const tag = scopeTag(flags.flow, flags.plan);
   const stored = replaceStored({
@@ -136,7 +140,7 @@ async function add(args, { root }) {
     tag,
     scope: subject.scope,
   });
-  const run = { flags, subject, check, model, judged, findings: merged, upcoming, tag, dropped };
+  const run = { flags, subject, check, model, judged, findings: merged, upcoming, tag };
   const store = storeOf(stored, lastRunOf(run));
   await writeStore(root, store);
   print(contractData(store), flags);

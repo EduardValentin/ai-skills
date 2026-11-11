@@ -228,7 +228,7 @@ Not a finding when: the components build and release together from one repositor
 | `module-cycle` | The graph of units contains a cycle. | R30 | check | blocker | `cycle` |
 | `unstable-dependency` | A component depends on a component whose instability is higher than its own. | R31 | check | major | `depends-on-less-stable` |
 | `zone-of-pain` | In a change review, the change touches a component whose metrics place it in the zone of pain and which at least {painMinChanges} commits touched within {historyWindow}. | R31, R32 | check (needs exports) | major | `zone-of-pain` |
-| `zone-of-pain-changing` | In an audit, a component in the zone of pain changed within {historyWindow}, where no change under review touches it for the check to decide. | R31, R32 | judgment | major | `zone-of-pain` |
+| `zone-of-pain-changing` | In an audit, a component in the zone of pain which at least {painMinChanges} commits touched within {historyWindow}, where no change under review touches it for the check to decide. | R31, R32 | judgment | major | `zone-of-pain` |
 | `unused-abstractions` | A component exports abstract types and no unit outside it depends on it. | R31, R32 | check (needs exports) | minor | `unused-abstraction` |
 | `abstractions-without-implementor` | A component has abstract types with no implementor, or outside consumers that use none of its abstract types. | R31, R32 | judgment | minor | `unused-abstraction` |
 | `distance-over-threshold` | With at least {distanceMinComponents} components, a component's distance lies more than {distanceDeviations} standard deviations above the mean, or rose by at least {distanceJump} between base and head. | R32 | check (needs exports) | minor | `off-balance` |

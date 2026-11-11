@@ -40,6 +40,15 @@ export const JUDGED_SCHEMA = {
       },
     },
     questions: { type: "array", items: { type: "string", minLength: 1 } },
+    disputes: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["path", "reason"],
+        additionalProperties: false,
+        properties: { path: { type: "string", minLength: 1 }, reason: { type: "string", minLength: 1 } },
+      },
+    },
   },
 };
 
@@ -60,6 +69,23 @@ export function readJudged(files) {
 
 export function judgedQuestions(documents) {
   return documents.flatMap(({ document }) => document.questions ?? []);
+}
+
+function disputesOf(documents) {
+  return documents.flatMap(({ file, document }) =>
+    (document.disputes ?? []).map((dispute, index) => ({ dispute, index, file })),
+  );
+}
+
+function disputeProblems(located, graph) {
+  const units = new Set(graph.units.map((unit) => unit.path));
+  return located
+    .filter(({ dispute }) => !units.has(dispute.path))
+    .map(
+      ({ dispute, index, file }) =>
+        `${file}: disputes[${index}] (${dispute.path}) names a path that is not a unit of the graph. ` +
+        "Use the path of a module the adapter reports, as arch model explain <path> shows it.",
+    );
 }
 
 function withoutJudgmentFields(entry) {
@@ -185,7 +211,7 @@ function buildFinding({ entry, file, judgment, row, context, flow, graph }) {
     provenance: "judged",
     judgedFiles: [file],
     consequence: entry.consequence.trim(),
-    correction: entry.correction.trim(),
+    corrections: [entry.correction.trim()],
     evidence: entry.evidence,
     wider: entry.wider === true,
     ...(entry.liftedBy && { liftedBy: entry.liftedBy }),
@@ -266,9 +292,13 @@ export function judgedFindings({ documents, flow, plan, root, model, graph, scop
   const ctx = { flow, plan, root, graph, model, scope, upcoming, context };
   const located = entriesOf(documents);
   const examined = located.map(({ entry }) => examine(entry, ctx));
-  const problems = examined.flatMap((result, position) =>
-    result.problems.map((problem) => `${labelOf(located[position])} ${problem}`),
-  );
+  const disputes = disputesOf(documents);
+  const problems = [
+    ...examined.flatMap((result, position) =>
+      result.problems.map((problem) => `${labelOf(located[position])} ${problem}`),
+    ),
+    ...disputeProblems(disputes, graph),
+  ];
   if (problems.length > 0) refuse(problems);
   const findings = [];
   const dropped = [];
@@ -278,5 +308,5 @@ export function judgedFindings({ documents, flow, plan, root, model, graph, scop
     if (reason) dropped.push({ target: entry.target, judgment: judgment.id, reason });
     else findings.push(buildFinding({ entry, file, judgment: { ...judgment, rules }, row, context, flow, graph }));
   });
-  return { findings, dropped };
+  return { findings, dropped, disputes: disputes.map(({ dispute }) => dispute) };
 }

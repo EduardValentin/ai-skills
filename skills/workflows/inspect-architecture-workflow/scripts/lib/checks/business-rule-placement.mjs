@@ -1,5 +1,5 @@
 import { touchesBarrel } from "./context.mjs";
-import { externalName, removeExternalImport } from "./corrections.mjs";
+import { externalName, movingOutward, removeExternalImport } from "./corrections.mjs";
 import { describedPair, externalEdgeRow, unitEdgeRow } from "./rows.mjs";
 import { describeUnit, edgePairs } from "./targets.mjs";
 
@@ -8,7 +8,9 @@ const ENTITY_NEIGHBOURS = new Set(["entity", "barrel"]);
 
 const CORRECTIONS = {
   entity: (from, to) =>
-    `Keep ${from} free of ${to}: pass what it needs as plain values, or move the rule that needs ${to} to a use case`,
+    movingOutward(
+      `Keep ${from} free of ${to}: pass what it needs as plain values, or move the rule that needs ${to} to a use case`,
+    ),
   useCase: (from, to) => `Remove the dependency of ${from} on ${to}: have ${to} call ${from} and pass it what it needs`,
   boundaryData: (from, to) =>
     `Keep ${from} plain data: copy the fields it needs from ${to} as plain values and remove the dependency`,
