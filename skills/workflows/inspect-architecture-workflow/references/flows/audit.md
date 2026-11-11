@@ -17,37 +17,35 @@ under `.architecture/work/`. Terms are defined in `references/rules/vocabulary.m
 2. Ask the user which baseline fits: `greenfield`, for a project with little code, where every
    enforced rule counts from the start; or `legacy`, for existing code, where existing breaches
    are inherited and R6, R19, R21, and R22 start advisory.
-3. The model names the project's adapter, the command that prints the code's dependency facts. If
-   the project has none, copy the adapter template folder for its language from the skill's
-   `adapter-templates` assets into the project, follow its README, and check the output against
-   `references/adapter-contract.md`. The adapter command is the line that runs the copied script.
-4. Run `arch model init --start <greenfield|legacy> --adapter "<command>"`. Add
-   `--record-mode local` if the user does not want the record committed. If the project has the
-   four model files of the earlier format instead, run `arch model migrate`, then
-   `arch model set-adapter "<command>"`. A new model has no components yet.
-5. Run `arch model validate`. Exit 0 means the model fits the code: go to step 7. Exit 2 with
-   `model does not fit the code:` or "the model has no components" means it needs classifying:
-   keep the message and continue. Any other exit 2 is a failure; see the last line.
-6. Run `arch uncovered`, which lists the uncovered modules (exit 1) or nothing (exit 0). Dispatch
-   `architecture-classifier` with that list, the message step 5 kept,
+3. If the project has no adapter, the command that prints its dependency facts, copy the adapter
+   template folder for its language from the skill's `adapter-templates` assets into the project,
+   follow its README, and check its output against `references/adapter-contract.md`.
+4. Run `arch model init --start <greenfield|legacy> --adapter "<command>"`, where `<command>` runs
+   the adapter, with `--record-mode local` if the user does not want the record committed. A project with the four
+   model files of the earlier format runs `arch model migrate`, then
+   `arch model set-adapter "<command>"`, instead.
+5. Run `arch model validate`. Exit 0: continue. Exit 2 with `model does not fit the code:` or "the
+   model has no components": keep the message and continue. Any other exit 2 is a failure.
+6. Run `arch uncovered`. If it exits 0 and step 5 kept no message, go to step 8. Exit 1 lists the
+   uncovered modules, which `validate` does not report.
+7. Dispatch `architecture-classifier` with those modules, the message step 5 kept,
    `references/classification.md`, `references/rules/vocabulary.md`, and the baseline. For a
    greenfield project it proposes the first two or three intended components and how the build
    will enforce their boundaries; for a legacy project it classifies what exists. It returns
    `arch model` commands, one per line, each with a one-sentence reason, such as
    `arch model add-component <name> paths=<globs>` and
    `arch model classify <component> <pattern> <kind>`. Run them and go back to step 5.
-7. Run `arch collect`. It rewrites `current.md` in the record path.
-8. Run `arch check --out .architecture/work/check.json`. Exit 1 means an enforced rule is breached;
+8. Run `arch collect`. It rewrites `current.md` in the record path.
+9. Run `arch check --out .architecture/work/check.json`. Exit 1 means an enforced rule is breached;
    continue either way.
-9. Run `arch applicable --all --json`. If `review` is `false`, no judgment condition applies: go
-   to step 12 and leave out `--judged`.
-10. Dispatch, in parallel, one `architecture-reviewer` for each rule group in `groups` other than
+10. Run `arch applicable --all --json`. If `review` is `false`, go to step 13 without `--judged`.
+11. Dispatch, in parallel, one `architecture-reviewer` for each rule group in `groups` other than
     `cross-cutting`, or one for `cross-cutting` when it is the only group. Each packet names each
-    file once: the flow `audit` and the scope, the whole project; the check output
-    `.architecture/work/check.json`; `references/rules/vocabulary.md`;
-    `references/rules/cross-cutting.md` with the `cross-cutting` ids from `judgments`; the group's
-    own file (for example `references/rules/dependency-direction.md`) with its ids; and whether
-    design or topology decisions are in scope. Each returns judged findings:
+    file once: the flow `audit` and the scope, the whole project; `.architecture/work/check.json`;
+    `references/rules/vocabulary.md`; `references/rules/cross-cutting.md` with the `cross-cutting`
+    ids from `judgments`; the group's own file (for example
+    `references/rules/dependency-direction.md`) with its ids; and whether design or topology
+    decisions are in scope. Each returns judged findings:
 
     ```json
     { "findings": [ { "judgment": "<judgment id>", "target": "<unit, edge, port, or component>",
@@ -56,35 +54,36 @@ under `.architecture/work/`. Terms are defined in `references/rules/vocabulary.m
       "questions": ["<question for the owner>"] }
     ```
 
-    An audit finding has no `origin` and no `wider`, and never sets `rules`, `defect`, or
-    `severity`. A classification dispute goes once to `architecture-classifier`; run its commands
-    and step 8 again, and the same reviewer continues.
-11. Put the questions to the user. Give each confirmed answer to the reviewer that asked; it sets
-    `liftedBy` to that exact text where the answer makes a finding heavier. If the owner wants the
-    answer remembered, run `arch model add-upcoming "<text>"`. Drop answered questions. Write each
-    reviewer's judged findings to its own file, `.architecture/work/judged-<group>.json`.
-12. Run `arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-<group>.json --upcoming "<upcoming change>"`.
-    Give `--judged` once per reviewer file and `--upcoming` once per confirmed answer. A `liftedBy`
-    that names none of them and no change recorded with `add-upcoming` is refused. It prints the
-    result.
-    A refusal names the file and the finding: send each problem to that reviewer, rewrite its
-    file, and run this step again. If it says the check is stale, run step 8 again, then this step.
-13. Run `arch findings list --rank`. It orders the findings by consequence within the components
+    An audit finding has no `origin` or `wider` and never sets `rules`, `defect`, or `severity`. A
+    classification dispute goes once to `architecture-classifier`; run its commands, then step 16.
+12. Put the questions to the user. Give each confirmed answer to the reviewer that asked; it sets
+    `liftedBy` to that exact text where the answer makes a finding heavier. To remember an answer,
+    run `arch model add-upcoming "<text>"`. Drop answered questions. Write each reviewer's judged
+    findings to its own file, `.architecture/work/judged-<group>.json`.
+13. Run `arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-<group>.json --upcoming "<upcoming change>"`,
+    with `--judged` once per reviewer file and `--upcoming` once per confirmed answer. A `liftedBy`
+    naming none of them and no change recorded with `add-upcoming` is refused. A refusal names the
+    file and the finding: send each problem to that reviewer, rewrite its file, and run this step
+    again. If it says the check is stale, run step 9 again, then this step.
+14. Run `arch findings list --rank`. It orders the findings by consequence within the components
     that changed most in the history window, and counts the rest per rule.
-14. If the user accepts a finding instead of fixing it, run the edit the user chooses:
-    `arch model add-exception <from> <to> rule=<R> reason="<text>"` for an edge,
-    `arch model add-exception <target> '*' rule=<R> reason="<text>"` for a unit, port, or component,
-    `arch model set-rule <R>[@<component>] off reason="<text>"` (or `advisory`) for a rule, or
-    `arch model set-threshold <knob> <value>` for a number. Then run steps 8 and 12 again with the
-    same judged files; the finding is counted under `Dropped:` or `Advisory:`.
-15. After code is fixed, run step 8 again, ask each reviewer to judge again only the findings it
-    raised, write its fresh file over the old one, and run step 12. Never pass judged findings
-    written before the fix.
-16. Read `record` in `architecture.json` in the record path (`docs/architecture/` unless the
+15. If the user accepts a finding instead of fixing it, run the edit the user chooses:
+    `arch model add-exception <from> <to> rule=<R> reason="<text>"` for an edge other than a cycle;
+    `arch model add-exception <target> '*' rule=<R> reason="<text>"` for a unit, a port
+    (`<path>#<Symbol>`), or a component, from the check or a reviewer;
+    `arch model set-rule <R>[@<component>] off reason="<text>"` (or `advisory`) for a rule, the
+    only way to accept a cycle; or `arch model set-threshold <knob> <value>`. Then run steps 8, 9,
+    13, and 14 again, in that order, with the same judged files; the finding moves to `Dropped:`
+    or `Advisory:`.
+16. After a fix to the code or the classification, run steps 8, 9, and 10 again. Each reviewer whose
+    group is still in `groups` judges again against the new `judgments`, and its fresh file replaces
+    the old one; drop the file of a group that left scope, and dispatch a reviewer for a group that
+    entered it. Then run steps 13 and 14. Never pass
+    judged findings written before the fix.
+17. Read `record` in `architecture.json` in the record path (`docs/architecture/` unless the
     project names another). If it is `committed`, tell the user to commit `architecture.json`,
-    `current.md`, and the copied adapter; if `local`, nothing is committed. `.architecture/` is
-    never committed.
-17. Return the printed result and the ranking. An audit has no origin, so every finding of an
-    enforced rule counts toward the verdict.
+    `current.md`, and the copied adapter; if `local`, nothing. `.architecture/` is never committed.
+18. Return the printed result and the ranking. Every finding of an enforced rule counts toward the
+    verdict, since an audit has no origin.
 
 If a command fails, it exits 2 and says what was wrong and what to do next; for more, read that subcommand's page, such as `references/commands/model.md`.

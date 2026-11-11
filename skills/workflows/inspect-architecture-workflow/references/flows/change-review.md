@@ -48,8 +48,7 @@ and paths that start with `references` are inside that folder. Working files liv
    `origin` is `inherited` for a defect the diff leaves in place. A target outside the diff adds
    `"wider": true`. `liftedBy` is optional. `rules`, `defect`, and `severity` are never set.
 8. If there are disputes, dispatch `architecture-classifier` once with the disputed paths and the
-   reviewer's reasons, run the commands it returns, run step 5 again, and ask the same reviewer to
-   finish against the new check output. No second reviewer is dispatched.
+   reviewer's reasons, run the commands it returns, then follow step 12; no second reviewer.
 9. Put each question to the user, or return the questions to the calling workflow to ask. Give each
    confirmed answer to the same reviewer, which sets `liftedBy` to that exact text where the answer
    makes a finding heavier. Drop answered questions; an unanswered one changes nothing and stays.
@@ -63,18 +62,21 @@ and paths that start with `references` are inside that folder. Working files liv
       to the reviewer, write its corrected judged findings, and run this step again.
     - If it says the check is stale or made with another base, run step 5 again, then this step.
 11. If the user accepts a finding instead of fixing it, run the edit the user chooses:
-    - an edge: `arch model add-exception <from> <to> rule=<R> reason="<text>"`;
-    - a unit, port, or component: `arch model add-exception <target> '*' rule=<R> reason="<text>"`;
-    - a whole rule, for the project or one component: `arch model set-rule <R>[@<component>] off reason="<text>"`,
-      or the same with `advisory` in place of `off`;
+    - an edge other than a cycle: `arch model add-exception <from> <to> rule=<R> reason="<text>"`;
+    - a unit, a port (`<path>#<Symbol>`), or a component, from the check or the reviewer:
+      `arch model add-exception <target> '*' rule=<R> reason="<text>"`;
+    - a whole rule, for the project or one component, and the only way to accept a cycle or an
+      incomplete condition: `arch model set-rule <R>[@<component>] off reason="<text>"`, or
+      `advisory` in place of `off`;
     - a number: `arch model set-threshold <knob> <value>`.
 
     Then run step 5 and step 10 again with the same judged findings file. The accepted finding is
-    counted under `Dropped:` (covered by an exception, or its rule off) or under `Advisory:`. An
-    incomplete condition is accepted the same way, by setting its rule to `advisory` or `off`.
-12. After the code is fixed, run step 5 again, ask the same reviewer to judge again only the
-    findings it raised, write its fresh judged findings over `.architecture/work/judged.json`, and
-    run step 10. Never pass judged findings written before the fix.
+    counted under `Dropped:` (an exception covers it, or its rule is off) or under `Advisory:`.
+12. After a fix to the code or to the classification, run steps 3 and 5 again: rule groups may
+    enter or leave scope. If `groups` is now empty, run step 10 without `--judged`. Otherwise ask
+    the same reviewer to judge again against the new `judgments`, not only its earlier findings,
+    write its fresh judged findings over `.architecture/work/judged.json`, and run step 10. Never
+    pass judged findings written before the fix.
 13. For a judged finding the fix resolved, offer a check that catches it next time:
     `arch model add-forbidden-edge <from> <to> reason="<text>"` for an edge, or
     `arch model set-threshold <knob> <value>` for a number. Run it only if the user agrees.

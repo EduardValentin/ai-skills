@@ -419,37 +419,63 @@ def test_every_flow_shows_judged_findings_in_a_code_block():
         assert any("findings" in block for block in blocks), f"{path.name} shows no judged findings shape"
 
 
-JUDGED_CONTROLLER_FINDING = {
-    "findings": [{
-        "judgment": "handler-holds-business-logic", "target": "src/web/payroll-controller.ts",
-        "consequence": "A pay rule change means editing the HTTP handler.",
-        "correction": "Move the validation into the payroll use case.",
-        "evidence": ["src/web/payroll-controller.ts:1"], "origin": "introduced",
-    }],
+def judged(judgment: str, target: str, evidence: str, **extra) -> dict:
+    return {
+        "judgment": judgment, "target": target, "consequence": "A pay rule change means editing this unit.",
+        "correction": "Move the rule into the payroll use case.", "evidence": [evidence], **extra,
+    }
+
+
+CHANGE_REVIEW_JUDGED = {
+    "findings": [
+        judged("handler-holds-business-logic", "src/web/payroll-controller.ts", "src/web/payroll-controller.ts:1",
+               origin="introduced"),
+        judged("consumer-uses-few-interface-members", "src/domain/clock.ts#Clock", "src/domain/clock.ts:1",
+               origin="introduced"),
+    ],
     "questions": [],
 }
 
 
-def change_with_a_new_external(tmp_path):
+def payroll_repository(tmp_path):
     root = copy_fixture("payroll", tmp_path / "payroll")
     init_repo(root)
-    git(["checkout", "-q", "-b", "feature"], root)
+    return root
+
+
+def add_to_adapter(root, *, modules=(), edges=()):
     adapter = json.loads((root / "adapter.json").read_text())
-    adapter["edges"].append({"from": "src/web/payroll-controller.ts", "external": {"name": "zod", "tag": "vendor"}})
+    adapter["modules"].extend(modules)
+    adapter["edges"].extend(edges)
     (root / "adapter.json").write_text(json.dumps(adapter, indent=2))
+
+
+def change_with_a_new_external(tmp_path):
+    root = payroll_repository(tmp_path)
+    git(["checkout", "-q", "-b", "feature"], root)
+    add_to_adapter(root, edges=[{"from": "src/web/payroll-controller.ts", "external": {"name": "zod", "tag": "vendor"}}])
     controller = root / "src/web/payroll-controller.ts"
     controller.write_text('import { z } from "zod";\n' + controller.read_text())
+    clock = root / "src/domain/clock.ts"
+    clock.write_text(clock.read_text() + "// read by the payroll controller\n")
     git(["commit", "-q", "-am", "controller imports a validation library"], root)
     return root
 
 
-class FlowRunner:
-    """Runs the change-review flow's own command lines, substituting only the placeholders."""
+def project_with_an_unclassified_module(tmp_path):
+    root = payroll_repository(tmp_path)
+    add_to_adapter(root, modules=[{"path": "src/reports/summary.ts", "exports": {"abstract": 0, "concrete": 1}}])
+    git(["commit", "-q", "-am", "a report module no component covers"], root)
+    return root
 
-    def __init__(self, root, values: dict):
+
+class FlowRunner:
+    """Runs a flow's own command lines, substituting only the placeholders."""
+
+    def __init__(self, flow: str, root, values: dict):
         self.root = root
         self.values = values
-        self.steps = numbered_steps(flow_file("change-review").read_text())
+        self.steps = numbered_steps(flow_file(flow).read_text())
 
     def commands(self, step: int) -> list[str]:
         return COMMAND_SPAN.findall(self.steps[step])
@@ -468,34 +494,62 @@ class FlowRunner:
     def run_step(self, step: int, **extra):
         return self.run(self.commands(step)[0], **extra)
 
-    def acceptance(self, fragment: str) -> str:
-        return next(line for line in self.commands(11) if fragment in line)
+    def command_in(self, step: int, fragment: str) -> str:
+        return next(line for line in self.commands(step) if fragment in line)
+
+    def judged_path(self, step: int, **extra):
+        args = self.substituted(self.command_in(step, "--judged"), extra)
+        return self.root / args[args.index("--judged") + 1]
 
 
-def test_the_change_review_flow_runs_as_written_through_an_acceptance(tmp_path):
+def test_the_change_review_flow_runs_as_written_through_acceptances(tmp_path):
     root = change_with_a_new_external(tmp_path)
-    flow = FlowRunner(root, {
-        "<ref>": "main", "<target>": "src/web/payroll-controller.ts",
-        "<upcoming change>": "a second payroll form", "<text>": "accepted by the owner",
+    flow = FlowRunner("change-review", root, {
+        "<ref>": "main", "<upcoming change>": "a second payroll form", "<text>": "accepted by the owner",
     })
-    status = flow.run_step(1)
-    assert json.loads(status.stdout)["model"] is True
+    assert json.loads(flow.run_step(1).stdout)["model"] is True
     applicable = json.loads(flow.run_step(3).stdout)
     assert applicable["review"] is True and "humble-objects" in applicable["groups"]
     assert flow.run_step(5).returncode in (0, 1)
-    judged = shlex.split(flow.commands(10)[0])
-    (root / judged[judged.index("--judged") + 1]).write_text(json.dumps(JUDGED_CONTROLLER_FINDING))
-    assert "Verdict: SHOULD_CHANGE: 0 blocker, 1 major" in flow.run_step(10).stdout
+    flow.judged_path(10).write_text(json.dumps(CHANGE_REVIEW_JUDGED))
+    assert "Verdict: SHOULD_CHANGE: 0 blocker, 2 major" in flow.run_step(10).stdout
 
-    assert flow.run(flow.acceptance("'*'"), **{"<R>": "R20"}).returncode == 0
+    star = flow.command_in(11, "'*'")
+    assert flow.run(star, **{"<target>": "src/web/payroll-controller.ts", "<R>": "R20"}).returncode == 0
+    assert flow.run(star, **{"<target>": "src/domain/clock.ts#Clock", "<R>": "R13"}).returncode == 0
     flow.run_step(5)
     accepted = flow.run_step(10).stdout
-    assert "Dropped: 1 (1 covered by an exception)" in accepted
+    assert "Dropped: 2 (2 covered by an exception)" in accepted
     assert "Verdict: INCOMPLETE" in accepted
 
-    assert flow.run(flow.acceptance("set-rule"), **{"<R>": "R13"}).returncode == 0
+    assert flow.run(flow.command_in(11, "set-rule"), **{"<R>": "R13"}).returncode == 0
     flow.run_step(5)
     assert "Verdict: OK" in flow.run_step(10).stdout
+
+
+def test_the_audit_flow_classifies_every_module_before_collecting(tmp_path):
+    root = project_with_an_unclassified_module(tmp_path)
+    flow = FlowRunner("audit", root, {
+        "<name>": "reports", "<globs>": "src/reports/**", "<component>": "reports", "<pattern>": "**",
+        "<kind>": "presenter", "<group>": "humble-objects", "<upcoming change>": "a second payroll form",
+    })
+    assert json.loads(flow.run_step(1).stdout)["model"] is True
+    assert flow.run_step(5).returncode == 0, "validate passes although a module is unclassified"
+    uncovered = flow.run_step(6)
+    assert uncovered.returncode == 1 and uncovered.stdout.split() == ["src/reports/summary.ts"]
+
+    for fragment in ["add-component", "classify"]:
+        assert flow.run(flow.command_in(7, fragment)).returncode == 0
+    assert flow.run_step(5).returncode == 0
+    reclassified = flow.run_step(6)
+    assert reclassified.returncode == 0 and reclassified.stdout.strip() == ""
+
+    assert flow.run_step(8).returncode == 0
+    assert flow.run_step(9).returncode in (0, 1)
+    assert json.loads(flow.run_step(10).stdout)["review"] is True
+    flow.judged_path(13).write_text(json.dumps({"findings": [], "questions": []}))
+    assert "# Architecture audit" in flow.run_step(13).stdout
+    assert "## Ranked by change volatility" in flow.run_step(14).stdout
 
 
 WORKING_FILES_SENTENCE = "Working files live under `.architecture/work/`"

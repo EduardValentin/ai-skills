@@ -72,13 +72,15 @@ and paths that start with `references` are inside that folder. Working files liv
     that have `"clarification": true`, each a `task` and the `fact` it leaves open. Report them
     apart from the findings: the plan is not concrete enough to review fully.
 11. If the verdict is `SHOULD_CHANGE` or `INCOMPLETE` and fewer than `planFixRounds` revisions have
-    been made, the plan's author revises the plan; count the revision, run steps 4 to 6 again,
-    ask the same reviewer to judge again only the findings it raised, write its fresh judged
-    findings over `.architecture/work/judged.json`, and run step 9. Never pass judged findings
-    written before the revision. After `planFixRounds` revisions, hand the remaining findings and
-    clarification requests to the user instead of another round.
+    been made, the plan's author revises the plan; count the revision and run steps 4 to 6 again,
+    since rule groups may enter or leave scope. The same reviewer judges again against the new
+    `judgments`, not only its earlier findings, and its fresh judged findings replace
+    `.architecture/work/judged.json` before step 9. Never pass judged findings written before the
+    revision. After `planFixRounds` revisions, hand the remaining findings and clarification
+    requests to the user instead of another round.
 12. Accepting a finding is a model edit the user makes after this flow: an exception
-    (`add-exception`), a rule status (`set-rule` with `advisory` or `off`), or a threshold
+    (`add-exception`, with `'*'` as its `to` end for a unit, port, or component), a rule status
+    (`set-rule` with `advisory` or `off`, the only way to accept a cycle), or a threshold
     (`set-threshold`). This flow only reports the finding.
 13. Return the printed result, the clarification requests, and the number of revisions. `OK`
     passes a gate; `SHOULD_CHANGE` and `INCOMPLETE` block it.
