@@ -40,6 +40,10 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
+def judgment_ids(out: dict, group: str) -> list[str]:
+    return [entry["id"] for entry in out["judgments"].get(group, [])]
+
+
 def applicable(root: Path, *args: str) -> dict:
     result = run_arch(["applicable", *args, "--json"], root)
     assert result.returncode == 0, result.stderr + result.stdout
@@ -82,8 +86,8 @@ def test_change_inside_one_component_needs_no_review(tmp_path: Path):
     assert out["reasons"] == [CONTAINED]
     assert out["groups"] == [] and out["judgments"] == {}
     assert out["uncovered"] == []
-    assert out["notReviewed"] == len([j for ids in applicable(root, "--base", "HEAD", "--full")["judgments"].values()
-                                      for j in ids])
+    assert out["notReviewed"] == len([j for entries in applicable(root, "--base", "HEAD", "--full")["judgments"].values()
+                                      for j in entries])
     assert out["notReviewed"] > 0
 
 
@@ -105,7 +109,7 @@ def test_full_reviews_a_contained_change_with_judgments_in_scope(tmp_path: Path)
     out = applicable(root, "--base", "HEAD", "--full")
     assert out["review"] is True
     assert "business-rule-placement" in out["groups"]
-    assert "entity-carries-framework-traits" in out["judgments"]["business-rule-placement"]
+    assert "entity-carries-framework-traits" in judgment_ids(out, "business-rule-placement")
     assert out["notReviewed"] == 0
     assert len(out["reasons"]) == 1 and "--full" in out["reasons"][0]
 
@@ -132,9 +136,9 @@ def test_custom_kind_stands_in_for_default_kinds_of_its_role(tmp_path: Path):
     edit_json(root / MODEL, custom_kind)
     touch(root, EMPLOYEE)
     out = applicable(root, "--base", "HEAD", "--full")
-    placement = out["judgments"]["business-rule-placement"]
+    placement = judgment_ids(out, "business-rule-placement")
     assert "entity-carries-framework-traits" in placement and "critical-rule-in-use-case" in placement
-    assert "device-unit-holds-logic" not in out["judgments"].get("humble-objects", [])
+    assert "device-unit-holds-logic" not in judgment_ids(out, "humble-objects")
 
 
 def test_new_cross_component_edge_needs_review(tmp_path: Path):
@@ -177,10 +181,10 @@ def test_groups_follow_touched_kinds(tmp_path: Path):
     touch(root, CONTROLLER)
     out = applicable(root, "--base", "HEAD", "--full")
     assert "humble-objects" in out["groups"]
-    assert "handler-holds-business-logic" in out["judgments"]["humble-objects"]
+    assert "handler-holds-business-logic" in judgment_ids(out, "humble-objects")
     assert set(out["groups"]) == set(out["judgments"])
-    assert "test-power-behind-flag" in out["judgments"]["tests"]
-    assert "rule-tested-through-volatile-surface" not in out["judgments"]["tests"]
+    assert "test-power-behind-flag" in judgment_ids(out, "tests")
+    assert "rule-tested-through-volatile-surface" not in judgment_ids(out, "tests")
 
 
 def test_group_is_dropped_when_its_rules_are_off(tmp_path: Path):
@@ -362,8 +366,8 @@ def test_all_puts_every_unit_and_component_in_scope(tmp_path: Path):
     out = applicable(root, "--all")
     assert out["review"] is True
     assert set(out["groups"]) == set(out["judgments"]) and len(out["groups"]) > 0
-    assert "entity-carries-framework-traits" in out["judgments"]["business-rule-placement"]
-    assert "handler-holds-business-logic" in out["judgments"]["humble-objects"]
+    assert "entity-carries-framework-traits" in judgment_ids(out, "business-rule-placement")
+    assert "handler-holds-business-logic" in judgment_ids(out, "humble-objects")
     assert "components-and-stability" in out["groups"]
     assert out["notReviewed"] == 0
 
@@ -389,6 +393,43 @@ def test_proposal_scope_is_its_modules_edges_and_components(tmp_path: Path):
     assert out["review"] is True
     assert any("adapters -> web" in reason for reason in out["reasons"]), out["reasons"]
     assert "components-and-stability" in out["groups"]
+
+
+PLAN_JUDGMENTS = {"structure-consequence-unstated": "cross-cutting", "plan-names-no-falsifying-tests": "tests",
+                  "plan-sequences-io-first": "deferral-and-boundaries"}
+
+
+def test_proposal_brings_the_plan_judgments_into_scope(tmp_path: Path):
+    root = repo(tmp_path)
+    contained = write_proposal(root, modules=[{"path": EMPLOYEE}], edges=[])
+    out = applicable(root, "--proposal", contained, "--full")
+    for judgment, group in PLAN_JUDGMENTS.items():
+        assert judgment in judgment_ids(out, group), judgment
+    audit = applicable(root, "--all")
+    assert not [j for j, group in PLAN_JUDGMENTS.items() if j in judgment_ids(audit, group)]
+
+
+def test_every_judgment_carries_its_targets_and_condition(tmp_path: Path):
+    root = repo(tmp_path)
+    proposal = write_proposal(root, modules=[{"path": EMPLOYEE}], edges=[])
+    for args in (["--all"], ["--files", EMPLOYEE, "--full"], ["--proposal", proposal, "--full"]):
+        out = applicable(root, *args)
+        assert out["judgments"], args
+        for entries in out["judgments"].values():
+            for entry in entries:
+                assert set(entry) == {"id", "targets", "condition"}, entry
+                assert entry["targets"] and entry["condition"].endswith("."), entry
+                assert "{" not in entry["condition"], entry
+    spans = next(e for e in applicable(root, "--all")["judgments"]["components-and-stability"]
+                 if e["id"] == "change-history-spans-groups")
+    assert "within 6 months" in spans["condition"] and spans["targets"] == ["component"]
+
+
+def test_all_lists_the_cross_cutting_judgments_once_under_their_own_group(tmp_path: Path):
+    out = applicable(repo(tmp_path), "--all")
+    ids = [entry["id"] for entries in out["judgments"].values() for entry in entries]
+    assert len(ids) == len(set(ids))
+    assert judgment_ids(out, "cross-cutting") == ["shape-mismatch-hidden"]
 
 
 def test_proposal_file_follows_the_work_placement_rule(tmp_path: Path):

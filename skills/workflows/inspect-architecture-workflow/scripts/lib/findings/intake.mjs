@@ -8,7 +8,7 @@ import { statusForRow } from "../checks/status.mjs";
 import { DEFAULT_KINDS } from "../model/defaults.mjs";
 import { validateShape } from "../model/validate-shape.mjs";
 import { evidenceProblems } from "./evidence.mjs";
-import { componentOfTarget, isInScope, recognizeTarget } from "./targets.mjs";
+import { componentOfTarget, isInScope, recognizeTarget, unitsOfTarget } from "./targets.mjs";
 
 const TEXT = { type: "string" };
 const SET_BY_JUDGMENT = ["rules", "defect", "severity"];
@@ -189,6 +189,7 @@ function buildFinding({ entry, judgment, row, context, flow, graph }) {
     wider: entry.wider === true,
     ...(entry.liftedBy && { liftedBy: entry.liftedBy }),
     component: componentOfTarget(graph, entry.target),
+    units: unitsOfTarget(graph, entry.target, judgment.defect),
   };
 }
 

@@ -2,7 +2,7 @@ import { highestSeverity } from "../checks/escalate.mjs";
 import { ruleNumber } from "../checks/rule-titles.mjs";
 import { strictest } from "../checks/status.mjs";
 import { naturalOrder } from "../checks/targets.mjs";
-import { componentOfTarget, isInScope } from "./targets.mjs";
+import { componentOfTarget, isInScope, unitsOfTarget } from "./targets.mjs";
 
 export const CODE_SCOPE = "code";
 
@@ -26,6 +26,7 @@ export function checkFinding(row, graph) {
     evidence: [row.evidence],
     wider: false,
     component: componentOfTarget(graph, row.target),
+    units: unitsOfTarget(graph, row.target, row.defect),
   };
 }
 

@@ -34,6 +34,14 @@ export function recognizeTarget(graph, target) {
   return null;
 }
 
+const CYCLE_DEFECT = "cycle";
+
+export function unitsOfTarget(graph, target, defect) {
+  if (defect === CYCLE_DEFECT) return [];
+  const units = new Set(graph.units.map((unit) => unit.path));
+  return [...new Set(partsOf(target))].filter((part) => units.has(part));
+}
+
 export function componentOfTarget(graph, target) {
   const [first] = partsOf(target);
   const unit = graph.units.find((candidate) => candidate.path === first);

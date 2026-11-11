@@ -150,7 +150,8 @@ async function ranking(root, store, flags) {
   const model = loadModel(root, flags);
   if (!model) throw new UsageError("--rank needs the architecture model. Run arch model init, then rank again.");
   const commits = await componentCommitCounts({ model, root });
-  return rankData({ findings: contractData(store).findings, commits, window: model.thresholds.historyWindow });
+  const ranked = contractData(store).findings.filter((finding) => !finding.wider);
+  return rankData({ findings: ranked, commits, window: model.thresholds.historyWindow });
 }
 
 async function list(args, { root }) {

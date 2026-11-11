@@ -79,8 +79,20 @@ function componentTargets(additions) {
   return [...new Set(names)].map((name) => ({ kind: "component", component: name }));
 }
 
-export function judgmentTargets(model, { units, additions }) {
-  return [...unitTargets(model, units), ...componentTargets(additions)];
+const PLAN_TARGETS = [{ kind: "plan", component: null }];
+
+export function judgmentTargets(model, { units, additions, plan = false }) {
+  return [...unitTargets(model, units), ...componentTargets(additions), ...(plan ? PLAN_TARGETS : [])];
+}
+
+const KNOB = /\{([A-Za-z]+)\}/g;
+
+function conditionFor(model, judgment) {
+  return judgment.condition.replace(KNOB, (knob, name) => String(model.thresholds[name] ?? knob));
+}
+
+function judgmentEntry(model, judgment) {
+  return { id: judgment.id, targets: judgment.targets, condition: conditionFor(model, judgment) };
 }
 
 function rulesInScope(model, judgment, targets) {
@@ -97,7 +109,7 @@ export function judgmentScope(model, targets) {
     if (rules.length === 0) continue;
     if (!byGroup.has(judgment.group)) byGroup.set(judgment.group, { judgments: [], rules: new Set() });
     const entry = byGroup.get(judgment.group);
-    entry.judgments.push(judgment.id);
+    entry.judgments.push(judgmentEntry(model, judgment));
     for (const rule of rules) entry.rules.add(rule);
   }
   return [...byGroup].map(([group, entry]) => ({

@@ -188,8 +188,64 @@ def test_out_of_scope_finding_needs_the_wider_mark(tmp_path):
     assert_refused(refused, root, CONTROLLER, "wider")
     accepted = change_review(root, tmp_path, finding(target=CONTROLLER, wider=True))
     assert accepted.returncode == 0, accepted.stderr
-    assert "Wider observations: 1" in accepted.stdout
+    assert f"Wider observations:\n- R10 One actor per module: {CONTROLLER}:" in accepted.stdout
     assert "Verdict: OK" in accepted.stdout
+
+
+SPLIT = "Split the reporting behavior into its own unit."
+ACTORS_LINE = f"- R10 One actor per module: {{target}}: Payroll and reporting changes now edit the same unit. Fix: {SPLIT}"
+
+
+def test_inherited_and_wider_findings_are_listed_one_line_each(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    wider = finding(target=CONTROLLER, wider=True, evidence=[f"{CONTROLLER}:1"])
+    result = change_review(root, tmp_path, finding(origin="inherited"), wider)
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    inherited = lines.index("Inherited findings:")
+    assert lines[inherited + 1] == ACTORS_LINE.format(target=EMPLOYEE)
+    observations = lines.index("Wider observations:")
+    assert lines[observations + 1] == ACTORS_LINE.format(target=CONTROLLER)
+    listed = run_arch(["findings", "list"], root).stdout
+    assert "Inherited findings:" in listed and "Wider observations:" in listed
+
+
+def test_empty_finding_sections_are_left_out(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path, finding())
+    assert result.returncode == 0, result.stderr
+    for heading in ("Inherited findings:", "Wider observations", "Overlapping findings:"):
+        assert heading not in result.stdout
+
+
+def test_findings_of_one_unit_with_different_corrections_are_grouped_as_overlapping(tmp_path):
+    root = workspace(tmp_path)
+    seed_policy_to_detail_edge(root)
+    touch(root, EMPLOYEE)
+    result = change_review(root, tmp_path, finding())
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    start = lines.index("Overlapping findings:")
+    assert lines[start + 1] == f"- {EMPLOYEE}:"
+    group = lines[start + 2:start + 4]
+    assert group[0].startswith("  - R4 Dependencies point toward policy; ")
+    assert f": {EMPLOYEE_TO_CLOCK}: Fix: Depend on the existing port `Clock`" in group[0]
+    assert group[1] == f"  - R10 One actor per module: {EMPLOYEE}: Fix: {SPLIT}"
+    overlaps = json.loads(run_arch(["findings", "list", "--json"], root).stdout)["overlaps"]
+    assert [entry["unit"] for entry in overlaps] == [EMPLOYEE]
+    assert [f["target"] for f in overlaps[0]["findings"]] == [EMPLOYEE_TO_CLOCK, EMPLOYEE]
+
+
+def test_findings_of_one_unit_with_the_same_correction_do_not_overlap(tmp_path):
+    root = workspace(tmp_path)
+    touch(root, EMPLOYEE)
+    second = finding("entity-carries-framework-traits", EMPLOYEE)
+    result = change_review(root, tmp_path, finding(), second)
+    assert result.returncode == 0, result.stderr
+    assert "Overlapping findings:" not in result.stdout
+    assert json.loads(run_arch(["findings", "list", "--json"], root).stdout)["overlaps"] == []
 
 
 def test_lift_needs_a_confirmed_upcoming_change(tmp_path):
@@ -455,6 +511,20 @@ def test_rank_orders_by_component_volatility(tmp_path):
     assert ranked.stdout.index("no commits in 6 months") < ranked.stdout.index("domain: R10")
 
 
+def test_rank_lists_wider_observations_apart_from_the_ranking(tmp_path):
+    root = workspace(tmp_path)
+    wider = finding(target=CLOCK, evidence=[f"{CLOCK}:1"], wider=True)
+    assert audit(root, tmp_path, finding(), wider).returncode == 0
+    ranked = run_arch(["findings", "list", "--rank"], root)
+    assert ranked.returncode == 0, ranked.stderr
+    contract, ranking = ranked.stdout.split("## Ranked by change volatility")
+    assert f"Wider observations:\n- R10 One actor per module: {CLOCK}:" in contract
+    assert f": {CLOCK}: " not in ranking and f"[major] R10 One actor per module: {EMPLOYEE}: " in ranking
+    data = json.loads(run_arch(["findings", "list", "--rank", "--json"], root).stdout)["ranking"]
+    ranked_targets = [f["target"] for entry in data["volatile"] for f in entry["findings"]]
+    assert CLOCK not in ranked_targets and EMPLOYEE in ranked_targets
+
+
 def test_rank_is_only_for_an_audit(tmp_path):
     root = workspace(tmp_path)
     touch(root, EMPLOYEE)
@@ -497,7 +567,7 @@ def test_wider_on_an_in_scope_target_is_reported_apart_and_never_blocks(tmp_path
     assert "Verdict: SHOULD_CHANGE" in blocking.stdout, blocking.stdout + blocking.stderr
     result = change_review(root, tmp_path, finding(wider=True))
     assert result.returncode == 0, result.stderr
-    assert "Wider observations: 1" in result.stdout
+    assert f"Wider observations:\n- R10 One actor per module: {EMPLOYEE}:" in result.stdout
     assert "Verdict: OK" in result.stdout
     assert stored(root, EMPLOYEE)["wider"] is True
 

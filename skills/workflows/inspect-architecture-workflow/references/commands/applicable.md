@@ -22,7 +22,7 @@ arch applicable --all
 |---|---|---|
 | `--base` | a branch, tag, or commit | The scope is a change: everything that differs from that commit. |
 | `--files` | comma-separated paths from the project root | The scope is these files, classified by the model as they stand. Additions such as a new component edge are not detected. |
-| `--proposal` | a proposal, a working file | The scope is a plan: the proposal's modules and edges, and the components and component edges they add. The file has the shape `arch check` reads with `--proposal`. |
+| `--proposal` | a proposal, a working file | The scope is a plan: the proposal's modules and edges, the components and component edges they add, and the plan itself, so the judgments whose target is `plan` are in scope. The file has the shape `arch check` reads with `--proposal`. |
 | `--all` | none | The scope is every unit and component, as in an audit. A review is needed whenever any judgment condition is in scope. |
 | `--full` | none | With `--base`, `--files`, or `--proposal`: list every judgment condition in scope even when the scope is contained in one component. `--all` already lists them all. |
 | `--json` | none | Print the JSON output instead of the report. |
@@ -50,7 +50,10 @@ The report prints "Review needed: yes" or "no", the reasons, each rule group wit
 conditions in scope and its rules, the uncovered files, and the count of conditions not reviewed.
 
 The JSON output has `model`; `review`, true or false; `reasons`; `groups`, the rule-group names,
-each the name of a rule-group file; `judgments`, the judgment ids in scope per group; `uncovered`,
+each the name of a rule-group file; `judgments`, the judgments in scope per group, each with its
+`id`, its `targets`, and its one-sentence `condition` with the project's knob values filled in,
+so a caller can hand a reviewer the conditions as they are; with `--all`, the cross-cutting
+judgments are listed once under `cross-cutting`; `uncovered`,
 the paths in scope no pattern covers; and `notReviewed`, the count of judgment conditions a
 contained scope left out. Without a model it is
 `{"model":false,"review":false,"reasons":["no architecture model; run a baseline audit to enable the full review"]}`
@@ -87,7 +90,7 @@ Rule groups with judgment conditions:
 - none
 Uncovered files:
 - none
-Judgment conditions not reviewed for a contained change: 22. Pass --full to review them.
+Judgment conditions not reviewed for a contained change: 27. Pass --full to review them.
 ```
 
 With `--all`, the known-defects fixture prints "Review needed: yes" with the reason "audit: every

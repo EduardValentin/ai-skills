@@ -71,6 +71,7 @@ async function scopeFromProposal(root, model, flags) {
     components: touched.components,
     uncovered: touched.uncovered,
     additions: changeAdditions({ model, baseGraph, graph, renames: touched.renames }),
+    plan: true,
   };
 }
 

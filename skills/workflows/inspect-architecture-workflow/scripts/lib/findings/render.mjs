@@ -1,14 +1,11 @@
 import { highestSeverity } from "../checks/escalate.mjs";
 import { ruleNumber, titledRule } from "../checks/rule-titles.mjs";
 import { naturalOrder } from "../checks/targets.mjs";
+import { plural } from "../text.mjs";
 import { SEVERITIES, classifyFindings, computeVerdict } from "./verdict.mjs";
 
 export const NO_COMPONENT = "no component";
 const COVERED_REASON = "covered by an exception";
-
-function plural(count, noun) {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
 
 function sentence(text) {
   return /[.!?]$/.test(text) ? text : `${text}.`;
@@ -54,6 +51,21 @@ function runFindings(store) {
   return store.findings.filter((finding) => keys.has(JSON.stringify([finding.target, finding.defect, finding.scope])));
 }
 
+function overlapEntry(finding) {
+  return { target: finding.target, defect: finding.defect, rules: finding.rules, correction: finding.correction };
+}
+
+function overlappingFindings(findings) {
+  const byUnit = new Map();
+  for (const finding of findings) {
+    for (const unit of finding.units ?? []) byUnit.set(unit, [...(byUnit.get(unit) ?? []), finding]);
+  }
+  return [...byUnit.entries()]
+    .filter(([, group]) => new Set(group.map((finding) => finding.correction)).size > 1)
+    .sort(([a], [b]) => naturalOrder(a, b))
+    .map(([unit, group]) => ({ unit, findings: group.map(overlapEntry) }));
+}
+
 export function contractData(store) {
   const { lastRun } = store;
   const findings = runFindings(store);
@@ -72,6 +84,7 @@ export function contractData(store) {
     questions: lastRun.questions,
     covered: lastRun.covered ?? 0,
     dropped: lastRun.dropped ?? [],
+    overlaps: overlappingFindings(findings),
     findings,
   };
 }
@@ -94,9 +107,39 @@ function notRunLine(entry) {
 }
 
 function correctionLine(correction, index) {
-  const rules = correction.rules.map(titledRule).join("; ");
+  const rules = rulesText(correction.rules);
   const where = correction.targets.join("; ");
   return `${index + 1}. ${rules}: ${where}: ${correction.consequence} Fix: ${correction.correction}`;
+}
+
+function rulesText(rules) {
+  return rules.map(titledRule).join("; ");
+}
+
+function findingLine(finding) {
+  const consequence = sentence(finding.consequence);
+  return `- ${rulesText(finding.rules)}: ${finding.target}: ${consequence} Fix: ${finding.correction}`;
+}
+
+function overlapLine(entry) {
+  return `  - ${rulesText(entry.rules)}: ${entry.target}: Fix: ${entry.correction}`;
+}
+
+function overlapLines(overlap) {
+  return [`- ${overlap.unit}:`, ...overlap.findings.map(overlapLine)];
+}
+
+function sectionOf(title, lines) {
+  return lines.length > 0 ? [[`${title}:`, ...lines].join("\n")] : [];
+}
+
+function findingSections(data) {
+  const groups = classifyFindings(data.findings, data.flow);
+  return [
+    ...sectionOf("Inherited findings", groups.inherited.map(findingLine)),
+    ...sectionOf("Wider observations", groups.wider.map(findingLine)),
+    ...sectionOf("Overlapping findings", data.overlaps.flatMap(overlapLines)),
+  ];
 }
 
 function droppedLine(data) {
@@ -133,7 +176,7 @@ export function renderContract(data) {
     droppedLine(data),
     `Rules not enforced: ${listOrNone(data.notEnforced.map(notEnforcedLine))}`,
     corrections.length > 0 ? ["Corrections:", ...corrections].join("\n") : "Corrections: none",
-    `Wider observations: ${data.wider}`,
+    ...findingSections(data),
     `Questions for the user: ${data.questions.length}`,
     ...data.questions.map((question) => `- ${question}`),
   ].join("\n");

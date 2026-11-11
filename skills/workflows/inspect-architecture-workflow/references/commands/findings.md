@@ -87,17 +87,23 @@ in that file, such as `.architecture/work/judged.json: findings[0] (src/domain/p
 The printed result has one line each for the verdict with its blocking counts by severity, the
 inherited counts, the incomplete conditions and why, the checks not run, the advisory findings,
 `Dropped:` with the count of findings an exception covers or whose rule is off and the reasons,
-and the rules not enforced; then the corrections, grouped by correction and ordered by severity;
-then the count of wider observations and each question for the user. The verdict is `OK`,
+and the rules not enforced; then the corrections, grouped by correction and ordered by severity.
+Then come three sections, each left out when it is empty: `Inherited findings:` and `Wider
+observations:`, one line per finding in the form `<rule numbers and titles>: <target>:
+<consequence> Fix: <correction>`, and `Overlapping findings:`, one group per unit that two or more
+findings of this run name as their target or as an edge end with different corrections, so the
+fixes can be weighed together. Last come the questions for the user. The verdict is `OK`,
 `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE`
 when none is and a condition of an enforced rule could not be decided. With `--rank`, a ranking
-follows. Without a model, the result is the verdict `OK` and the line "no architecture model; run a
+follows; wider observations stay in their own section and are not ranked. Without a model, the result is the verdict `OK` and the line "no architecture model; run a
 baseline audit to enable the full review".
 
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
 `advisory`, `covered` (check findings an exception covered), `dropped` (each dropped judged finding
 with its `target`, `judgment`, and `reason`), `wider`, `incompleteCount`, `incompleteReasons`,
-`notRun`, `notEnforced`, `corrections`, `questions`, `findings`, and with `--rank` a `ranking`.
+`notRun`, `notEnforced`, `corrections`, `questions`, `overlaps` (each overlapping `unit` with its
+`findings`, each with `target`, `defect`, `rules`, and `correction`), `findings`, and with `--rank`
+a `ranking`.
 
 ## Example
 
@@ -115,14 +121,21 @@ Advisory: 0 findings
 Dropped: 0
 Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
 Corrections:
-1. R30 No dependency cycles: adapters -> domain: component cycle through ... Fix: Break the cycle adapters -> domain: define the needed interface in the side that needs it and have the other implement it, or extract a cohesive leaf both depend on
+1. R30 No dependency cycles: adapters -> domain: A change to any component in adapters -> domain can force a change to all of them, so none can be released or tested alone. Fix: Break the cycle adapters -> domain by removing one of its edges: move what that edge uses into the depending side, or merge the members if they always change together; only if the dependency must stay, have the side that needs it declare an interface the other side implements
+3. R4 Dependencies point toward policy; R5 The consumer owns the port: src/domain/payroll-use-case.ts -> src/adapters/system-clock.ts: A change to src/adapters/system-clock.ts can force a change to the business rule in src/domain/payroll-use-case.ts, which cannot be tested without it. Fix: Depend on the existing port `Clock` in `src/domain/clock.ts` instead of src/adapters/system-clock.ts, and have the composition root pass src/adapters/system-clock.ts to src/domain/payroll-use-case.ts
 5. R23 Defer unforced decisions: src/domain/payroll-use-case.ts: Swapping the clock for tests or another runtime means editing the use case. Fix: Take the Clock port in the constructor and drop the SystemClock import.
-Wider observations: 0
+Inherited findings:
+- R38 Enforce boundaries with the build: domain: Nothing stops code from reaching into domain, so its boundary erodes unnoticed and its internals become hard to change. Fix: Enforce the boundary of domain with the compiler or the build, then record how in its enforcement field
+Overlapping findings:
+- src/domain/payroll-use-case.ts:
+  - R4 Dependencies point toward policy; R5 The consumer owns the port: src/domain/payroll-use-case.ts -> src/adapters/system-clock.ts: Fix: Depend on the existing port `Clock` in `src/domain/clock.ts` instead of src/adapters/system-clock.ts, and have the composition root pass src/adapters/system-clock.ts to src/domain/payroll-use-case.ts
+  - R23 Defer unforced decisions: src/domain/payroll-use-case.ts: Fix: Take the Clock port in the constructor and drop the SystemClock import.
 Questions for the user: 1
 - Will payroll run in a second time zone this year?
 ```
 
-Corrections 2 to 4 and the cycle's full path are left out here for length.
+Corrections 2 and 4 are left out here for length. The overlapping group shows that the check's
+correction and the reviewer's describe one fix.
 
 Accepting a judged finding: on the payroll fixture after a commit that makes the payroll controller
 import a new external, a reviewer judged `handler-holds-business-logic` (R20) on
@@ -143,9 +156,14 @@ Advisory: 0 findings
 Dropped: 1 (1 covered by an exception)
 Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
 Corrections: none
-Wider observations: 0
+Inherited findings:
+- R7 Lower-level components are plugins: src/web/payroll-controller.ts -> src/adapters/pg-payroll-repository.ts: Replacing or reconfiguring src/adapters/pg-payroll-repository.ts means editing src/web/payroll-controller.ts, which cannot be tested with a stand-in. Fix: Move the construction of src/adapters/pg-payroll-repository.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `PayrollRepository` in `src/domain/payroll-repository.ts`
+- R7 Lower-level components are plugins: src/web/payroll-controller.ts -> src/adapters/system-clock.ts: Replacing or reconfiguring src/adapters/system-clock.ts means editing src/web/payroll-controller.ts, which cannot be tested with a stand-in. Fix: Move the construction of src/adapters/system-clock.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `Clock` in `src/domain/clock.ts`
 Questions for the user: 0
 ```
+
+The Overlapping findings section, which groups the two construction findings of
+`src/web/payroll-controller.ts`, is left out here for length.
 
 The verdict is `INCOMPLETE` because the adapter does not provide `typeChecks`, which an enforced
 condition of R13 needs.
@@ -156,7 +174,7 @@ other only a question, stores both files' content in one result:
 ```
 $ arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-deferral-and-boundaries.json --judged .architecture/work/judged-tests.json
 # Architecture audit: all components
-Verdict: SHOULD_CHANGE: 18 blocker, 10 major, 3 minor blocking
+Verdict: SHOULD_CHANGE: 19 blocker, 10 major, 3 minor blocking
 Inherited: 0 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 0 conditions
 Not run: zone-of-pain (needs --base), no-cohesion-groups (needs --base), change-spans-groups (needs --base)
@@ -164,10 +182,10 @@ Advisory: 0 findings
 Dropped: 0
 Rules not enforced: none
 Corrections:
-21. R23 Defer unforced decisions: src/lending/loan-use-case.ts: Moving loans to another store means editing the lending rules. Fix: Take the LoanStore port in the constructor instead of the SQL store.
-Wider observations: 0
+20. R23 Defer unforced decisions: src/lending/loan-use-case.ts: Moving loans to another store means editing the lending rules. Fix: Take the LoanStore port in the constructor instead of the SQL store.
 Questions for the user: 1
 - Will a second team own the storage component this year?
 ```
 
-Thirty of the thirty-one corrections are left out here for length.
+Twenty-nine of the thirty corrections, and the Overlapping findings section, which groups the
+findings of nine units, are left out here for length.
