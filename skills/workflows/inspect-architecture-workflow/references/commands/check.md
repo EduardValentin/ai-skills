@@ -23,7 +23,7 @@ arch check --strict
 | `--base` | a branch, tag, or commit | Compare with that commit: build its graph with the current model and mark each finding `introduced` or `inherited`. Only findings in the touched scope are reported. |
 | `--proposal` | a proposal file | Check the current code plus a plan's proposed facts (shape below). Cannot be combined with `--base`. The proposal is a working file. |
 | `--out` | a working file | Write the JSON output there and print one line. |
-| `--strict` | none | Also exit 1 when a condition of an enforced rule could not be decided. |
+| `--strict` | none | Also exit 1 on a minor finding of an enforced rule, and when a condition of an enforced rule could not be decided. |
 | `--json` | none | Print the JSON output instead of the report. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
@@ -34,8 +34,8 @@ inside the project, because it would change the reviewed state.
 
 | Code | Meaning |
 |---|---|
-| 0 | No enforced rule is breached, or there is no model. With `--base` or `--proposal`, no introduced breach. A breach a recorded exception covers does not count. |
-| 1 | An enforced rule is breached (with `--base` or `--proposal`, by an introduced finding), or `--strict` and an enforced condition is incomplete. |
+| 0 | No finding of an enforced rule is a blocker or major, or there is no model. With `--base` or `--proposal`, no introduced one is. Minor findings are printed and do not fail. A breach a recorded exception covers does not count. |
+| 1 | A finding of an enforced rule is a blocker or major (with `--base` or `--proposal`, an introduced one), the same line the findings verdict draws. With `--strict`, also a minor finding of an enforced rule, or an incomplete condition of an enforced rule. |
 | 2 | An invalid model, an adapter failure, an invalid proposal, or a usage error. |
 
 ## Output
@@ -103,5 +103,5 @@ $ arch check
 - R6 Use cases own their boundaries: off (one delivery mechanism; controllers call use cases directly)
 ```
 
-Two of the four rows are left out here for length; the command exits 1 because enforced rules are
-breached.
+Two of the four rows are left out here for length; the command exits 1 because findings of
+enforced rules are blockers and majors.

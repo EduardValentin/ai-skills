@@ -1,7 +1,7 @@
 import { concernsEnforcedRule } from "../checks/status.mjs";
 
 export const SEVERITIES = ["blocker", "major", "minor"];
-const STOPPING = ["blocker", "major"];
+export const STOPPING = ["blocker", "major"];
 
 function blocks(finding, flow) {
   if (flow === "audit" || finding.origin === "introduced") return true;

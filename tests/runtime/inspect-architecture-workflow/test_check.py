@@ -566,6 +566,23 @@ def test_without_base_any_enforced_breach_exits_1(tmp_path: Path):
     assert run_arch(["check"], root).returncode == 1
 
 
+def test_an_enforced_minor_row_is_printed_and_fails_only_under_strict(tmp_path: Path):
+    root = copy_fixture("over-engineered", tmp_path / "p")
+    plain = run_arch(["check"], root)
+    assert plain.returncode == 0, plain.stderr
+    assert "| contracts | minor | enforced |" in plain.stdout and "| hooks | minor | enforced |" in plain.stdout
+    assert run_arch(["check", "--strict"], root).returncode == 1
+
+
+def test_an_inherited_minor_row_does_not_fail_even_under_strict(tmp_path: Path):
+    root = copy_fixture("over-engineered", tmp_path / "p")
+    (root / ".gitignore").write_text(".architecture/\n")
+    init_repo(root)
+    touch(root, "src/contracts/note-events.ts")
+    out = check_output(root, "--base", "HEAD", "--strict", exit_code=0)
+    assert [(row["target"], row["origin"]) for row in out["rows"]] == [("contracts", "inherited")]
+
+
 def test_with_base_only_introduced_breach_exits_1(tmp_path: Path):
     root = repo(tmp_path)
     init_repo(root)

@@ -7,6 +7,7 @@ import { runChecks } from "../checks/run.mjs";
 import { touchedScope } from "../checks/scope.mjs";
 import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
 import { runRecord } from "../findings/binding.mjs";
+import { STOPPING } from "../findings/verdict.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
@@ -43,9 +44,13 @@ async function subjectOf(root, model, flags) {
   return { graph, baseGraph, touched, history: await historyOf(root, model), clarifications: [] };
 }
 
-function breaches(result, flags) {
+function countedRows(result, flags) {
   const compared = flags.base || flags.proposal;
-  return result.rows.some((row) => row.status === "enforced" && (!compared || row.origin === "introduced"));
+  return result.rows.filter((row) => row.status === "enforced" && (!compared || row.origin === "introduced"));
+}
+
+function breaches(result, flags) {
+  return countedRows(result, flags).some((row) => flags.strict || STOPPING.includes(row.severity));
 }
 
 function leavesEnforcedRuleUndecided(result, model, flags) {

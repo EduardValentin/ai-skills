@@ -35,14 +35,16 @@ function coversTarget(exception, subject) {
   return exception.to === ANY_DESTINATION && endMatches(exception.from, subject);
 }
 
-function covers(exception, row, context) {
-  if (exception.rule && !row.rules.includes(exception.rule)) return false;
+function coversEnds(exception, row, context) {
   if (row.edge) return coversEdge(exception, row.edge, context);
   if (row.defect === CYCLE_DEFECT) return false;
   const subject = subjectOfTarget(row.target, context);
   return subject !== null && coversTarget(exception, subject);
 }
 
-export function isCoveredByException(row, context) {
-  return context.model.exceptions.some((exception) => covers(exception, row, context));
+export function rulesLeftUncovered(row, context) {
+  const covering = context.model.exceptions.filter((exception) => coversEnds(exception, row, context));
+  if (covering.some((exception) => !exception.rule)) return [];
+  const excepted = new Set(covering.map((exception) => exception.rule));
+  return row.rules.filter((rule) => !excepted.has(rule));
 }

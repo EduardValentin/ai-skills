@@ -1,6 +1,6 @@
 import { createContext, rowComponents } from "./context.mjs";
 import { escalateRow, highestSeverity } from "./escalate.mjs";
-import { isCoveredByException } from "./exceptions.mjs";
+import { rulesLeftUncovered } from "./exceptions.mjs";
 import { createOriginResolver } from "./origin.mjs";
 import { CHECKS } from "./registry.mjs";
 import { ruleNumber } from "./rule-titles.mjs";
@@ -25,6 +25,7 @@ function mergeGroup(rows) {
     evidence: union(rows.map((row) => [row.evidence])).join("; "),
     units: union(rows.map((row) => row.units)),
     components: union(rows.map((row) => row.components)),
+    parts: rows,
   };
 }
 
@@ -35,6 +36,15 @@ export function mergeRows(rows) {
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   return [...groups.values()].map(mergeGroup);
+}
+
+function withoutExceptedRules(row, context) {
+  const left = new Set(rulesLeftUncovered(row, context));
+  if (left.size === row.rules.length) return row;
+  const parts = row.parts
+    .map((part) => ({ ...part, rules: part.rules.filter((rule) => left.has(rule)) }))
+    .filter((part) => part.rules.length > 0);
+  return parts.length === 0 ? null : mergeGroup(parts);
 }
 
 function inScope(row, touched) {
@@ -128,15 +138,15 @@ export function runChecks({ graph, model, baseGraph = null, touched = null, hist
   const results = active.map((check) => runCheck(check, context));
   const originOf = createOriginResolver({ graph, baseGraph, baseRows: baseRowsOf(active, context), touched });
   const inChange = results.flatMap((result) => result.rows).filter((row) => inScope(row, touched));
-  const decided = mergeRows(inChange.map((row) => ({ ...row, origin: originOf(row) }))).filter(
-    (row) => statusForRow(model, row.rules, rowComponents(row, context)) !== "off",
-  );
-  const uncovered = decided.filter((row) => !isCoveredByException(row, context));
+  const isOn = (row) => statusForRow(model, row.rules, rowComponents(row, context)) !== "off";
+  const decided = mergeRows(inChange.map((row) => ({ ...row, origin: originOf(row) }))).filter(isOn);
+  const narrowed = decided.map((row) => withoutExceptedRules(row, context));
+  const uncovered = narrowed.filter((row) => row !== null && isOn(row));
   return {
     rows: uncovered.map((row) => finalRow(row, context)).sort(byRuleThenTarget),
     incomplete: [...results.flatMap((result) => result.incomplete), ...unclassifiedEntries(graph, touched)],
     notRun: results.flatMap((result) => result.notRun),
     skipped: skippedRules(model),
-    covered: decided.length - uncovered.length,
+    covered: narrowed.filter((row) => row === null).length,
   };
 }

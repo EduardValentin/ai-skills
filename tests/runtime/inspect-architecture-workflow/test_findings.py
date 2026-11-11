@@ -777,6 +777,18 @@ def test_exception_naming_the_component_and_rule_covers_a_judged_finding(tmp_pat
     assert "Verdict: OK" in change_review(root, tmp_path, finding()).stdout
 
 
+def test_exception_with_a_rule_removes_only_that_rule_from_a_judged_finding(tmp_path):
+    root = workspace(tmp_path)
+    judged_finding = finding("zone-of-pain-changing", "domain")
+    assert run_arch(["model", "add-exception", "domain", "*", "rule=R31", "reason=stability accepted"], root).returncode == 0
+    assert audit(root, tmp_path, judged_finding).returncode == 0
+    assert stored(root, "domain")["rules"] == ["R32"]
+    assert run_arch(["model", "add-exception", "domain", "*", "rule=R32", "reason=metrics accepted"], root).returncode == 0
+    result = audit(root, tmp_path, judged_finding)
+    assert result.returncode == 0 and "Dropped: 1 (1 covered by an exception)" in result.stdout
+    assert not [f for f in store(root)["findings"] if f["target"] == "domain"]
+
+
 def test_exception_with_a_real_destination_does_not_cover_a_unit_finding(tmp_path):
     root = workspace(tmp_path)
     blocked_change_review(root, tmp_path)

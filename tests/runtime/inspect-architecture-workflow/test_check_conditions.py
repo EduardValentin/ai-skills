@@ -283,6 +283,18 @@ def test_one_exception_covers_the_rows_of_an_allowed_external(tmp_path: Path):
     assert model_validates(root)
 
 
+def test_an_exception_with_a_rule_removes_only_that_rule_from_a_merged_row(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    model_edit(root, "add-exception", "src/lending/member.ts", "external:orm", "rule=R4", "reason=not about direction")
+    out = check_output(root)
+    (row,) = [r for r in out["rows"] if r["target"] == FRAMEWORK_ROW]
+    assert row["rules"] == ["R17"] and ids_of(row) == ["entity-imports-non-entity"]
+    assert row["evidence"].startswith("entity imports the framework external orm") and out["covered"] == 0
+    model_edit(root, "add-exception", "src/lending/member.ts", "external:orm", "rule=R17", "reason=accepted")
+    out = check_output(root)
+    assert not [r for r in out["rows"] if r["target"] == FRAMEWORK_ROW] and out["covered"] == 1
+
+
 def test_an_external_exception_covers_boundary_data_rows_too(tmp_path: Path):
     root = fixture_root(tmp_path)
     target = add_boundary_data_external(root)

@@ -3,7 +3,7 @@ import { UsageError } from "../cli/errors.mjs";
 import { createContext, rowComponents } from "../checks/context.mjs";
 import { escalateRow, highestSeverity } from "../checks/escalate.mjs";
 import { JUDGMENTS } from "../checks/registry.mjs";
-import { isCoveredByException } from "../checks/exceptions.mjs";
+import { rulesLeftUncovered } from "../checks/exceptions.mjs";
 import { statusForRow } from "../checks/status.mjs";
 import { DEFAULT_KINDS } from "../model/defaults.mjs";
 import { validateShape } from "../model/validate-shape.mjs";
@@ -249,10 +249,12 @@ function documentShapeProblems(documents) {
 
 const DROP_REASONS = { off: "rule off", covered: "covered by an exception" };
 
-function dropReason(judgment, row, context) {
-  if (statusForRow(context.model, judgment.rules, rowComponents(row, context)) === "off") return DROP_REASONS.off;
-  if (isCoveredByException({ ...row, rules: judgment.rules }, context)) return DROP_REASONS.covered;
-  return null;
+function judgedOutcome(judgment, row, context) {
+  const isOff = (rules) => statusForRow(context.model, rules, rowComponents(row, context)) === "off";
+  if (isOff(judgment.rules)) return { reason: DROP_REASONS.off };
+  const rules = rulesLeftUncovered({ ...row, rules: judgment.rules }, context);
+  if (rules.length === 0) return { reason: DROP_REASONS.covered };
+  return isOff(rules) ? { reason: DROP_REASONS.off } : { rules };
 }
 
 export function judgedFindings({ documents, flow, plan, root, model, graph, scope, upcoming }) {
@@ -270,9 +272,9 @@ export function judgedFindings({ documents, flow, plan, root, model, graph, scop
   const dropped = [];
   examined.forEach(({ judgment, row }, position) => {
     const { entry } = located[position];
-    const reason = dropReason(judgment, row, context);
+    const { reason, rules } = judgedOutcome(judgment, row, context);
     if (reason) dropped.push({ target: entry.target, judgment: judgment.id, reason });
-    else findings.push(buildFinding({ entry, judgment, row, context, flow, graph }));
+    else findings.push(buildFinding({ entry, judgment: { ...judgment, rules }, row, context, flow, graph }));
   });
   return { findings, dropped };
 }

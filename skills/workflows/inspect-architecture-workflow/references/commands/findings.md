@@ -76,8 +76,9 @@ the reviewed scope, where it is required, or a finding whose only correction is 
 smallest change inside the scope. It is reported apart and never blocks. `liftedBy` names a confirmed upcoming change that makes the finding a
 blocker: one passed with `--upcoming` or recorded with `arch model add-upcoming`.
 
-A judged finding is dropped, not refused, when a recorded exception covers it or every rule it
-names is `off` for its target's component. That is how a finding the user accepted leaves the
+A judged finding is dropped, not refused, when recorded exceptions cover every rule it names or
+every rule it names is `off` for its target's component. An exception with `rule=` removes only
+that rule, so a finding of a judgment with several rules stays with the rules left. That is how a finding the user accepted leaves the
 verdict: `arch model add-exception <target> '*' rule=<R> reason="<text>"` covers a unit, port, or
 component target, and an exception with two ends covers an edge. When any judged finding breaks the
 rules above, `add` stores nothing and lists every problem, each prefixed with its file and its place

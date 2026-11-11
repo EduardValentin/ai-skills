@@ -201,7 +201,8 @@ def test_recorded_advisory_rule_makes_its_row_gate_only_when_enforced(tmp_path: 
     assert [row["status"] for row in rows_of(check_json(root)[1], "thin-component-use")] == ["advisory"]
     assert run_arch(["model", "unset-rule", "R27"], root).returncode == 0
     code, out = check_json(root)
-    assert code == 1 and [row["status"] for row in rows_of(out, "thin-component-use")] == ["enforced"]
+    assert code == 0 and [row["status"] for row in rows_of(out, "thin-component-use")] == ["enforced"]
+    assert check_json(root, "--strict")[0] == 1
 
 
 def test_recorded_threshold_hides_a_row_until_it_is_reset(tmp_path: Path):
