@@ -21,7 +21,7 @@ spaces, and quote any pattern with `*` so the shell does not expand it, as in
 Create and check the model:
 
 - `arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]`: write a new model holding the adapter command and the starting point's default rule statuses, with no components yet; `add-component` adds the first. `local` also adds the record path to the repository's local exclude file. Refuses to overwrite a model.
-- `arch model migrate`: convert the four model files of the earlier format into `architecture.json`, leaving them in place. The adapter is left empty; set it with `set-adapter`.
+- `arch model migrate [--record-mode committed|local]`: convert the four model files of the earlier format into `architecture.json`, leaving them in place, with the record mode as `init` takes it. The adapter is left empty; set it with `set-adapter`.
 - `arch model status`: say whether a model file exists, without reading the code or running the adapter. Every flow runs it first to learn whether there is a model. `status`, `init`, and `migrate` are the only subcommands of the whole command that run without a model; every other one exits 2 and names the baseline flow, which creates the model.
 - `arch model validate`: check the model file against the schema, then the model against the code. It fails on a model with no components, a classification pattern that matches no module in a component that has modules, a port that matches no module, a module two components claim, and a forbidden edge or exception whose end is not exact: a component, a ring, an external the adapter reports, `*` as a destination, or the path of a module with or without `#<Symbol>`. A glob end is refused. A pattern of a component that has no modules yet, as in a greenfield project, is only a warning.
 - `arch model explain <path>`: print the path's component, kind, ring, actors, and the classification pair that matched.
@@ -52,6 +52,7 @@ Rule statuses, thresholds, and accepted findings:
 - `arch model add-upcoming <text>`: remember an upcoming change the user confirmed, so every later review counts it as a named upcoming change, as `--upcoming` does for one run of `arch findings add`. Refused when the same text is already recorded.
 - `arch model remove-upcoming <text>`: forget a recorded upcoming change once it has shipped or been dropped.
 - `arch model set-adapter <command>`: set the command that prints the adapter document.
+- `arch model set-record <committed|local>`: change whether the record is committed. `local` adds the record path to the repository's local exclude file, as `init` does, and `committed` removes it from there.
 
 ## Flags
 
@@ -59,7 +60,7 @@ Rule statuses, thresholds, and accepted findings:
 |---|---|---|
 | `--start` | `greenfield` or `legacy` | `init` only: the starting point, which sets the default rule statuses. |
 | `--adapter` | a shell command | `init` only, and required there: the project's adapter command. |
-| `--record-mode` | `committed` or `local` | `init` only: whether the record is committed. `committed` by default. |
+| `--record-mode` | `committed` or `local` | `init` and `migrate` only: whether the record is committed. `committed` by default. |
 | `--json` | none | `validate`, `status`, `explain`, and `explain-thresholds`: print JSON. Edits ignore it. |
 | `--record` | a directory | Use this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 

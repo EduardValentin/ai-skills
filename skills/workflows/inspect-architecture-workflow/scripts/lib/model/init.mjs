@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { ModelError, ToolingError } from "../cli/errors.mjs";
 import { gitText } from "../graph/tree.mjs";
@@ -30,22 +30,42 @@ function initialDocument({ start, adapter, recordMode }) {
   return { version: MODEL_VERSION, adapter, record: recordMode, components: [], ...withRules };
 }
 
-async function excludeLocally(root, directory) {
+async function excludeFile(root, directory) {
   const out = await gitText(root, ["rev-parse", "--show-toplevel", "--git-path", "info/exclude"]);
   const [top, excludePath] = out.trim().split("\n");
-  const exclude = resolve(root, excludePath);
   const entry = `/${relative(realpathSync(top), realpathSync(directory)).split("\\").join("/")}/`;
+  return { exclude: resolve(root, excludePath), entry };
+}
+
+function excludedLines(exclude) {
+  return existsSync(exclude) ? readFileSync(exclude, "utf8").split("\n") : [];
+}
+
+async function excludeLocally(root, directory) {
+  const { exclude, entry } = await excludeFile(root, directory);
   mkdirSync(dirname(exclude), { recursive: true });
-  const present = existsSync(exclude) ? readFileSync(exclude, "utf8").split("\n") : [];
-  if (!present.includes(entry)) appendFileSync(exclude, `${entry}\n`);
+  if (!excludedLines(exclude).includes(entry)) appendFileSync(exclude, `${entry}\n`);
 }
 
 async function excludeOrExplain(root, directory) {
   try {
     await excludeLocally(root, directory);
   } catch {
-    throw new ToolingError("--record-mode local needs a git repository. Run git init first or use committed.");
+    throw new ToolingError("record mode local needs a git repository. Run git init first or use committed.");
   }
+}
+
+async function stopExcluding(root, directory) {
+  const found = await excludeFile(root, directory).catch(() => null);
+  if (!found) return;
+  const lines = excludedLines(found.exclude);
+  if (!lines.includes(found.entry)) return;
+  writeFileSync(found.exclude, lines.filter((line) => line !== found.entry).join("\n"));
+}
+
+export async function applyRecordMode({ root, directory, recordMode }) {
+  if (recordMode === "local") await excludeOrExplain(root, directory);
+  else await stopExcluding(root, directory);
 }
 
 export async function initModel({ root, directory, file, ...choices }) {
@@ -54,5 +74,5 @@ export async function initModel({ root, directory, file, ...choices }) {
   }
   mkdirSync(directory, { recursive: true });
   writeDocument(file, initialDocument(choices));
-  if (choices.recordMode === "local") await excludeOrExplain(root, directory);
+  await applyRecordMode({ root, directory, recordMode: choices.recordMode });
 }

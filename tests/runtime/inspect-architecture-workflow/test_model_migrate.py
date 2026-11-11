@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import copy_fixture, run_arch
+from support import copy_fixture, git, run_arch
 
 RECORD = "docs/architecture"
 
@@ -115,3 +115,12 @@ def test_migrate_gives_a_rule_to_the_component_with_the_longest_matching_prefix(
     names = {c["name"]: c for c in json.loads((root / RECORD / "architecture.json").read_text())["components"]}
     assert names["reports"]["classify"] == [["*.ts", "use-case"]]
     assert ["reports/*.ts", "use-case"] not in names["domain"]["classify"]
+
+
+def test_migrate_takes_the_record_mode_and_excludes_a_local_record(tmp_path: Path):
+    root, _ = payroll_with_old_model(tmp_path)
+    git(["init", "-q", "-b", "main"], root)
+    result = run_arch(["model", "migrate", "--record-mode", "local"], root)
+    assert result.returncode == 0, result.stderr
+    assert json.loads((root / RECORD / "architecture.json").read_text())["record"] == "local"
+    assert "/docs/architecture/" in (root / ".git/info/exclude").read_text().splitlines()

@@ -5,7 +5,7 @@ import { loadGraph } from "../graph/load.mjs";
 import { EDITS } from "../model/edits.mjs";
 import { explainPath, renderExplanation, renderThresholds, thresholdRows } from "../model/explain.mjs";
 import { graphProblems } from "../model/graph-problems.mjs";
-import { RECORD_MODES, STARTS, initModel } from "../model/init.mjs";
+import { RECORD_MODES, STARTS, applyRecordMode, initModel } from "../model/init.mjs";
 import { missingModelError, modelFile, readDocument, recordDir, requireModel } from "../model/load.mjs";
 import { migrateOldModel } from "../model/migrate.mjs";
 import { writeDocument } from "../model/write.mjs";
@@ -16,6 +16,8 @@ const INIT_FLAGS = ["start", "adapter", "record-mode"];
 const INIT_REQUIRED_FLAGS = ["start", "adapter"];
 const INIT_USAGE =
   'arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]';
+const MIGRATE_USAGE = "arch model migrate [--record-mode committed|local]";
+const SET_RECORD_USAGE = "arch model set-record <committed|local>";
 const GLOBAL_FLAGS = ["json", "record"];
 const ABSENT_LINE = "model: absent; run the baseline flow";
 
@@ -85,24 +87,42 @@ function requireChoice(flags, name, choices) {
   throw new UsageError(`--${name} must be one of ${choices.join(", ")}. Pass it as --${name} <value>.`);
 }
 
+function chosenRecordMode(flags) {
+  return requireChoice({ "record-mode": flags["record-mode"] ?? RECORD_MODES[0] }, "record-mode", RECORD_MODES);
+}
+
 async function init({ root, flags }) {
   const start = requireChoice(flags, "start", STARTS);
-  const modeFlags = { "record-mode": flags["record-mode"] ?? RECORD_MODES[0] };
-  const recordMode = requireChoice(modeFlags, "record-mode", RECORD_MODES);
+  const recordMode = chosenRecordMode(flags);
   const file = modelFile(root, flags);
   await initModel({ root, directory: recordDir(root, flags), file, start, adapter: flags.adapter, recordMode });
   console.log(`wrote ${file}. Check it with arch model validate.`);
   return 0;
 }
 
-function migrate({ root, flags }) {
+async function migrate({ root, flags }) {
   const file = modelFile(root, flags);
-  migrateOldModel({ root, flags, file });
+  const recordMode = chosenRecordMode(flags);
+  migrateOldModel({ root, flags, file, recordMode });
+  await applyRecordMode({ root, directory: recordDir(root, flags), recordMode });
   console.log(`wrote ${file}. The old files under the record path were left in place.`);
   console.log(
     "The adapter is empty. Copy an adapter template for your language from the skill's adapter-templates " +
       'directory into the project, then run arch model set-adapter "<command>".',
   );
+  return 0;
+}
+
+async function setRecord({ root, flags, positional: [recordMode] }) {
+  if (!RECORD_MODES.includes(recordMode)) {
+    throw new UsageError(`the record mode must be one of ${RECORD_MODES.join(", ")}. usage: ${SET_RECORD_USAGE}`);
+  }
+  const file = modelFile(root, flags);
+  const document = requireDocument(root, flags);
+  document.record = recordMode;
+  writeDocument(file, document);
+  await applyRecordMode({ root, directory: recordDir(root, flags), recordMode });
+  console.log(`updated ${file}`);
   return 0;
 }
 
@@ -128,7 +148,8 @@ function directCommands() {
     status: command("arch model status", 0, status),
     explain: command("arch model explain <path>", 1, explain),
     "explain-thresholds": command("arch model explain-thresholds", 0, explainThresholds),
-    migrate: command("arch model migrate", 0, migrate),
+    migrate: command(MIGRATE_USAGE, 0, migrate, { flags: ["record-mode"] }),
+    "set-record": command(SET_RECORD_USAGE, 1, setRecord),
   };
 }
 

@@ -1,10 +1,12 @@
-"""The router, the three flows, and the command pages agree with the command they describe."""
+"""The router, the four flows, and the command pages agree with the command they describe."""
 
 import json
 import re
 import shlex
 import shutil
 from functools import cache
+
+import pytest
 
 from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
@@ -852,13 +854,46 @@ def test_an_acceptance_by_model_edit_validates_the_model_before_the_rerun():
     assert "Then run `arch model validate`, and steps 3, 5, and 10 again" in flow_text("change-review")
 
 
-def test_the_classify_loops_stop_when_a_pass_makes_no_progress():
-    for name, loop, validate in [("baseline", 7, 5), ("audit", 5, 3)]:
+CLASSIFY_LOOPS = [("baseline", 5, 6, 7, 8), ("audit", 3, 4, 5, 6)]
+
+
+def test_the_classify_loops_stop_only_when_a_pass_changes_neither_validate_nor_uncovered():
+    for name, validate, _, loop, _ in CLASSIFY_LOOPS:
         steps = numbered_steps(flow_file(name).read_text())
         step = " ".join(steps[loop].split())
-        assert "lists the same modules as before this pass" in step and "show them to the user" in step, name
+        assert "the list `arch uncovered` printed" in step, name
         assert f"go back to step {validate}" in step, name
+        assert "The loop goes on while `validate` keeps a message or `uncovered` lists modules" in step, name
+        assert "exactly as they were" in step and "the flow ends there" in step, name
+        assert "unchanged, as what needs their decision" in step, name
         assert "`warning:`" in " ".join(steps[validate].split()), name
+
+
+def refreshed_model_with_a_stale_port(tmp_path):
+    root = copy_fixture("sound-small", tmp_path / "sound-small")
+    model = root / "docs/architecture/architecture.json"
+    document = json.loads(model.read_text())
+    document["ports"].append({"at": "src/billing/gone.ts#Gone", "owner": "billing"})
+    model.write_text(json.dumps(document, indent=2))
+    init_repo(root)
+    return root
+
+
+@pytest.mark.parametrize("name, validate, uncovered, loop, collect", CLASSIFY_LOOPS)
+def test_a_stale_port_the_classifier_removes_lets_the_flow_reach_collect(tmp_path, name, validate, uncovered,
+                                                                         loop, collect):
+    root = refreshed_model_with_a_stale_port(tmp_path)
+    flow = FlowRunner(name, root, {"<path>": "src/billing/gone.ts", "<Symbol>": "Gone"})
+    assert json.loads(flow.run_step(1).stdout)["model"] is True
+    stale = flow.run_step(validate)
+    assert stale.returncode == 2 and "model does not fit the code:" in stale.stderr
+    listed = flow.run_step(uncovered)
+    assert listed.returncode == 0 and listed.stdout.strip() == ""
+    assert flow.run(flow.command_in(loop, "remove-port")).returncode == 0
+    assert flow.run_step(validate).returncode == 0
+    assert flow.run_step(uncovered).returncode == 0
+    collected = flow.run_step(collect)
+    assert collected.returncode == 0 and collected.stdout.startswith("collect: ")
 
 
 def test_plan_review_reads_clarification_requests_from_the_printed_result():

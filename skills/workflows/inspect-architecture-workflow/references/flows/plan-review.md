@@ -19,7 +19,8 @@ defined in `references/rules/vocabulary.md`.
 2. If `model` is `false`, stop here: run no other command, dispatch no agent, give no verdict, and
    return to the caller only this message: "There is no architecture model for this project. Run the
    baseline flow first (`inspect-architecture-workflow` with the flow name `baseline`), then run this review again."
-3. Run `arch model explain-thresholds --json`; the `project` value of `planFixRounds` is the number of revisions allowed.
+3. Run `arch model explain-thresholds --json` and note the `project` value of `planFixRounds`, the
+   number of revisions this review allows. No revision has been made yet: the count starts at 0.
 4. Dispatch one `architecture-reviewer` to write the proposal, with the flow `plan-review`, the
    plan path, `references/adapter-contract.md` for the module and edge shapes, and
    `references/classification.md`. It may run `arch model explain <path>` to see how the model
@@ -34,8 +35,7 @@ defined in `references/rules/vocabulary.md`.
      "unknown": [ { "task": "Task 2: Invoice report", "fact": "which component the report reads from" } ] }
    ```
 
-   `classify` is only for a new module no model pattern covers. Each `unknown` entry becomes a
-   clarification request.
+   `classify` is only for a new module no model pattern covers. Each `unknown` entry becomes a clarification request.
 5. Run `arch check --proposal .architecture/work/proposal.json --out .architecture/work/check.json`.
    It exits 1 only when the plan introduces a blocker or major finding of an enforced rule;
    continue either way. If it refuses the proposal, give its message to the reviewer, write the

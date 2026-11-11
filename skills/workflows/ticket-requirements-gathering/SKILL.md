@@ -126,9 +126,10 @@ and questions for the user; put the questions to the user.
 before any review and asks for the baseline flow. Stop at that gate and ask
 the user to choose: run `inspect-architecture-workflow` with `baseline` now
 and then continue with the plan review, or continue without an architecture
-plan review, recorded in the handoff as `architecture review: not run, no
-baseline`. Never pass that gate silently, and never create the model on your
-own initiative. `SHOULD_CHANGE` or `INCOMPLETE` blocks approval: answer the
+plan review. That choice removes architecture plan review from this plan
+gate's selection, so plan revisions neither re-enter the flow nor ask again,
+and the handoff records `architecture review: not run, no baseline`. Never
+pass that gate silently, and never create the model on your own initiative. `SHOULD_CHANGE` or `INCOMPLETE` blocks approval: answer the
 clarifications and revise the plan within the revisions the flow allows, or
 present a finding to the user, who may accept it with a reason through the
 model edit the flow names. Only the user accepts a finding. When the

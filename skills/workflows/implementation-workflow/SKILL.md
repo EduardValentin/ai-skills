@@ -146,7 +146,9 @@ by the delta since the previous round.
    stops before any review and asks for the baseline flow; the gate stops
    there and asks the user to choose: run `inspect-architecture-workflow`
    with `baseline` now and then continue with the change review, or continue
-   without an architecture review, recorded in the implementation report as
+   without an architecture review. That choice removes architecture change
+   review from this gate's selection for every round, so later rounds neither
+   re-enter the flow nor ask again, and the implementation report records
    `architecture review: not run, no baseline`. Never pass that gate
    silently, and never create the model on your own initiative.
    `SHOULD_CHANGE` and `INCOMPLETE` block the gate

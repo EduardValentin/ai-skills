@@ -22,12 +22,14 @@ defined in `references/rules/vocabulary.md`.
    modules yet. Exit 2 with `model does not fit the code:` or "the model has no components": keep the
    message and continue. Any other exit 2 is a failure.
 4. Run `arch uncovered`. If it exits 0 and step 3 kept no message, go to step 6.
-5. Dispatch `architecture-classifier` with the uncovered modules, files added since the model was
-   made, the message step 3 kept, `references/classification.md`, and `references/rules/vocabulary.md`.
-   It returns `arch model` commands with reasons, such as `arch model add-component <name> paths=<globs>` and
-   `arch model classify <component> <pattern> <kind>`, and open questions. Run the commands, put the
-   questions to the user, and go back to step 3, unless `arch uncovered` lists the same modules as
-   before this pass: then stop and show them to the user.
+5. Dispatch `architecture-classifier` with the list `arch uncovered` printed, which holds the files
+   added since the model was made, the message step 3 kept, `references/classification.md`, and
+   `references/rules/vocabulary.md`. It returns `arch model` commands with reasons, such as
+   `arch model add-component <name> paths=<globs>`, `arch model classify <component> <pattern> <kind>`,
+   or `arch model remove-port <path>#<Symbol>`, and open questions. Run them, put the questions to the
+   user, and go back to step 3. The loop goes on while `validate` keeps a message or `uncovered` lists
+   modules. If a pass leaves both exactly as they were, stop: the flow ends there and returns to the
+   user that message and that list, unchanged, as what needs their decision.
 6. Run `arch collect`. It rewrites `current.md` in the record path.
 7. Run `arch check --out .architecture/work/check.json`; exit 1, an enforced blocker or major, continues.
 8. Run `arch applicable --all --out .architecture/work/applicable.json`; `groups` names the reviewers, none if `inScope` is 0.

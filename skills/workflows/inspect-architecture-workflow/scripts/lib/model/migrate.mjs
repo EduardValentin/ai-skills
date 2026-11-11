@@ -135,11 +135,11 @@ function convertGroups(old) {
   }));
 }
 
-function convertOldModel(old) {
+function convertOldModel(old, recordMode) {
   return {
     version: 2,
     adapter: "",
-    record: "committed",
+    record: recordMode,
     rings: old.rules.rings ?? DEFAULT_RINGS,
     frameworks: old.rules.frameworks ?? [],
     components: convertComponents(old),
@@ -149,12 +149,12 @@ function convertOldModel(old) {
   };
 }
 
-export function migrateOldModel({ root, flags, file }) {
+export function migrateOldModel({ root, flags, file, recordMode }) {
   if (existsSync(file)) {
     throw new ModelError(`${file} already exists. Delete it first if you want to convert the old files again.`);
   }
   const old = readOldModel(recordDir(root, flags));
-  const document = convertOldModel(old);
+  const document = convertOldModel(old, recordMode);
   const problems = documentProblems({ ...document, adapter: PLACEHOLDER_ADAPTER });
   if (problems.length > 0) {
     throw new ModelError(`the old model converts to an invalid model:\n- ${problems.join("\n- ")}\nFix the old files.`);

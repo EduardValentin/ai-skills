@@ -579,3 +579,18 @@ def test_suggested_commands_quote_the_star_end(tmp_path: Path):
     assert edit(root, "add-exception", "src/gone.ts", "*", "reason=x").returncode == 0
     result = edit(root, "validate")
     assert result.returncode == 2 and "arch model remove-exception src/gone.ts '*'" in result.stderr
+
+
+def test_set_record_switches_the_mode_and_the_local_exclude_entry(tmp_path: Path):
+    root = payroll(tmp_path)
+    git(["init", "-q", "-b", "main"], root)
+    exclude = root / ".git/info/exclude"
+    assert edit(root, "set-record", "local").returncode == 0
+    assert document(root)["record"] == "local"
+    assert exclude.read_text().splitlines().count("/docs/architecture/") == 1
+    assert edit(root, "set-record", "committed").returncode == 0
+    assert document(root)["record"] == "committed"
+    assert "/docs/architecture/" not in exclude.read_text().splitlines()
+    refused = edit(root, "set-record", "shared")
+    assert refused.returncode == 2 and "committed, local" in refused.stderr
+    assert document(root)["record"] == "committed"
