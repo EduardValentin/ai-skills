@@ -607,7 +607,7 @@ const ENFORCEMENT_AND_ORGANIZATION = [
     targets: ["component", "use-case"],
     condition:
       "The top-level structure is named by technology, such as web, service, or data, " +
-      "and a use case is spread across more than two of those technical folders.",
+      "so one use case's code is spread across those technical folders.",
   },
   {
     id: "delivery-inside-domain-component",

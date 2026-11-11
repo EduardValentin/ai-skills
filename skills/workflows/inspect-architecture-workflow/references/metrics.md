@@ -1,103 +1,117 @@
 # Metrics
 
-Screening metrics for component graphs. Compute them only when the graph has more than five
-components; on smaller graphs the qualitative rules R30 and R31 are enough. A metric never decides
-a finding on its own: every flagged value is explained in words before it becomes a
-`SHOULD_CHANGE` row (R32).
+How the command measures the component graph, and every knob a project can set. Read it when a
+rule or condition names a metric or a knob in braces, when `arch` reports a component in a zone or
+off the balanced line, or before changing a threshold with `arch model set-threshold`. A metric
+never decides a finding on its own: R32 (Use metrics as a screen) says how the numbers are used.
+
+## Knobs
+
+Every number a rule or condition depends on is a knob with a default. A project overrides one with
+`arch model set-threshold <knob> <value>` and restores the default with `arch model unset-threshold
+<knob>`; `arch model explain-thresholds` prints each knob with its default and the project's value.
+Rule text refers to a knob by its name in braces, such as `{historyWindow}`.
+
+| Knob | Default | Meaning |
+|---|---|---|
+| `interfaceUseShare` | 0.5 | Share of an interface's members a consumer must use for the interface to fit that consumer. |
+| `componentUseShare` | 0.25 | Share of a component's exports a consumer must use for the dependency to count as real use. |
+| `detailReasonChanges` | 2 | Count of recent changes for a detail reason that marks a unit as changing for that reason. |
+| `historyWindow` | 6 months | How far back change history reaches, written as a date expression such as 6 months. |
+| `escalationFanIn` | 3 | Count of dependents that makes a unit widely depended on, which escalates findings about it. |
+| `painMaxInstability` | 0.2 | Highest instability of a unit that still sits in the zone of pain. |
+| `painMaxAbstractness` | 0.2 | Highest abstractness of a unit that still sits in the zone of pain. |
+| `painMinFanIn` | 3 | Count of dependents a stable, concrete unit needs before it is reported in the zone of pain. |
+| `uselessMinAbstractness` | 0.8 | Lowest abstractness of a unit that sits in the zone of uselessness. |
+| `uselessMinInstability` | 0.8 | Lowest instability of a unit that sits in the zone of uselessness. |
+| `distanceDeviations` | 1 | Standard deviations above the mean distance to the main sequence that mark an outlier. |
+| `distanceJump` | 0.1 | Increase in a component's distance to the main sequence between base and head that is reported. |
+| `distanceMinComponents` | 8 | Fewest components for which distance from the balanced line is compared across the graph. |
+| `planFixRounds` | 2 | Rounds of plan fixes before the remaining findings go to the user. |
 
 ## What is counted
 
-The unit of counting is the module (file). A dependency is any source reference the adapter
-resolves: import, implements, extends, construct, or a type used in a signature. Externals (package
-dependencies, runtime modules) and modules with no component are excluded from both fan-in and
-fan-out.
+The unit of counting is the module (one file). A dependency is any source reference the adapter
+resolves: an import, an implements or extends clause, a construction, or a type in a signature.
+External packages and modules that belong to no component count toward neither fan-in nor fan-out.
 
 For a component C:
 
-| Quantity | Definition |
+| Quantity | How it is counted |
 |---|---|
-| Fan-in | Number of distinct modules outside C, each itself in some component, that import at least one module inside C. |
-| Fan-out | Number of distinct modules inside C that import at least one module outside C that is itself in some component (efferent coupling). |
+| Fan-in | Distinct modules outside C, each in some component, that depend on at least one module inside C. |
+| Fan-out | Distinct modules inside C that depend on at least one module in another component. |
 | Abstract exports | Exported interfaces, type aliases, and abstract classes across C's modules. |
 | Total exports | All exported symbols, abstract and concrete, across C's modules. |
-| Volatility | Commits that touched C since `--since <ref>` (`arch query volatility`). |
+
+A barrel adds nothing to either export count, since its exports are other modules' declarations
+published again. The export counts need the adapter fact `exports`; without it abstractness and
+distance are undefined, and the conditions that need them are incomplete.
 
 Worked count: component `Cc` holds modules `t` and `u`. Modules `q`, `r`, and `s`, each in some
-other component, import `t` or `u`, so fan-in is 3. Module `u` imports `v` in another component,
-so fan-out is 1.
+other component, depend on `t` or `u`, so fan-in is 3. Module `u` depends on `v` in another
+component, so fan-out is 1.
+
+## Formulas
 
 | Metric | Formula | Undefined when |
 |---|---|---|
-| I (instability) | fan-out / (fan-in + fan-out) | fan-in and fan-out are both 0 |
-| A (abstractness) | abstract exports / total exports | C has no exports |
-| D (distance) | abs(A + I - 1) | I or A is undefined |
+| Instability (I) | fan-out / (fan-in + fan-out) | fan-in and fan-out are both zero |
+| Abstractness (A) | abstract exports / total exports | C has no exports, or the adapter gives no `exports` fact |
+| Distance (D) | abs(A + I - 1) | I or A is undefined |
 
-Every value is rounded to two decimals. A component is in the zone of pain when D is defined, I
-is 0.2 or less, A is 0.2 or less, and fan-in is 3 or more; in the zone of uselessness when A is
-0.8 or more and I is 0.8 or more. `arch query metrics` prints `none` in the Zone column when
-neither applies, and `undefined` in the I, A, or D column when that value is undefined (`null`
-with `--json`).
+Every value is rounded to two decimals.
 
-## Instability
+Instability runs from 0 to 1. At 0 a component is depended on and depends on nothing: maximally
+stable, and hard to change, because every change must be reconciled with every dependent. At 1 it
+depends on others and nothing depends on it: maximally volatile, and cheap to change. In the worked
+count, I = 1 / (3 + 1) = 0.25. R31 (Depend toward stability) in metric form: instability decreases
+along every dependency between components.
 
-    I = fan-out / (fan-in + fan-out)
+Abstractness runs from 0 (all concrete) to 1 (nothing but interfaces and abstract types). A stable
+component should be abstract, so it can be extended without being edited; a volatile one should be
+concrete, so it stays cheap to change. An interface-only component has A = 1 and, once
+implemented, I = 0.
 
-Range 0 to 1. I = 0: depended on, depends on nothing; maximally stable, and hard to change because
-every change must be reconciled with every dependent. I = 1: depends on others, nothing depends on
-it; maximally unstable, cheap to change. In the worked count, I = 1 / (3 + 1) = 0.25.
+The two ideal positions on the I and A plane are stable and abstract (I = 0, A = 1) and volatile
+and concrete (I = 1, A = 0). The line between them, A + I = 1, is the balanced line: a component on
+it is depended on to the extent that it is abstract. Distance measures how far a component sits
+from that line, from 0 (on it) to 1.
 
-R31 in metric form: for every dependency arrow from component A to component B, I(A) > I(B);
-instability decreases along every arrow. Drawn with unstable components at the top and arrows
-pointing down, an arrow that points up is a violation.
+## Zones
 
-## Abstractness
+The zone column of the metrics table names the zone a component falls in, by these bounds:
 
-    A = abstract exports / total exports
+| Zone column | Bounds |
+|---|---|
+| `pain` | I at most {painMaxInstability}, A at most {painMaxAbstractness}, and fan-in at least {painMinFanIn} |
+| `uselessness` | A at least {uselessMinAbstractness} and I at least {uselessMinInstability} |
 
-Range 0 to 1. A = 1: nothing but interfaces and abstract types. A = 0: all concrete. A stable
-component (low I) should be abstract (high A) so it can be extended without being edited; an
-unstable one (high I) should be concrete (low A) so it stays cheap to change. An interface-only
-component has A = 1 and, once implemented, I = 0.
+A component in the zone of pain is harmful only when it also changes: a concrete utility that never
+changes is left alone. Its typical inhabitant is a schema or a shared concrete model that every
+service imports. A component in the zone of uselessness is often a set of interfaces left over
+after a refactor.
 
-Abstract exports are a component's exported interfaces, type aliases, and abstract classes; A is
-undefined when C has no exports. A unit of kind `barrel` adds nothing to either count, since its
-exports are other modules' declarations published again.
+## How the numbers are used
 
-## The balanced line and distance
+- Across the graph: with at least {distanceMinComponents} components, the command computes the
+  mean and standard deviation of D and reports every component more than {distanceDeviations}
+  standard deviations above the mean. On a smaller graph the comparison is not run, and R30 (No
+  dependency cycles) and R31 (Depend toward stability) are applied without arithmetic.
+- Between base and head: in a change review, a component whose D rose by at least {distanceJump}
+  between the base and the head of the change is reported.
+- In words: each reported component gets a sentence saying which side of the line it fell to,
+  whether it changes, and what the harm is, for example "concrete, depended on by nine components,
+  changed in most recent commits, so every change re-verifies nine components". Only then does it
+  become a finding under R32 (Use metrics as a screen), with the correction that moves it: own a port, extract an
+  interface-only component, or delete unused abstractions.
+- What the numbers cannot see: shared data shapes, run-time coupling through a message bus, and a
+  boundary that exists in a diagram but not in the code. R41 (Verify the real dependency graph)
+  covers those.
 
-The two ideal positions on the I/A plane are (I = 0, A = 1), stable and abstract, and (I = 1,
-A = 0), unstable and concrete. The line between them, A + I = 1, is the balanced line: a component
-on it is depended on to the extent it is abstract and depends on others to the extent it is
-concrete.
+## Where the numbers appear
 
-    D = abs(A + I - 1)
-
-Range 0 to 1. D = 0 is on the line. Most components should sit at or near an endpoint; the rest
-close to the line. A component with a large D fell to one of two sides:
-
-| Position | Name | Reading |
-|---|---|---|
-| Low I, low A (near 0, 0) | Zone of pain | Many dependents, concrete code. Harmful only when it also has volatility above zero; a concrete utility that never changes is harmless. Typical inhabitant: a database schema or a shared concrete model every service imports. |
-| High I, high A (near 1, 1) | Zone of uselessness | Abstract types nothing implements or nothing depends on. Abstraction paid for and unused; leftover interfaces after a refactor. |
-
-## How to use the numbers
-
-1. **Across the graph.** Compute D for every component, then the mean and standard deviation.
-   Examine every component more than one standard deviation from the mean; the rest are within
-   the graph's own norm.
-2. **Over time.** `arch diff <base>` compares each component's D with the graph built at the
-   base commit and flags a move of 0.10 or more. A flagged component deserves a look at the
-   dependencies or abstractions that changed.
-3. **In words.** For each examined component, state which side of the line it fell to, whether it
-   is volatile, and what the harm is: "concrete, depended on by nine components, changed in six
-   of the last ten commits, so every change re-verifies nine components". Only then write a
-   `SHOULD_CHANGE` row citing R32, with the change that moves it (own a port, extract an
-   interface-only component, delete unused abstractions).
-4. **What the numbers cannot say.** They do not see shared data shapes, runtime coupling through
-   a message bus, or a boundary that exists in a diagram but not in code. W8 covers those.
-
-## Recording
-
-`arch query metrics` prints the table; `arch diff <base>` reports the delta per component and
-flags a move of 0.10 or more in D; `arch query volatility --since` counts commits per component.
-Nothing is written by hand.
+`arch collect` writes the metrics table and any zone or distance breach into the current picture.
+`arch query metrics` prints the same table, with `none` in the zone column when no zone applies
+and `undefined` in a column whose value is undefined. `arch query volatility` counts the commits
+that touched each component within {historyWindow}. Nothing is written by hand.
