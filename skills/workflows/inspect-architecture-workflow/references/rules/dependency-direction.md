@@ -161,7 +161,7 @@ Not a finding when: the edited tests assert behavior the change deliberately alt
 |---|---|---|---|---|---|
 | `policy-imports-detail` | A policy unit depends on a unit whose role is detail or wiring, with no barrel at either end. | R4 | check | blocker | `policy-depends-on-detail` |
 | `policy-imports-external` | A policy unit imports an external package tagged framework, vendor, or runtime. | R4 | check | blocker | `policy-depends-on-detail` |
-| `outward-ring-edge` | Any other dependency points from an inner ring to an outer one, with no barrel at either end. | R4 | check | blocker | `outward-dependency` |
+| `outward-ring-edge` | Any other dependency points from an inner ring to an outer ring, with no barrel at either end. | R4 | check | blocker | `outward-dependency` |
 | `policy-changes-for-detail-reason` | A policy unit changed for a device, format, transport, or vendor reason in at least {detailReasonChanges} changes within {historyWindow}. | R4 | judgment | blocker | `policy-changes-for-detail-reason` |
 | `port-owner-below-consumer` | A recorded port is owned by a component whose innermost ring lies outside the ring of a unit that depends on the port. | R5 | check | blocker | `port-on-wrong-side` |
 | `port-signature-detail-type` | The signature of a recorded port names a type declared in a detail unit. | R5 | check (needs signatures) | blocker | `port-carries-detail-type` |

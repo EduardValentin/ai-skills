@@ -101,8 +101,9 @@ port in the component that needs it and have the other implement it. Alternative
 interface-only component both depend on, or extraction of the shared concrete units into a new
 component both depend on, which is acceptable when the extracted set is cohesive and a smell when
 it is a grab-bag. Draw the graph with volatile components on top, so an upward arrow is visibly
-wrong. Acyclic is necessary, not sufficient: name the forbidden edges too, as R39 (Make forbidden
-edges uncompilable) requires.
+wrong. A loop that exists only at run time, such as a callback handed in through a port, is not a
+cycle: dependencies decide, not calls. Acyclic is necessary, not sufficient: name the forbidden
+edges too, as R39 (Make forbidden edges uncompilable) requires.
 
 Check questions:
 - Following dependencies from this component, can you return to it?
@@ -117,7 +118,7 @@ Examples:
 // now authorizer depends on entities, and entities depends on nothing
 ```
 
-Not a finding when: `component-cycle`: the loop exists only at run time, such as a callback handed in through a port, with no chain of source dependencies closing it, since dependencies decide, not calls.
+Not a finding when: `component-cycle`: no exemption; `module-cycle`: no exemption.
 
 ### R31. Depend toward stability
 
@@ -174,7 +175,7 @@ Examples:
 - Note and leave alone: a `string-utils` package in the same position but unchanged within
   {historyWindow}.
 
-Not a finding when: `distance-over-threshold`: nobody can say in words why the component's position is harmful, volatile and depended on or abstract and unused, since a number alone is never a finding.
+Not a finding when: `distance-over-threshold`: nobody can say in words why the component's position is harmful, volatile and depended on or abstract and unused, since a number alone is never a finding; `unused-abstractions`: the published extension point stated under R31; `abstractions-without-implementor`: the published extension point stated under R31.
 
 ### R33. Release components bottom-up
 

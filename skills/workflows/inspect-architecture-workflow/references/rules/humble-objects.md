@@ -62,7 +62,7 @@ Examples:
 - Good: `label.text = vm.totalText; label.color = vm.totalIsNegative ? RED : DEFAULT`, with a
   `refundButtonVisible: boolean` field.
 
-Not a finding when: `view-makes-decisions`: the screen has no decision to make, such as a static page or a view that shows received text as it is, or the view only maps a flag or enumeration to an appearance, wherever the presenter runs.
+Not a finding when: `view-makes-decisions`: the view only binds view-model fields to widgets, or maps a flag or enumeration field of the view model to an appearance, as on a static page or a screen with no decision to make. A view that reads a domain object, a domain status, or any value outside the view model is never exempt.
 
 ### R22. Reach storage through a gateway
 

@@ -39,7 +39,11 @@ BANNED_PHRASES = ["fewer than half", "a quarter of", "three or more", "two or mo
 RETIRED_WORDS = re.compile(r"\b(evaluator|ledger|slice|packet)", re.IGNORECASE)
 NUMBERED_STEP = re.compile(r"^\s*\d+\.\s")
 RULE_NUMBER = re.compile(r"\bR\d+\b")
-NUMBER_IN_TEXT = re.compile(r"\d|\b(two|three|half|quarter|several)\b", re.IGNORECASE)
+NUMBER_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+                "twice", "half", "quarter", "several", "dozen"]
+NUMBER_IN_TEXT = re.compile(rf"\d|\b({'|'.join(NUMBER_WORDS)})\b", re.IGNORECASE)
+PLURAL_NOT_A_THRESHOLD = re.compile(r"\bmore than one\b", re.IGNORECASE)
+NO_EXEMPTION = "no exemption."
 CLAUSE_START = re.compile(r"^`[a-z]+(?:-[a-z]+)+`: ")
 REQUIRED_TERMS = ["Port", "Storage port", "Adapter", "Gateway", "Plugin", "Device boundary", "Collected evidence",
                   "Metrics", "Presenter"]
@@ -208,7 +212,7 @@ def conditions_by_rule() -> dict[str, set[str]]:
 def test_condition_cells_state_no_number_outside_a_knob():
     for group in GROUP_RULES:
         for row_id, rows in condition_rows(group).items():
-            condition = RULE_NUMBER.sub("", KNOB.sub("", rows[0][1]))
+            condition = PLURAL_NOT_A_THRESHOLD.sub("", RULE_NUMBER.sub("", KNOB.sub("", rows[0][1])))
             assert not NUMBER_IN_TEXT.search(condition), f"{row_id}: condition states a number: {rows[0][1]!r}"
 
 
@@ -226,7 +230,10 @@ def test_not_a_finding_clauses_name_the_condition_they_exempt():
         if len(own) < 2:
             continue
         for clause in not_a_finding_clauses(line):
-            assert CLAUSE_START.match(clause), f"{rule}: clause names no condition id: {clause!r}"
+            start = CLAUSE_START.match(clause)
+            assert start, f"{rule}: clause names no condition id: {clause!r}"
+            exemption = clause[start.end():].rstrip(".") + "."
+            assert exemption == NO_EXEMPTION or len(exemption) > 30, f"{rule}: clause names no situation: {clause!r}"
 
 
 def rule_references(path):

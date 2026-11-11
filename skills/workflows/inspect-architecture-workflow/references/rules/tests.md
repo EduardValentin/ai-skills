@@ -30,7 +30,7 @@ Examples:
 - Good: a `testing-api` package depends on the use cases' ports and is imported only by the test
   component and the test environment's composition root.
 
-Not a finding when: `test-code-in-production-deployable`: the test-only code lives in a separate testing component that the production composition root never imports and the production artifact excludes, even though it sits in the same repository.
+Not a finding when: `test-code-in-production-deployable`: the route or fixture is a production feature that tests also use, such as a health check or reference data the product ships with.
 
 ### R35. Test through a testing API
 
@@ -60,7 +60,7 @@ const r = await testApi.applyInterest({ loanId: seeded.loanId });
 expect(r.interest).toBe("12.50");
 ```
 
-Not a finding when: `rule-tested-through-volatile-surface`: the test asserts the screen itself, such as layout, navigation, or a widget's state, rather than a business outcome; `no-testing-api`: the code has no business rules beyond passing data between a screen and a store.
+Not a finding when: `rule-tested-through-volatile-surface`: the test asserts the screen itself, such as layout, navigation, or a widget's state, rather than a business outcome; `no-testing-api`: no exemption.
 
 ### R36. Organize tests by behavior
 

@@ -1,7 +1,8 @@
 # Cross-cutting rules
 
 The rules about value and priority (R1 to R3), and the conventions every other rule group relies
-on: when a condition is not raised, how a finding is graded, and what a correction may propose.
+on: when a condition is not raised, which severity a finding carries (always the one in its
+condition's table row), and what a correction may propose.
 Read this file before any other rule group, and read the vocabulary first if a term is unfamiliar.
 
 ## Applying any rule

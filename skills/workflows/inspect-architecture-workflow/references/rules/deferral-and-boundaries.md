@@ -33,7 +33,7 @@ Examples:
 - Good: first task "`PageStore` port with an in-memory implementation; formatting features shipped
   on it; store chosen when saving across restarts is required."
 
-Not a finding when: `port-without-test-double`: the tests that need the real detail verify the gateway itself, not business rules.
+Not a finding when: `detail-reached-without-port`: the external does no I/O and a recorded exception names it as part of the policy's language, such as a decimal or date-arithmetic library; `port-without-test-double`: no exemption.
 
 ### R24. No tiers without a reason
 
@@ -85,7 +85,7 @@ Examples:
 - Good: web, store, and mail each depend on the rules and never on each other; `WikiFormatter` and
   `FileSystemPageStore` sit on opposite sides of `PageStore`.
 
-Not a finding when: `plugin-imports-plugin`: the project lets those two plugins depend on each other on purpose and has recorded an exception for that pair with its reason; `boundary-defers-nothing`: the port records the decision it defers, or the change history shows its two sides changing at different cadences; `unit-mixes-change-cadences`: the unit is large but changes for one reason at one cadence.
+Not a finding when: `plugin-imports-plugin`: the project lets those two plugins depend on each other on purpose and has recorded an exception for that pair with its reason; `boundary-defers-nothing`: no exemption; `unit-mixes-change-cadences`: no exemption.
 
 ### R26. Demonstrate the model without I/O
 
@@ -107,7 +107,7 @@ Examples:
 - Good: "first deliver the model behind an input port and a recording output port; the first
   screen adapter comes two deliveries later".
 
-Not a finding when: `plan-sequences-io-first`: the early work is about the screen, store, or transport itself, such as a layout, a migration, or a wire protocol, and no rule waits on it; `rules-need-io`: the only behavior that needs the device is the device's own, such as a migration's correctness or a protocol's framing.
+Not a finding when: `plan-sequences-io-first`: the early work is about the screen, store, or transport itself, such as a layout, a migration, or a wire protocol, and no rule waits on it; `rules-need-io`: no exemption.
 
 ## Conditions
 

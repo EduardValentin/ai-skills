@@ -36,7 +36,7 @@ export type { OrdersComponent } from "./OrdersComponent";
 export { createOrdersComponent } from "./wiring";
 ```
 
-Not a finding when: `unenforced-component`: the component has no dependents in other components yet; `unconsumed-export`: the component is a library whose published surface serves consumers outside the repository, as its documentation states; `unconsumed-export-of-unpublished-component`: the component is such a library, serving consumers outside the repository.
+Not a finding when: `unenforced-component`: no exemption; `unconsumed-export`: the component is a library whose published surface serves consumers outside the repository, as its documentation states; `unconsumed-export-of-unpublished-component`: the component is such a library, serving consumers outside the repository.
 
 ### R39. Make forbidden edges uncompilable
 
@@ -45,7 +45,9 @@ point inward can still let a controller reach storage directly, bypassing the us
 authorizes access. Plans and reviews name the dependencies between units that must not exist and
 the mechanism that prevents each, and record them as forbidden edges. A ring skip is forbidden by
 default; an intended skip, such as a read path that bypasses command-side logic, is recorded with
-the risk it accepts.
+the risk it accepts. A detail implementing or translating to policy types, such as a gateway
+constructing entities as R5 (The consumer owns the port) allows, bypasses no check and is not a
+forbidden skip.
 
 Check questions:
 - Which dependencies must not exist, and what fails if one is written?
@@ -56,7 +58,7 @@ Examples:
 - Good: `Orders` is unreachable from `web`; the plan lists "web to persistence: forbidden, enforced
   by package exports".
 
-Not a finding when: `edge-skips-ring`: the skip is a detail implementing or translating to policy types, such as a gateway constructing entities under R5 (The consumer owns the port), or it is recorded as an exception with the risk it accepts.
+Not a finding when: `edge-skips-ring`: no exemption; `forbidden-edge-present`: no exemption.
 
 ### R40. Organize a monolith by domain
 
@@ -114,7 +116,7 @@ Examples:
 - Good: `reporting` reads through `OrdersComponent`, or through a projection `orders` owns and
   publishes.
 
-Not a finding when: `shared-shape-without-owner`: one component owns the shape and publishes it, and the others read it only through that owner.
+Not a finding when: `shared-shape-without-owner`: the shape is an external standard both components implement, such as a file format or a wire protocol defined outside the system, so its owner is that standard.
 
 ## Conditions
 
@@ -128,7 +130,7 @@ Not a finding when: `shared-shape-without-owner`: one component owns the shape a
 | `forbidden-edge-present` | A dependency matches a recorded forbidden edge. | R39 | check | major | `forbidden-edge` |
 | `forbidden-edge-unenforced` | A recorded forbidden edge is absent from the code, but nothing in the build would stop it. | R39 | judgment | major | `forbidden-edge-unenforced` |
 | `edge-skips-ring` | A unit depends on a unit more than one ring inward with no recorded exception, and the skip is not a detail implementing or translating to policy types. | R39 | judgment | major | `edge-skips-ring` |
-| `structure-named-by-technology` | The top-level structure is named by technology, such as web, service, or data, so one use case's code is spread across those technical folders. | R40 | judgment | major | `structure-named-by-technology` |
+| `structure-named-by-technology` | The top-level structure is named by technology, such as web, service, or data, so a use case's code is spread across those technical folders. | R40 | judgment | major | `structure-named-by-technology` |
 | `delivery-inside-domain-component` | A delivery-mechanism class sits inside a domain component, or persistence is reachable from delivery code. | R40 | judgment | major | `delivery-inside-domain-component` |
 | `edge-outside-intended-graph` | An edge present in the code is absent from the intended component graph. | R41 | judgment | major | `edge-outside-intended-graph` |
 | `shared-shape-without-owner` | Components share a table, document, or wire shape that no component owns. | R41 | judgment | major | `shared-shape-without-owner` |
