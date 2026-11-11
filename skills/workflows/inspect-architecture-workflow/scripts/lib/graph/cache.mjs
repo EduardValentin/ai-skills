@@ -113,7 +113,7 @@ async function isIgnored(root) {
   }
 }
 
-async function ensureIgnored(root) {
+export async function ensureIgnored(root) {
   if (!(await isGitRepository(root)) || (await isIgnored(root))) return;
   const excludeFile = path.resolve(root, (await gitText(root, ["rev-parse", "--git-path", "info/exclude"])).trim());
   mkdirSync(path.dirname(excludeFile), { recursive: true });

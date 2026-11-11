@@ -34,9 +34,18 @@ function tally(commits, classify) {
   return { commitsOf, modulesOf };
 }
 
-export async function volatility({ model, flags, root }) {
+async function tallyHistory({ model, root, flags }) {
   const commits = await readHistory(root, selectionFor(flags, model));
-  const { commitsOf, modulesOf } = tally(commits, createClassifier(model));
+  return tally(commits, createClassifier(model));
+}
+
+export async function componentCommitCounts({ model, root, flags = {} }) {
+  const { commitsOf } = await tallyHistory({ model, root, flags });
+  return new Map(model.components.map((component) => [component.name, commitsOf.get(component.name)?.size ?? 0]));
+}
+
+export async function volatility({ model, flags, root }) {
+  const { commitsOf, modulesOf } = await tallyHistory({ model, root, flags });
   const rows = model.components.map((component) => [
     component.name,
     commitsOf.get(component.name)?.size ?? 0,

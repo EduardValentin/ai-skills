@@ -23,7 +23,7 @@ function readFlag(name, kind, argv, index, flags) {
     throw new UsageError(`--${name} needs a value. Pass it as --${name} <value>.`);
   }
   if (kind === "git-ref") checkGitRef(name, next);
-  flags[name] = next;
+  flags[name] = kind === "list" ? [...(flags[name] ?? []), next] : next;
   return index + 1;
 }
 

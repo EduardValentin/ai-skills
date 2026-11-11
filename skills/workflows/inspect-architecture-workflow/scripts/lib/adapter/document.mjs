@@ -27,7 +27,7 @@ function parseJson(output, command) {
   }
 }
 
-function edgeProblems(edges = []) {
+export function edgeProblems(edges = []) {
   return edges.flatMap((edge, index) => {
     const at = `edges[${index}]`;
     if (edge.external && edge.to) return [`${at}: give either "to" or "external", not both`];
@@ -49,7 +49,7 @@ function normalizeCapabilities(declared = {}) {
   return Object.fromEntries(FACT_CAPABILITIES.map((name) => [name, declared[name] === true]));
 }
 
-function normalizeModule(module, capabilities) {
+export function normalizeModule(module, capabilities) {
   const facts = Object.entries(FACT_DEFAULTS).map(([name, empty]) => {
     const provided = capabilities[name] && module[name] !== undefined;
     return [name, provided ? module[name] : empty()];
@@ -57,7 +57,7 @@ function normalizeModule(module, capabilities) {
   return { path: module.path, ...Object.fromEntries(facts) };
 }
 
-function normalizeEdge(edge, capabilities) {
+export function normalizeEdge(edge, capabilities) {
   const { symbols, ...rest } = edge;
   return capabilities.symbolImports && symbols ? { ...rest, symbols } : rest;
 }

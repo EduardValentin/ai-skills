@@ -1,29 +1,19 @@
 #!/usr/bin/env node
 import process from "node:process";
 import { ArchError, UsageError } from "./lib/cli/errors.mjs";
-import { parseArgs } from "./lib/cli/flags.mjs";
 import { run as runApplicable } from "./lib/commands/applicable.mjs";
 import { run as runCheck } from "./lib/commands/check.mjs";
 import { run as runCollect } from "./lib/commands/collect.mjs";
+import { run as runFindings } from "./lib/commands/findings.mjs";
 import { run as runModel } from "./lib/commands/model.mjs";
 import { run as runQuery } from "./lib/commands/query.mjs";
 import { run as runUncovered } from "./lib/commands/uncovered.mjs";
-
-const NOT_IMPLEMENTED_EXIT = 2;
-
-function pending(name, spec) {
-  return async (args) => {
-    parseArgs(spec, args);
-    console.error(`arch ${name}: not implemented`);
-    return NOT_IMPLEMENTED_EXIT;
-  };
-}
 
 const handlers = {
   collect: runCollect,
   check: runCheck,
   applicable: runApplicable,
-  findings: pending("findings", { flags: {}, positional: { min: 0, max: 2 } }),
+  findings: runFindings,
   query: runQuery,
   uncovered: runUncovered,
   model: runModel,

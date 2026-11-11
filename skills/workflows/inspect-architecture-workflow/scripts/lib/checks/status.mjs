@@ -7,7 +7,7 @@ export function statusForRule(model, rule, component) {
   return specific?.status ?? model.rules[rule]?.status ?? "enforced";
 }
 
-function strictest(statuses) {
+export function strictest(statuses) {
   return statuses.reduce((best, status) => (STRICTNESS[status] > STRICTNESS[best] ? status : best), "off");
 }
 

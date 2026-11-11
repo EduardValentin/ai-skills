@@ -25,11 +25,11 @@ function providedFacts(module, capabilities) {
   return Object.fromEntries(FACTS.map((fact) => [fact, capabilities[fact] ? module[fact] : null]));
 }
 
-function buildUnits(model, document) {
+function buildUnits(model, document, classifications) {
   const classify = createClassifier(model);
   return document.modules
     .map((module) => {
-      const { matched, ...classified } = classify(module.path);
+      const { matched, ...classified } = classifications[module.path] ?? classify(module.path);
       return { path: module.path, ...classified, ...providedFacts(module, document.capabilities) };
     })
     .sort(byText("path"));
@@ -113,8 +113,8 @@ function buildCycles(units, edges, componentEdges, model) {
   };
 }
 
-export function buildGraph(model, document) {
-  const units = buildUnits(model, document);
+export function buildGraph(model, document, { classifications = {} } = {}) {
+  const units = buildUnits(model, document, classifications);
   const edges = buildEdges(document, units, model.rings);
   const componentEdges = buildComponentEdges(units, edges);
   return {
