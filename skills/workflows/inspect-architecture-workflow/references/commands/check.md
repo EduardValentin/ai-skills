@@ -44,7 +44,7 @@ Without a model the report is the line "no architecture model; run a baseline au
 full review", and the JSON is `{ "model": false }`.
 
 The report is a table with the columns Rule (number and title), Target, Severity, Status, Origin,
-Evidence, and Correction; then "Covered by recorded exceptions" with a count when any finding was
+Evidence, and Corrections, several alternatives joined by `|`; then "Covered by recorded exceptions" with a count when any finding was
 covered; then three sections. Incomplete lists each condition that lacked a fact or a
 classification, with what to do. Not run lists each check that needs something this run lacks,
 such as `--base`. Rules not enforced lists every rule set to `advisory` or `off`, with its reason.
@@ -53,8 +53,10 @@ The JSON output has `model`; `run` (`mode` of `audit`, `base`, or `proposal`, th
 commit, the `proposal` path, and the `state` it ran on, which `arch findings add` compares to
 refuse a stale check); `rows`, one per finding (`check`, `target`, `defect`, `rules`, `severity`,
 `baseSeverity`, `lifts`, `status`, `origin` of `introduced`, `inherited`, or `none`, `evidence`,
-`consequence`, one sentence saying what the finding makes harder to change, and `correction`, the
-smallest fix first); `incomplete` (`check`, `rules`, `target`, `reason`, and for a plan's open fact
+`consequence`, one sentence saying what the finding makes harder to change, `corrections`, every
+distinct correction of the checks that met at this target, each with its smallest fix first, and
+`moves`, `inward` or `outward` for each correction that moves code across rings, so corrections of
+one edge can be compared without reading their text); `incomplete` (`check`, `rules`, `target`, `reason`, and for a plan's open fact
 `clarification`, `task`, and `fact`); `notRun` (`check`, `rules`, `reason`); `skipped` (`rule`,
 `status`, `reason`, `component`); and `covered`, the count of findings recorded exceptions covered.
 With `--out`, the one printed line is `wrote <file>: <n> findings, <n> incomplete`, or
@@ -82,10 +84,10 @@ From the payroll fixture, whose model sets R6 off:
 
 ```
 $ arch check
-| Rule | Target | Severity | Status | Origin | Evidence | Correction |
+| Rule | Target | Severity | Status | Origin | Evidence | Corrections |
 |---|---|---|---|---|---|---|
 | R7 Lower-level components are plugins | src/web/payroll-controller.ts -> src/adapters/system-clock.ts | blocker | enforced | none | concrete detail constructed outside a composition root: src/web/payroll-controller.ts (adapters, controller) constructs src/adapters/system-clock.ts (adapters, adapter) | Move the construction of src/adapters/system-clock.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `Clock` in `src/domain/clock.ts` |
-| R38 Enforce boundaries with the build | domain | major | enforced | none | domain has enforcement "none", which the build does not check, and adapters, web depend on it | Enforce the boundary of domain with the compiler or the build, then record how in its enforcement field |
+| R38 Enforce boundaries with the build | domain | major | enforced | none | domain has enforcement "none", which the build does not check, and adapters, web depend on it | If something already stops code outside domain from importing its internals, record that mechanism in the enforcement field of domain; otherwise add the cheapest enforcement the project has, such as a visibility rule, an export list, or an import rule that fails the build, and record it there; make it a separate build unit only when none of those is available |
 
 ## Incomplete
 

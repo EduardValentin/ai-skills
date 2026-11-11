@@ -22,7 +22,7 @@ Order the commands so each runs after the ones it depends on, such as `add-compo
 
 - The absolute paths of the project root and the skill folder.
 - The uncovered modules `arch uncovered` or `arch applicable` listed.
-- For a dispute: the disputed paths, each with the reviewer's reason, and the model path.
+- For a dispute: the `disputes` entries of the reviewers' judged files, each a unit path with the reviewer's reason, and the model path.
 - The message `arch model validate` printed, in an audit.
 - The baseline, `greenfield` or `legacy`, in an audit.
 - `references/classification.md` and `references/rules/vocabulary.md`.

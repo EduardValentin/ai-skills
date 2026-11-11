@@ -61,7 +61,9 @@ The judged findings file is one object:
       "consequence": "Swapping the clock for tests or another runtime means editing the use case.",
       "correction": "Take the Clock port in the constructor and drop the SystemClock import.",
       "evidence": ["src/domain/payroll-use-case.ts:2"], "origin": "introduced" } ],
-  "questions": ["Will payroll run in a second time zone this year?"] }
+  "questions": ["Will payroll run in a second time zone this year?"],
+  "disputes": [ { "path": "src/domain/payroll-use-case.ts",
+                  "reason": "It formats the payslip text, which is presenter work, not a use case's." } ] }
 ```
 
 `judgment` is an id from the conditions table of a rule group, and `rules`, `defect`, and
@@ -74,7 +76,9 @@ scope there and refused in the other flows.
 required in a change or plan review and absent in an audit. `"wider": true` marks a target outside
 the reviewed scope, where it is required, or a finding whose only correction is larger than the
 smallest change inside the scope. It is reported apart and never blocks. `liftedBy` names a confirmed upcoming change that makes the finding a
-blocker: one passed with `--upcoming` or recorded with `arch model add-upcoming`.
+blocker: one passed with `--upcoming` or recorded with `arch model add-upcoming`. `disputes` lists
+the units whose code contradicts their classification, each with the reviewer's reason; every
+`path` must be a unit of the graph, or `add` refuses the file.
 
 A judged finding is dropped, not refused, when recorded exceptions cover every rule it names or
 every rule it names is `off` for its target's component. An exception with `rule=` removes only
@@ -88,13 +92,18 @@ The printed result has one line each for the verdict with its blocking counts by
 inherited counts, the incomplete conditions and why, the checks not run, the advisory findings,
 `Dropped:` with the count of findings an exception covers or whose rule is off and the reasons,
 and the rules not enforced; then the corrections, grouped by correction and ordered by severity.
+A finding keeps every distinct correction of the check rows and judged findings merged into it, a
+check row's first, printed as `Fix: <a> | <b>`.
 Then come three sections, each left out when it is empty: `Inherited findings:` and `Wider
 observations:`, one line per finding in the form `<rule numbers and titles>: <target>:
 <consequence> Fix: <correction>`, and `Overlapping findings:`, one group per unit that judged
 findings from two or more `--judged` files name as their target or as an edge end with different
-corrections, each followed by the file it came from. These are parallel reviewers proposing two
-fixes for one unit, to be reconciled into one. A check finding never overlaps, since its correction
-is fixed, and a single judged file never overlaps with itself. Last come the questions for the user. The verdict is `OK`,
+corrections, each followed by the file it came from. The command reads the judged findings before
+merging them, so two reviewers giving the same judgment on the same target with different
+corrections are listed too. These are parallel reviewers proposing two fixes for one unit, to be
+reconciled into one. A check finding never overlaps, since its correction is fixed, and a single
+judged file never overlaps with itself. Then come the questions for the user, and last
+`Classification disputes: <n>`, one line per dispute: `- <path>: <reason>`. The verdict is `OK`,
 `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE`
 when none is and a condition of an enforced rule could not be decided. With `--rank`, a ranking
 follows; wider observations stay in their own section and are not ranked. Without a model, the result is the verdict `OK` and the line "no architecture model; run a
@@ -103,9 +112,11 @@ baseline audit to enable the full review".
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
 `advisory`, `covered` (check findings an exception covered), `dropped` (each dropped judged finding
 with its `target`, `judgment`, and `reason`), `wider`, `incompleteCount`, `incompleteReasons`,
-`notRun`, `notEnforced`, `corrections`, `questions`, `overlaps` (each overlapping `unit` with its
-`findings`, each with `target`, `defect`, `rules`, `correction`, and `files`, the judged files it
-came from), `findings`, and with `--rank` a `ranking`.
+`notRun`, `notEnforced`, `corrections` (each group's `severity`, `rules`, `targets`,
+`consequence`, `corrections`, and `findings` count), `questions`, `disputes` (each `path` and
+`reason`), `overlaps` (each overlapping `unit` with its `findings`, each with `target`, `defect`,
+`rules`, `corrections`, and `files`, the judged files it came from), `findings` (each with its
+`corrections`), and with `--rank` a `ranking`.
 
 ## Example
 
@@ -127,9 +138,11 @@ Corrections:
 3. R4 Dependencies point toward policy; R5 The consumer owns the port: src/domain/payroll-use-case.ts -> src/adapters/system-clock.ts: A change to src/adapters/system-clock.ts can force a change to the business rule in src/domain/payroll-use-case.ts, which cannot be tested without it. Fix: Depend on the existing port `Clock` in `src/domain/clock.ts` instead of src/adapters/system-clock.ts, and have the composition root pass src/adapters/system-clock.ts to src/domain/payroll-use-case.ts
 5. R23 Defer unforced decisions: src/domain/payroll-use-case.ts: Swapping the clock for tests or another runtime means editing the use case. Fix: Take the Clock port in the constructor and drop the SystemClock import.
 Inherited findings:
-- R38 Enforce boundaries with the build: domain: Nothing stops code from reaching into domain, so its boundary erodes unnoticed and its internals become hard to change. Fix: Enforce the boundary of domain with the compiler or the build, then record how in its enforcement field
+- R38 Enforce boundaries with the build: domain: Nothing fails when code outside domain imports one of its internal modules, so such imports pile up unnoticed and any internal change to domain can break code outside it. Fix: If something already stops code outside domain from importing its internals, record that mechanism in the enforcement field of domain; otherwise add the cheapest enforcement the project has, such as a visibility rule, an export list, or an import rule that fails the build, and record it there; make it a separate build unit only when none of those is available
 Questions for the user: 1
 - Will payroll run in a second time zone this year?
+Classification disputes: 1
+- src/domain/payroll-use-case.ts: It formats the payslip text, which is presenter work, not a use case's.
 ```
 
 Corrections 2 and 4 are left out here for length. Correction 5 repeats what correction 3, from the
@@ -158,6 +171,7 @@ Inherited findings:
 - R7 Lower-level components are plugins: src/web/payroll-controller.ts -> src/adapters/pg-payroll-repository.ts: Replacing or reconfiguring src/adapters/pg-payroll-repository.ts means editing src/web/payroll-controller.ts, which cannot be tested with a stand-in. Fix: Move the construction of src/adapters/pg-payroll-repository.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `PayrollRepository` in `src/domain/payroll-repository.ts`
 - R7 Lower-level components are plugins: src/web/payroll-controller.ts -> src/adapters/system-clock.ts: Replacing or reconfiguring src/adapters/system-clock.ts means editing src/web/payroll-controller.ts, which cannot be tested with a stand-in. Fix: Move the construction of src/adapters/system-clock.ts from src/web/payroll-controller.ts into the composition root and pass it to src/web/payroll-controller.ts as the existing port `Clock` in `src/domain/clock.ts`
 Questions for the user: 0
+Classification disputes: 0
 ```
 
 The verdict is `INCOMPLETE` because the adapter does not provide `typeChecks`, which an enforced
@@ -184,6 +198,7 @@ Overlapping findings:
   - R6 Use cases own their boundaries: src/lending/loan-use-case.ts: Fix: Depend on the existing LoanStore port instead of the SQL store. (from .architecture/work/judged-dependency-direction.json)
   - R26 Demonstrate the model without I/O: src/lending/loan-use-case.ts: Fix: Have the composition root create the pool and pass the store in. (from .architecture/work/judged-deferral-and-boundaries.json)
 Questions for the user: 0
+Classification disputes: 0
 ```
 
 Twenty-nine of the thirty-one corrections are left out here for length. The two findings on the use

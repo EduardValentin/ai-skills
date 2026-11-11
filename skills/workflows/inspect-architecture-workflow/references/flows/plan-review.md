@@ -46,22 +46,22 @@ defined in `references/rules/vocabulary.md`.
    `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, the file of every other
    group in `groups`, such as `references/rules/dependency-direction.md`, each with its `judgments`
    entries as printed (`id`, `targets`, `condition`), and the upcoming changes the plan states, word
-   for word. It returns classification disputes, if any, then judged findings, which you write to
-   `.architecture/work/judged.json`:
+   for word. It returns one JSON object, which you write to `.architecture/work/judged.json`:
 
    ```json
    { "findings": [ { "judgment": "<judgment id>", "target": "<unit, edge, port, or component>",
        "consequence": "<one sentence>", "correction": "<smallest change to the plan>",
        "evidence": ["<plan>#<heading>"], "origin": "introduced", "liftedBy": "<upcoming change>" } ],
-     "questions": ["<question for the user>"] }
+     "questions": ["<question for the user>"],
+     "disputes": [ { "path": "<unit path>", "reason": "<what its code shows that the model contradicts>" } ] }
    ```
 
    A judgment that applies to the plan as a whole takes the target `plan`. `origin` is `inherited`
    for a defect the plan leaves in place. A target outside the plan adds `"wider": true`, as does a
-   finding no smaller correction can fix under R8 (Constraints need a named reason). Send disputes
-   once to `architecture-classifier`, each path with the reviewer's reason, with the model path and
-   `references/classification.md`, and tell the user its commands for after this review; a later
-   dispute goes in the result as an open question.
+   finding no smaller correction can fix under R8 (Constraints need a named reason). If `disputes`
+   is not empty on the first judged pass, send them to `architecture-classifier` with the model path
+   and `references/classification.md`, and only report its commands to the user with the result,
+   since this flow never edits the model; later disputes go to the user as open questions.
 8. Put each question to the user, or return the questions to the calling workflow to ask. Send the
    questions with the answers to the same reviewer; it returns a fresh judged file, written over
    `judged.json`, in which each answered question became a finding, a `liftedBy` on a finding, or
@@ -72,9 +72,8 @@ defined in `references/rules/vocabulary.md`.
    prints the result and its verdict. If it refuses judged findings, send the listed problems to
    the reviewer, write its fresh judged file, and run this step again; if it says the check is
    stale or made from another proposal, run step 5 again, then this step.
-10. Collect the clarification requests: the `incomplete` entries of `.architecture/work/check.json`
-    that have `"clarification": true`, each a `task` and the `fact` it leaves open. Report them
-    apart from the findings: the plan is not concrete enough to review fully.
+10. Collect the clarification requests, the `incomplete` entries of `.architecture/work/check.json`
+    with `"clarification": true`, each a `task` and the `fact` it leaves open; report them apart.
 11. If the verdict is `SHOULD_CHANGE` or `INCOMPLETE` and fewer than `planFixRounds` revisions have
     been made, the plan's author revises it; count the revision and run steps 4 to 6 again. The same
     reviewer judges again against the new `judgments`, its fresh file replaces `judged.json`, and
@@ -82,7 +81,8 @@ defined in `references/rules/vocabulary.md`.
     revisions, hand the remaining findings and clarification requests to the user instead.
 12. This flow only reports findings. The user accepts one after it with a model edit: an exception
     (`add-exception`, `'*'` as the `to` end for a unit, port, or component), a rule status
-    (`set-rule` `advisory` or `off`, the only way to accept a cycle), or a threshold.
+    (`set-rule` `advisory` or `off`, the only way to accept a cycle), or a threshold, after which a
+    judged finding whose condition names that knob needs the same reviewer to judge it again.
 13. Return the printed result, the clarification requests, the open questions, and the revision
     count; show `Inherited findings` and `Wider observations` to the user as non-blocking. The
     verdict line is what the caller returns: `OK` passes a gate; `SHOULD_CHANGE` and `INCOMPLETE` block it.

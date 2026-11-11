@@ -622,11 +622,35 @@ def test_only_the_first_audit_reviewer_judges_the_cross_cutting_conditions():
     assert "Only the first reviewer dispatched also gets `references/rules/cross-cutting.md`" in step
 
 
-def test_accepting_by_threshold_removes_the_finding_and_names_the_knobs():
+def test_accepting_by_threshold_drops_check_findings_and_has_judged_ones_judged_again():
     for name in ["audit", "change-review"]:
         text = flow_text(name)
-        assert "after a threshold it no longer appears at all" in text, name
+        assert "After a threshold, a finding from `check` no longer appears on the rerun" in text, name
+        assert "whose condition names that knob is judged again by" in text, name
+        assert "covering some rules leaves it with the rest" in text, name
         assert "arch model explain-thresholds" in text, name
+        assert "no longer appears at all" not in text, name
+    assert "condition names that knob needs the same reviewer to judge it again" in flow_text("plan-review")
+
+
+def test_every_reviewer_reply_is_one_json_object_carrying_its_disputes():
+    for name in FLOW_NAMES:
+        text = flow_text(name)
+        assert "returns one JSON object" in text, name
+        assert "returns classification disputes, if any, then" not in text, name
+        assert "on the run's first judged pass" in text.lower() or "on the first judged pass" in text, name
+        assert "open questions" in text, name
+        blocks = [json.loads(block) for block in JSON_BLOCK.findall(flow_file(name).read_text())]
+        assert any("disputes" in block for block in blocks), name
+    assert "only report its commands to the user" in flow_text("plan-review")
+
+
+def test_the_audit_flow_names_the_reconciliation_packet_and_its_order():
+    step = " ".join(numbered_steps(flow_file("audit").read_text())[15].split())
+    for part in ["Reconcile before any acceptance", "a fresh `architecture-reviewer`, same prompt",
+                 "the section as printed", "`.architecture/work/check.json`", "with its group's file",
+                 "Its one JSON object"]:
+        assert part in step, part
 
 
 def test_every_flow_shows_the_non_blocking_sections():

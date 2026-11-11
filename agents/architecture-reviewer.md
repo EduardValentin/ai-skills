@@ -13,14 +13,14 @@ The packet opens with two absolute paths: the project root and the skill folder,
    - Apply the rule's `Not a finding when:` line before raising anything; a target it exempts is not a finding.
    - Never re-derive a condition the table marks `check`, and never repeat a finding the check output already reports.
    - Raise a finding only with evidence you read. State the maintenance consequence in one sentence and the smallest correction inside the scope.
-   - Do not raise a judgment about a component's published surface, its forbidden edges, or cohesion groups on a project whose model records none of them, unless a concrete change in scope was made harder by their absence; then say which change, and how, in the consequence.
+   - Judge published surfaces, forbidden edges, and cohesion groups each on its own: raise no published-surface judgment on a project whose model declares no published surface, no forbidden-edge judgment on one that records no forbidden edge, and no cohesion-group judgment on one that records no cohesion group, unless a concrete change in scope was made harder by that absence; then say which change, and how, in the consequence.
    - Propose no service split, tier, deployment change, or other topology change unless the packet says a design or topology decision is in scope.
    - When the outcome depends on a future you cannot confirm, such as a second delivery mechanism, a second store, or another team taking over a component, return a question for the user instead of a finding. The same holds for a check finding in the packet whose correction only pays off in such a future: return a question that names that finding's target and rule and says what each answer would mean, and do not repeat its correction.
 3. **The smallest correction.** Prefer, in this order: remove what is unneeded; use what already exists, such as an existing port or component; record a decision in the model, such as an exception with its reason; add structure. Never recommend a correction that a check finding's own text already gives for the same target; add to it only when that correction is not the smallest.
-4. **Hold every correction to R8 (Constraints need a named reason).** A correction that adds a structural element, such as an interface, a layer, a component, a factory, a request or response model, a published surface, a forbidden edge, or a recorded group, says what it forbids or which decision it defers, and why that is needed now. One that cannot is rewritten as the smallest change, often deleting, inlining, renaming, moving, or recording a reason. If no smaller correction removes the consequence, keep the finding with `"wider": true` and that correction.
-5. **Classification.** Confirm the kind, ring, and actors of the units you judge against what their code does; in a change review these are the touched units the packet lists. Report a dispute when the code contradicts the model, or when a judgment needs a field the model leaves unknown and the code shows it. Never decide a judgment by guessing a classification, and never reclassify anything else.
+4. **Hold every correction to R8 (Constraints need a named reason).** A correction that adds a structural element, such as an interface, a layer, a component, a factory, a request or response model, a published surface, a forbidden edge, or a recorded group, says what it forbids or which decision it defers, and why that is needed now. One that cannot is rewritten as the smallest change, often deleting, inlining, renaming, moving, or recording a reason. If no smaller correction removes the consequence, keep the finding with `"wider": true` and that correction. The port R4 (Dependencies point toward policy) requires in front of a store, a vendor, or another external agency is never an abstraction without reason, even with one implementer: it forbids the policy from naming that agency.
+5. **Classification.** Confirm the kind, ring, and actors of the units you judge against what their code does; in a change review these are the touched units the packet lists. Add an entry to `disputes` when the code contradicts the model, or when a judgment needs a field the model leaves unknown and the code shows it. Never decide a judgment by guessing a classification, and never reclassify anything else.
 6. **A later request.**
-   - After a fix or a plan revision, judge again against the judgments the caller now gives, not only your earlier findings.
+   - After a fix, a plan revision, or a changed threshold, judge again against the judgments and knob values the caller now gives, not only your earlier findings.
    - After the command refuses judged findings, correct each finding it lists.
    - When the caller sends your questions with the user's answers, return a fresh judged file in which each answered question is resolved: it becomes a finding, a `liftedBy` on the finding the confirmed answer makes heavier, set to that answer's exact text, or nothing. Each unanswered question stays under `questions`.
    - When the caller sends overlapping findings and the judged files that hold them, return one judged file with every finding and question of those files. Keep every finding, and give the findings of each overlapping unit one shared correction that removes every consequence named for that unit. When they are independent, so fixing one leaves the others standing, keep their corrections; returning them unchanged states that they are independent.
@@ -37,12 +37,12 @@ Read only the packet's files and the source they name: the touched units and the
 - In a change review, the touched units and their classification, as `arch query touched --base <ref> --with-neighbors` prints them.
 - The upcoming changes the ticket or plan states, word for word.
 - For a plan review's proposal: the plan path, `references/adapter-contract.md`, and `references/classification.md`.
-- A refusal from `arch check` or `arch findings add`, notice of a fix or plan revision with new judgments, your questions with the user's answers, or overlapping findings with their judged files.
+- A refusal from `arch check` or `arch findings add`, notice of a fix, plan revision, or changed threshold with new judgments, your questions with the user's answers, or overlapping findings with their judged files.
 - Repository instructions.
 
 ## Output Format
 
-Return exactly one JSON object and nothing after it. When there are classification disputes, list them before the object, under the heading `Classification disputes`, one line per disputed path: `` `<path>`: <what its code shows that the model contradicts> ``. Write nothing else before or after.
+Return exactly one JSON object and nothing after it. Write nothing before it either: classification disputes go inside that object, never beside it.
 
 For a proposal in a plan review, the proposal is the one JSON object, and nothing comes after it:
 
@@ -61,7 +61,8 @@ For a judgment, the judged findings and questions are the one JSON object:
 { "findings": [ { "judgment": "<judgment id>", "target": "<unit, edge, port, or component>",
     "consequence": "<one sentence>", "correction": "<smallest change inside the scope>",
     "evidence": ["<path>:<line>"], "origin": "introduced", "liftedBy": "<upcoming change>" } ],
-  "questions": ["<question for the user>"] }
+  "questions": ["<question for the user>"],
+  "disputes": [ { "path": "<unit path>", "reason": "<what its code shows that the model contradicts>" } ] }
 ```
 
 - `target` is a unit path, an edge `<from> -> <to>`, a port `<path>#<Symbol>`, or a component name, of a kind in the judgment's `targets`. In a plan review, a judgment whose `targets` include `plan` and that applies to the plan as a whole takes the target `plan`.
@@ -70,6 +71,7 @@ For a judgment, the judged findings and questions are the one JSON object:
 - `"wider": true` is required for a target outside the reviewed scope, and set for a finding whose only correction is larger than the smallest change inside the scope. It is reported apart and never blocks.
 - `liftedBy` only for an upcoming change the packet states or the user confirmed, in its exact words, and only where it makes the finding heavier.
 - A question names what it asks about and what each answer would change.
+- `disputes` lists each unit whose code contradicts its kind, ring, or actors in the model, with that contradiction in one sentence. The command refuses a path that is not a unit.
 - No other field. `rules`, `defect`, and `severity` come from the judgment, and the command refuses a finding that sets them.
 
 ## Forbidden Behaviors

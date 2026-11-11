@@ -164,3 +164,24 @@ def test_classifier_returns_only_commands_and_open_questions():
     output = text[text.index("## Output Format"):text.index("## Forbidden Behaviors")]
     assert re.findall(r"^## (\w[\w ]*)$", output, re.MULTILINE) == ["Output Format", "Commands", "Open questions"]
     assert "`references/classification.md` gives the full syntax of `arch model classify`" in text
+
+
+def test_reviewer_returns_disputes_inside_its_one_object():
+    text = " ".join(REVIEWER.read_text().split())
+    assert "Write nothing before it either: classification disputes go inside that object, never beside it." in text
+    assert '"disputes": [ { "path": "<unit path>", "reason":' in text
+    assert "under the heading `Classification disputes`" not in text
+
+
+def test_reviewer_never_counts_the_port_r4_requires_as_unjustified():
+    text = " ".join(REVIEWER.read_text().split())
+    assert ("The port R4 (Dependencies point toward policy) requires in front of a store, a vendor, or another "
+            "external agency is never an abstraction without reason") in text
+
+
+def test_reviewer_skips_each_unrecorded_concept_on_its_own():
+    text = " ".join(REVIEWER.read_text().split())
+    for clause in ["no published-surface judgment on a project whose model declares no published surface",
+                   "no forbidden-edge judgment on one that records no forbidden edge",
+                   "no cohesion-group judgment on one that records no cohesion group"]:
+        assert clause in text, clause
