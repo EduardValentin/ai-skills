@@ -60,3 +60,16 @@ function metricsOf(units, edges, component, thresholds) {
 export function componentMetrics(units, edges, components, thresholds) {
   return components.map((component) => metricsOf(units, edges, component, thresholds));
 }
+
+const TOLERANCE = 1e-9;
+
+export function distanceOutliers(components, deviations) {
+  const measured = components.filter((component) => component.distance !== null && component.distance !== undefined);
+  if (measured.length === 0) return [];
+  const mean = measured.reduce((sum, component) => sum + component.distance, 0) / measured.length;
+  const variance = measured.reduce((sum, component) => sum + (component.distance - mean) ** 2, 0) / measured.length;
+  const limit = mean + deviations * Math.sqrt(variance);
+  return measured
+    .filter((component) => component.distance > limit + TOLERANCE)
+    .map((component) => ({ name: component.name, distance: component.distance, mean: round(mean) }));
+}

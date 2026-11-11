@@ -1,12 +1,12 @@
 const RING_PREFIX = "ring:";
 
-function subjectOf(level, name, context) {
+export function subjectOf(level, name, context) {
   if (level === "component") return { path: null, component: name, ring: null };
   const unit = context.unitOf(name);
   return { path: name, component: unit?.component ?? null, ring: unit?.ring ?? null };
 }
 
-function endMatches(end, subject) {
+export function endMatches(end, subject) {
   if (end.startsWith(RING_PREFIX)) return end.slice(RING_PREFIX.length) === subject.ring;
   return end === subject.path || end === subject.component;
 }

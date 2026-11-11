@@ -59,13 +59,14 @@ function undecidedEntries(check, context) {
 }
 
 function runCheck(check, context) {
-  if (check.needsBase && !context.touched) return { rows: [], incomplete: [] };
+  const skipped = check.needsBase && !context.touched;
+  if (skipped || check.applies?.(context) === false) return { rows: [], incomplete: [] };
   const missing = check.facts.filter((fact) => !context.graph.capabilities?.[fact]);
   if (missing.length > 0) return { rows: [], incomplete: [missingFactEntry(check, missing)] };
   const rows = check.run(context).map((raw) => ({
     ...raw,
     check: check.id,
-    defect: check.defect,
+    defect: raw.defect ?? check.defect,
     rules: check.rules,
     severity: check.severity,
   }));

@@ -1,5 +1,7 @@
 import { touchesBarrel } from "./context.mjs";
-import { describeUnit, edgePairs, edgeTarget } from "./targets.mjs";
+import { PORT_OWNERSHIP_CHECKS } from "./port-ownership.mjs";
+import { describedPair, externalEdgeRow, unitEdgeRow } from "./rows.mjs";
+import { describeUnit, edgePairs } from "./targets.mjs";
 
 const GROUP = "dependency-direction";
 const DETAIL_SIDE_ROLES = new Set(["detail", "wiring"]);
@@ -10,29 +12,14 @@ const CORRECTIONS = {
     `or move ${to} to the ring it belongs to`,
   external: (name) =>
     `Route the dependency on external:${name} through a port the policy ring owns, implemented outside it`,
+  boundary: (from, to) =>
+    `Have ${from} call ${to} through an input boundary the use case implements, declared beside the use case`,
   construction: (from) =>
     `Move the construction in ${from} into a composition root and hand the details in through ports ${from} declares`,
 };
 
-function unitEdgeRow({ from, to, evidence, correction }) {
-  return {
-    target: edgeTarget(from, to),
-    evidence,
-    correction,
-    units: [from, to],
-    components: [],
-    edge: { level: "unit", from, to },
-  };
-}
-
 function isPolicyToDetail(context, pair) {
   return context.roleOf(pair.from) === "policy" && DETAIL_SIDE_ROLES.has(context.roleOf(pair.to));
-}
-
-function describedPair(context, pair) {
-  const from = describeUnit(context.unitOf(pair.from) ?? { path: pair.from });
-  const to = describeUnit(context.unitOf(pair.to) ?? { path: pair.to });
-  return `${from} -> ${to} by ${pair.kinds.join(", ")}`;
 }
 
 function policyImportsDetail(context) {
@@ -51,20 +38,16 @@ function policyImportsExternal(context) {
   return (context.graph.externals ?? []).flatMap((external) =>
     external.importers
       .filter((importer) => context.roleOf(importer) === "policy")
-      .map((importer) => {
-        const target = `external:${external.name}`;
-        return {
-          ...unitEdgeRow({
-            from: importer,
-            to: target,
-            evidence:
-              `policy unit depends on a ${external.tag} external: ` +
-              `${describeUnit(context.unitOf(importer))} imports ${external.name}`,
-            correction: CORRECTIONS.external(external.name),
-          }),
-          units: [importer],
-        };
-      }),
+      .map((importer) =>
+        externalEdgeRow({
+          from: importer,
+          name: external.name,
+          evidence:
+            `policy unit depends on a ${external.tag} external: ` +
+            `${describeUnit(context.unitOf(importer))} imports ${external.name}`,
+          correction: CORRECTIONS.external(external.name),
+        }),
+      ),
   );
 }
 
@@ -94,6 +77,19 @@ function detailConstructedOutsideRoot(context) {
           "concrete detail constructed outside a composition root: " +
           `${describeUnit(context.unitOf(edge.from))} constructs ${describeUnit(context.unitOf(edge.to))}`,
         correction: CORRECTIONS.construction(edge.from),
+      }),
+    );
+}
+
+function controllerImportsUseCase(context) {
+  return edgePairs(context.graph)
+    .filter((pair) => context.unitOf(pair.from)?.kind === "controller" && context.unitOf(pair.to)?.kind === "use-case")
+    .filter((pair) => pair.kinds.some((kind) => kind !== "type-import"))
+    .map((pair) =>
+      unitEdgeRow({
+        ...pair,
+        evidence: `controller calls a use case directly: ${describedPair(context, pair)}`,
+        correction: CORRECTIONS.boundary(pair.from, pair.to),
       }),
     );
 }
@@ -139,4 +135,15 @@ export const DEPENDENCY_DIRECTION_CHECKS = [
     needsBase: false,
     run: detailConstructedOutsideRoot,
   },
+  {
+    id: "controller-imports-use-case",
+    rules: ["R6"],
+    group: GROUP,
+    defect: "use-case-called-without-boundary",
+    severity: "blocker",
+    facts: [],
+    needsBase: false,
+    run: controllerImportsUseCase,
+  },
+  ...PORT_OWNERSHIP_CHECKS,
 ];

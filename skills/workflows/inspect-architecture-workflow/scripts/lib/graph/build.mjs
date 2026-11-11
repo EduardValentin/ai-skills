@@ -2,7 +2,7 @@ import { createClassifier } from "../model/classify.mjs";
 import { stronglyConnected, naturalOrder } from "./cycles.mjs";
 import { componentMetrics } from "./metrics.mjs";
 
-export const GRAPH_VERSION = 6;
+export const GRAPH_VERSION = 7;
 export const THROUGH_BARREL = "through-barrel";
 const FACTS = ["exports", "implements", "signatures", "typeChecks"];
 
@@ -29,8 +29,8 @@ function buildUnits(model, document) {
   const classify = createClassifier(model);
   return document.modules
     .map((module) => {
-      const { component, kind, ring, actors } = classify(module.path);
-      return { path: module.path, component, kind, ring, actors, ...providedFacts(module, document.capabilities) };
+      const { matched, ...classified } = classify(module.path);
+      return { path: module.path, ...classified, ...providedFacts(module, document.capabilities) };
     })
     .sort(byText("path"));
 }

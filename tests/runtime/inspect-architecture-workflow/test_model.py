@@ -93,7 +93,8 @@ def test_unstated_actors_are_unknown(tmp_path: Path):
 
 def test_unclassified_path_returns_nulls(tmp_path: Path):
     result = classify(payroll(tmp_path), "scripts/build.ts")[0]
-    assert result == {"component": None, "kind": None, "ring": None, "actors": None, "matched": None}
+    assert result == {"component": None, "kind": None, "ring": None, "actors": None, "valueType": False,
+                      "matched": None}
 
 
 def test_explicit_ring_overrides_the_kind_default(tmp_path: Path):

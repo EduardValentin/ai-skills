@@ -36,7 +36,7 @@ def test_two_builds_of_the_same_inputs_are_byte_identical(tmp_path: Path):
 
 def test_graph_units_and_edges_are_classified(tmp_path: Path):
     graph = collect_json(payroll(tmp_path))
-    assert graph["version"] == 6
+    assert graph["version"] == 7
     units = {unit["path"]: unit for unit in graph["units"]}
     assert units["src/domain/payroll-use-case.ts"]["kind"] == "use-case"
     assert units["src/domain/payroll-use-case.ts"]["component"] == "domain"

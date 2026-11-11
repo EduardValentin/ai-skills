@@ -36,11 +36,12 @@ function describe(model, component, pair, index) {
     kind: pair.kind,
     ring: resolvePairRing(model, component, pair),
     actors: pair.actors ?? null,
+    valueType: pair.valueType === true,
     matched: { component: component.name, index },
   };
 }
 
-const UNCLASSIFIED = { component: null, kind: null, ring: null, actors: null, matched: null };
+const UNCLASSIFIED = { component: null, kind: null, ring: null, actors: null, valueType: false, matched: null };
 
 export function createClassifier(model) {
   return (path) => {

@@ -1,4 +1,7 @@
+import { COMPONENT_METRIC_CHECKS } from "./component-metrics.mjs";
+import { componentRow } from "./rows.mjs";
 import { cycleTarget, edgeTarget, naturalOrder, pairTargetsWhere } from "./targets.mjs";
+import { unitsWithoutExports } from "./undecided.mjs";
 
 const GROUP = "components-and-stability";
 const GROUPS_TARGET = "groups";
@@ -18,17 +21,6 @@ const CORRECTIONS = {
     `Split the change along the recorded groups, or record a group covering ${components.join(", ")} ` +
     "if they change together",
 };
-
-function componentRow(name, evidence, correction) {
-  return {
-    target: name,
-    evidence,
-    correction,
-    units: [],
-    components: [name],
-    edge: null,
-  };
-}
 
 function componentCycleRows(context) {
   return context.graph.cycles.components.map((members) => {
@@ -123,16 +115,6 @@ function unusedAbstractionRows(context) {
       ),
     ];
   });
-}
-
-function unitsWithoutExports(context, componentNames) {
-  return context.graph.units
-    .filter((unit) => componentNames.has(unit.component) && unit.kind !== "barrel" && !unit.exports)
-    .map((unit) => ({
-      target: unit.path,
-      reason: `${unit.path} reports no exports although the adapter provides them, so abstractness is unknown. ` +
-        "Make the adapter report the exports of every module.",
-    }));
 }
 
 function zoneOfPainUndecided(context) {
@@ -260,4 +242,5 @@ export const COMPONENTS_AND_STABILITY_CHECKS = [
     needsBase: true,
     run: changeSpansGroupsRows,
   },
+  ...COMPONENT_METRIC_CHECKS,
 ];

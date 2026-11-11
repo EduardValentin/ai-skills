@@ -1,3 +1,5 @@
+import { distanceOutliers } from "./metrics.mjs";
+
 const TITLE = "# Architecture: current picture";
 const NOTE = "This file is rewritten by `arch collect` and is never edited by hand.";
 
@@ -10,10 +12,14 @@ function table(header, rows) {
   return [...lines, ...rows.map((row) => `| ${row.join(" | ")} |`)];
 }
 
-export function thresholdBreaches(graph) {
-  return graph.components
+export function thresholdBreaches(graph, thresholds) {
+  const zones = graph.components
     .filter((component) => component.zone !== null)
     .map((component) => `${component.name}: zone of ${component.zone}`);
+  const distances = distanceOutliers(graph.components, thresholds.distanceDeviations).map(
+    (outlier) => `${outlier.name}: distance ${outlier.distance} beyond the project threshold`,
+  );
+  return [...zones, ...distances];
 }
 
 function countLines(graph) {
@@ -39,18 +45,18 @@ function componentGraphTable(graph) {
   return table(["From", "To", "Modules"], graph.componentEdges.map((edge) => [edge.from, edge.to, edge.modules]));
 }
 
-function breachLines(graph) {
-  const breaches = thresholdBreaches(graph);
+function breachLines(graph, thresholds) {
+  const breaches = thresholdBreaches(graph, thresholds);
   return breaches.length === 0 ? ["None"] : breaches.map((breach) => `- ${breach}`);
 }
 
-export function renderCurrentPicture(graph) {
+export function renderCurrentPicture(graph, thresholds) {
   const sections = [
     [TITLE, "", NOTE],
     ["## Counts", "", ...countLines(graph)],
     ["## Metrics", "", ...metricsTable(graph)],
     ["## Component graph", "", ...componentGraphTable(graph)],
-    ["## Threshold breaches", "", ...breachLines(graph)],
+    ["## Threshold breaches", "", ...breachLines(graph, thresholds)],
   ];
   return `${sections.map((lines) => lines.join("\n")).join("\n\n")}\n`;
 }

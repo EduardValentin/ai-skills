@@ -22,8 +22,12 @@ COLUMNS = "| Rule | Target | Severity | Status | Origin | Evidence | Correction 
 CONSTRUCTION_ROWS = [(f"{CONTROLLER} -> {PG}", "R7"), (f"{CONTROLLER} -> {CLOCK}", "R7")]
 CHECK_IDS = [
     "policy-imports-detail", "policy-imports-external", "outward-ring-edge", "detail-constructed-outside-root",
+    "controller-imports-use-case", "port-owner-below-consumer", "port-signature-detail-type",
+    "policy-detail-edge-beside-port", "type-check-on-implementation", "entity-imports-non-entity",
+    "entity-imports-use-case", "boundary-data-imports", "presenter-imports-ui-framework", "plugin-imports-plugin",
     "component-cycle", "module-cycle", "unstable-dependency", "zone-of-pain", "unused-abstractions",
-    "no-cohesion-groups", "change-spans-groups",
+    "no-cohesion-groups", "change-spans-groups", "distance-over-threshold", "thin-component-use",
+    "production-imports-test", "unenforced-component", "deep-import", "forbidden-edge-present", "unconsumed-export",
 ]
 
 
@@ -31,6 +35,30 @@ def edit_json(path: Path, change) -> None:
     document = json.loads(path.read_text())
     change(document)
     path.write_text(json.dumps(document))
+
+
+QUIETED_RULES = {
+    "R32": "payroll has three components, so the distance screen has nothing to compare",
+    "R38": "payroll records no enforcement; the old-check tests below do not read it",
+}
+
+
+def quiet_payroll(dest: Path) -> Path:
+    """The payroll fixture with the later-added conditions silenced, so these tests see only the old checks."""
+    root = copy_fixture("payroll", dest)
+
+    def quiet_model(document: dict) -> None:
+        document.setdefault("rules", {}).update({rule: ["off", reason] for rule, reason in QUIETED_RULES.items()})
+
+    def name_symbols(document: dict) -> None:
+        document["capabilities"].update(symbolImports=True, typeChecks=True)
+        for edge in document["edges"]:
+            if "to" in edge:
+                edge["symbols"] = [Path(edge["to"]).stem]
+
+    edit_json(root / MODEL, quiet_model)
+    edit_json(root / ADAPTER, name_symbols)
+    return root
 
 
 def seed_edge(root: Path, source: str, target: str, kind: str = "import") -> None:
@@ -43,7 +71,7 @@ def touch(root: Path, *paths: str) -> None:
 
 
 def repo(tmp_path: Path) -> Path:
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     (root / ".gitignore").write_text(".architecture/\n")
     return root
 
@@ -87,7 +115,7 @@ def run_checks(tmp_path: Path, graph: dict, touched: dict | None = None, model: 
         f"import {{ runChecks }} from {json.dumps(RUN_MODULE)};"
         f"import {{ DEFAULT_KINDS, DEFAULT_THRESHOLDS }} from {json.dumps(DEFAULTS_MODULE)};"
         "const model = { kinds: DEFAULT_KINDS, thresholds: DEFAULT_THRESHOLDS, rules: {}, forbidden: [],"
-        f" exceptions: [], groups: [], components: [], ...{json.dumps(model or {})} }};"
+        f" exceptions: [], groups: [], components: [], ports: [], ...{json.dumps(model or {})} }};"
         f"console.log(JSON.stringify(runChecks({{ graph: {json.dumps(graph)}, model, baseGraph: null,"
         f" touched: {json.dumps(touched)} }})));"
     )
@@ -102,7 +130,8 @@ def component(name: str, fan_in: int, fan_out: int, instability, abstractness, z
 
 
 def empty_graph(components: list[dict]) -> dict:
-    return {"capabilities": {"exports": True, "constructs": True},
+    return {"capabilities": {"exports": True, "constructs": True, "implements": True, "signatures": True,
+                             "symbolImports": True, "typeChecks": True},
             "rings": ["entities", "use-cases", "adapters", "frameworks"],
             "units": [], "edges": [], "externals": [], "uncovered": [], "components": components, "componentEdges": [],
             "cycles": {"modules": [], "components": []}}
@@ -120,6 +149,10 @@ def construction_graph(constructing_kind: str, constructed_kind: str) -> dict:
     ]
     graph["edges"] = [{"from": "src/a.ts", "to": "src/b.ts", "kind": "constructs", "direction": "same"}]
     return graph
+
+
+def construction_rows(tmp_path: Path, graph: dict) -> list[dict]:
+    return [row for row in run_checks(tmp_path, graph)["rows"] if "R7" in row["rules"]]
 
 
 def test_registry_declares_each_check_with_the_contract():
@@ -155,7 +188,7 @@ def test_every_rule_has_a_short_plain_title():
 
 
 def test_unseeded_fixture_has_only_the_construction_rows_without_a_base(tmp_path: Path):
-    out = check_output(copy_fixture("payroll", tmp_path / "p"), exit_code=1)
+    out = check_output(quiet_payroll(tmp_path / "p"), exit_code=1)
     assert keys(out["rows"]) == CONSTRUCTION_ROWS
     row = out["rows"][0]
     assert (row["check"], row["defect"], row["severity"], row["baseSeverity"]) == (
@@ -163,12 +196,15 @@ def test_unseeded_fixture_has_only_the_construction_rows_without_a_base(tmp_path
     assert (row["status"], row["origin"], row["lifts"]) == ("enforced", "none", [])
     assert set(out) == {"model", "rows", "incomplete", "notRun", "skipped", "covered"}
     assert out["model"] is True and out["incomplete"] == [] and out["covered"] == 0
-    assert out["skipped"] == [{"rule": "R6", "status": "off", "component": None,
-                               "reason": "one delivery mechanism; controllers call use cases directly"}]
+    assert out["skipped"] == [
+        {"rule": "R6", "status": "off", "component": None,
+         "reason": "one delivery mechanism; controllers call use cases directly"},
+        *[{"rule": rule, "status": "off", "component": None, "reason": reason} for rule, reason in QUIETED_RULES.items()],
+    ]
 
 
 def test_markdown_table_has_the_documented_columns_and_titled_rules(tmp_path: Path):
-    result = run_arch(["check"], copy_fixture("payroll", tmp_path / "p"))
+    result = run_arch(["check"], quiet_payroll(tmp_path / "p"))
     assert result.returncode == 1, result.stderr
     lines = result.stdout.splitlines()
     assert lines[0] == COLUMNS
@@ -178,7 +214,7 @@ def test_markdown_table_has_the_documented_columns_and_titled_rules(tmp_path: Pa
 
 
 def test_printed_rule_carries_its_title(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CONTROLLER)
     result = run_arch(["check"], root)
     assert "R4 Dependencies point toward policy" in result.stdout
@@ -186,7 +222,7 @@ def test_printed_rule_carries_its_title(tmp_path: Path):
 
 
 def test_markdown_says_none_for_empty_sections(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     model_edit(root, "add-exception", "web", "adapters", "reason=tolerated for now")
     result = run_arch(["check"], root)
     assert result.returncode == 0, result.stderr
@@ -194,7 +230,7 @@ def test_markdown_says_none_for_empty_sections(tmp_path: Path):
 
 
 def test_seeded_component_cycle_yields_cycle_rows(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CONTROLLER)
     rows = check_rows(root)
     component_cycle = find(rows, "adapters -> domain -> web", "R30")
@@ -211,14 +247,14 @@ def test_cycle_targets_sort_members_numerically(tmp_path: Path):
 
 
 def test_blocker_rows_record_no_lift(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, USE_CASE)
     row = find(check_rows(root), f"{EMPLOYEE} -> {USE_CASE}", "R4")
     assert row["severity"] == "blocker" and row["lifts"] == [] and row["defect"] == "outward-dependency"
 
 
 def test_outward_edge_between_components_yields_the_stability_row(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, CLOCK, MAIN)
     rows = check_rows(root)
     assert find(rows, f"{CLOCK} -> {MAIN}", "R4")["lifts"] == []
@@ -226,7 +262,7 @@ def test_outward_edge_between_components_yields_the_stability_row(tmp_path: Path
 
 
 def test_policy_role_comes_from_the_model(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, USE_CASE, PG)
     target = f"{USE_CASE} -> {PG}"
     assert find(check_rows(root), target, "R4")["defect"] == "policy-depends-on-detail"
@@ -409,7 +445,7 @@ def test_rows_outside_the_change_are_not_emitted_with_a_base(tmp_path: Path):
 
 
 def test_a_base_that_predates_the_model_is_compared_with_the_current_model(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     saved = tmp_path / "docs"
     shutil.move(root / "docs", saved)
     init_repo(root)
@@ -425,7 +461,7 @@ def test_a_base_that_predates_the_model_is_compared_with_the_current_model(tmp_p
 
 
 def test_rule_off_drops_its_rows_and_is_listed_as_skipped(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7", "off", "reason=composition happens in the controller on purpose")
     out = check_output(root, exit_code=0)
     assert out["rows"] == []
@@ -434,7 +470,7 @@ def test_rule_off_drops_its_rows_and_is_listed_as_skipped(tmp_path: Path):
 
 
 def test_advisory_row_is_printed_and_exits_0(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7", "advisory", "reason=under review")
     out = check_output(root, exit_code=0)
     assert keys(out["rows"]) == CONSTRUCTION_ROWS and {r["status"] for r in out["rows"]} == {"advisory"}
@@ -442,7 +478,7 @@ def test_advisory_row_is_printed_and_exits_0(tmp_path: Path):
 
 
 def test_rule_off_for_one_component_only(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7@adapters", "off", "reason=adapters are built anywhere")
     assert keys(check_rows(root)) == CONSTRUCTION_ROWS
     model_edit(root, "set-rule", "R7@web", "off", "reason=the controller composes on purpose")
@@ -453,7 +489,7 @@ def test_rule_off_for_one_component_only(tmp_path: Path):
 
 
 def test_a_component_cycle_is_as_strict_as_its_strictest_member(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CONTROLLER)
     cycle = "adapters -> domain -> web"
     model_edit(root, "set-rule", "R30@domain", "off", "reason=legacy cycle")
@@ -466,14 +502,14 @@ def test_a_component_cycle_is_as_strict_as_its_strictest_member(tmp_path: Path):
 
 
 def test_exception_covers_a_row(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     model_edit(root, "add-exception", "web", "adapters", "reason=composition happens in the controller")
     out = check_output(root, exit_code=0)
     assert out["rows"] == [] and out["covered"] == 2
 
 
 def test_an_exception_with_a_rule_covers_only_rows_carrying_it(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     model_edit(root, "add-exception", "web", "ring:adapters", "rule=R4", "reason=not about construction")
     assert check_output(root)["covered"] == 0
     model_edit(root, "remove-exception", "web", "ring:adapters", "rule=R4")
@@ -483,7 +519,7 @@ def test_an_exception_with_a_rule_covers_only_rows_carrying_it(tmp_path: Path):
 
 
 def test_missing_fact_is_incomplete_not_passing(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(constructs=False))
     out = check_output(root, exit_code=0)
     assert out["rows"] == []
@@ -492,7 +528,7 @@ def test_missing_fact_is_incomplete_not_passing(tmp_path: Path):
 
 
 def test_strict_fails_on_incomplete_enforced_rule(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(constructs=False))
     assert run_arch(["check", "--strict"], root).returncode == 1
     model_edit(root, "set-rule", "R7", "advisory", "reason=construction is not reported yet")
@@ -500,7 +536,7 @@ def test_strict_fails_on_incomplete_enforced_rule(tmp_path: Path):
 
 
 def test_a_rule_that_is_off_does_not_report_a_missing_fact(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(constructs=False))
     model_edit(root, "set-rule", "R7", "off", "reason=not applicable")
     assert check_output(root, exit_code=0)["incomplete"] == []
@@ -572,7 +608,7 @@ def test_zone_of_pain_without_the_exports_fact_is_incomplete(tmp_path: Path):
     graph["capabilities"]["exports"] = False
     out = run_checks(tmp_path, graph, touched_scope("domain"))
     assert out["rows"] == []
-    assert {e["check"] for e in out["incomplete"]} == {"zone-of-pain", "unused-abstractions"}
+    assert {e["check"] for e in out["incomplete"]} == {"zone-of-pain", "unused-abstractions", "distance-over-threshold"}
 
 
 def test_abstract_component_without_outside_consumers_is_a_minor_row(tmp_path: Path):
@@ -596,7 +632,7 @@ def test_construction_of_a_policy_kind_is_not_a_row_under_custom_rings(tmp_path:
         {"from": "web/controller.ts", "to": "app/use-case.ts", "kind": "constructs", "direction": "inward"},
         {"from": "web/controller.ts", "to": "db/gateway.ts", "kind": "constructs", "direction": "same"},
     ]
-    assert keys(run_checks(tmp_path, graph)["rows"]) == [("web/controller.ts -> db/gateway.ts", "R7")]
+    assert keys(construction_rows(tmp_path, graph)) == [("web/controller.ts -> db/gateway.ts", "R7")]
 
 
 def test_construction_by_a_test_config_or_composition_root_is_not_a_row(tmp_path: Path):
@@ -606,13 +642,13 @@ def test_construction_by_a_test_config_or_composition_root_is_not_a_row(tmp_path
 
 def test_construction_of_a_unit_that_is_not_a_detail_kind_is_not_a_row(tmp_path: Path):
     for kind in ("mixed", "test", "config", "composition-root", "entity"):
-        assert run_checks(tmp_path, construction_graph("controller", kind))["rows"] == [], kind
-    rows = run_checks(tmp_path, construction_graph("controller", "gateway"))["rows"]
+        assert construction_rows(tmp_path, construction_graph("controller", kind)) == [], kind
+    rows = construction_rows(tmp_path, construction_graph("controller", "gateway"))
     assert keys(rows) == [("src/a.ts -> src/b.ts", "R7")]
 
 
 def test_corrections_name_the_move(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, CLOCK)
     seed_edge(root, "src/domain/clock.ts", CLOCK)
     rows = check_rows(root)
@@ -626,13 +662,13 @@ BARREL = "src/domain/index.ts"
 
 
 def test_an_outward_edge_through_a_barrel_is_not_a_crossing(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, BARREL, "src/adapters/memory-payroll-repository.ts")
     assert not any("R4" in r["rules"] and BARREL in r["target"] for r in check_rows(root))
 
 
 def test_an_outward_edge_not_through_a_barrel_is_still_a_crossing(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     seed_edge(root, EMPLOYEE, "src/adapters/memory-payroll-repository.ts")
     target = f"{EMPLOYEE} -> src/adapters/memory-payroll-repository.ts"
     assert find(check_rows(root), target, "R4")["severity"] == "blocker"
@@ -755,7 +791,7 @@ def test_a_merged_row_is_introduced_when_any_contributing_row_is(tmp_path: Path)
 
 
 def test_a_check_runs_when_a_rule_is_off_for_the_project_but_enforced_for_a_component(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = quiet_payroll(tmp_path / "p")
     model_edit(root, "set-rule", "R7", "off", "reason=not applicable")
     model_edit(root, "set-rule", "R7@web", "enforced", "reason=the web component must stay clean")
     out = check_output(root, exit_code=1)
@@ -793,4 +829,4 @@ def test_a_unit_without_exports_makes_the_abstractness_checks_incomplete(tmp_pat
     out = run_checks(tmp_path, graph, touched_scope("svc"))
     assert out["rows"] == []
     assert {(e["check"], e["target"]) for e in out["incomplete"]} == {
-        ("zone-of-pain", "svc/a.ts"), ("unused-abstractions", "svc/a.ts")}
+        ("zone-of-pain", "svc/a.ts"), ("unused-abstractions", "svc/a.ts"), ("distance-over-threshold", "svc/a.ts")}

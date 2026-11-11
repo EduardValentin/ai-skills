@@ -11,7 +11,7 @@ import { migrateOldModel } from "../model/migrate.mjs";
 import { writeDocument } from "../model/write.mjs";
 
 const MAX_POSITIONAL = 12;
-const KEY_VALUE = /^([a-z]+)=([\s\S]*)$/;
+const KEY_VALUE = /^([a-z][a-z-]*)=([\s\S]*)$/;
 const INIT_FLAGS = ["start", "adapter", "record-mode"];
 const INIT_USAGE =
   'arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]';

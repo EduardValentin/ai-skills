@@ -16,10 +16,10 @@ function summaryLine(graph) {
   );
 }
 
-function writeCurrentPicture(root, flags, graph) {
+function writeCurrentPicture(root, flags, graph, model) {
   const directory = recordDir(root, flags);
   mkdirSync(directory, { recursive: true });
-  writeFileSync(path.join(directory, "current.md"), renderCurrentPicture(graph));
+  writeFileSync(path.join(directory, "current.md"), renderCurrentPicture(graph, model.thresholds));
 }
 
 export async function run(args, { root }) {
@@ -32,7 +32,7 @@ export async function run(args, { root }) {
   }
   const graph = await loadGraph(root, model, { ref: flags.ref, flags });
   for (const warning of graph.warnings) console.error(warning);
-  if (!flags.ref) writeCurrentPicture(root, flags, graph);
+  if (!flags.ref) writeCurrentPicture(root, flags, graph, model);
   console.log(flags.json ? JSON.stringify(graph, null, 2) : summaryLine(graph));
   return 0;
 }

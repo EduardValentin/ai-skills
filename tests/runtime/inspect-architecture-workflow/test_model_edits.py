@@ -190,6 +190,16 @@ def test_classify_inserts_before_a_pattern_and_replaces_in_place(tmp_path: Path)
     assert edit(root, "classify", "domain", "x.ts", "widget").returncode == 2
 
 
+def test_classify_records_a_value_type_and_drops_it_again(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "classify", "domain", "money.ts", "mixed", "ring=entities", "value-type=true").returncode == 0
+    assert document(root)["components"][0]["classify"][-1] == ["money.ts", "mixed", {"ring": "entities", "valueType": True}]
+    assert edit(root, "classify", "domain", "money.ts", "mixed", "ring=entities", "value-type=false").returncode == 0
+    assert document(root)["components"][0]["classify"][-1] == ["money.ts", "mixed", {"ring": "entities"}]
+    refused = edit(root, "classify", "domain", "money.ts", "mixed", "value-type=maybe")
+    assert refused.returncode == 2 and "value-type" in refused.stderr
+
+
 def test_classify_without_before_appends_and_unclassify_removes(tmp_path: Path):
     root = payroll(tmp_path)
     assert edit(root, "classify", "adapters", "odd.ts", "adapter", "ring=frameworks").returncode == 0

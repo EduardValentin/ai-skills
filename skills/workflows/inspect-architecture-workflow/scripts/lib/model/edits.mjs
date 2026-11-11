@@ -51,11 +51,17 @@ function removeComponent(doc, [name]) {
   doc.components = doc.components.filter((component) => component.name !== name);
 }
 
+function parseValueType(text) {
+  if (text === "true" || text === "false") return text === "true";
+  throw new UsageError(`value-type must be true or false, got "${text}". Pass value-type=true or value-type=false.`);
+}
+
 function pairExtras(keys) {
   const extras = {};
   if (keys.ring) extras.ring = keys.ring;
   if (keys.actors) extras.actors = splitList(keys.actors);
   if (keys.reason) extras.reason = keys.reason;
+  if (keys["value-type"] !== undefined && parseValueType(keys["value-type"])) extras.valueType = true;
   return extras;
 }
 
@@ -209,9 +215,10 @@ export const EDITS = {
   "add-component": edit("arch model add-component <name> paths=<globs>", 1, { required: ["paths"] }, addComponent),
   "remove-component": edit("arch model remove-component <name>", 1, {}, removeComponent),
   classify: edit(
-    "arch model classify <component> <pattern> <kind> [ring=<ring>] [actors=<a,b>] [reason=<text>] [before=<pattern>]",
+    "arch model classify <component> <pattern> <kind> [ring=<ring>] [actors=<a,b>] [reason=<text>] " +
+      "[value-type=true] [before=<pattern>]",
     3,
-    { optional: ["ring", "actors", "reason", "before"] },
+    { optional: ["ring", "actors", "reason", "value-type", "before"] },
     classify,
   ),
   unclassify: edit("arch model unclassify <component> <pattern>", 2, {}, unclassify),
