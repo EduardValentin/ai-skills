@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { ModelError, ToolingError } from "../cli/errors.mjs";
-import { git } from "../git.mjs";
+import { gitText } from "../graph/tree.mjs";
 import { DEFAULT_STATUSES } from "./defaults.mjs";
 import { writeDocument } from "./write.mjs";
 
@@ -32,7 +32,7 @@ function initialDocument({ start, adapter, recordMode }) {
 }
 
 async function excludeLocally(root, directory) {
-  const out = await git(root, ["rev-parse", "--show-toplevel", "--git-path", "info/exclude"]);
+  const out = await gitText(root, ["rev-parse", "--show-toplevel", "--git-path", "info/exclude"]);
   const [top, excludePath] = out.trim().split("\n");
   const exclude = resolve(root, excludePath);
   const entry = `/${relative(realpathSync(top), realpathSync(directory)).split("\\").join("/")}/`;

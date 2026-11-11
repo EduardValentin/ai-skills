@@ -1,11 +1,4 @@
-import { listUntracked, nameStatus } from "../git.mjs";
-
-async function changedPaths(root, base) {
-  const changes = await nameStatus(root, base);
-  const listed = new Set(changes.map((change) => change.path));
-  const untracked = (await listUntracked(root)).filter((path) => !listed.has(path));
-  return [...changes, ...untracked.map((path) => ({ status: "A", path }))];
-}
+import { changedPaths } from "../git/changes.mjs";
 
 function renameMap(changes) {
   return new Map(changes.filter((change) => change.status === "R").map((change) => [change.oldPath, change.path]));

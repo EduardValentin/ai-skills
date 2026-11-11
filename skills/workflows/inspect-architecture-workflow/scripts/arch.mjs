@@ -5,15 +5,10 @@ import { parseArgs } from "./lib/cli/flags.mjs";
 import { run as runCheck } from "./lib/commands/check.mjs";
 import { run as runCollect } from "./lib/commands/collect.mjs";
 import { run as runModel } from "./lib/commands/model.mjs";
+import { run as runQuery } from "./lib/commands/query.mjs";
+import { run as runUncovered } from "./lib/commands/uncovered.mjs";
 
 const NOT_IMPLEMENTED_EXIT = 2;
-
-function legacy(file) {
-  return async (args, ctx) => {
-    const module = await import(`./lib/commands/${file}.mjs`);
-    return module.run(args, ctx);
-  };
-}
 
 function pending(name, spec) {
   return async (args) => {
@@ -30,10 +25,9 @@ const handlers = {
   check: runCheck,
   applicable: pending("applicable", { flags: {}, positional: NO_POSITIONAL }),
   findings: pending("findings", { flags: {}, positional: { min: 0, max: 2 } }),
-  query: legacy("query"),
-  uncovered: legacy("uncovered"),
+  query: runQuery,
+  uncovered: runUncovered,
   model: runModel,
-  ledger: legacy("ledger"),
 };
 
 function usageText() {

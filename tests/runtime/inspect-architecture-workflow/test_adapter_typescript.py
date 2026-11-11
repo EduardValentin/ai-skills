@@ -26,6 +26,12 @@ def typescript_resolvable(root: Path) -> bool:
     return run_node(probe, root).stdout == "yes"
 
 
+def payroll_with_cruise(dest: Path) -> Path:
+    """The payroll sources plus the saved dependency-tool output the fake tooling prints."""
+    copy_fixture("typescript-tooling", dest)
+    return copy_fixture("payroll", dest)
+
+
 def install_cruise_shim(root: Path) -> None:
     shim = root / "node_modules/.bin/depcruise"
     shim.parent.mkdir(parents=True, exist_ok=True)
@@ -54,7 +60,7 @@ def cruise_of(*pairs: tuple[str, str | None]) -> dict:
 
 
 def test_normalize_cruise_classifies_edges(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = payroll_with_cruise(tmp_path / "p")
     script = (f"import {{ normalizeCruise }} from '{TEMPLATE.as_posix()}';import {{ readFile }} from 'node:fs/promises';"
               "const j = JSON.parse(await readFile('cruise.json','utf8'));const n = normalizeCruise(j, ['express']);"
               "process.stdout.write(JSON.stringify({modules:[...n.modules].sort(), edges:n.edges}));")
@@ -96,7 +102,7 @@ def test_normalize_cruise_treats_npm_dev_and_node_modules_entries_as_external():
 
 
 def test_extract_uses_saved_cruise_and_counts_exports(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = payroll_with_cruise(tmp_path / "p")
     if not typescript_resolvable(root):
         pytest.skip("typescript not resolvable from the fixture")
     install_cruise_shim(root)
@@ -110,7 +116,7 @@ def test_extract_uses_saved_cruise_and_counts_exports(tmp_path: Path):
 
 
 def test_template_prints_a_document_from_the_saved_cruise(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = payroll_with_cruise(tmp_path / "p")
     install_fake_tooling(root)
     result = run_template(root)
     assert result.returncode == 0, result.stderr
@@ -126,7 +132,7 @@ def test_template_prints_a_document_from_the_saved_cruise(tmp_path: Path):
 
 
 def test_missing_typescript_is_a_clear_error(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = payroll_with_cruise(tmp_path / "p")
     result = run_template(root, source_root="/nonexistent-root")
     assert result.returncode != 0
     assert "typescript is not installed in /nonexistent-root" in result.stderr
@@ -138,7 +144,7 @@ def test_tree_without_packages_sees_the_source_roots_packages_during_the_run(tmp
     install_fake_tooling(source)
     shim = source / "node_modules/.bin/depcruise"
     shim.write_text("#!/bin/sh\ntest -d node_modules/typescript && cat cruise.json\n")
-    tree = copy_fixture("payroll", tmp_path / "base-tree")
+    tree = payroll_with_cruise(tmp_path / "base-tree")
     result = run_template(tree, source_root=source)
     assert result.returncode == 0, result.stderr
     assert "src/domain/clock.ts" in {m["path"] for m in json.loads(result.stdout)["modules"]}
@@ -146,7 +152,7 @@ def test_tree_without_packages_sees_the_source_roots_packages_during_the_run(tmp
 
 
 def test_source_root_falls_back_to_the_current_directory(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = payroll_with_cruise(tmp_path / "p")
     install_fake_tooling(root)
     env = {key: value for key, value in os.environ.items() if key != "ARCH_SOURCE_ROOT"}
     result = subprocess.run([node_path(), str(TEMPLATE)], cwd=root, env=env, input=json.dumps(REQUEST),
@@ -313,7 +319,7 @@ def test_links_are_removed_after_a_failing_run(tmp_path: Path):
     source.mkdir()
     install_fake_tooling(source)
     (source / "node_modules/.bin/depcruise").write_text("#!/bin/sh\ntest -d node_modules && echo boom-detail >&2; exit 1\n")
-    tree = copy_fixture("payroll", tmp_path / "base-tree")
+    tree = payroll_with_cruise(tmp_path / "base-tree")
     result = run_template(tree, source_root=source)
     assert result.returncode != 0
     assert "boom-detail" in result.stderr
@@ -321,34 +327,10 @@ def test_links_are_removed_after_a_failing_run(tmp_path: Path):
 
 
 def test_unsupported_compiler_version_is_a_clear_error(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
+    root = payroll_with_cruise(tmp_path / "p")
     install_fake_tooling(root)
     (root / "node_modules/typescript/index.js").write_text('module.exports = { version: "7.0.2" };\n')
     result = run_template(root)
     assert result.returncode != 0
     assert "version 7.0.2" in result.stderr
     assert "5.x and 6.x" in result.stderr
-
-
-OLD_ADAPTER = SKILL_DIR / "scripts" / "lib" / "adapters" / "typescript.mjs"
-
-
-# Removed together with the old adapter in the next task.
-def test_fixture_adapter_json_equals_what_the_old_adapter_produced(tmp_path: Path):
-    root = copy_fixture("payroll", tmp_path / "p")
-    script = (f"import {{ createTypescriptAdapter }} from '{OLD_ADAPTER.as_posix()}';"
-              "const adapter = createTypescriptAdapter({root: process.cwd(), tooling: {roots: ['src']}});"
-              "const result = await adapter.extract({roots: ['src'], dependenciesJsonPath: 'cruise.json',"
-              " factsJsonPath: 'facts.json', frameworks: []});"
-              "process.stdout.write(JSON.stringify(result));")
-    result = run_node(script, root)
-    assert result.returncode == 0, result.stderr
-    old = json.loads(result.stdout)
-    fixture = json.loads((root / "adapter.json").read_text())
-    assert fixture["modules"] == old["modules"]
-    assert fixture["edges"] == old["edges"]
-    assert fixture["warnings"] == old["warnings"]
-    old_capabilities = {name: True for name in old["capabilities"] if old["capabilities"][name]}
-    assert {name: fixture["capabilities"][name] for name in old_capabilities} == old_capabilities
-    assert fixture["capabilities"]["symbolImports"] is False
-    assert fixture["capabilities"]["typeChecks"] is False

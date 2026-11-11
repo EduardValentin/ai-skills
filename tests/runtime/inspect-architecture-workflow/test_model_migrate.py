@@ -11,6 +11,7 @@ def payroll_with_old_model(tmp_path: Path):
     new_file = root / RECORD / "architecture.json"
     expected = json.loads(new_file.read_text())
     new_file.unlink()
+    copy_fixture("legacy-model", root)
     return root, expected
 
 

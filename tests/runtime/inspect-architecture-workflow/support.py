@@ -15,7 +15,6 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_DIR = REPO_ROOT / "skills" / "workflows" / "inspect-architecture-workflow"
 ARCH = SKILL_DIR / "scripts" / "arch.mjs"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-FIXTURE_FLAGS = ["--dependencies-json", "cruise.json", "--facts-json", "facts.json"]
 
 
 def node_path() -> str:
@@ -55,15 +54,7 @@ def copy_fixture(name: str, dest: Path) -> Path:
     return dest
 
 
-def add_old_group(root: Path, name: str, components: list[str], absorbs: str) -> None:
-    """Record a cohesion group in the old four-file model by editing its file directly."""
-    path = root / "docs/architecture/model/boundaries.json"
-    data = json.loads(path.read_text())
-    data.setdefault("groups", []).append({"name": name, "components": components, "absorbs": absorbs})
-    path.write_text(json.dumps(data, indent=2) + "\n")
-
-
-def git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args],
         cwd=cwd,
@@ -72,7 +63,7 @@ def git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         timeout=60,
         check=True,
         env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"},
+             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", **(env or {})},
     )
 
 

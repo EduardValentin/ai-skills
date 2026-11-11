@@ -121,3 +121,11 @@ export function loadModel(root, flags = {}) {
   }
   return normalize(doc);
 }
+
+export function requireModel(root, flags = {}) {
+  const model = loadModel(root, flags);
+  if (model) return model;
+  throw new ModelError(
+    'no architecture model found. Run arch model init --start <greenfield|legacy> --adapter "<command>" first.',
+  );
+}

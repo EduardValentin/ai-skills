@@ -30,21 +30,9 @@ START_MARKER = "<!-- adapters -->"
 END_MARKER = "<!-- /adapters -->"
 
 TEMPLATES_DIR = SKILL_DIR / "assets" / "adapter-templates"
-GENERIC_SCRIPT_FOLDERS = ("adapter", "model", "cli", "graph", "checks")
+GENERIC_SCRIPTS = sorted((SKILL_DIR / "scripts").rglob("*.mjs"))
 
-GENERIC_SCRIPTS = [
-    SKILL_DIR / "scripts" / "lib" / name for name in ("graph.mjs", "queries.mjs", "ledger.mjs")
-] + [
-    script
-    for folder in GENERIC_SCRIPT_FOLDERS
-    for script in sorted((SKILL_DIR / "scripts" / "lib" / folder).glob("*.mjs"))
-]
-
-AGENT_FILES = [
-    REPO_ROOT / "agents" / "architecture-coordinator.md",
-    REPO_ROOT / "agents" / "architecture-evaluator.md",
-    REPO_ROOT / "agents" / "architecture-code-auditor.md",
-]
+AGENT_FILES = sorted((REPO_ROOT / "agents").glob("architecture-*.md"))
 
 
 def _allowed_line_numbers(path) -> set[int]:
