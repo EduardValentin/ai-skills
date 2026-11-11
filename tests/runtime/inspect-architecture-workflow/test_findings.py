@@ -661,3 +661,40 @@ def test_source_edit_between_check_and_add_is_still_stale_with_work_files(tmp_pa
     result = run_arch(["findings", "add", "--flow", "change-review", "--check", f"{WORK}/check.json",
                        "--base", "main"], root)
     assert_refused(result, root, "stale")
+
+
+def test_audit_reads_several_judged_files_in_order(tmp_path):
+    root = workspace(tmp_path)
+    check = check_file(root, tmp_path)
+    first = write_json(tmp_path / "first.json", {"findings": [finding()], "questions": ["Who owns payroll?"]})
+    second = write_json(
+        tmp_path / "second.json",
+        {
+            "findings": [finding("handler-holds-business-logic", CONTROLLER, evidence=[f"{CONTROLLER}:1"])],
+            "questions": ["Is the web layer replaced soon?"],
+        },
+    )
+    result = add(root, "audit", check, "--judged", str(first), "--judged", str(second), "--json")
+    assert result.returncode == 0, result.stderr
+    assert stored(root, EMPLOYEE)["provenance"] == "judged"
+    assert stored(root, CONTROLLER)["provenance"] == "judged"
+    assert store(root)["lastRun"]["questions"] == ["Who owns payroll?", "Is the web layer replaced soon?"]
+
+
+def test_refusal_names_the_judged_file_and_the_finding(tmp_path):
+    root = workspace(tmp_path)
+    check = check_file(root, tmp_path)
+    first = write_json(tmp_path / "first.json", {"findings": [finding()]})
+    second = write_json(tmp_path / "second.json", {"findings": [finding(target=CONTROLLER, evidence=[])]})
+    result = add(root, "audit", check, "--judged", str(first), "--judged", str(second))
+    assert_refused(result, root, str(second), f"findings[0] ({CONTROLLER})", "has no evidence")
+    assert str(first) not in result.stderr
+
+
+def test_missing_check_file_says_to_create_it_with_arch_check_out(tmp_path):
+    root = workspace(tmp_path)
+    missing = root / ".architecture/work/check.json"
+    result = add(root, "audit", missing)
+    assert result.returncode == 2
+    assert "arch check" in result.stderr and "--out .architecture/work/check.json" in result.stderr
+    assert "> <file>" not in result.stderr

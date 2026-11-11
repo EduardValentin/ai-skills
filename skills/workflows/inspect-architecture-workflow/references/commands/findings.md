@@ -24,7 +24,7 @@ arch findings list --rank
 |---|---|---|
 | `--flow` | `audit`, `change-review`, or `plan-review` | Required: which flow produced the findings. |
 | `--check` | the `arch check` JSON file | Required. It must come from the same mode, base, or proposal as this run, and no source file may have changed since it ran. |
-| `--judged` | the judged findings file | The reviewer's findings and questions. Leave it out when no reviewer ran. |
+| `--judged` | the judged findings file | The reviewer's findings and questions. Repeat the flag for one file per reviewer: the files are read in order and their findings and questions joined. Leave it out when no reviewer ran. |
 | `--base` | a branch, tag, or commit | Required in `change-review`: the ref the check compared with. |
 | `--plan` | the plan file | Required in `plan-review`: plan evidence cites its headings. |
 | `--proposal` | the proposal file | Required in `plan-review`: the file the check ran on. |

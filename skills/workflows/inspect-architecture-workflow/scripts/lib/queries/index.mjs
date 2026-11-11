@@ -25,3 +25,12 @@ export const QUERIES = {
 export const FLAG_CHECKS = {
   touched: requireBase,
 };
+
+export const QUERY_FLAGS = {
+  "ring-crossings": ["direction", "include-barrels"],
+  edges: ["kind"],
+  units: ["component", "kind", "ring"],
+  touched: ["base", "with-neighbors"],
+  externals: ["tag"],
+  volatility: ["since"],
+};

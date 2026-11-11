@@ -5,7 +5,7 @@ import { gitText } from "../graph/tree.mjs";
 import { DEFAULT_STATUSES } from "./defaults.mjs";
 import { writeDocument } from "./write.mjs";
 
-const TEMPLATE = new URL("../../../assets/architecture.json", import.meta.url);
+const MODEL_VERSION = 2;
 const GUIDANCE_REASON = "guidance on sequencing, topology, or release practice, so it informs and does not block";
 const LEGACY_REASON = "legacy code: promote this rule to enforced per component as the code allows";
 
@@ -25,10 +25,9 @@ function startingRules(start) {
 }
 
 function initialDocument({ start, adapter, recordMode }) {
-  const document = JSON.parse(readFileSync(TEMPLATE, "utf8"));
   const rules = startingRules(start);
   const withRules = Object.keys(rules).length > 0 ? { rules } : {};
-  return { ...document, adapter, record: recordMode, ...withRules };
+  return { version: MODEL_VERSION, adapter, record: recordMode, components: [], ...withRules };
 }
 
 async function excludeLocally(root, directory) {

@@ -19,18 +19,20 @@ arch applicable --base <ref> --full
 |---|---|---|
 | `--base` | a branch, tag, or commit | The change is everything that differs from that commit. |
 | `--files` | comma-separated paths from the project root | The change is these files, classified by the model as they stand. Additions such as a new component edge are not detected. |
+| `--proposal` | a proposal file under `.architecture/` or outside the project | The scope is the proposal's modules, edges, and components (a plan review). |
+| `--all` | none | Every unit and component of the current graph is in scope (an audit); `review` is true when any judgment condition is in scope. |
 | `--full` | none | Review every judgment condition in scope even when the change is contained. |
 | `--json` | none | Print the JSON output instead of the report. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
-Pass exactly one of `--base` and `--files`.
+Pass exactly one of `--base`, `--files`, `--proposal`, and `--all`.
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | The answer was printed, whatever it is, including when there is no model. |
-| 2 | An invalid model, an adapter failure, or a usage error, such as both or neither of `--base` and `--files`. |
+| 2 | An invalid model, an adapter failure, or a usage error, such as none or more than one of `--base`, `--files`, `--proposal`, and `--all`. |
 
 ## Output
 

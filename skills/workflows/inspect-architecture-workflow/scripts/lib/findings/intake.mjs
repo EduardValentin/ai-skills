@@ -40,17 +40,23 @@ const JUDGED_SCHEMA = {
   },
 };
 
-export function readJudged(file) {
-  let document;
+function readJudgedFile(file) {
   try {
-    document = JSON.parse(readFileSync(file, "utf8"));
+    return JSON.parse(readFileSync(file, "utf8"));
   } catch (error) {
     throw new UsageError(
       `judged findings file ${file} cannot be read as JSON: ${error.message}. ` +
         "Write the reviewer's findings and questions as one JSON object and pass its path with --judged.",
     );
   }
-  return document;
+}
+
+export function readJudged(files) {
+  return files.map((file) => ({ file, document: readJudgedFile(file) }));
+}
+
+export function judgedQuestions(documents) {
+  return documents.flatMap(({ document }) => document.questions ?? []);
 }
 
 function withoutJudgmentFields(entry) {
@@ -222,8 +228,8 @@ function examine(entry, ctx) {
   return { problems, judgment, row };
 }
 
-function labelOf(entry, index) {
-  return `findings[${index}] (${entry.target ?? entry.judgment ?? "no target"})`;
+function labelOf({ entry, index, file }) {
+  return `${file}: findings[${index}] (${entry.target ?? entry.judgment ?? "no target"})`;
 }
 
 function refuse(problems) {
@@ -233,17 +239,26 @@ function refuse(problems) {
   );
 }
 
-export function judgedFindings({ document, flow, plan, root, model, graph, scope, upcoming }) {
-  const shape = shapeProblems(document);
+function entriesOf(documents) {
+  return documents.flatMap(({ file, document }) => document.findings.map((entry, index) => ({ entry, index, file })));
+}
+
+function documentShapeProblems(documents) {
+  return documents.flatMap(({ file, document }) => shapeProblems(document).map((problem) => `${file}: ${problem}`));
+}
+
+export function judgedFindings({ documents, flow, plan, root, model, graph, scope, upcoming }) {
+  const shape = documentShapeProblems(documents);
   if (shape.length > 0) refuse(shape);
   const context = createContext({ graph, model });
   const ctx = { flow, plan, root, graph, model, scope, upcoming, context };
-  const examined = document.findings.map((entry) => examine(entry, ctx));
-  const problems = examined.flatMap((result, index) =>
-    result.problems.map((problem) => `${labelOf(document.findings[index], index)} ${problem}`),
+  const located = entriesOf(documents);
+  const examined = located.map(({ entry }) => examine(entry, ctx));
+  const problems = examined.flatMap((result, position) =>
+    result.problems.map((problem) => `${labelOf(located[position])} ${problem}`),
   );
   if (problems.length > 0) refuse(problems);
-  return examined.map(({ judgment, row }, index) =>
-    buildFinding({ entry: document.findings[index], judgment, row, context, flow, graph }),
+  return examined.map(({ judgment, row }, position) =>
+    buildFinding({ entry: located[position].entry, judgment, row, context, flow, graph }),
   );
 }

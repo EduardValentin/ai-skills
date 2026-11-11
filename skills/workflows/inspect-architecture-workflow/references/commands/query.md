@@ -48,7 +48,7 @@ arch query units --component <component> --json
 | `--json` | none | Print JSON instead of a table. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
-A flag that belongs to another query is accepted and has no effect.
+A query refuses a flag it does not take and lists the flags it accepts.
 
 ## Exit codes
 

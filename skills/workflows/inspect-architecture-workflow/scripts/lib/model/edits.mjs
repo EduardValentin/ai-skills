@@ -35,7 +35,10 @@ function removeOrRefuse(doc, name, matches, description) {
 
 function findComponent(doc, name) {
   const component = doc.components.find((candidate) => candidate.name === name);
-  if (component) return component;
+  if (component) {
+    component.classify ??= [];
+    return component;
+  }
   throw new UsageError(`there is no component "${name}". Components: ${names(doc.components)}.`);
 }
 
@@ -218,6 +221,17 @@ function removeException(doc, [from, to], { rule }) {
   removeOrRefuse(doc, "exceptions", matches, `exception ${from} -> ${to}${rule ? ` rule=${rule}` : ""}`);
 }
 
+function addUpcoming(doc, [text]) {
+  if ((doc.upcoming ?? []).includes(text)) {
+    throw new UsageError(`the upcoming change "${text}" is already recorded. Nothing was changed.`);
+  }
+  section(doc, "upcoming").push(text);
+}
+
+function removeUpcoming(doc, [text]) {
+  removeOrRefuse(doc, "upcoming", (entry) => entry === text, `upcoming change "${text}"`);
+}
+
 function setAdapter(doc, [command]) {
   doc.adapter = command;
 }
@@ -279,5 +293,7 @@ export const EDITS = {
     removeException,
   ),
   "unset-rule": edit("arch model unset-rule <R>[@<component>]", 1, {}, unsetRule),
+  "add-upcoming": edit("arch model add-upcoming <text>", 1, {}, addUpcoming),
+  "remove-upcoming": edit("arch model remove-upcoming <text>", 1, {}, removeUpcoming),
   "set-adapter": edit("arch model set-adapter <command>", 1, {}, setAdapter),
 };

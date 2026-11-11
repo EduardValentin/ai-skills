@@ -377,3 +377,14 @@ def test_unknown_query_and_unknown_flag_are_usage_errors(tmp_path: Path):
     flag = run_arch(["query", "metrics", "--bse", "main"], root)
     assert flag.returncode == 2 and "--bse" in flag.stderr
     assert run_arch(["query"], root).returncode == 2
+
+
+def test_a_query_refuses_a_flag_it_does_not_take_and_lists_the_ones_it_takes(tmp_path: Path):
+    root = payroll(tmp_path)
+    result = run_arch(["query", "metrics", "--kind", "port"], root)
+    assert result.returncode == 2 and "--kind" in result.stderr and "metrics" in result.stderr
+    result = run_arch(["query", "units", "--tag", "x"], root)
+    assert result.returncode == 2
+    for accepted in ("--component", "--kind", "--ring"):
+        assert accepted in result.stderr
+    assert run_arch(["query", "units", "--kind", "port"], root).returncode == 0

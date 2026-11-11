@@ -76,6 +76,7 @@ function entryText(section, entry) {
 }
 
 function listText(section, entries) {
+  if (entries.length === 0) return "[]";
   const lines = entries.map((entry) => `    ${entryText(section, entry)}`).join(",\n");
   return `[\n${lines}\n  ]`;
 }

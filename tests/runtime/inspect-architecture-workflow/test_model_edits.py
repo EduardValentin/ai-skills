@@ -33,6 +33,8 @@ def test_init_legacy_writes_only_non_default_statuses(tmp_path: Path):
     assert all(reason for _, reason in rules.values())
     assert document(tmp_path)["adapter"] == "cat adapter.json"
     (tmp_path / "adapter.json").write_text('{"version": 1, "modules": [{"path": "src/domain/entity.ts"}]}')
+    assert edit(tmp_path, "add-component", "domain", "paths=src/domain/**").returncode == 0
+    assert edit(tmp_path, "classify", "domain", "**", "entity").returncode == 0
     assert edit(tmp_path, "validate").returncode == 0
 
 
@@ -349,3 +351,54 @@ def test_unset_rule_removes_the_entry(tmp_path: Path):
     assert edit(root, "unset-rule", "R6").returncode == 0
     assert "rules" not in document(root)
     assert edit(root, "unset-rule", "R6").returncode == 2
+
+
+def fresh_model(tmp_path: Path) -> Path:
+    root = copy_fixture("payroll", tmp_path / "p")
+    model_file(root).unlink()
+    assert edit(root, "init", "--start", "greenfield", "--adapter", "cat adapter.json").returncode == 0
+    return root
+
+
+def test_classifier_sequence_works_on_a_component_just_added(tmp_path: Path):
+    root = fresh_model(tmp_path)
+    steps = [
+        ["add-component", "domain", "paths=src/domain/**"],
+        ["classify", "domain", "**/*-repository.ts", "port"],
+        ["classify", "domain", "**", "entity"],
+        ["add-port", "src/domain/clock.ts#Clock", "owner=domain"],
+        ["validate"],
+    ]
+    for step in steps:
+        result = edit(root, *step)
+        assert result.returncode == 0, f"{step}: {result.stderr}"
+    assert document(root)["components"][0]["classify"] == [["**/*-repository.ts", "port"], ["**", "entity"]]
+
+
+def test_unclassify_on_a_component_without_pairs_is_a_clear_refusal(tmp_path: Path):
+    root = fresh_model(tmp_path)
+    assert edit(root, "add-component", "domain", "paths=src/domain/**").returncode == 0
+    result = edit(root, "unclassify", "domain", "**")
+    assert result.returncode == 2 and "has no pattern" in result.stderr
+
+
+def test_init_writes_a_model_with_no_component(tmp_path: Path):
+    root = fresh_model(tmp_path)
+    assert "components" in document(root) and document(root)["components"] == []
+
+
+def test_validate_on_a_model_without_components_says_to_add_the_first(tmp_path: Path):
+    root = fresh_model(tmp_path)
+    result = edit(root, "validate")
+    assert result.returncode == 2 and "arch model add-component" in result.stderr
+
+
+def test_add_and_remove_upcoming(tmp_path: Path):
+    root = payroll(tmp_path)
+    assert edit(root, "add-upcoming", "move payroll to a queue").returncode == 0
+    assert document(root)["upcoming"] == ["move payroll to a queue"]
+    duplicate = edit(root, "add-upcoming", "move payroll to a queue")
+    assert duplicate.returncode == 2 and "already" in duplicate.stderr
+    assert edit(root, "remove-upcoming", "move payroll to a queue").returncode == 0
+    assert "upcoming" not in document(root)
+    assert edit(root, "remove-upcoming", "move payroll to a queue").returncode == 2

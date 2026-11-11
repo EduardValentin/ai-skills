@@ -341,3 +341,58 @@ def test_audit_and_unpublished_judgments_reuse_the_check_defects():
     assert "{historyWindow}" in judgments["change-history-spans-groups"]["condition"]
     assert "{componentUseShare}" in judgments["thin-use-of-unpublished-component"]["condition"]
     assert judgments["structure-consequence-unstated"]["condition"].startswith("A plan ")
+
+
+def write_proposal(root: Path, **document) -> str:
+    path = root / ".architecture/work/proposal.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": 1, **document}))
+    return str(path.relative_to(root))
+
+
+def test_exactly_one_of_the_four_modes_is_required(tmp_path: Path):
+    root = repo(tmp_path)
+    for args in ([], ["--base", "HEAD", "--all"], ["--files", EMPLOYEE, "--all"], ["--all", "--proposal", "p.json"]):
+        result = run_arch(["applicable", *args], root)
+        assert result.returncode == 2 and "--proposal" in result.stderr and "--all" in result.stderr, args
+
+
+def test_all_puts_every_unit_and_component_in_scope(tmp_path: Path):
+    root = repo(tmp_path)
+    out = applicable(root, "--all")
+    assert out["review"] is True
+    assert set(out["groups"]) == set(out["judgments"]) and len(out["groups"]) > 0
+    assert "entity-carries-framework-traits" in out["judgments"]["business-rule-placement"]
+    assert "handler-holds-business-logic" in out["judgments"]["humble-objects"]
+    assert "components-and-stability" in out["groups"]
+    assert out["notReviewed"] == 0
+
+
+def test_all_is_not_a_review_when_every_rule_is_off(tmp_path: Path):
+    root = repo(tmp_path)
+    for number in range(1, 42):
+        assert run_arch(["model", "set-rule", f"R{number}", "off", "reason=all off"], root).returncode == 0
+    out = applicable(root, "--all")
+    assert out["review"] is False and out["groups"] == []
+
+
+def test_proposal_scope_is_its_modules_edges_and_components(tmp_path: Path):
+    root = repo(tmp_path)
+    plain = write_proposal(root, modules=[{"path": EMPLOYEE}], edges=[])
+    contained = applicable(root, "--proposal", plain)
+    assert contained["review"] is False and contained["reasons"] == [CONTAINED]
+    assert applicable(root, "--proposal", plain, "--full")["review"] is True
+    crossing = write_proposal(
+        root, modules=[{"path": CLOCK}], edges=[{"from": CLOCK, "to": MAIN, "kind": "import"}]
+    )
+    out = applicable(root, "--proposal", crossing)
+    assert out["review"] is True
+    assert any("adapters -> web" in reason for reason in out["reasons"]), out["reasons"]
+    assert "components-and-stability" in out["groups"]
+
+
+def test_proposal_file_follows_the_work_placement_rule(tmp_path: Path):
+    root = repo(tmp_path)
+    (root / "proposal.json").write_text(json.dumps({"version": 1}))
+    result = run_arch(["applicable", "--proposal", "proposal.json"], root)
+    assert result.returncode == 2 and ".architecture/" in result.stderr

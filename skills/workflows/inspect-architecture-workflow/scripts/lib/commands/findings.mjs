@@ -8,7 +8,7 @@ import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
 import { checkBinding } from "../findings/binding.mjs";
 import { requireWorkPlacement } from "../findings/placement.mjs";
-import { judgedFindings, readJudged } from "../findings/intake.mjs";
+import { judgedFindings, judgedQuestions, readJudged } from "../findings/intake.mjs";
 import { checkFinding, mergeFindings, replaceStored, scopeTag } from "../findings/merge.mjs";
 import { contractData, noModelData, rankData, renderContract, renderRank } from "../findings/render.mjs";
 import { readStore, storeOf, writeStore } from "../findings/store.mjs";
@@ -18,7 +18,7 @@ const FLOWS = ["audit", "change-review", "plan-review"];
 const SUBCOMMANDS = ["add", "list"];
 export const ADD_SPEC = {
   flags: {
-    flow: "value", check: "value", judged: "value", base: "git-ref", plan: "value", proposal: "value",
+    flow: "value", check: "value", judged: "list", base: "git-ref", plan: "value", proposal: "value",
     upcoming: "list",
   },
   positional: { min: 0, max: 0 },
@@ -41,8 +41,11 @@ function checkAddFlags(flags, root) {
     requireFlag(flags, "plan", "in plan-review, the plan file that was reviewed");
     requireFlag(flags, "proposal", "in plan-review, the proposal file the check ran on");
   }
-  for (const name of ["check", "judged", "proposal"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
+  for (const name of ["check", "proposal"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
+  for (const file of flags.judged ?? []) requireWorkPlacement(root, file, "judged");
 }
+
+const CHECK_COMMAND = "arch check <the same scope flags> --out .architecture/work/check.json";
 
 function readCheckOutput(file) {
   let output;
@@ -50,13 +53,13 @@ function readCheckOutput(file) {
     output = JSON.parse(readFileSync(file, "utf8"));
   } catch (error) {
     throw new UsageError(
-      `check file ${file} cannot be read as JSON: ${error.message}. Create it with arch check --json > <file>.`,
+      `check file ${file} cannot be read as JSON: ${error.message}. Create it with ${CHECK_COMMAND}.`,
     );
   }
   if (output.model === false) return output;
   const lists = ["rows", "incomplete", "notRun", "skipped"];
   if (output.model !== true || lists.some((name) => !Array.isArray(output[name]))) {
-    throw new UsageError(`check file ${file} is not arch check --json output. Create it with arch check --json.`);
+    throw new UsageError(`check file ${file} is not arch check --json output. Create it with ${CHECK_COMMAND}.`);
   }
   return output;
 }
@@ -109,10 +112,11 @@ async function add(args, { root }) {
   await checkBinding({ check, flags, root, model });
   const subject = await reviewSubject({ root, model, flags });
   const upcoming = confirmedUpcoming(model, flags);
-  const judged = flags.judged ? readJudged(flags.judged) : { findings: [] };
-  const fromJudgment = flags.judged
-    ? judgedFindings({ document: judged, ...flags, root, model, graph: subject.graph, scope: subject.scope, upcoming })
-    : [];
+  const documents = readJudged(flags.judged ?? []);
+  const fromJudgment = judgedFindings({
+    documents, ...flags, root, model, graph: subject.graph, scope: subject.scope, upcoming,
+  });
+  const judged = { questions: judgedQuestions(documents) };
   const merged = mergeFindings([...check.rows.map((row) => checkFinding(row, subject.graph)), ...fromJudgment]);
   const tag = scopeTag(flags.flow, flags.plan);
   const stored = replaceStored({

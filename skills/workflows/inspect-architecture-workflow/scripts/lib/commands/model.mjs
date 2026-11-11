@@ -31,6 +31,14 @@ function requireModel(root, flags) {
   throw missingModel(root, flags);
 }
 
+function requireComponents(model) {
+  if (model.components.length > 0) return;
+  throw new ModelError(
+    "the model has no components. Add the first with arch model add-component <name> paths=<globs>, " +
+      "then classify its files with arch model classify.",
+  );
+}
+
 function requireDocument(root, flags) {
   if (existsSync(modelFile(root, flags))) return readDocument(modelFile(root, flags));
   throw missingModel(root, flags);
@@ -42,6 +50,7 @@ function print(flags, data, text) {
 
 async function validate({ root, flags }) {
   const model = requireModel(root, flags);
+  requireComponents(model);
   print(flags, { ok: true }, "model: ok");
   const graph = await loadGraph(root, model, { flags });
   const problems = graphProblems(model, graph);
