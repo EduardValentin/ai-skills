@@ -295,6 +295,8 @@ def test_unenforced_component_needs_an_incoming_component_edge(tmp_path: Path):
     assert targets == ["notify"]
     edit_json(root / MODEL, lambda d: d["components"][2].update(enforcement="none"))
     assert [r["target"] for r in rows_of(check_output(root)["rows"], "unenforced-component")] == ["notify"]
+    edit_json(root / MODEL, lambda d: d["components"][2].update(enforcement="review"))
+    assert [r["target"] for r in rows_of(check_output(root)["rows"], "unenforced-component")] == ["notify"]
     edit_json(root / MODEL, lambda d: d["components"][2].update(enforcement="boundary-lint"))
     assert not rows_of(check_output(root)["rows"], "unenforced-component")
 

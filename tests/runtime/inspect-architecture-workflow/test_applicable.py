@@ -14,6 +14,8 @@ CLOCK = "src/adapters/system-clock.ts"
 MAIN = "src/web/main.ts"
 STRAY = "src/stray/helper.ts"
 NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review"
+CONTAINED = "contained in one component; adds no component, port, cross-component edge, or external"
+MODEL = "docs/architecture/architecture.json"
 GROUPS = [
     "dependency-direction", "reasons-to-change", "business-rule-placement", "humble-objects",
     "deferral-and-boundaries", "components-and-stability", "tests", "enforcement-and-organization",
@@ -77,8 +79,62 @@ def test_change_inside_one_component_needs_no_review(tmp_path: Path):
     out = applicable(root, "--base", "HEAD")
     assert out["model"] is True
     assert out["review"] is False
-    assert out["reasons"] == []
+    assert out["reasons"] == [CONTAINED]
+    assert out["groups"] == [] and out["judgments"] == {}
     assert out["uncovered"] == []
+    assert out["notReviewed"] == len([j for ids in applicable(root, "--base", "HEAD", "--full")["judgments"].values()
+                                      for j in ids])
+    assert out["notReviewed"] > 0
+
+
+def test_contained_change_prose_counts_what_was_not_reviewed(tmp_path: Path):
+    root = repo(tmp_path)
+    touch(root, EMPLOYEE)
+    result = run_arch(["applicable", "--base", "HEAD"], root)
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0] == "Review needed: no"
+    assert f"- {CONTAINED}" in lines
+    count = applicable(root, "--base", "HEAD")["notReviewed"]
+    assert lines[-1] == f"Judgment conditions not reviewed for a contained change: {count}. Pass --full to review them."
+
+
+def test_full_reviews_a_contained_change_with_judgments_in_scope(tmp_path: Path):
+    root = repo(tmp_path)
+    touch(root, EMPLOYEE)
+    out = applicable(root, "--base", "HEAD", "--full")
+    assert out["review"] is True
+    assert "business-rule-placement" in out["groups"]
+    assert "entity-carries-framework-traits" in out["judgments"]["business-rule-placement"]
+    assert out["notReviewed"] == 0
+    assert len(out["reasons"]) == 1 and "--full" in out["reasons"][0]
+
+
+def test_full_with_nothing_in_scope_is_not_a_review(tmp_path: Path):
+    root = repo(tmp_path)
+    for number in range(1, 42):
+        result = run_arch(["model", "set-rule", f"R{number}", "off", "reason=all off"], root)
+        assert result.returncode == 0, result.stderr
+    touch(root, EMPLOYEE)
+    out = applicable(root, "--base", "HEAD", "--full")
+    assert out["review"] is False
+    assert out["reasons"] == [CONTAINED]
+    assert out["notReviewed"] == 0
+
+
+def test_custom_kind_stands_in_for_default_kinds_of_its_role(tmp_path: Path):
+    root = repo(tmp_path)
+
+    def custom_kind(document: dict) -> None:
+        document["kinds"] = {"rule-set": {"role": "policy", "ring": "entities"}}
+        document["components"][0]["classify"][-1] = ["**", "rule-set"]
+
+    edit_json(root / MODEL, custom_kind)
+    touch(root, EMPLOYEE)
+    out = applicable(root, "--base", "HEAD", "--full")
+    placement = out["judgments"]["business-rule-placement"]
+    assert "entity-carries-framework-traits" in placement and "critical-rule-in-use-case" in placement
+    assert "device-unit-holds-logic" not in out["judgments"].get("humble-objects", [])
 
 
 def test_new_cross_component_edge_needs_review(tmp_path: Path):
@@ -119,7 +175,7 @@ def test_new_port_and_component_need_review(tmp_path: Path):
 def test_groups_follow_touched_kinds(tmp_path: Path):
     root = repo(tmp_path)
     touch(root, CONTROLLER)
-    out = applicable(root, "--base", "HEAD")
+    out = applicable(root, "--base", "HEAD", "--full")
     assert "humble-objects" in out["groups"]
     assert "handler-holds-business-logic" in out["judgments"]["humble-objects"]
     assert set(out["groups"]) == set(out["judgments"])
@@ -133,7 +189,7 @@ def test_group_is_dropped_when_its_rules_are_off(tmp_path: Path):
         result = run_arch(["model", "set-rule", rule, "off", "reason=no humble objects here"], root)
         assert result.returncode == 0, result.stderr
     touch(root, CONTROLLER)
-    out = applicable(root, "--base", "HEAD")
+    out = applicable(root, "--base", "HEAD", "--full")
     assert "humble-objects" not in out["groups"]
     assert "humble-objects" not in out["judgments"]
 
@@ -144,9 +200,9 @@ def test_component_rule_off_drops_only_that_component(tmp_path: Path):
         result = run_arch(["model", "set-rule", f"{rule}@web", "off", "reason=thin controllers"], root)
         assert result.returncode == 0, result.stderr
     touch(root, CONTROLLER)
-    assert "humble-objects" not in applicable(root, "--base", "HEAD")["groups"]
+    assert "humble-objects" not in applicable(root, "--base", "HEAD", "--full")["groups"]
     touch(root, CLOCK)
-    assert "humble-objects" in applicable(root, "--base", "HEAD")["groups"]
+    assert "humble-objects" in applicable(root, "--base", "HEAD", "--full")["groups"]
 
 
 def test_touched_uncovered_file_is_listed_and_needs_review(tmp_path: Path):
@@ -155,6 +211,7 @@ def test_touched_uncovered_file_is_listed_and_needs_review(tmp_path: Path):
     out = applicable(root, "--base", "HEAD")
     assert out["uncovered"] == [STRAY]
     assert out["review"] is True
+    assert out["notReviewed"] == 0
 
 
 def test_files_mode_uses_component_spread_only(tmp_path: Path):
@@ -162,7 +219,7 @@ def test_files_mode_uses_component_spread_only(tmp_path: Path):
     add_adapter_edge(root, {"from": CLOCK, "to": MAIN, "kind": "import"})
     single = applicable(root, "--files", f"{EMPLOYEE},src/domain/clock.ts")
     assert single["review"] is False
-    assert single["reasons"] == []
+    assert single["reasons"] == [CONTAINED]
     spread = applicable(root, "--files", f"{EMPLOYEE},{MAIN}")
     assert spread["review"] is True
     assert any("domain" in reason and "web" in reason for reason in spread["reasons"])
@@ -170,6 +227,15 @@ def test_files_mode_uses_component_spread_only(tmp_path: Path):
     stray = applicable(root, "--files", "docs/notes.md")
     assert stray["uncovered"] == ["docs/notes.md"]
     assert stray["review"] is True
+
+
+def test_files_mode_treats_an_unclassified_path_as_uncovered(tmp_path: Path):
+    root = copy_fixture("payroll", tmp_path / "p")
+    edit_json(root / MODEL, lambda d: d["components"][2].update(
+        classify=[["main.ts", "composition-root"], ["*-controller.ts", "controller"]]))
+    out = applicable(root, "--files", "src/web/notes.txt")
+    assert out["uncovered"] == ["src/web/notes.txt"]
+    assert out["review"] is True
 
 
 def test_no_model_is_not_a_review(tmp_path: Path):
@@ -257,3 +323,21 @@ def test_judgment_entries_are_well_formed():
         assert judgment["condition"].endswith("."), judgment["id"]
     plan_only = {j["id"] for j in data["judgments"] if j["targets"] == ["plan"]}
     assert {"plan-sequences-io-first", "component-map-fixed-upfront", "structure-consequence-unstated"} <= plan_only
+
+
+def test_audit_and_unpublished_judgments_reuse_the_check_defects():
+    data = registry()
+    judgments = {j["id"]: j for j in data["judgments"]}
+    expected = {
+        "change-history-spans-groups": ("R27", "major", "change-spans-groups"),
+        "change-history-without-groups": ("R28", "minor", "no-cohesion-groups"),
+        "thin-use-of-unpublished-component": ("R27", "minor", "thin-component-use"),
+        "unconsumed-export-of-unpublished-component": ("R38", "major", "published-without-consumer"),
+    }
+    for identifier, (rule, severity, defect) in expected.items():
+        entry = judgments[identifier]
+        assert (entry["rules"], entry["severity"], entry["defect"], entry["targets"]) == (
+            [rule], severity, defect, ["component"]), identifier
+    assert "{historyWindow}" in judgments["change-history-spans-groups"]["condition"]
+    assert "{componentUseShare}" in judgments["thin-use-of-unpublished-component"]["condition"]
+    assert judgments["structure-consequence-unstated"]["condition"].startswith("A plan ")

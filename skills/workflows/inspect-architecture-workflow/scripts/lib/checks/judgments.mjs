@@ -15,8 +15,7 @@ const CROSS_CUTTING = [
     defect: "structure-consequence-unstated",
     targets: ["plan"],
     condition:
-      "The change or plan states the behavior it delivers but not how it keeps or lowers the cost " +
-      "of the next known change.",
+      "A plan states the behavior it delivers but not how it keeps or lowers the cost of the next known change.",
   },
   {
     id: "shape-mismatch-hidden",
@@ -356,7 +355,7 @@ const DEFERRAL_AND_BOUNDARIES = [
     defect: "tiers-without-reason",
     targets: ["component", "plan"],
     condition:
-      "Several deployables or a service catalog exist with no recorded team or deployment reason, " +
+      "More than one deployable or a service catalog exists with no recorded team or deployment reason, " +
       "and the simplest change edits several of them.",
   },
   {
@@ -418,6 +417,38 @@ const COMPONENTS_AND_STABILITY = [
     targets: ["component", "port"],
     condition:
       "A component has abstract types with no implementor, or outside consumers that use none of its abstract types.",
+  },
+  {
+    id: "change-history-spans-groups",
+    rules: ["R27"],
+    group: "components-and-stability",
+    severity: "major",
+    defect: "change-spans-groups",
+    targets: ["component"],
+    condition:
+      "In an audit, changes within {historyWindow} touched this component together with a component " +
+      "it shares no recorded cohesion group with.",
+  },
+  {
+    id: "change-history-without-groups",
+    rules: ["R28"],
+    group: "components-and-stability",
+    severity: "minor",
+    defect: "no-cohesion-groups",
+    targets: ["component"],
+    condition:
+      "In an audit, the model records no cohesion groups and changes within {historyWindow} " +
+      "touched more than one component together.",
+  },
+  {
+    id: "thin-use-of-unpublished-component",
+    rules: ["R27"],
+    group: "components-and-stability",
+    severity: "minor",
+    defect: "thin-component-use",
+    targets: ["component"],
+    condition:
+      "A consumer uses less than {componentUseShare} of what a component with no declared published surface exports.",
   },
   {
     id: "cohesion-position-unstated",
@@ -539,6 +570,15 @@ const ENFORCEMENT_AND_ORGANIZATION = [
     condition: "A component publishes a concrete implementation although outside code consumes only its interface.",
   },
   {
+    id: "unconsumed-export-of-unpublished-component",
+    rules: ["R38"],
+    group: "enforcement-and-organization",
+    severity: "major",
+    defect: "published-without-consumer",
+    targets: ["component"],
+    condition: "A component with no declared published surface exports a symbol that no unit outside it consumes.",
+  },
+  {
     id: "forbidden-edge-unenforced",
     rules: ["R39"],
     group: "enforcement-and-organization",
@@ -567,7 +607,7 @@ const ENFORCEMENT_AND_ORGANIZATION = [
     targets: ["component", "use-case"],
     condition:
       "The top-level structure is named by technology, such as web, service, or data, " +
-      "and a use case is spread across several of those technical folders.",
+      "and a use case is spread across more than two of those technical folders.",
   },
   {
     id: "delivery-inside-domain-component",

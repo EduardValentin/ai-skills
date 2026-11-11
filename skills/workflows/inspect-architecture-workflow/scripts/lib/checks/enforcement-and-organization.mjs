@@ -6,7 +6,7 @@ import { componentRow, unitEdgeRow } from "./rows.mjs";
 import { edgePairs, edgeTarget } from "./targets.mjs";
 
 const GROUP = "enforcement-and-organization";
-const NO_ENFORCEMENT = "none";
+const NOT_ENFORCING = new Set(["none", "review"]);
 
 const CORRECTIONS = {
   enforcement: (name) =>
@@ -29,14 +29,15 @@ function incomingComponents(context, name) {
 
 function unenforcedComponent(context) {
   return context.model.components
-    .filter((component) => component.enforcement === NO_ENFORCEMENT)
+    .filter((component) => NOT_ENFORCING.has(component.enforcement))
     .flatMap((component) => {
       const dependents = incomingComponents(context, component.name);
       if (dependents.length === 0) return [];
       return [
         componentRow(
           component.name,
-          `${component.name} has no enforcement and ${dependents.join(", ")} depend on it`,
+          `${component.name} has enforcement "${component.enforcement}", which the build does not check, ` +
+            `and ${dependents.join(", ")} depend on it`,
           CORRECTIONS.enforcement(component.name),
         ),
       ];

@@ -1,3 +1,4 @@
+import { DEFAULT_KINDS } from "../model/defaults.mjs";
 import { JUDGMENTS } from "./judgments.mjs";
 import { ruleNumber } from "./rule-titles.mjs";
 import { statusForRule } from "./status.mjs";
@@ -54,13 +55,23 @@ export function reviewReasons({ components, uncovered, additions }) {
   ];
 }
 
-function unitTargets(units) {
-  return units
-    .filter((unit) => unit.kind)
-    .flatMap((unit) => [
-      { kind: unit.kind, component: unit.component },
-      ...(unit.kind === "test" ? [{ kind: "test-suite", component: unit.component }] : []),
-    ]);
+const ROLES_STANDING_IN = new Set(["policy", "detail", "wiring"]);
+
+function defaultKindsLike(model, kind) {
+  if (Object.hasOwn(DEFAULT_KINDS, kind)) return [kind];
+  const role = model.kinds[kind]?.role;
+  if (!ROLES_STANDING_IN.has(role)) return [];
+  return Object.keys(DEFAULT_KINDS).filter((candidate) => DEFAULT_KINDS[candidate].role === role);
+}
+
+function targetsOfUnit(model, unit) {
+  const kinds = defaultKindsLike(model, unit.kind);
+  const suite = unit.kind === "test" ? ["test-suite"] : [];
+  return [...kinds, ...suite].map((kind) => ({ kind, component: unit.component }));
+}
+
+function unitTargets(model, units) {
+  return units.filter((unit) => unit.kind).flatMap((unit) => targetsOfUnit(model, unit));
 }
 
 function componentTargets(additions) {
@@ -68,8 +79,8 @@ function componentTargets(additions) {
   return [...new Set(names)].map((name) => ({ kind: "component", component: name }));
 }
 
-export function judgmentTargets({ units, additions }) {
-  return [...unitTargets(units), ...componentTargets(additions)];
+export function judgmentTargets(model, { units, additions }) {
+  return [...unitTargets(model, units), ...componentTargets(additions)];
 }
 
 function rulesInScope(model, judgment, targets) {
