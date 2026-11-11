@@ -48,14 +48,15 @@ arch query units --component <component> --json
 | `--json` | none | Print JSON instead of a table. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
-A query refuses a flag it does not take and lists the flags it accepts.
+Each query takes only the flags listed for it, plus `--json` and `--record`. Any other flag is a
+usage error whose message names the flags that query takes.
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | The table was printed. |
-| 2 | An unknown query, a missing path or `--base`, no model, an invalid model, an adapter failure, or no git history for `volatility`. |
+| 2 | An unknown query, a flag the query does not take, a missing path or `--base`, no model, an invalid model, an adapter failure, or no git history for `volatility`. |
 
 ## Output
 
@@ -78,3 +79,6 @@ $ arch query units --component domain
 | src/domain/payroll-repository.ts | port | entities |  | 1 | 0 |
 | src/domain/payroll-use-case.ts | use-case | use-cases |  | 0 | 1 |
 ```
+
+Asking `metrics` for `--kind port` on the same fixture exits 2 with "query metrics does not take
+--kind. It takes: no flags of its own."

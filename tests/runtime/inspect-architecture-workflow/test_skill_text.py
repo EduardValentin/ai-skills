@@ -43,6 +43,7 @@ import { COLLECT_SPEC } from "./scripts/lib/commands/collect.mjs";
 import { ADD_SPEC, LIST_SPEC } from "./scripts/lib/commands/findings.mjs";
 import { MODEL_SPEC, MODEL_SUBCOMMANDS } from "./scripts/lib/commands/model.mjs";
 import { QUERY_SPEC } from "./scripts/lib/commands/query.mjs";
+import { QUERY_FLAGS } from "./scripts/lib/queries/index.mjs";
 import { UNCOVERED_SPEC } from "./scripts/lib/commands/uncovered.mjs";
 import { EDITS } from "./scripts/lib/model/edits.mjs";
 console.log(JSON.stringify({
@@ -54,6 +55,7 @@ console.log(JSON.stringify({
   findings: { add: ADD_SPEC, list: LIST_SPEC },
   model: MODEL_SUBCOMMANDS,
   edits: Object.keys(EDITS),
+  queryFlags: QUERY_FLAGS,
 }));
 """
 
@@ -143,7 +145,8 @@ def check_model_line(rest: list[str]) -> list[str]:
 
 def check_top_line(name: str, rest: list[str]) -> list[str]:
     spec = specs()["top"][name]
-    problems, positional = check_flags(spec["flags"], rest)
+    allowed = specs()["queryFlags"].get(rest[0], []) if name == "query" and rest else None
+    problems, positional = check_flags(spec["flags"], rest, allowed)
     low, high = spec["positional"].get("min", 0), spec["positional"].get("max", 0)
     if rest and not low <= len(positional) <= high:
         problems.append(f"{len(positional)} positional arguments, expected {low} to {high}")

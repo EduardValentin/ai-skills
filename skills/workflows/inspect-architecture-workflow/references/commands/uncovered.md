@@ -34,14 +34,19 @@ One path per line, relative to the project root, or nothing when every module is
 
 ## Example
 
-The payroll fixture right after `arch model init`, whose example component covers only the domain
-folder:
+The payroll fixture right after `arch model init`, which writes no components, so no module is
+covered yet:
 
 ```
 $ arch uncovered
 src/adapters/memory-payroll-repository.ts
 src/adapters/pg-payroll-repository.ts
 src/adapters/system-clock.ts
+src/domain/clock.ts
+src/domain/employee.ts
+src/domain/index.ts
+src/domain/payroll-repository.ts
+src/domain/payroll-use-case.ts
 src/web/legacy-router.js
 src/web/main.ts
 src/web/payroll-controller.ts

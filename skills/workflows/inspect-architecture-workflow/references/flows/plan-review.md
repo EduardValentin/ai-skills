@@ -14,7 +14,7 @@ and paths that start with `references` are inside that folder. Working files liv
 
 ## Steps
 
-1. Run `arch applicable --files <plan> --json` and read only its `model` field.
+1. Run `arch applicable --all --json` and read its `model` field.
 2. If it is `false`, return `Verdict: OK` with the line
    "no architecture model; run a baseline audit to enable the full review", and stop with `OK`.
 3. Run `arch model explain-thresholds --json` and note the `project` value of `planFixRounds`:
@@ -38,8 +38,9 @@ and paths that start with `references` are inside that folder. Working files liv
 5. Run `arch check --proposal .architecture/work/proposal.json --out .architecture/work/check.json`.
    Exit 1 means the plan introduces a breach of an enforced rule; continue either way. If it
    refuses the proposal, send its message to the reviewer and write the corrected object.
-6. Run `arch applicable --files <paths> --full --json`, where `<paths>` is every path in the
-   proposal's `modules` and edges, comma-separated, to get `groups` and `judgments`.
+6. Run `arch applicable --proposal .architecture/work/proposal.json --full --json`. It lists in
+   `groups` the rule groups the plan's modules, edges, and components bring into scope, and in
+   `judgments` their ids. If `groups` is empty, go to step 9 and leave out `--judged`.
 7. Send the same reviewer the judging packet: the check output `.architecture/work/check.json`,
    `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, the rule-group file of
    each name in `groups` (for example `references/rules/dependency-direction.md`) with its ids from
@@ -52,11 +53,13 @@ and paths that start with `references` are inside that folder. Working files liv
 8. Put each question to the user, or return the questions to the calling workflow to ask. Give
    every confirmed answer to the same reviewer; it sets `liftedBy` to that exact text where the
    answer makes a finding heavier. Drop answered questions; an unanswered one changes nothing.
-   Write the object to `.architecture/work/judged.json`.
+   Write the object to `.architecture/work/judged.json`. This flow never writes the model; tell the
+   owner that the `add-upcoming` model edit, made after this review, remembers an answer for later.
 9. Run `arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json --judged .architecture/work/judged.json`.
    Add `--upcoming "<text>"` once per confirmed answer, with the same text as `liftedBy`. It prints
    the result. If it refuses judged findings, send the listed problems to the reviewer and run this
-   step again; if it says the check is stale or made from another proposal, go back to step 5.
+   step again; if it says the check is stale or made from another proposal, run step 5 again,
+   then this step.
 10. Collect the clarification requests: the `incomplete` entries of `.architecture/work/check.json`
     with `"clarification": true`, each a `task` and the `fact` it does not state. They are kept
     apart from the findings and mean the plan is not concrete enough to review fully.

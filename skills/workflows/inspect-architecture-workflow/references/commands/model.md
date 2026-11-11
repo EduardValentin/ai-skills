@@ -20,9 +20,9 @@ spaces, and quote any pattern with `*` so the shell does not expand it, as in
 
 Create and check the model:
 
-- `arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]`: write a new model with the starting point's default rule statuses, the adapter command, and no components; add the first with `add-component`. `local` also adds the record path to the repository's local exclude file. Refuses to overwrite a model.
+- `arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]`: write a new model holding the adapter command and the starting point's default rule statuses, with no components yet; `add-component` adds the first. `local` also adds the record path to the repository's local exclude file. Refuses to overwrite a model.
 - `arch model migrate`: convert the four model files of the earlier format into `architecture.json`, leaving them in place. The adapter is left empty; set it with `set-adapter`.
-- `arch model validate`: refuse a model with no components; otherwise check the model against the schema and against the code: a classification pattern or a port that matches no module, a module two components claim, or a forbidden edge or exception whose end matches nothing.
+- `arch model validate`: check the model against the schema and against the code. It fails on a model with no components, a classification pattern or a port that matches no module, a module two components claim, and a forbidden edge or exception whose end matches nothing.
 - `arch model explain <path>`: print the path's component, kind, ring, actors, and the classification pair that matched.
 - `arch model explain-thresholds`: print every knob with its default, the project's value, and its meaning.
 
@@ -47,8 +47,8 @@ Rule statuses, thresholds, and accepted findings:
 - `arch model remove-forbidden-edge <from> <to>`
 - `arch model add-exception <from> <to> [rule=<R>] reason=<text>`: accept a finding by recording an intended dependency, for one target or generalized to a component or ring pair. Ends are written as for a forbidden edge, and `to` may also be `external:<name>`. Without `rule=` it covers every rule.
 - `arch model remove-exception <from> <to> [rule=<R>]`
-- `arch model add-upcoming <text>`: record a confirmed upcoming change in the model. Refused when it is already recorded.
-- `arch model remove-upcoming <text>`: remove a recorded upcoming change.
+- `arch model add-upcoming <text>`: remember an upcoming change the owner confirmed, so every later review counts it as a named upcoming change, as `--upcoming` does for one run of `arch findings add`. Refused when the same text is already recorded.
+- `arch model remove-upcoming <text>`: forget a recorded upcoming change once it has shipped or been dropped.
 - `arch model set-adapter <command>`: set the command that prints the adapter document.
 
 ## Flags
@@ -81,7 +81,7 @@ prints `path`, `component`, `kind`, `ring`, `actors`, `valueType`, and `matched`
 
 ## Example
 
-From the payroll fixture:
+From the payroll fixture, explaining a path, then recording the same upcoming change twice:
 
 ```
 $ arch model explain src/domain/payroll-use-case.ts
@@ -91,4 +91,10 @@ kind: use-case
 ring: use-cases
 actors: unknown
 matched: domain, pair 1: **/*-use-case.ts -> use-case
+$ arch model add-upcoming "a second delivery mechanism"
+updated docs/architecture/architecture.json
+$ arch model add-upcoming "a second delivery mechanism"
+the upcoming change "a second delivery mechanism" is already recorded. Nothing was changed.
 ```
+
+The command prints the model file's absolute path; it is shortened here.

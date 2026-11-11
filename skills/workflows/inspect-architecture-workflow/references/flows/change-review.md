@@ -24,7 +24,8 @@ and paths that start with `references` are inside that folder. Working files liv
    means an introduced breach of an enforced rule; continue either way.
 5. If `review` is `false`, the change stays inside one component and adds no component, port,
    cross-component edge, or external: skip to step 9 with no reviewer. `notReviewed` counts the
-   judgment conditions left out; if the user wants them, rerun step 1 with `--full` added.
+   judgment conditions left out; if the user wants them, rerun step 1 with `--full` added. If
+   `review` is `true` but `groups` is empty, every rule in scope is off: also skip to step 9.
 6. Dispatch one `architecture-reviewer` with this packet:
    - the flow `change-review`, the base ref, and the scope: the diff against `<ref>`;
    - the check output `.architecture/work/check.json`, whose findings it does not repeat;
@@ -47,23 +48,24 @@ and paths that start with `references` are inside that folder. Working files liv
 8. Put each question to the user, or return the questions to the calling workflow to ask. Give
    every confirmed answer to the same reviewer; it returns the judged object with `liftedBy` set to
    that exact text on the findings the answer makes heavier. Drop answered questions; an
-   unanswered one changes nothing and stays, so the result lists it. Write the object to
-   `.architecture/work/judged.json`.
+   unanswered one changes nothing and stays, so the result lists it. If the owner wants a confirmed
+   answer remembered beyond this review, run `arch model add-upcoming "<text>"` with the same text.
+   Write the object to `.architecture/work/judged.json`.
 9. Run `arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --judged .architecture/work/judged.json`.
    Leave out `--judged` when no reviewer ran. Add `--upcoming "<text>"` once per confirmed answer,
    with the same text as `liftedBy`. It prints the result.
    - If it refuses judged findings, it lists each problem: send them to the reviewer, write its
      corrected object, and run this step again.
-   - If it says the check is stale or made with another base, go back to step 4.
+   - If it says the check is stale or made with another base, run step 4 again, then this step.
 10. If the user would rather accept a finding than fix it, that is a model edit the user chooses:
     `arch model add-exception <from> <to> rule=<R> reason=<text>` for one target or a component
     pair, `arch model set-rule <R>[@<component>] advisory reason=<text>` (or `off`) for a rule, or
-    `arch model set-threshold <knob> <value>` for a number. Run the chosen edit, then go back to
-    step 4.
+    `arch model set-threshold <knob> <value>` for a number. Run the chosen edit, then steps 4 and 9
+    again.
 11. If the code was changed in this session to resolve a judged finding, offer to catch it with a
     check next time: `arch model add-forbidden-edge <from> <to> reason=<text>` for an edge that
     must not return, or `arch model set-threshold <knob> <value>` for a number. Run it only if the
-    user agrees, then go back to step 4.
+    user agrees, then steps 4 and 9 again.
 12. Return the printed result to the caller; `arch findings list` prints it again. `OK` passes a
     gate. `SHOULD_CHANGE` and `INCOMPLETE` block it until the findings are fixed or accepted.
 

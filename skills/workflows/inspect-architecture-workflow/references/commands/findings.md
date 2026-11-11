@@ -2,7 +2,7 @@
 
 What `arch findings add` and `arch findings list` do, their flags, exit codes, and output, and the
 shape of a reviewer's judged findings. Read it when either fails or refuses findings. `add` merges a
-check's findings with a reviewer's judged findings, applies the escalation the command owns, stores
+check's findings with the judged findings of one or more reviewers, applies the escalation the command owns, stores
 the open findings in `.architecture/findings.json`, and prints the result with its verdict. `list`
 prints that result again.
 
@@ -11,7 +11,8 @@ prints that result again.
 ```
 arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --judged .architecture/work/judged.json
 arch findings add --flow plan-review --plan <plan> --proposal .architecture/work/proposal.json --check .architecture/work/check.json
-arch findings add --flow audit --check .architecture/work/check.json --upcoming "<confirmed upcoming change>"
+arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-tests.json --judged .architecture/work/judged-humble-objects.json
+arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --upcoming "<confirmed upcoming change>"
 arch findings list
 arch findings list --rank
 ```
@@ -24,11 +25,11 @@ arch findings list --rank
 |---|---|---|
 | `--flow` | `audit`, `change-review`, or `plan-review` | Required: which flow produced the findings. |
 | `--check` | the `arch check` JSON file | Required. It must come from the same mode, base, or proposal as this run, and no source file may have changed since it ran. |
-| `--judged` | the judged findings file | The reviewer's findings and questions. Repeat the flag for one file per reviewer: the files are read in order and their findings and questions joined. Leave it out when no reviewer ran. |
+| `--judged` | a judged findings file | One reviewer's findings and questions. Repeat the flag once per reviewer; the files are read in the order given and their findings and questions joined. Leave it out when no reviewer ran. |
 | `--base` | a branch, tag, or commit | Required in `change-review`: the ref the check compared with. |
 | `--plan` | the plan file | Required in `plan-review`: plan evidence cites its headings. |
 | `--proposal` | the proposal file | Required in `plan-review`: the file the check ran on. |
-| `--upcoming` | text | A named upcoming change the owner confirmed; repeat the flag for each. A finding's `liftedBy` must equal one of them or one recorded in the model. |
+| `--upcoming` | text | A named upcoming change the owner confirmed; repeat the flag for each. A finding's `liftedBy` must equal one of them or one recorded with `arch model add-upcoming`. |
 | `--json` | none | Print the result as JSON. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
@@ -48,7 +49,7 @@ keeps them under `.architecture/work/`.
 | Code | Meaning |
 |---|---|
 | 0 | The findings were stored and the result printed, whatever its verdict. |
-| 2 | A usage error, a check file that does not match this run or is stale, or judged findings refused; nothing is stored. |
+| 2 | A usage error, a check file that is missing, does not match this run, or is stale, or judged findings refused; nothing is stored. A missing check file's message names the `arch check` command, with `--out`, that creates it. |
 
 ## Output
 
@@ -69,9 +70,10 @@ port `<path>#<Symbol>`, or a component, of a kind that judgment applies to. `evi
 `path:line` entries that exist in the reviewed tree; in plan review, `<plan>#<heading>` entries
 naming headings of the plan. `origin` is `introduced` or `inherited`, required in a change or plan
 review and absent in an audit. `"wider": true` marks a target outside the reviewed scope and is
-refused inside it. `liftedBy` names the confirmed upcoming change that makes the finding a blocker.
-`add` refuses the whole file, listing every problem, when any finding breaks these rules or names
-a rule whose status is `off`.
+refused inside it; an audit's scope is the whole codebase, so an audit finding never sets it. `liftedBy` names the confirmed upcoming change that makes the finding a blocker.
+When any finding breaks these rules or names a rule whose status is `off`, `add` stores nothing
+and lists every problem, each prefixed with its file and its place in that file, such as
+`.architecture/work/judged.json: findings[0] (src/domain/payroll-use-case.ts)`.
 
 The printed result has one line each for the verdict with its blocking counts by severity, the
 inherited counts, the incomplete conditions and why, the checks not run, the advisory findings, and
@@ -109,3 +111,24 @@ Questions for the owner: 1
 ```
 
 Corrections 2 to 4 and the cycle's full path are left out here for length.
+
+An audit of the known-defects fixture with one file per reviewer, one holding a finding and the
+other only a question, stores both files' content in one result:
+
+```
+$ arch findings add --flow audit --check .architecture/work/check.json --judged .architecture/work/judged-deferral-and-boundaries.json --judged .architecture/work/judged-tests.json
+# Architecture audit: all components
+Verdict: SHOULD_CHANGE: 18 blocker, 10 major, 3 minor blocking
+Inherited: 0 blocker, 0 major, 0 minor (not blocking)
+Incomplete: 0 conditions
+Not run: zone-of-pain (needs --base), no-cohesion-groups (needs --base), change-spans-groups (needs --base)
+Advisory: 0 findings
+Rules not enforced: none
+Corrections:
+21. R23 Defer unforced decisions: src/lending/loan-use-case.ts: Moving loans to another store means editing the lending rules. Fix: Take the LoanStore port in the constructor instead of the SQL store.
+Wider observations: 0
+Questions for the owner: 1
+- Will a second team own the storage component this year?
+```
+
+Thirty of the thirty-one corrections are left out here for length.
