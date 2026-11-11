@@ -81,17 +81,32 @@ function detailConstructedOutsideRoot(context) {
     );
 }
 
-function controllerImportsUseCase(context) {
-  return edgePairs(context.graph)
+function controllerCallsByUseCase(context) {
+  const calls = new Map();
+  edgePairs(context.graph)
     .filter((pair) => context.unitOf(pair.from)?.kind === "controller" && context.unitOf(pair.to)?.kind === "use-case")
     .filter((pair) => pair.kinds.some((kind) => kind !== "type-import"))
-    .map((pair) =>
+    .forEach((pair) => calls.set(pair.to, [...(calls.get(pair.to) ?? []), pair]));
+  return [...calls.values()];
+}
+
+function callingComponents(context, calls) {
+  return [...new Set(calls.map((pair) => context.componentOf(pair.from)).filter(Boolean))].sort();
+}
+
+function controllerImportsUseCase(context) {
+  return controllerCallsByUseCase(context).flatMap((calls) => {
+    const components = callingComponents(context, calls);
+    if (components.length < 2) return [];
+    return calls.map((pair) =>
       unitEdgeRow({
         ...pair,
-        evidence: `controller calls a use case directly: ${describedPair(context, pair)}`,
+        evidence:
+          `controllers of ${components.join(", ")} call ${pair.to} directly: ${describedPair(context, pair)}`,
         correction: CORRECTIONS.boundary(pair.from, pair.to),
       }),
     );
+  });
 }
 
 export const DEPENDENCY_DIRECTION_CHECKS = [

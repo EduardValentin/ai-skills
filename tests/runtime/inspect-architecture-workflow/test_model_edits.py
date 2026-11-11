@@ -4,7 +4,7 @@ from pathlib import Path
 from support import copy_fixture, git, run_arch
 
 RECORD = "docs/architecture/architecture.json"
-GUIDANCE_RULES = {"R3", "R15", "R23", "R24", "R26", "R29", "R33", "R37"}
+GUIDANCE_RULES = {"R3", "R15", "R23", "R24", "R26", "R28", "R29", "R32", "R33", "R37"}
 LEGACY_ONLY_RULES = {"R6", "R19", "R21", "R22"}
 
 
@@ -139,7 +139,7 @@ def test_explain_thresholds_lists_default_and_project_value(tmp_path: Path):
     assert "default 3" in fan_in and "project 5" in fan_in
     share = next(line for line in lines if line.startswith("interfaceUseShare"))
     assert "default 0.5" in share and "project 0.5" in share
-    assert len(lines) == 14
+    assert len(lines) == 15
 
 
 def test_edit_writes_one_entry_per_line_and_omits_defaults(tmp_path: Path):

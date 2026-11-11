@@ -1,4 +1,4 @@
-export function createContext({ graph, model, baseGraph = null, touched = null }) {
+export function createContext({ graph, model, baseGraph = null, touched = null, history = null }) {
   const units = new Map(graph.units.map((unit) => [unit.path, unit]));
   const unitOf = (path) => units.get(path);
   const componentOf = (path) => units.get(path)?.component ?? null;
@@ -6,7 +6,7 @@ export function createContext({ graph, model, baseGraph = null, touched = null }
     const kind = units.get(path)?.kind;
     return kind ? (model.kinds[kind]?.role ?? null) : null;
   };
-  return { graph, model, baseGraph, touched, unitOf, componentOf, roleOf };
+  return { graph, model, baseGraph, touched, history, unitOf, componentOf, roleOf };
 }
 
 export function touchesBarrel(context, fromPath, toPath) {

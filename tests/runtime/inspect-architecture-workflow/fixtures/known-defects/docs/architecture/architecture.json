@@ -24,7 +24,9 @@
     { "name": "reports", "paths": ["src/reports/**"], "enforcement": "boundary-lint", "classify": [
         ["**", "entity"] ] },
     { "name": "archive", "paths": ["src/archive/**"], "classify": [
-        ["**", "entity"] ] }
+        ["**", "entity"] ] },
+    { "name": "kiosk", "paths": ["src/kiosk/**"], "enforcement": "boundary-lint", "classify": [
+        ["**", "controller"] ] }
   ],
   "ports": [
     { "at": "src/lending/loan-store.ts#LoanStore", "owner": "lending" },

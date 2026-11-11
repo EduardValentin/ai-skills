@@ -6,7 +6,7 @@ import { DEFAULT_STATUSES } from "./defaults.mjs";
 import { writeDocument } from "./write.mjs";
 
 const MODEL_VERSION = 2;
-const GUIDANCE_REASON = "guidance on sequencing, topology, or release practice, so it informs and does not block";
+const GUIDANCE_REASON = "guidance rather than a structural invariant, so it informs and does not block";
 const LEGACY_REASON = "legacy code: promote this rule to enforced per component as the code allows";
 
 export const STARTS = Object.keys(DEFAULT_STATUSES);

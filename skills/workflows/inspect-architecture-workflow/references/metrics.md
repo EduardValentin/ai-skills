@@ -22,6 +22,7 @@ Rule text refers to a knob by its name in braces, such as `{historyWindow}`.
 | `painMaxInstability` | 0.2 | Highest instability of a unit that still sits in the zone of pain. |
 | `painMaxAbstractness` | 0.2 | Highest abstractness of a unit that still sits in the zone of pain. |
 | `painMinFanIn` | 3 | Count of dependents a stable, concrete unit needs before it is reported in the zone of pain. |
+| `painMinChanges` | 3 | Fewest changes within the history window for a concrete, depended-on component to count as changing often. |
 | `uselessMinAbstractness` | 0.8 | Lowest abstractness of a unit that sits in the zone of uselessness. |
 | `uselessMinInstability` | 0.8 | Lowest instability of a unit that sits in the zone of uselessness. |
 | `distanceDeviations` | 1 | Standard deviations above the mean distance to the main sequence that mark an outlier. |
@@ -88,7 +89,8 @@ The zone column of the metrics table names the zone a component falls in, by the
 | `uselessness` | A at least {uselessMinAbstractness} and I at least {uselessMinInstability} |
 
 A component in the zone of pain is harmful only when it also changes: a concrete utility that never
-changes is left alone. Its typical inhabitant is a schema or a shared concrete model that every
+changes is left alone, and a change review reports a touched component in the zone only when at
+least {painMinChanges} commits within {historyWindow} touched it. Its typical inhabitant is a schema or a shared concrete model that every
 service imports. A component in the zone of uselessness is often a set of interfaces left over
 after a refactor.
 

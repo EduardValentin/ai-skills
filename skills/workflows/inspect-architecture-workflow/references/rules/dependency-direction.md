@@ -75,7 +75,9 @@ boundary toward the UI and a storage port toward storage; the presenter and the 
 them. These ports and their boundary data live in the use-case component. Control runs from
 controller to use case to presenter while every dependency runs from adapter to use case: wherever
 control must flow outward, declare the port inward, implement it outward, and never call outward
-directly.
+directly. The input boundary earns its place once a second delivery mechanism calls the use case:
+the check raises the controller's direct call only when controllers of more than one component
+call the same use case.
 
 Check questions:
 - Does the use case import its presenter or its gateway?
@@ -97,7 +99,7 @@ export class PlaceOrder implements PlaceOrderInputBoundary {
 // persistence/SqlOrders implements Orders and holds all the query code
 ```
 
-Not a finding when: `controller-imports-use-case`: the system has one delivery mechanism and no second one is stated in the scope or confirmed by the user, so record an exception for that controller-to-use-case dependency with the reason, and add no input boundary for a caller that does not exist.
+Not a finding when: `controller-imports-use-case`: the controllers of the different components are one delivery mechanism split by area, such as one web API organized per feature, so record an exception for those calls with that reason. A use case that the controllers of one component call is never raised, and needs no input boundary for a caller that does not exist.
 
 ### R7. Lower-level components are plugins
 
@@ -167,7 +169,7 @@ Not a finding when: the edited tests assert behavior the change deliberately alt
 | `port-signature-detail-type` | The signature of a recorded port names a type declared in a detail unit. | R5 | check (needs signatures) | blocker | `port-carries-detail-type` |
 | `policy-detail-edge-beside-port` | A policy unit depends directly on a detail unit that implements a port the policy unit's component owns. | R5 | check (needs implements) | blocker | `policy-depends-on-detail` |
 | `port-in-shared-bucket` | A port sits in a shared interfaces bucket with no consumer beside it, instead of beside the policy that calls it. | R5 | judgment | blocker | `port-on-wrong-side` |
-| `controller-imports-use-case` | A controller imports a use-case unit for more than its types, so it calls the use-case class instead of an input boundary. | R6 | check | blocker | `use-case-called-without-boundary` |
+| `controller-imports-use-case` | Controllers of more than one component import the same use-case unit for more than its types, so more than one delivery mechanism calls the use-case class instead of an input boundary. | R6 | check | blocker | `use-case-called-without-boundary` |
 | `use-case-names-its-details` | A use case reaches its presenter or its store through their implementations instead of an output boundary and a storage port declared in the use-case module. | R6 | judgment | blocker | `policy-depends-on-detail` |
 | `detail-constructed-outside-root` | A unit whose role is not wiring constructs a unit whose role is detail. | R7 | check (needs constructs) | blocker | `detail-constructed-outside-root` |
 | `mixed-unit-constructed-outside-root` | A unit that is not a composition root, config, or test constructs a mixed unit that holds a concrete detail. | R7 | judgment | blocker | `detail-constructed-outside-root` |

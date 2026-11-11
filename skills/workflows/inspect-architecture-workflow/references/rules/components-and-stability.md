@@ -38,6 +38,8 @@ Not a finding when: `change-spans-groups`: the change is a repository-wide mecha
 
 ### R28. Name your cohesion position
 
+Guidance: advisory by default.
+
 **Choose a position in the cohesion tension, name its cost, and expect it to drift.** Neglect
 splitting and consumers receive too many releases they do not need; neglect grouping for
 maintenance and too many components change per requirement; neglect grouping for reuse and the
@@ -148,6 +150,8 @@ Not a finding when: `abstractions-without-implementor`: the component is a publi
 
 ### R32. Use metrics as a screen
 
+Guidance: advisory by default.
+
 **Use the metrics as a screen, never a verdict.** When the graph has at least
 {distanceMinComponents} components, compare each component's distance with the rest of the graph:
 the metrics page defines instability, abstractness, distance, and the bounds of the zones. Two
@@ -218,7 +222,7 @@ Not a finding when: the components build and release together from one repositor
 | `component-cycle` | The component graph contains a cycle. | R30 | check | blocker | `cycle` |
 | `module-cycle` | The graph of units contains a cycle. | R30 | check | blocker | `cycle` |
 | `unstable-dependency` | A component depends on a component whose instability is higher than its own. | R31 | check | major | `depends-on-less-stable` |
-| `zone-of-pain` | In a change review, the change touches a component whose metrics place it in the zone of pain. | R31, R32 | check (needs exports) | major | `zone-of-pain` |
+| `zone-of-pain` | In a change review, the change touches a component whose metrics place it in the zone of pain and which at least {painMinChanges} commits touched within {historyWindow}. | R31, R32 | check (needs exports) | major | `zone-of-pain` |
 | `zone-of-pain-changing` | In an audit, a component in the zone of pain changed within {historyWindow}, where no change under review touches it for the check to decide. | R31, R32 | judgment | major | `zone-of-pain` |
 | `unused-abstractions` | A component exports abstract types and no unit outside it depends on it. | R31, R32 | check (needs exports) | minor | `unused-abstraction` |
 | `abstractions-without-implementor` | A component has abstract types with no implementor, or outside consumers that use none of its abstract types. | R31, R32 | judgment | minor | `unused-abstraction` |

@@ -113,6 +113,7 @@
         "detailReasonChanges": { "type": "integer", "minimum": 1 },
         "escalationFanIn": { "type": "integer", "minimum": 1 },
         "painMinFanIn": { "type": "integer", "minimum": 1 },
+        "painMinChanges": { "type": "integer", "minimum": 1 },
         "planFixRounds": { "type": "integer", "minimum": 1 },
         "distanceMinComponents": { "type": "integer", "minimum": 1 },
         "distanceDeviations": { "type": "number", "exclusiveMinimum": 0 },

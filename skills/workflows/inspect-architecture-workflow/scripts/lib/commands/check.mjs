@@ -1,4 +1,4 @@
-import { UsageError } from "../cli/errors.mjs";
+import { ToolingError, UsageError } from "../cli/errors.mjs";
 import { parseArgs } from "../cli/flags.mjs";
 import { concernsEnforcedRule } from "../checks/status.mjs";
 import { renderCheckMarkdown } from "../checks/render.mjs";
@@ -9,6 +9,7 @@ import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
 import { runRecord } from "../findings/binding.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
+import { componentCommitCounts } from "../queries/history.mjs";
 
 export const CHECK_EXCLUSIVE = ["base", "proposal"];
 
@@ -21,12 +22,25 @@ function printWarnings(graph) {
   for (const warning of graph.warnings) console.error(warning);
 }
 
+async function historyOf(root, model) {
+  try {
+    return await componentCommitCounts({ model, root });
+  } catch (error) {
+    if (error instanceof ToolingError) return null;
+    throw error;
+  }
+}
+
 async function subjectOf(root, model, flags) {
-  if (flags.proposal) return proposalComparison({ root, model, file: flags.proposal });
+  if (flags.proposal) {
+    const comparison = await proposalComparison({ root, model, file: flags.proposal });
+    return { ...comparison, history: await historyOf(root, model) };
+  }
   const graph = await loadGraph(root, model, { flags });
   if (!flags.base) return { graph, clarifications: [] };
   const baseGraph = await loadGraph(root, model, { ref: flags.base, flags });
-  return { graph, baseGraph, touched: await touchedScope(root, graph, flags.base), clarifications: [] };
+  const touched = await touchedScope(root, graph, flags.base);
+  return { graph, baseGraph, touched, history: await historyOf(root, model), clarifications: [] };
 }
 
 function breaches(result, flags) {

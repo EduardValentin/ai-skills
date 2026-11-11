@@ -66,6 +66,22 @@
       "typeChecks": []
     },
     {
+      "path": "src/kiosk/loan-command.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "LoanCommand",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
       "path": "src/lending/loan-period.ts",
       "exports": {
         "abstract": 0,
@@ -642,6 +658,14 @@
       "kind": "import",
       "symbols": [
         "MonthlyReport"
+      ]
+    },
+    {
+      "from": "src/kiosk/loan-command.ts",
+      "to": "src/lending/loan-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "LoanUseCase"
       ]
     }
   ],

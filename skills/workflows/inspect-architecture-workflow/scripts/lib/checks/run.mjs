@@ -114,14 +114,14 @@ function byRuleThenTarget(a, b) {
   return ruleNumber(a.rules[0]) - ruleNumber(b.rules[0]) || naturalOrder(a.target, b.target);
 }
 
-function baseRowsOf(checks, { baseGraph, model, touched }) {
+function baseRowsOf(checks, { baseGraph, model, touched, history }) {
   if (!baseGraph) return [];
-  const context = createContext({ graph: baseGraph, model, touched });
+  const context = createContext({ graph: baseGraph, model, touched, history });
   return checks.flatMap((check) => runCheck(check, context).rows);
 }
 
-export function runChecks({ graph, model, baseGraph = null, touched = null }) {
-  const context = createContext({ graph, model, baseGraph, touched });
+export function runChecks({ graph, model, baseGraph = null, touched = null, history = null }) {
+  const context = createContext({ graph, model, baseGraph, touched, history });
   const active = CHECKS.filter((check) => !isOffForEveryComponent(model, check.rules));
   const results = active.map((check) => runCheck(check, context));
   const originOf = createOriginResolver({ graph, baseGraph, baseRows: baseRowsOf(active, context), touched });

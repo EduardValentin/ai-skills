@@ -29,6 +29,7 @@ export const DEFAULT_THRESHOLDS = {
   painMaxInstability: 0.2,
   painMaxAbstractness: 0.2,
   painMinFanIn: 3,
+  painMinChanges: 3,
   uselessMinAbstractness: 0.8,
   uselessMinInstability: 0.8,
   distanceDeviations: 1,
@@ -46,6 +47,8 @@ export const THRESHOLD_DESCRIPTIONS = {
   painMaxInstability: "Highest instability of a unit that still sits in the zone of pain.",
   painMaxAbstractness: "Highest abstractness of a unit that still sits in the zone of pain.",
   painMinFanIn: "Count of dependents a stable, concrete unit needs before it is reported in the zone of pain.",
+  painMinChanges:
+    "Fewest changes within the history window for a concrete, depended-on component to count as changing often.",
   uselessMinAbstractness: "Lowest abstractness of a unit that sits in the zone of uselessness.",
   uselessMinInstability: "Lowest instability of a unit that sits in the zone of uselessness.",
   distanceDeviations: "Standard deviations above the mean distance to the main sequence that mark an outlier.",
@@ -58,7 +61,7 @@ export const RULE_COUNT = 41;
 
 export const RULE_STATUSES = ["enforced", "advisory", "off"];
 
-const ADVISORY_IN_BOTH = ["R3", "R15", "R23", "R24", "R26", "R29", "R33", "R37"];
+const ADVISORY_IN_BOTH = ["R3", "R15", "R23", "R24", "R26", "R28", "R29", "R32", "R33", "R37"];
 const ADVISORY_IN_LEGACY = ["R6", "R19", "R21", "R22"];
 
 function statusesFor(advisoryRules) {

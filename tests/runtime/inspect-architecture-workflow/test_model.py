@@ -254,6 +254,8 @@ def test_defaults_module_exposes_the_documented_values(tmp_path: Path):
     assert out["thresholds"]["historyWindow"] == "6 months" and out["thresholds"]["painMaxInstability"] == 0.2
     assert out["greenfield"]["R3"] == "advisory" and out["greenfield"]["R6"] == "enforced"
     assert out["legacy"]["R6"] == "advisory" and out["legacy"]["R22"] == "advisory" and out["legacy"]["R1"] == "enforced"
+    for rule in ("R28", "R32"):
+        assert out["greenfield"][rule] == "advisory" and out["legacy"][rule] == "advisory", rule
 
 
 def test_model_template_loads(tmp_path: Path):

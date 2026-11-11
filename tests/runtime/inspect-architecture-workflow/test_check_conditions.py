@@ -139,6 +139,29 @@ def test_entity_importing_a_declared_value_type_is_not_a_row(tmp_path: Path):
     assert row["defect"] == "entity-depends-outward"
 
 
+KIOSK_CALL = "src/kiosk/loan-command.ts -> src/lending/loan-use-case.ts"
+WEB_CALL = "src/web/loan-controller.ts -> src/lending/loan-use-case.ts"
+
+
+def without_kiosk_call(document: dict) -> None:
+    document["edges"] = [edge for edge in document["edges"]
+                         if f"{edge['from']} -> {edge.get('to')}" != KIOSK_CALL]
+
+
+def test_a_use_case_called_by_controllers_of_two_components_is_a_row_per_call(tmp_path: Path):
+    rows = rows_of(check_output(fixture_root(tmp_path))["rows"], "controller-imports-use-case")
+    assert sorted(row["target"] for row in rows) == [KIOSK_CALL, WEB_CALL]
+    assert all("kiosk, web" in row["evidence"] for row in rows)
+
+
+def test_a_use_case_called_only_by_controllers_of_one_component_is_not_a_row(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    edit_json(root / ADAPTER, without_kiosk_call)
+    out = check_output(root)
+    assert not rows_of(out["rows"], "controller-imports-use-case")
+    assert not [entry for entry in out["incomplete"] if entry["check"] == "controller-imports-use-case"]
+
+
 def test_deep_import_is_not_run_without_published_globs(tmp_path: Path):
     root = fixture_root(tmp_path)
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(symbolImports=False))
@@ -356,17 +379,19 @@ def test_a_small_move_is_not_a_jump(tmp_path: Path):
 
 def test_distance_is_not_run_below_the_minimum_component_count(tmp_path: Path):
     root = fixture_root(tmp_path)
-    model_edit(root, "set-threshold", "distanceMinComponents", "8")
+    model_edit(root, "set-threshold", "distanceMinComponents", "9")
     out = check_output(root)
     assert not rows_of(out["rows"], "distance-over-threshold")
-    assert {"check": "distance-over-threshold", "rules": ["R32"], "reason": "fewer than 8 components"} in out["notRun"]
+    assert {"check": "distance-over-threshold", "rules": ["R32"], "reason": "fewer than 9 components"} in out["notRun"]
     result = run_arch(["check"], root)
-    assert "- distance-over-threshold (R32 Use metrics as a screen): fewer than 8 components" in result.stdout
+    assert "- distance-over-threshold (R32 Use metrics as a screen): fewer than 9 components" in result.stdout
 
 
 def test_distance_minimum_defaults_to_eight_components(tmp_path: Path):
     root = fixture_root(tmp_path)
     model_edit(root, "unset-threshold", "distanceMinComponents")
+    assert not [e for e in check_output(root)["notRun"] if e["check"] == "distance-over-threshold"]
+    edit_json(root / MODEL, lambda d: d["components"].remove(d["components"][-1]))
     out = check_output(root)
     assert [e["reason"] for e in out["notRun"] if e["check"] == "distance-over-threshold"] == [
         "fewer than 8 components"]

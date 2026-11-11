@@ -83,15 +83,26 @@ function unstableDependencyRows(context) {
   });
 }
 
-function zoneOfPainRows(context) {
+function touchedInPain(context) {
   const touched = new Set(context.touched.components);
-  return context.graph.components
-    .filter((component) => component.zone === "pain" && touched.has(component.name))
+  return context.graph.components.filter((component) => component.zone === "pain" && touched.has(component.name));
+}
+
+function changesOften(context, component) {
+  return (context.history.get(component.name) ?? 0) >= context.model.thresholds.painMinChanges;
+}
+
+function zoneOfPainRows(context) {
+  if (!context.history) return [];
+  const window = context.model.thresholds.historyWindow;
+  return touchedInPain(context)
+    .filter((component) => changesOften(context, component))
     .map((component) =>
       componentRow(
         component.name,
         `zone of pain and changed by this change: concrete (A ${component.abstractness}), ` +
-          `depended on by ${component.fanIn} modules (I ${component.instability})`,
+          `depended on by ${component.fanIn} modules (I ${component.instability}), ` +
+          `changed in ${context.history.get(component.name)} commits within ${window}`,
         CORRECTIONS.pain(component.name),
       ),
     );
@@ -117,8 +128,18 @@ function unusedAbstractionRows(context) {
   });
 }
 
+function withoutHistory(context) {
+  if (context.history) return [];
+  return touchedInPain(context).map((component) => ({
+    target: component.name,
+    reason:
+      `${component.name} is in the zone of pain, but the change history is unknown, so whether it changes often ` +
+      "could not be decided. Run arch check inside the project's git repository.",
+  }));
+}
+
 function zoneOfPainUndecided(context) {
-  return unitsWithoutExports(context, new Set(context.touched.components));
+  return [...unitsWithoutExports(context, new Set(context.touched.components)), ...withoutHistory(context)];
 }
 
 function unusedAbstractionUndecided(context) {

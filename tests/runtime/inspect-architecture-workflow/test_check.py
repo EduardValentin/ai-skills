@@ -106,14 +106,17 @@ def two_component_change(tmp_path: Path) -> Path:
     return root
 
 
-def run_checks(tmp_path: Path, graph: dict, touched: dict | None = None, model: dict | None = None) -> dict:
+def run_checks(tmp_path: Path, graph: dict, touched: dict | None = None, model: dict | None = None,
+               history: dict | None = None) -> dict:
     script = (
         f"import {{ runChecks }} from {json.dumps(RUN_MODULE)};"
         f"import {{ DEFAULT_KINDS, DEFAULT_THRESHOLDS }} from {json.dumps(DEFAULTS_MODULE)};"
-        "const model = { kinds: DEFAULT_KINDS, thresholds: DEFAULT_THRESHOLDS, rules: {}, forbidden: [],"
-        f" exceptions: [], groups: [], components: [], ports: [], ...{json.dumps(model or {})} }};"
+        f"const override = {json.dumps(model or {})};"
+        "const model = { kinds: DEFAULT_KINDS, rules: {}, forbidden: [], exceptions: [], groups: [], components: [],"
+        " ports: [], ...override, thresholds: { ...DEFAULT_THRESHOLDS, ...override.thresholds } };"
+        f"const history = {json.dumps(history)};"
         f"console.log(JSON.stringify(runChecks({{ graph: {json.dumps(graph)}, model, baseGraph: null,"
-        f" touched: {json.dumps(touched)} }})));"
+        f" touched: {json.dumps(touched)}, history: history && new Map(Object.entries(history)) }})));"
     )
     result = run_node(script, tmp_path)
     assert result.returncode == 0, result.stderr
@@ -592,17 +595,55 @@ def test_unknown_base_exits_2_naming_it(tmp_path: Path):
 
 def test_zone_of_pain_is_checked_only_when_the_change_touches_the_component(tmp_path: Path):
     graph = empty_graph([component("domain", 5, 0, 0, 0.1, "pain"), component("web", 0, 3, 1, 0, None)])
-    assert run_checks(tmp_path, graph)["rows"] == []
-    assert run_checks(tmp_path, graph, touched_scope("web"))["rows"] == []
-    row = find(run_checks(tmp_path, graph, touched_scope("domain"))["rows"], "domain", "R31")
+    often = {"domain": 3, "web": 3}
+    assert run_checks(tmp_path, graph, history=often)["rows"] == []
+    assert run_checks(tmp_path, graph, touched_scope("web"), history=often)["rows"] == []
+    row = find(run_checks(tmp_path, graph, touched_scope("domain"), history=often)["rows"], "domain", "R31")
     assert row["severity"] == "major" and row["lifts"] == [] and row["rules"] == ["R31", "R32"]
     assert row["defect"] == "zone-of-pain"
+    assert "changed in 3 commits within 6 months" in row["evidence"]
+
+
+def test_zone_of_pain_needs_the_component_to_change_often(tmp_path: Path):
+    graph = empty_graph([component("domain", 5, 0, 0, 0.1, "pain")])
+    assert run_checks(tmp_path, graph, touched_scope("domain"), history={"domain": 2})["rows"] == []
+    rows = run_checks(tmp_path, graph, touched_scope("domain"), history={"domain": 3})["rows"]
+    assert [row["target"] for row in rows] == ["domain"]
+    model = {"thresholds": {"painMinChanges": 2}}
+    rows = run_checks(tmp_path, graph, touched_scope("domain"), model=model, history={"domain": 2})["rows"]
+    assert [row["target"] for row in rows] == ["domain"]
+
+
+def test_zone_of_pain_without_change_history_is_incomplete(tmp_path: Path):
+    graph = empty_graph([component("domain", 5, 0, 0, 0.1, "pain")])
+    out = run_checks(tmp_path, graph, touched_scope("domain"))
+    assert out["rows"] == []
+    (entry,) = [e for e in out["incomplete"] if e["check"] == "zone-of-pain"]
+    assert entry["target"] == "domain" and "history" in entry["reason"]
+
+
+def commit_change(root: Path, path: str, times: int) -> None:
+    for _ in range(times):
+        touch(root, path)
+        git(["commit", "-qam", f"change {path}"], root)
+
+
+def test_a_sound_domain_touched_once_is_not_in_pain_and_one_changed_often_is(tmp_path: Path):
+    root = repo(tmp_path)
+    set_exports(root, {"src/domain/payroll-repository.ts": (0, 1), "src/domain/clock.ts": (0, 1)})
+    init_repo(root)
+    touch(root, EMPLOYEE)
+    assert not [r for r in check_rows(root, "--base", "HEAD") if r["check"] == "zone-of-pain"]
+    commit_change(root, EMPLOYEE, 2)
+    touch(root, EMPLOYEE)
+    row = find(check_rows(root, "--base", "HEAD"), "domain", "R31")
+    assert row["check"] == "zone-of-pain" and "changed in 3 commits" in row["evidence"]
 
 
 def test_zone_of_pain_without_the_exports_fact_is_incomplete(tmp_path: Path):
     graph = empty_graph([component("domain", 5, 0, 0, 0.1, "pain")])
     graph["capabilities"]["exports"] = False
-    out = run_checks(tmp_path, graph, touched_scope("domain"))
+    out = run_checks(tmp_path, graph, touched_scope("domain"), history={"domain": 3})
     assert out["rows"] == []
     assert {e["check"] for e in out["incomplete"]} == {"zone-of-pain", "unused-abstractions"}
 
@@ -722,6 +763,7 @@ def test_a_file_that_imported_a_detail_and_now_constructs_it_is_introduced(tmp_p
 def test_moving_a_touched_component_into_the_zone_of_pain_is_introduced(tmp_path: Path):
     root = repo(tmp_path)
     init_repo(root)
+    commit_change(root, EMPLOYEE, 2)
     set_exports(root, {"src/domain/payroll-repository.ts": (0, 1), "src/domain/clock.ts": (0, 1)})
     touch(root, EMPLOYEE)
     row = find(check_rows(root, "--base", "HEAD"), "domain", "R31")

@@ -27,6 +27,7 @@ and some seeds also trip a neighbouring check on a different target. Both are li
 | `src/web/loan-presenter.ts -> external:react` | `presenter-imports-ui-framework` | R21 | `presenter-bound-to-framework` |
 | `src/web/loan-presenter.ts -> src/notify/mail-notifier.ts` | `forbidden-edge-present` | R39 | `forbidden-edge` |
 | `src/web/loan-controller.ts -> src/lending/loan-use-case.ts` | `controller-imports-use-case` | R6 | `use-case-called-without-boundary` |
+| `src/kiosk/loan-command.ts -> src/lending/loan-use-case.ts` | `controller-imports-use-case` | R6 | `use-case-called-without-boundary` |
 | `src/web/loan-controller.ts -> src/storage/sql-loan-store.ts` | `detail-constructed-outside-root` | R7 | `detail-constructed-outside-root` |
 | `src/web/loan-controller.ts -> src/storage/sql-loan-store.ts` | `type-check-on-implementation` | R13 | `consumer-checks-implementation` |
 | `src/web/catalog-page.ts -> src/catalog/internal/index-builder.ts` | `deep-import` | R38 | `deep-import` |
@@ -44,6 +45,10 @@ and some seeds also trip a neighbouring check on a different target. Both are li
 
 Findings that merge into one row: `member.ts -> external:orm` (R4 and R17), `loan-use-case.ts -> sql-loan-store.ts`
 (R4 and R5), and `reservation.ts -> renewal-use-case.ts` under `entity-depends-outward` (R17 and R18).
+
+The loan use case is called directly by the controllers of two components, `web` and `kiosk`: two delivery
+mechanisms, which is what makes `controller-imports-use-case` a finding. A use case whose controllers all sit in one
+component is not one.
 
 Not seeded, because they need a base to compare against: `zone-of-pain`, `no-cohesion-groups`, `change-spans-groups`.
 The classification and exports of every module are known, so nothing is reported as incomplete.
