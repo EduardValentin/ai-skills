@@ -57,10 +57,10 @@ Check questions:
 - Can presenter tests assert on the view model with structural equality?
 
 Examples:
-- Bad: `if (order.total < 0) label.color = RED; label.text = fmt(order.total)`; the view hides
-  "Refund" by inspecting `order.status`.
-- Good: `label.text = vm.totalText; label.color = vm.totalIsNegative ? RED : DEFAULT`, with a
-  `refundButtonVisible: boolean` field.
+- Bad: `if order.total < 0 then label.color = RED`, `label.text = fmt(order.total)`; the view
+  hides "Refund" by inspecting `order.status`.
+- Good: `label.text = vm.totalText`, `label.color = if vm.totalIsNegative then RED else DEFAULT`,
+  with a `refundButtonVisible: Boolean` field.
 
 Not a finding when: `view-makes-decisions`: the view only binds view-model fields to widgets, or maps a flag or enumeration field of the view model to an appearance, as on a static page or a screen with no decision to make. A view that reads a domain object, a domain status, or any value outside the view model is never exempt.
 
@@ -88,9 +88,9 @@ Check questions:
 Examples:
 ```
 // good
-interface Users { lastNamesOfUsersWhoLoggedInAfter(since: Date): Promise<string[]> }
+interface Users: lastNamesOfUsersWhoLoggedInAfter(since: Date) -> List of Text
 // bad
-interface Users { query(sql: string): Promise<Row[]> }
+interface Users: query(sql: Text) -> List of Row
 ```
 
 Not a finding when: `query-inside-policy`: the string is a domain value that only resembles a query, such as a search phrase the user typed, passed to the storage port unchanged; `storage-port-exposes-queries`: each method takes parameters named in domain terms for one application need, such as `ordersPlacedBetween(start, end)`, even though the gateway turns them into a query; `port-named-for-detail`: the word names a domain concept that shares a technical term, such as `Queue` for customers waiting in line.

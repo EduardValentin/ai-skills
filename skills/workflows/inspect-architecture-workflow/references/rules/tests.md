@@ -26,7 +26,7 @@ Check questions:
 - Is authorization covered by tests that do not use the bypass?
 
 Examples:
-- Bad: `if (process.env.TEST_MODE) skipAuth()` in the production authorization adapter.
+- Bad: `if the environment sets TEST_MODE then skipAuth()` in the production authorization adapter.
 - Good: a `testing-api` package depends on the use cases' ports and is imported only by the test
   component and the test environment's composition root.
 
@@ -53,11 +53,11 @@ Check questions:
 Examples:
 ```
 // bad: rule reached through login and navigation
-await page.goto("/login"); await login(page); await page.click("#loans"); await page.click("#new");
-expect(await page.textContent("#interest")).toBe("12.50");
+open page "/login", log in, click "#loans", click "#new"
+expect the text of "#interest" is "12.50"
 // good: rule reached through the testing API
-const r = await testApi.applyInterest({ loanId: seeded.loanId });
-expect(r.interest).toBe("12.50");
+r = testApi.applyInterest(loanId: seeded.loanId)
+expect r.interest is "12.50"
 ```
 
 Not a finding when: `rule-tested-through-volatile-surface`: the test asserts the screen itself, such as layout, navigation, or a widget's state, rather than a business outcome; `no-testing-api`: no exemption.
@@ -78,8 +78,8 @@ Check questions:
   production change?
 
 Examples:
-- Bad: `InterestCalculator.test.ts` asserts `monthlyRate()` and `compound()` separately.
-- Good: `loan-interest.test.ts` asserts `applyInterest` outcomes, so the class split is invisible,
+- Bad: `tests/InterestCalculator` asserts `monthlyRate()` and `compound()` separately.
+- Good: `tests/loan-interest` asserts `applyInterest` outcomes, so the class split is invisible,
   and a cleanup collapses many scenario tests into one data-driven table with no production edits.
 
 Not a finding when: a test file shares a production file's name but asserts behavior through the public surface or the testing API.
@@ -102,7 +102,7 @@ Check questions:
 - Does the review ask what the tests are coupled to?
 
 Examples:
-- Bad: `expect(sort([])).toEqual([])` as the only test, then "sort is verified".
+- Bad: `expect sort(empty list) is empty list` as the only test, then "sort is verified".
 - Good: "a 10-hour day pays 9 regular hours (catches the old cap); the report still counts 8
   (catches a shared helper); the use case runs against an in-memory store (catches a
   policy-to-detail import)."

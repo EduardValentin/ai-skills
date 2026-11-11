@@ -32,12 +32,11 @@ Check questions:
 Examples:
 ```
 // bad: the highest-level unit imports the I/O it is farthest from
-import { PgClient } from "../persistence/PgClient";
-class PayrollService { private db = new PgClient(); }
+unit payroll/PayrollService uses persistence/PgClient, constructs PgClient
 // good: policy owns the port; the detail implements it and depends on the policy
-interface EmployeeRepository { load(id: EmployeeId): Promise<Employee> }   // payroll/
-class PayrollService { constructor(private employees: EmployeeRepository) {} }
-class PgEmployeeRepository implements EmployeeRepository { ... }            // persistence/, imports payroll/
+interface payroll/EmployeeRepository: load(id: EmployeeId) -> Employee
+unit payroll/PayrollService uses EmployeeRepository           // handed in, never constructed
+unit persistence/PgEmployeeRepository implements payroll/EmployeeRepository
 ```
 
 Not a finding when: `policy-imports-external`: the external does no I/O and a recorded exception names it as part of the policy's language, such as a decimal or date-arithmetic library; `outward-ring-edge`: the depending unit is a test that drives the system through its composition root or an entry point, since tests are the outermost component.
@@ -60,8 +59,8 @@ Check questions:
 - Is there still a direct dependency between the policy and the detail?
 
 Examples:
-- Bad: `interface EmployeeRepository { find(conn: PgClient, id: string): PgRow }`
-- Good: `interface EmployeeRepository { find(id: EmployeeId): Employee }`
+- Bad: `interface EmployeeRepository: find(conn: PgClient, id: Text) -> PgRow`
+- Good: `interface EmployeeRepository: find(id: EmployeeId) -> Employee`
 
 Not a finding when: `port-in-shared-bucket`: the shared component holds only ports that several stable consumers use, with no executable code, so it is an interface-only component rather than a bucket.
 
@@ -91,14 +90,12 @@ Check questions:
 Examples:
 ```
 // usecases/place-order/
-export interface PlaceOrderInput  { customerId: string; lines: Line[] }
-export interface PlaceOrderOutput { orderId: string; total: string }
-export interface PlaceOrderInputBoundary  { execute(input: PlaceOrderInput): void }
-export interface PlaceOrderOutputBoundary { present(output: PlaceOrderOutput): void }
-export interface Orders { save(order: Order): void }
-export class PlaceOrder implements PlaceOrderInputBoundary {
-  constructor(private orders: Orders, private out: PlaceOrderOutputBoundary) {} ...
-}
+data PlaceOrderInput(customerId: Text, lines: List of Line)
+data PlaceOrderOutput(orderId: Text, total: Text)
+interface PlaceOrderInputBoundary: execute(input: PlaceOrderInput)
+interface PlaceOrderOutputBoundary: present(output: PlaceOrderOutput)
+interface Orders: save(order: Order)
+unit PlaceOrder implements PlaceOrderInputBoundary, uses Orders and PlaceOrderOutputBoundary
 // web/PlaceOrderController imports PlaceOrderInputBoundary; web/PlaceOrderPresenter implements PlaceOrderOutputBoundary
 // persistence/SqlOrders implements Orders and holds all the query code
 ```

@@ -28,12 +28,12 @@ Check questions:
 
 Examples:
 ```
-// bad: three actors in one class
-class Employee { calculatePay() {}  reportHours() {}  save() {} }
+// bad: three actors in one unit
+unit Employee: calculatePay(), reportHours(), save()
 // good: one unit per actor over a shared plain data type
-class PayCalculator  { calculatePay(e: EmployeeData) {} }     // finance
-class HourReporter   { reportHours(e: EmployeeData) {} }      // HR
-class EmployeeSaver  { save(e: EmployeeData) {} }             // operations
+unit PayCalculator: calculatePay(e: EmployeeData)     // finance
+unit HourReporter: reportHours(e: EmployeeData)       // HR
+unit EmployeeSaver: save(e: EmployeeData)             // operations
 ```
 
 Not a finding when: one actor requests the unit's changes, however many operations it has, or the unit is a thin facade that only constructs per-actor units and forwards calls; a second actor who is only imagined is a question for the user, not evidence.
@@ -73,8 +73,8 @@ Check questions:
 Examples:
 ```
 // bad: every new kind edits Billing
-if (l.kind === "personal") ... else if (l.kind === "business") ... else if (l.kind === "edu") ...
-// good: Billing calls license.calcFee(); a new kind is class EduLicense implements License
+if l.kind is "personal" ... else if l.kind is "business" ... else if l.kind is "edu" ...
+// good: Billing calls license.calcFee(); a new kind is unit EduLicense implements License
 ```
 
 Not a finding when: `variant-added-by-conditional`: the branch selects an implementation once, in a factory or the composition root, and the stable unit only calls the abstraction; `subtype-never-substituted`: the only place the subtype stands in for its supertype is a test that uses it as a test double, which still counts as substitution.
@@ -98,11 +98,11 @@ Check questions:
 Examples:
 ```
 // bad
-fee = l instanceof BusinessLicense ? l.calcFee() * l.users : l.calcFee();
+if l is a BusinessLicense then fee = l.calcFee() * l.users else fee = l.calcFee()
 // good: BusinessLicense.calcFee() already accounts for users
-fee = l.calcFee();
-interface U1Ops { op1(): void }  interface U2Ops { op2(): void }
-class Ops implements U1Ops, U2Ops { op1() {}  op2() {} }     // one implementation, two narrow views
+fee = l.calcFee()
+interface U1Ops: op1()      interface U2Ops: op2()
+unit Ops implements U1Ops, U2Ops: op1(), op2()     // one implementation, two narrow views
 ```
 
 Not a finding when: `type-check-on-implementation`: the type check is in a test that asserts which implementation the composition root wired, not in a consumer of the abstraction.
@@ -123,9 +123,9 @@ Check questions:
 Examples:
 ```
 // bad
-export const cart = { items: [] as Item[] };   // callers push into items
+unit cart publishes its field items: List of Item     // callers push into items
 // good
-export class Cart { private items: Item[] = []; add(i: Item) {}  total(): Money {} }
+unit Cart: add(i: Item), total() -> Money             // items stays private to Cart
 ```
 
 Not a finding when: the exposed structure is boundary data or a value type, or the unit hands out a read-only copy or view through which its state cannot be changed.
@@ -147,9 +147,9 @@ Check questions:
 Examples:
 ```
 // bad: control flow driven by flags across a large body
-let done = false; while (!done) { ... if (x) { done = true; continue; } ... }
+done = false, repeat until done: ... if x then done = true and skip to the next pass ...
 // good: decomposed
-const rows = parse(input); const valid = rows.filter(isValid); return summarize(valid);
+rows = parse(input), valid = the rows that pass isValid, return summarize(valid)
 ```
 
 Not a finding when: the function still states one thing despite a guard clause or an early return, or an exception reports a genuine failure to the caller rather than steering an ordinary path.

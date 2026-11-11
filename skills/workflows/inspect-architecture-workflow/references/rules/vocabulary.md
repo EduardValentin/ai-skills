@@ -129,3 +129,11 @@ whenever a rule or a flow uses a word in a sense that seems narrower than everyd
 | Proposal | What a plan would add to or remove from the code, written in the module and edge shapes of the adapter document, so the command can check a plan before the code exists. |
 | Clarification request | A fact a plan leaves open that the review needs, such as where a new module lives. It is reported as incomplete, apart from the findings, and means the plan is not concrete enough to review fully. |
 | Working files | The files a flow writes for the command to read: the check output, the proposal, and the judged findings. Working files live under `.architecture/work/`, which is never committed. |
+
+## How examples are written
+
+Examples in the catalog are pseudocode that reads the same in any stack. `interface Name:` or
+`unit Name:` (a class, a module, or a set of functions) is followed by its operations, each written
+`operation(argument: Type) -> Result`; `data Name(field: Type)` is boundary data; units relate by
+`implements`, `extends`, `uses`, and `constructs`; control flow is plain `if` and `else`; `// bad`
+and `// good` mark the contrast; and paths carry no file extension, as in `billing/EmployeeRepository`.

@@ -31,11 +31,11 @@ Check questions:
 Examples:
 ```
 // bad: everything published; the package is a folder
-export interface OrdersComponent {}   export class OrdersComponentImpl {}
-export interface Orders {}            export class SqlOrders {}
+component orders publishes: interface OrdersComponent, unit OrdersComponentImpl,
+                            interface Orders, unit SqlOrders
 // good: one published interface plus wiring; the rest is private to the component
-export type { OrdersComponent } from "./OrdersComponent";
-export { createOrdersComponent } from "./wiring";
+component orders publishes: interface OrdersComponent from orders/OrdersComponent,
+                            createOrdersComponent from orders/wiring
 ```
 
 Not a finding when: `unenforced-component`: no exemption; `unconsumed-export`: the component is a library whose published surface serves consumers outside the repository, as its documentation states; `unconsumed-export-of-unpublished-component`: the component is such a library, serving consumers outside the repository, or the model declares no published surface for any component and no change in scope was made harder by that.
@@ -96,7 +96,7 @@ Examples:
 ```
 // orders/        OrdersComponent (published), OrdersComponentImpl, Orders port, SqlOrders gateway (private)
 // web/           OrdersController imports only OrdersComponent
-// app/wiring.ts  createOrdersComponent(...) handed to the controller
+// app/wiring     createOrdersComponent(...) handed to the controller
 ```
 
 Not a finding when: `structure-named-by-technology`: the technical top-level folders hold only delivery or infrastructure code, while each concept's rules and persistence live in its own component.

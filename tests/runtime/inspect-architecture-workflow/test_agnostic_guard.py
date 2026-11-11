@@ -99,3 +99,59 @@ def test_flows_and_the_adapter_contract_name_no_file_extension_of_a_language():
         if LANGUAGE_EXTENSION.search(line.replace(OWN_ENTRY_POINT, ""))
     ]
     assert not violations, "language file extension in a flow or the adapter contract:\n" + "\n".join(violations)
+
+
+CATALOG = sorted((SKILL_DIR / "references" / "rules").glob("*.md"))
+INLINE_CODE = re.compile(r"`([^`]+)`")
+LANGUAGE_SYNTAX_PATTERNS = [
+    r"\b[A-Z]\w*<\w",
+    r"=>",
+    r"===",
+    r"\bimport\s*\{",
+    r"\bfrom\s+[\"']",
+    r"\b(export|const|let|private|async|await)\s",
+    r"\bnew\s+\w+\s*\(",
+    r"\binstanceof\b",
+    r"\bclass\s+[A-Z]",
+    r"\bif\s*\(",
+    r"\[\]",
+    r"\{\s*\}",
+    r"\)\s*:\s*\w",
+    r":\s*(string|number|boolean|void)\b",
+]
+LANGUAGE_SYNTAX = re.compile("|".join(LANGUAGE_SYNTAX_PATTERNS))
+PSEUDOCODE_COMMENT = "//"
+
+
+def _code_examples(path) -> list[tuple[int, str]]:
+    examples = []
+    prose_lines = []
+    in_fence = False
+    for index, line in enumerate(path.read_text().splitlines(), start=1):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            prose_lines.append("")
+        elif in_fence:
+            examples.append((index, line))
+            prose_lines.append("")
+        else:
+            prose_lines.append(line)
+    prose = "\n".join(prose_lines)
+    for match in INLINE_CODE.finditer(prose):
+        examples.append((prose.count("\n", 0, match.start()) + 1, match.group(1)))
+    return examples
+
+
+def _language_syntax_in(example: str) -> bool:
+    code = example.split(PSEUDOCODE_COMMENT)[0]
+    return bool(LANGUAGE_SYNTAX.search(code) or ";" in code or LANGUAGE_EXTENSION.search(example))
+
+
+def test_catalog_examples_are_written_in_pseudocode():
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{index}: {example.strip()}"
+        for path in CATALOG
+        for index, example in _code_examples(path)
+        if _language_syntax_in(example)
+    ]
+    assert not violations, "catalog example in a language's syntax:\n" + "\n".join(violations)

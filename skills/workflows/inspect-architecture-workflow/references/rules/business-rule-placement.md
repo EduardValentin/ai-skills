@@ -25,8 +25,8 @@ Check questions:
 - Does any method name a channel or a use case (`toJson`, `fromRow`, `onEstimationStarted`)?
 
 Examples:
-- Bad: `@Entity() class Loan extends OrmModel { toJson() {} }`
-- Good: `class Loan { applyInterest(): Loan {} }` importing only `Money`, `Rate`, and `Period`.
+- Bad: `unit Loan extends OrmModel, annotated Entity: toJson()`
+- Good: `unit Loan: applyInterest() -> Loan` importing only `Money`, `Rate`, and `Period`.
 
 Not a finding when: `entity-imports-non-entity`: the imported unit is a value type the model has not marked as one, so mark its pair with `value-type=true` instead of raising it; `entity-holds-system-concerns`: the field no rule reads is the entity's identifier, which the paper record has too.
 
@@ -52,10 +52,10 @@ Check questions:
 Examples:
 ```
 // bad: the use case computes interest
-loan.balance = loan.balance * (1 + loan.rate / 12);
+loan.balance = loan.balance * (1 + loan.rate / 12)
 // good: the entity owns the rule; the use case sequences it
-const loan = await this.loans.load(request.loanId);
-await this.loans.save(loan.applyInterest());
+loan = loans.load(request.loanId)
+loans.save(loan.applyInterest())
 ```
 
 Not a finding when: `critical-rule-in-use-case`: the arithmetic or branch is input format validation, sequencing, a gate before an action, or a flow threshold, which exist only because the system is automated and belong in the use case.
@@ -83,11 +83,11 @@ Check questions:
 Examples:
 ```
 // bad
-class GatherContactInfoRequest extends HttpRequest {}
-interface CreateLoanResponse { loan: Loan }
+data GatherContactInfoRequest extends HttpRequest
+data CreateLoanResponse(loan: Loan)
 // good
-interface GatherContactInfoRequest { name: string; address: string; birthdate: string }
-interface CreateLoanResponse { loanId: string; principal: number; periodMonths: number }
+data GatherContactInfoRequest(name: Text, address: Text, birthdate: Text)
+data CreateLoanResponse(loanId: Text, principal: Number, periodMonths: Number)
 ```
 
 Not a finding when: `boundary-data-carries-detail-shape`: a field is a string, number, boolean, or enumeration that describes state, even when its name mirrors an entity field, since mirroring is expected and carrying the entity itself is the breach; `adapter-branches-on-shape`: the adapter branches on the value of a state field, such as a status enumeration, rather than on which type of data it received.

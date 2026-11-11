@@ -116,8 +116,8 @@ Check questions:
 Examples:
 ```
 // before: entities -> authorizer (User imports Permissions) -> interactors -> entities
-// after:  entities/Permissions.ts       export interface Permissions { allows(action: string): boolean }
-//         authorizer/PermissionsImpl.ts import { Permissions } from "entities"; class PermissionsImpl implements Permissions {}
+// after:  interface entities/Permissions: allows(action: Text) -> Boolean
+//         unit authorizer/PermissionsImpl implements entities/Permissions
 // now authorizer depends on entities, and entities depends on nothing
 ```
 
