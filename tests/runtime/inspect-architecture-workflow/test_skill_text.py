@@ -547,9 +547,48 @@ def test_the_audit_flow_classifies_every_module_before_collecting(tmp_path):
     assert flow.run_step(8).returncode == 0
     assert flow.run_step(9).returncode in (0, 1)
     assert json.loads(flow.run_step(10).stdout)["review"] is True
-    flow.judged_path(13).write_text(json.dumps({"findings": [], "questions": []}))
-    assert "# Architecture audit" in flow.run_step(13).stdout
-    assert "## Ranked by change volatility" in flow.run_step(14).stdout
+    flow.judged_path(14).write_text(json.dumps({"findings": [], "questions": []}))
+    assert "# Architecture audit" in flow.run_step(14).stdout
+    assert "## Ranked by change volatility" in flow.run_step(16).stdout
+
+
+EMPLOYEE = "src/domain/employee.ts"
+
+
+def audit_judged(judgment: str, correction: str) -> dict:
+    return {"findings": [{
+        "judgment": judgment, "target": EMPLOYEE, "consequence": "Payroll and reporting changes edit the same unit.",
+        "correction": correction, "evidence": [f"{EMPLOYEE}:1"],
+    }], "questions": []}
+
+
+def test_the_audit_flow_reconciles_overlapping_findings_of_parallel_reviewers(tmp_path):
+    root = payroll_repository(tmp_path)
+    flow = FlowRunner("audit", root, {"<upcoming change>": "a second payroll form"})
+    assert flow.run_step(9).returncode in (0, 1)
+    parallel = {
+        "reasons-to-change": audit_judged("unit-serves-several-actors", "Split the reporting behavior out."),
+        "business-rule-placement": audit_judged("entity-carries-framework-traits", "Remove the framework base class."),
+    }
+    command = flow.command_in(14, "--judged")
+    paths = [flow.judged_path(14, **{"<group>": group}) for group in parallel]
+    for path, document in zip(paths, parallel.values()):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document))
+    both = flow.substituted(command, {"<group>": "reasons-to-change"})
+    both += ["--judged", str(paths[1].relative_to(root))]
+    overlapping = run_arch(both, root).stdout
+    assert "Overlapping findings:" in overlapping
+    assert all(f"(from {path.relative_to(root)})" in overlapping for path in paths)
+
+    reconciled = flow.judged_path(14, **{"<group>": "reconciled"})
+    shared = "Move the reporting behavior and its framework base class out of the entity."
+    findings = [{**document["findings"][0], "correction": shared} for document in parallel.values()]
+    reconciled.write_text(json.dumps({"findings": findings, "questions": []}))
+    assert reconciled.name in numbered_steps(flow_file("audit").read_text())[15]
+    rerun = flow.run(command, **{"<group>": "reconciled"}).stdout
+    assert "Overlapping findings:" not in rerun
+    assert f"{EMPLOYEE}; {EMPLOYEE}: Payroll and reporting changes edit the same unit. Fix: {shared}" in rerun
 
 
 WORKING_FILES_SENTENCE = "Working files live under `.architecture/work/`"
@@ -559,3 +598,40 @@ def test_flows_and_pages_state_where_working_files_live_in_one_sentence():
     for path in [*flow_files(), page_file("findings"), page_file("check"), page_file("applicable")]:
         text = " ".join(path.read_text().split())
         assert WORKING_FILES_SENTENCE in text, f"{path.name} does not say: {WORKING_FILES_SENTENCE}"
+
+
+PACKET_PATHS = "Every packet opens with the absolute paths of the project root and the skill folder."
+CONDITION_FIELDS = "(`id`, `targets`, `condition`)"
+
+
+def flow_text(name: str) -> str:
+    return " ".join(flow_file(name).read_text().split())
+
+
+def test_every_flow_names_the_packet_paths_and_the_judgment_conditions():
+    for name in FLOW_NAMES:
+        text = flow_text(name)
+        assert PACKET_PATHS in text and "two levels above this file" in text, name
+        assert CONDITION_FIELDS in text, f"{name} does not pass the judgment conditions"
+        assert "Never edit a judged file by hand" in text, name
+        assert "open question" in text, f"{name} does not return a late classification dispute"
+
+
+def test_only_the_first_audit_reviewer_judges_the_cross_cutting_conditions():
+    step = numbered_steps(flow_file("audit").read_text())[11]
+    assert "Only the first reviewer dispatched also gets `references/rules/cross-cutting.md`" in step
+
+
+def test_accepting_by_threshold_removes_the_finding_and_names_the_knobs():
+    for name in ["audit", "change-review"]:
+        text = flow_text(name)
+        assert "after a threshold it no longer appears at all" in text, name
+        assert "arch model explain-thresholds" in text, name
+
+
+def test_every_flow_shows_the_non_blocking_sections():
+    for name in FLOW_NAMES:
+        assert "`Wider observations`" in flow_text(name) and "non-blocking" in flow_text(name), name
+    for name in REVIEW_FLOWS:
+        assert "`Inherited findings`" in flow_text(name), name
+        assert "The verdict line is what the caller returns" in flow_text(name), name

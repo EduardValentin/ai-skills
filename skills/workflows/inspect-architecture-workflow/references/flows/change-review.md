@@ -6,37 +6,38 @@ result. Follow it step by step when the skill is invoked with `change-review` or
 names this flow.
 
 Inputs: the base ref the diff is compared with, written `<ref>` below, and the upcoming changes the
-ticket or plan states. Run every command from the inspected project's root. `arch` stands for
-`node <skill>/scripts/arch.mjs`, where `<skill>` is the folder that holds this skill's `SKILL.md`,
-and paths that start with `references` are inside that folder. Working files live under
-`.architecture/work/`. Terms are defined in `references/rules/vocabulary.md`.
+ticket or plan states. Run every command from the project root. The skill folder holds `SKILL.md`,
+two levels above this file; `arch` stands for `node <skill folder>/scripts/arch.mjs`, and paths that
+start with `references` are inside it. Every packet opens with the absolute paths of the project
+root and the skill folder. Working files live under `.architecture/work/`. Terms are defined in
+`references/rules/vocabulary.md`.
 
 ## Steps
 
-1. Run `arch model status --json`.
+1. Run `arch model status --json`; its `path` is the model path.
 2. If `model` is `false`, return `Verdict: OK` with the line
    "no architecture model; run a baseline audit to enable the full review", and stop with `OK`.
 3. Run `arch applicable --base <ref> --json`.
-4. If `uncovered` lists uncovered modules, dispatch `architecture-classifier` with them,
+4. If `uncovered` lists modules, dispatch `architecture-classifier` with them,
    `references/classification.md`, and `references/rules/vocabulary.md`. It returns `arch model`
-   commands, one per line, each with a one-sentence reason. Run them, then step 3 again, once: a
+   commands with a reason each, and open questions. Run the commands, then step 3 again, once: a
    module still uncovered after that is reported incomplete, never as passing.
-5. Run `arch check --base <ref> --out .architecture/work/check.json`. Exit 0 means no introduced
-   breach of an enforced rule and exit 1 means at least one; continue either way.
-6. If `review` is `false` or `groups` is empty, no reviewer is needed: go to step 10 and leave out
-   `--judged`. `notReviewed` counts the judgment conditions a contained change leaves out; if the
-   user wants them judged, run step 3 again with `--full` added.
-7. Dispatch one `architecture-reviewer` with this packet, which names each file once:
+5. Run `arch check --base <ref> --out .architecture/work/check.json`. It exits 1 only when the change
+   introduces a blocker or major finding of an enforced rule; continue either way.
+6. If `review` is `false` or `groups` is empty, go to step 10 and leave out `--judged`.
+   `notReviewed` counts the judgment conditions a contained change leaves out; if the user wants
+   them judged, run step 3 again with `--full` added, then continue at this step.
+7. Dispatch one `architecture-reviewer` with this packet:
    - the flow `change-review`, the base ref, and the scope: the diff against `<ref>`;
    - the check output `.architecture/work/check.json`, whose findings it does not repeat;
    - `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, and the file of every
-     other rule group in `groups` (for example `references/rules/dependency-direction.md`), with
-     the judgment ids `judgments` lists for each;
+     other group in `groups`, such as `references/rules/dependency-direction.md`, each with its
+     `judgments` entries as printed (`id`, `targets`, `condition`);
    - the touched units and their classification, as `arch query touched --base <ref> --with-neighbors` prints them;
    - the upcoming changes the ticket or plan states, word for word.
 
-   It returns its judged findings in this shape, and apart from them any classification disputes,
-   each a touched path and what its code shows that the model contradicts:
+   It returns classification disputes, if any, then judged findings, which you write to
+   `.architecture/work/judged.json`:
 
    ```json
    { "findings": [ { "judgment": "<judgment id>", "target": "<unit, edge, port, or component>",
@@ -46,42 +47,42 @@ and paths that start with `references` are inside that folder. Working files liv
    ```
 
    `origin` is `inherited` for a defect the diff leaves in place. A target outside the diff adds
-   `"wider": true`, as does a finding whose correction cannot be made smaller under R8 (Constraints
-   need a named reason). `liftedBy` is optional. `rules`, `defect`, and `severity` are never set.
-8. If there are disputes, dispatch `architecture-classifier` once with the disputed paths and the
-   reviewer's reasons, run the commands it returns, then follow step 12; no second reviewer.
-9. Put each question to the user, or return the questions to the calling workflow to ask. Give each
-   confirmed answer to the same reviewer, which sets `liftedBy` to that exact text where the answer
-   makes a finding heavier. Drop answered questions; an unanswered one changes nothing and stays.
-   If the user wants an answer remembered, run `arch model add-upcoming "<text>"`. Write the
-   judged findings to `.architecture/work/judged.json`.
-10. Run `arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`.
-    Give `--upcoming` once for every upcoming change the packet stated and every answer the user
-    confirmed. A `liftedBy` that names neither one of those nor a change recorded with
-    `add-upcoming` is refused. It prints the result and its verdict.
-    - If it refuses judged findings, it names the file and the finding of each problem: send them
-      to the reviewer, write its corrected judged findings, and run this step again.
+   `"wider": true`, as does a finding no smaller correction can fix under R8 (Constraints need a
+   named reason). `liftedBy` is optional. `rules`, `defect`, and `severity` are never set.
+8. If there are disputes, dispatch `architecture-classifier` once with the disputed paths, each
+   with the reviewer's reason, the model path, and `references/classification.md`; run its
+   commands, then step 12. A dispute raised after that pass goes in the result as an open question.
+9. Put each question to the user, or return the questions to the calling workflow to ask. Send the
+   questions with the answers to the same reviewer; it returns a fresh judged file, written over
+   `judged.json`, in which each answered question became a finding, a `liftedBy` on a finding, or
+   nothing, and unanswered ones remain. Never edit a judged file by hand. If the user wants an
+   answer remembered, run `arch model add-upcoming "<text>"`.
+10. Run `arch findings add --flow change-review --base <ref> --check .architecture/work/check.json --judged .architecture/work/judged.json --upcoming "<upcoming change>"`,
+    with `--upcoming` once for every upcoming change the packet stated and every confirmed answer.
+    It prints the result and its verdict.
+    - If it refuses judged findings, it names the file and the finding: send the problems to the
+      reviewer, write its fresh judged file, and run this step again.
     - If it says the check is stale or made with another base, run step 5 again, then this step.
 11. If the user accepts a finding instead of fixing it, run the edit the user chooses:
     - an edge other than a cycle: `arch model add-exception <from> <to> rule=<R> reason="<text>"`;
-    - a unit, a port (`<path>#<Symbol>`), or a component, from the check or the reviewer:
+    - a unit, a port (`<path>#<Symbol>`), or a component:
       `arch model add-exception <target> '*' rule=<R> reason="<text>"`;
     - a whole rule, for the project or one component, and the only way to accept a cycle or an
       incomplete condition: `arch model set-rule <R>[@<component>] off reason="<text>"`, or
       `advisory` in place of `off`;
-    - a number: `arch model set-threshold <knob> <value>`.
+    - a number: `arch model set-threshold <knob> <value>`, with a knob `arch model explain-thresholds` lists.
 
-    Then run step 5 and step 10 again with the same judged findings file. The accepted finding is
-    counted under `Dropped:` (an exception covers it, or its rule is off) or under `Advisory:`.
-12. After a fix to the code or to the classification, run steps 3 and 5 again: rule groups may
-    enter or leave scope. If `groups` is now empty, run step 10 without `--judged`. Otherwise ask
-    the same reviewer to judge again against the new `judgments`, not only its earlier findings,
-    write its fresh judged findings over `.architecture/work/judged.json`, and run step 10. Never
-    pass judged findings written before the fix.
+    Then run steps 5 and 10 again with the same judged file. An exception or a rule status moves
+    the finding to `Dropped:` or `Advisory:`; after a threshold it no longer appears at all.
+12. After a fix to the code or to the classification, run steps 3 and 5 again. If `groups` is now
+    empty, run step 10 without `--judged`. Otherwise the same reviewer judges again against the new
+    `judgments`, writes a fresh `judged.json`, and steps 9 and 10 follow. Never pass judged
+    findings written before the fix.
 13. For a judged finding the fix resolved, offer a check that catches it next time:
     `arch model add-forbidden-edge <from> <to> reason="<text>"` for an edge, or
     `arch model set-threshold <knob> <value>` for a number. Run it only if the user agrees.
-14. Return the printed result. `OK` passes a gate; `SHOULD_CHANGE` and `INCOMPLETE` block it until
-    the findings are fixed or accepted.
+14. Return the printed result and any open question. Show the user the `Inherited findings` and
+    `Wider observations` lines as non-blocking. The verdict line is what the caller returns: `OK`
+    passes a gate; `SHOULD_CHANGE` and `INCOMPLETE` block it until the findings are fixed or accepted.
 
 If a command fails, it exits 2 and says what was wrong and what to do next; for more, read that subcommand's page, such as `references/commands/check.md`.

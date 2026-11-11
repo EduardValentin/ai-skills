@@ -122,3 +122,45 @@ def test_no_skill_mentions_a_removed_agent_or_skill():
     assert not (REPO_ROOT / "skills" / "abilities" / "software-architecture-principles").exists()
     mentions = mentions_of_removed_names(REPO_ROOT / "skills")
     assert not mentions, "\n".join(mentions)
+
+
+DROP_VERBS = r"(?:drop|discard|omit|remove|delete|skip|hide)s?"
+DROP = re.compile(
+    rf"\b{DROP_VERBS}(?:,? (?:or |and )?(?:accept|downgrade|{DROP_VERBS}),?)* (?:the |a |any |each |this )?"
+    r"(?:judged )?findings?\b",
+    re.IGNORECASE,
+)
+PROHIBITION = re.compile(r"\b(do not|never)\b", re.IGNORECASE)
+SINGLE_OBJECT = "Return exactly one JSON object and nothing after it."
+PROPOSAL_OBJECT = "the proposal is the one JSON object, and nothing comes after it"
+
+
+def test_neither_agent_is_told_to_drop_a_finding():
+    for path in [REVIEWER, CLASSIFIER]:
+        for sentence in re.split(r"(?<=[.:])\s", path.read_text()):
+            if DROP.search(sentence):
+                assert PROHIBITION.search(sentence), f"{path.name}: {sentence.strip()}"
+
+
+def test_reviewer_returns_one_json_object_and_nothing_after_it():
+    text = " ".join(REVIEWER.read_text().split())
+    assert SINGLE_OBJECT in text
+    assert PROPOSAL_OBJECT in text
+    assert "Do not read the skill's scripts." in text
+
+
+def test_reviewer_holds_every_structural_correction_to_r8():
+    text = " ".join(REVIEWER.read_text().split())
+    for element in ["an interface", "a layer", "a component", "a factory", "a request or response model",
+                    "a published surface", "a forbidden edge", "a recorded group"]:
+        assert element in text, element
+    order = ["remove what is unneeded", "use what already exists", "record a decision in the model", "add structure"]
+    positions = [text.find(step) for step in order]
+    assert all(position > 0 for position in positions) and positions == sorted(positions), positions
+
+
+def test_classifier_returns_only_commands_and_open_questions():
+    text = CLASSIFIER.read_text()
+    output = text[text.index("## Output Format"):text.index("## Forbidden Behaviors")]
+    assert re.findall(r"^## (\w[\w ]*)$", output, re.MULTILINE) == ["Output Format", "Commands", "Open questions"]
+    assert "`references/classification.md` gives the full syntax of `arch model classify`" in text
