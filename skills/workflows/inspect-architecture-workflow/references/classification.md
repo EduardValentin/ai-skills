@@ -80,6 +80,8 @@ unit to the nearest entry point and to the nearest device-facing unit (a databas
 screen, or file system). The unit farther from both is the higher level. For example, a use case
 imported by a route handler and importing a database client is one hop from each; a pay rule
 imported only by that use case is two hops from each, so it is higher than the use case.
+R4 (Dependencies point toward policy) uses this level: inside one ring, too, a unit never depends
+on one at a lower level.
 
 ## An unstated field is unknown
 

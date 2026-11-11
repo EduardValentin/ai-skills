@@ -30,7 +30,7 @@ Examples:
 - Good: a `testing-api` package depends on the use cases' ports and is imported only by the test
   component and the test environment's composition root.
 
-Not a finding when: the test-only code lives in a separate testing component that the production composition root never imports and the production artifact excludes, even if it sits in the same repository.
+Not a finding when: `test-code-in-production-deployable`: the test-only code lives in a separate testing component that the production composition root never imports and the production artifact excludes, even though it sits in the same repository.
 
 ### R35. Test through a testing API
 
@@ -60,7 +60,7 @@ const r = await testApi.applyInterest({ loanId: seeded.loanId });
 expect(r.interest).toBe("12.50");
 ```
 
-Not a finding when: the test asserts the screen itself, such as layout, navigation, or a widget's state, rather than a business outcome, or the code has no business rules beyond passing data between a screen and a store.
+Not a finding when: `rule-tested-through-volatile-surface`: the test asserts the screen itself, such as layout, navigation, or a widget's state, rather than a business outcome; `no-testing-api`: the code has no business rules beyond passing data between a screen and a store.
 
 ### R36. Organize tests by behavior
 
@@ -82,7 +82,7 @@ Examples:
 - Good: `loan-interest.test.ts` asserts `applyInterest` outcomes, so the class split is invisible,
   and a cleanup collapses many scenario tests into one data-driven table with no production edits.
 
-Not a finding when: a test file shares a production file's name but asserts behavior through the public surface, or the internal refactors within {historyWindow} left the tests untouched.
+Not a finding when: a test file shares a production file's name but asserts behavior through the public surface or the testing API.
 
 ### R37. Tests falsify, they do not prove
 
@@ -92,7 +92,7 @@ Guidance: advisory by default. Reported to the reviewers who own it.
 a defect. Each test targets a concrete way the code could be wrong, and the plan states, per
 behavior, which defect the test catches and through which surface. Never write "tests pass,
 therefore correct". A test that broke because structure changed while behavior did not falsified
-nothing: count it as a coupling defect. A humble unit that is hard to test is no evidence of
+nothing: count it as structural coupling. A humble unit that is hard to test is no evidence of
 correctness either; keeping it thin limits what can go wrong in it. Tests not designed into the
 system turn fragile, get discarded, and take their regression protection with them.
 
@@ -107,7 +107,7 @@ Examples:
   (catches a shared helper); the use case runs against an in-memory store (catches a
   policy-to-detail import)."
 
-Not a finding when: each test or plan item names the defect it would catch, even if a report also mentions passing tests alongside that evidence.
+Not a finding when: `tests-falsify-nothing`: a report mentions passing tests alongside evidence of which defect each test would catch; `plan-names-no-falsifying-tests`: the plan names the defect and the surface per behavior in each test's description rather than in a separate section.
 
 ## Conditions
 

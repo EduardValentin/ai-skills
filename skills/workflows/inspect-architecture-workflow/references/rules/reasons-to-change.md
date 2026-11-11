@@ -77,7 +77,7 @@ if (l.kind === "personal") ... else if (l.kind === "business") ... else if (l.ki
 // good: Billing calls license.calcFee(); a new kind is class EduLicense implements License
 ```
 
-Not a finding when: the branch selects an implementation once, in a factory or the composition root, or the edited unit has no dependents outside its own component yet, so editing it costs no more than adding a class; a subtype used only as a test double still counts as substituted.
+Not a finding when: `variant-added-by-conditional`: the branch selects an implementation once, in a factory or the composition root, and the stable unit only calls the abstraction; `subtype-never-substituted`: the only place the subtype stands in for its supertype is a test that uses it as a test double, which still counts as substitution.
 
 ### R13. Substitutable implementations, narrow interfaces
 
@@ -105,7 +105,7 @@ interface U1Ops { op1(): void }  interface U2Ops { op2(): void }
 class Ops implements U1Ops, U2Ops { op1() {}  op2() {} }     // one implementation, two narrow views
 ```
 
-Not a finding when: the type check sits where external input is parsed into a typed value rather than in a consumer of the abstraction, or the consumer uses every member because it is the composition root or an adapter that forwards the whole interface.
+Not a finding when: `type-check-on-implementation`: the type check is in a test that asserts which implementation the composition root wired, not in a consumer of the abstraction.
 
 ### R14. Hide data behind behavior
 

@@ -33,7 +33,7 @@ Examples:
 - Good: first task "`PageStore` port with an in-memory implementation; formatting features shipped
   on it; store chosen when saving across restarts is required."
 
-Not a finding when: a use case in scope needs the technology now and the plan names that use case, or the policy already reaches the framework, store, or vendor through a port and only the gateway behind it names the technology.
+Not a finding when: `port-without-test-double`: the tests that need the real detail verify the gateway itself, not business rules.
 
 ### R24. No tiers without a reason
 
@@ -68,7 +68,8 @@ other.** UI versus rules, rules versus store, formatting versus storage, rules v
 dependency-injection framework: each such pair gets its own boundary, with the port on the side
 that does not care and the dependency pointing at it. Every optional or many-formed part is a
 plugin to the core, and by default plugins do not depend on each other directly; a project that
-composes plugins on purpose switches that default off through the rule's status. Sides that change
+lets two plugins depend on each other on purpose records an exception for that pair, with its
+reason. Sides that change
 together for the same reason need no line, and a unit carrying two cadences is missing one inside
 it. Every boundary justifies itself by a decision it defers or an axis of change it separates, as
 R8 (Constraints need a named reason) requires.
@@ -84,7 +85,7 @@ Examples:
 - Good: web, store, and mail each depend on the rules and never on each other; `WikiFormatter` and
   `FileSystemPageStore` sit on opposite sides of `PageStore`.
 
-Not a finding when: the boundary records the decision it defers, or the change history shows its two sides changing at different cadences; a large unit that changes for one reason at one cadence needs no internal line, and two plugins that meet only through a port the policy owns are not coupled.
+Not a finding when: `plugin-imports-plugin`: the project lets those two plugins depend on each other on purpose and has recorded an exception for that pair with its reason; `boundary-defers-nothing`: the port records the decision it defers, or the change history shows its two sides changing at different cadences; `unit-mixes-change-cadences`: the unit is large but changes for one reason at one cadence.
 
 ### R26. Demonstrate the model without I/O
 
@@ -106,7 +107,7 @@ Examples:
 - Good: "first deliver the model behind an input port and a recording output port; the first
   screen adapter comes two deliveries later".
 
-Not a finding when: the acceptance criterion is about the screen, store, or transport itself, such as a layout, a migration, or a wire protocol, or the plan delivers the rules first and adds a console or test adapter for early visible progress.
+Not a finding when: `plan-sequences-io-first`: the early work is about the screen, store, or transport itself, such as a layout, a migration, or a wire protocol, and no rule waits on it; `rules-need-io`: the only behavior that needs the device is the device's own, such as a migration's correctness or a protocol's framing.
 
 ## Conditions
 
@@ -114,9 +115,9 @@ Not a finding when: the acceptance criterion is about the screen, store, or tran
 |---|---|---|---|---|---|
 | `detail-reached-without-port` | A framework, store, or vendor is reached with no port between it and the policy. | R23 | judgment | major | `policy-depends-on-detail` |
 | `port-without-test-double` | A port has no in-memory or stub implementation while the rule tests need the real detail. | R23 | judgment | major | `rules-need-real-detail` |
-| `tiers-without-reason` | More than one deployable or a service catalog exists with no recorded team or deployment reason, and the simplest change edits several of them. | R24 | judgment | major | `tiers-without-reason` |
+| `tiers-without-reason` | More than one deployable or a service catalog exists with no recorded team or deployment reason, and the simplest change edits more than one of them. | R24 | judgment | major | `tiers-without-reason` |
 | `plugin-imports-plugin` | A unit that implements a recorded port depends on a unit in another component that also implements a recorded port. | R25 | check (needs implements) | major | `plugins-coupled` |
-| `boundary-defers-nothing` | A boundary defers no decision and its two sides change together for the same reason. | R25 | judgment | minor | `unjustified-abstraction` |
-| `unit-mixes-change-cadences` | A unit changes at two unrelated cadences, so an internal boundary is missing. | R25 | judgment | major | `missing-boundary` |
+| `boundary-defers-nothing` | A boundary defers no decision and the code on both sides of it changes together for the same reason. | R25 | judgment | minor | `unjustified-abstraction` |
+| `unit-mixes-change-cadences` | A unit changes for unrelated reasons at unrelated cadences, so an internal boundary is missing. | R25 | judgment | major | `missing-boundary` |
 | `rules-need-io` | The business rules cannot be exercised without a UI, a store, or a server in the process. | R26 | judgment | major | `rules-need-real-detail` |
 | `plan-sequences-io-first` | The plan or brief sequences framework, schema, or screen work before the rules. | R26 | judgment | major | `plan-sequences-io-first` |

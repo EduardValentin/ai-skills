@@ -9,18 +9,23 @@ a use case's callers.
 
 ### R4. Dependencies point toward policy
 
-**Dependencies point from detail toward policy, whatever way the data flows.** A policy unit
-never depends on a database, framework, transport, vendor SDK, clock, file system, configuration
-reader, the units that read or write them, or the formats they produce. Data flow and call flow do
-not set the direction: a use case handing output to a presenter or a store is still depended on by
-that adapter. Every dependency that crosses rings points inward, and a ring added when needed
-states which two rings it sits between. Change frequency is the diagnostic: a policy unit that
-keeps changing for device, format, transport, or vendor reasons holds detail, and a rarely
+**Dependencies point from detail toward policy, whatever way the data flows.** Every source
+dependency that crosses levels points from the lower level to the higher one, so the
+depended-upon side is immune to changes on the depending side, and business rules are that side
+at every boundary. A policy unit never depends on a database, framework, transport, vendor SDK,
+clock, file system, configuration reader, the units that read or write them, or the formats they
+produce. Data flow and call flow do not set the direction: a use case handing output to a
+presenter or a store is still depended on by that adapter. Every dependency that crosses rings
+points inward, and a ring added when needed states which two rings it sits between. Inside one
+ring the same holds by the finer level the classification guide describes: a unit never depends on
+one nearer the inputs and outputs than itself. Change frequency is the diagnostic: a policy unit
+that keeps changing for device, format, transport, or vendor reasons holds detail, and a rarely
 changing business rule inside an I/O unit is misplaced the other way.
 
 Check questions:
 - What does each policy unit import and name in its signatures? Any framework, driver, SDK,
   environment read, or construction of a concrete detail?
+- Does any unit import one nearer the inputs and outputs than itself?
 - Could a schema, screen, or transport change break an entity or a use case?
 - In the change history, did a policy unit change for a detail reason?
 
@@ -35,7 +40,7 @@ class PayrollService { constructor(private employees: EmployeeRepository) {} }
 class PgEmployeeRepository implements EmployeeRepository { ... }            // persistence/, imports payroll/
 ```
 
-Not a finding when: the dependency runs from a detail or wiring unit toward policy, even where data flows outward, or the policy imports an external that does no I/O and that a recorded exception names as part of the policy's language, such as a decimal or date-arithmetic library.
+Not a finding when: `policy-imports-external`: the external does no I/O and a recorded exception names it as part of the policy's language, such as a decimal or date-arithmetic library; `outward-ring-edge`: the depending unit is a test that drives the system through its composition root or an entry point, since tests are the outermost component.
 
 ### R5. The consumer owns the port
 
@@ -47,8 +52,7 @@ composition root. Port signatures use domain types (a storage port may return en
 gateway behind it depends inward) or plain boundary data; never driver handles, framework request
 objects, rows, or vendor payloads. A framework's row type is detail even when it is "just data".
 When several stable consumers share one port, or the consumer must stay concrete, the port may
-live in an interface-only component both sides depend on: no executable code, and not a dumping
-ground.
+live in an interface-only component both sides depend on.
 
 Check questions:
 - Which component declares the port, and does the implementing component depend on it?
@@ -59,7 +63,7 @@ Examples:
 - Bad: `interface EmployeeRepository { find(conn: PgClient, id: string): PgRow }`
 - Good: `interface EmployeeRepository { find(id: EmployeeId): Employee }`
 
-Not a finding when: several stable consumers share the port and it lives in an interface-only component they all depend on, or the signature names only entities, value types, or boundary data, which a storage port may return because its gateway depends inward.
+Not a finding when: `port-in-shared-bucket`: the shared component holds only ports that several stable consumers use, with no executable code, so it is an interface-only component rather than a bucket.
 
 ### R6. Use cases own their boundaries
 
@@ -93,7 +97,7 @@ export class PlaceOrder implements PlaceOrderInputBoundary {
 // persistence/SqlOrders implements Orders and holds all the query code
 ```
 
-Not a finding when: the system has one delivery mechanism and no second one is stated in the scope or confirmed by the user, so a controller calling the use case directly costs nothing; the rule's status records that with its reason, and no boundary is added for a caller that does not exist.
+Not a finding when: `controller-imports-use-case`: the system has one delivery mechanism and no second one is stated in the scope or confirmed by the user, so record an exception for that controller-to-use-case dependency with the reason, and add no input boundary for a caller that does not exist.
 
 ### R7. Lower-level components are plugins
 
@@ -116,7 +120,7 @@ Examples:
 - Good: use-case tests run against an in-memory store and a recording output boundary; a framework
   swap touches only controllers, presenters, and wiring.
 
-Not a finding when: the construction sits in a composition root, a config unit, or a test, or the constructed object is boundary data or a value type with no I/O; a replacement of a different kind that changes only a port's boundary data is the expected cost, not a breach.
+Not a finding when: `detail-constructed-outside-root`: the constructing unit is a component's wiring factory, which R38 (Enforce boundaries with the build) has the component publish and which the model classifies under a kind whose role is wiring, such as `config`.
 
 ### R8. Constraints need a named reason
 
@@ -135,7 +139,7 @@ Examples:
 - Good: "The port `Payments` forbids checkout from naming the vendor SDK, so a vendor swap cannot touch
   checkout."
 
-Not a finding when: the abstraction names the decision it defers or the ripple it forbids, however few consumers and implementers it has; a port with a recorded `defers` reason is justified, and an in-memory implementation the rule tests use counts as a second implementer.
+Not a finding when: the abstraction names the decision it defers or the ripple it forbids, for example in its port's recorded `defers` reason, however few consumers and implementers it has.
 
 ### R9. Trace change impact along dependencies
 
@@ -143,7 +147,7 @@ Not a finding when: the abstraction names the decision it defers or the ripple i
 references, which decide what must be rebuilt and re-verified, not the run-time call graph. The
 impact of a change to B is every dependent of B. Visibility bounds it: a published symbol can be
 depended on by anything, a private one only inside its component. A change that forces edits to
-many tests whose asserted behavior did not change is test coupling, not expected fallout.
+many tests whose asserted behavior did not change is structural coupling, not expected fallout.
 
 Check questions:
 - Which units depend on the changed symbol? Is it published beyond its component?

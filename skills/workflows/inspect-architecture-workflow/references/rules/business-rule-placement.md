@@ -19,7 +19,7 @@ Different actors owning rules over the same data get one rule unit each over a s
 type, as R10 (One actor per module) requires.
 
 Check questions:
-- Does a rule function read every field, and would a clerk perform every function?
+- Is every field read by a rule function, and would a clerk perform every function?
 - What does the entity import, and what annotations does it carry? Anything beyond another entity
   or a value type is a defect.
 - Does any method name a channel or a use case (`toJson`, `fromRow`, `onEstimationStarted`)?
@@ -28,7 +28,7 @@ Examples:
 - Bad: `@Entity() class Loan extends OrmModel { toJson() {} }`
 - Good: `class Loan { applyInterest(): Loan {} }` importing only `Money`, `Rate`, and `Period`.
 
-Not a finding when: the entity depends only on other entities and value types, whether it is a class or a plain data type with free rule functions; an identifier field no rule reads is still critical data, since the paper record has one too.
+Not a finding when: `entity-imports-non-entity`: the imported unit is a value type the model has not marked as one, so mark its pair with `value-type=true` instead of raising it; `entity-holds-system-concerns`: the field no rule reads is the entity's identifier, which the paper record has too.
 
 ### R18. Use cases hold application rules
 
@@ -58,7 +58,7 @@ const loan = await this.loans.load(request.loanId);
 await this.loans.save(loan.applyInterest());
 ```
 
-Not a finding when: the use case validates input format, sequences calls, gates an action, or applies a flow threshold that exists only because the system is automated; those are application rules and belong in it.
+Not a finding when: `critical-rule-in-use-case`: the arithmetic or branch is input format validation, sequencing, a gate before an action, or a flow threshold, which exist only because the system is automated and belong in the use case.
 
 ### R19. Cross boundaries with plain data
 
@@ -90,7 +90,7 @@ interface GatherContactInfoRequest { name: string; address: string; birthdate: s
 interface CreateLoanResponse { loanId: string; principal: number; periodMonths: number }
 ```
 
-Not a finding when: a field is a string, number, boolean, or enumeration that describes state, even when its name mirrors an entity field; mirroring an entity's fields is expected, and carrying the entity itself is the breach.
+Not a finding when: `boundary-data-carries-detail-shape`: a field is a string, number, boolean, or enumeration that describes state, even when its name mirrors an entity field, since mirroring is expected and carrying the entity itself is the breach; `adapter-branches-on-shape`: the adapter branches on the value of a state field, such as a status enumeration, rather than on which type of data it received.
 
 ## Conditions
 

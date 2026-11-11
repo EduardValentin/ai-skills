@@ -24,6 +24,7 @@ Check questions:
 - Which two units sit on either side of the device boundary? Does the humble one contain any
   decision?
 - Do the testable unit's tests run without the real device?
+- If the humble unit had no tests, what defects could hide in it?
 - Does the handler do anything besides parse, convert, and invoke?
 
 Examples:
@@ -32,7 +33,7 @@ Examples:
 - Good: `ReportPresenter`, tested with in-memory rows, produces `ReportViewModel`; `ReportPage`
   copies it to the screen; the approval rule lives in the use case.
 
-Not a finding when: the device-facing unit only parses, converts, invokes, serializes, or transmits, or the remaining logic is input-format parsing that a controller must do to build the request model; such a unit needs only the thin integration test, not a testable twin.
+Not a finding when: `handler-holds-business-logic`: the handler's only checks parse the input format to build the request model, which a controller must do; `device-unit-holds-logic`: the conditionals it holds only encode or decode a wire or file format, such as escaping or framing, with no decision on domain data.
 
 ### R21. Presenter finishes every decision
 
@@ -61,7 +62,7 @@ Examples:
 - Good: `label.text = vm.totalText; label.color = vm.totalIsNegative ? RED : DEFAULT`, with a
   `refundButtonVisible: boolean` field.
 
-Not a finding when: the screen has no decision to make, such as a static page or a view that shows received text as it is, or the view only maps a flag or enumeration to an appearance; where the presenter runs, on a server or in the client, is not part of the rule.
+Not a finding when: `view-makes-decisions`: the screen has no decision to make, such as a static page or a view that shows received text as it is, or the view only maps a flag or enumeration to an appearance, wherever the presenter runs.
 
 ### R22. Reach storage through a gateway
 
@@ -92,7 +93,7 @@ interface Users { lastNamesOfUsersWhoLoggedInAfter(since: Date): Promise<string[
 interface Users { query(sql: string): Promise<Row[]> }
 ```
 
-Not a finding when: the query code and ORM types stay inside a gateway or the persistence component, or the technology word is on the gateway's name rather than the storage port's; a storage port with many methods is fine when each serves a need the application has.
+Not a finding when: `query-inside-policy`: the string is a domain value that only resembles a query, such as a search phrase the user typed, passed to the storage port unchanged; `storage-port-exposes-queries`: each method takes parameters named in domain terms for one application need, such as `ordersPlacedBetween(start, end)`, even though the gateway turns them into a query; `port-named-for-detail`: the word names a domain concept that shares a technical term, such as `Queue` for customers waiting in line.
 
 ## Conditions
 

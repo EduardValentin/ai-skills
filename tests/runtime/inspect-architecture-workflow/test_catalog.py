@@ -38,6 +38,9 @@ KNOB = re.compile(r"\{([a-z][A-Za-z]*)\}")
 BANNED_PHRASES = ["fewer than half", "a quarter of", "three or more", "two or more recent"]
 RETIRED_WORDS = re.compile(r"\b(evaluator|ledger|slice|packet)", re.IGNORECASE)
 NUMBERED_STEP = re.compile(r"^\s*\d+\.\s")
+RULE_NUMBER = re.compile(r"\bR\d+\b")
+NUMBER_IN_TEXT = re.compile(r"\d|\b(two|three|half|quarter|several)\b", re.IGNORECASE)
+CLAUSE_START = re.compile(r"^`[a-z]+(?:-[a-z]+)+`: ")
 REQUIRED_TERMS = ["Port", "Storage port", "Adapter", "Gateway", "Plugin", "Device boundary", "Collected evidence",
                   "Metrics", "Presenter"]
 
@@ -192,6 +195,57 @@ def test_rule_titles_match_the_registry():
     for rule, section in sections.items():
         assert section["title"] == titles[rule], rule
         assert int(rule[1:]) in GROUP_RULES[section["group"]], f"{rule} sits in {section['group']}.md"
+
+
+def conditions_by_rule() -> dict[str, set[str]]:
+    ids: dict[str, set[str]] = {}
+    for entry in registry()["entries"]:
+        for rule in entry["rules"]:
+            ids.setdefault(rule, set()).add(entry["id"])
+    return ids
+
+
+def test_condition_cells_state_no_number_outside_a_knob():
+    for group in GROUP_RULES:
+        for row_id, rows in condition_rows(group).items():
+            condition = RULE_NUMBER.sub("", KNOB.sub("", rows[0][1]))
+            assert not NUMBER_IN_TEXT.search(condition), f"{row_id}: condition states a number: {rows[0][1]!r}"
+
+
+def not_a_finding_clauses(line: str) -> list[str]:
+    return line[len(NOT_A_FINDING):].strip().split("; ")
+
+
+def test_not_a_finding_clauses_name_the_condition_they_exempt():
+    by_rule = conditions_by_rule()
+    for rule, section in rule_sections().items():
+        own = by_rule.get(rule, set())
+        line = next(line for line in section["lines"] if line.startswith(NOT_A_FINDING))
+        named = set(re.findall(r"`([a-z]+(?:-[a-z]+)+)`: ", line))
+        assert named <= own, f"{rule}: names conditions of another rule: {sorted(named - own)}"
+        if len(own) < 2:
+            continue
+        for clause in not_a_finding_clauses(line):
+            assert CLAUSE_START.match(clause), f"{rule}: clause names no condition id: {clause!r}"
+
+
+def rule_references(path):
+    for block in path.read_text().split("\n\n"):
+        text = " ".join(line.strip() for line in block.splitlines() if not line.startswith(("#", "|")))
+        for match in re.finditer(r"\bR(\d+)\b", text):
+            yield int(match.group(1)), text[match.end():]
+
+
+def test_references_to_other_groups_carry_the_rule_title():
+    titles = registry()["titles"]
+    for path in catalog_files():
+        own = GROUP_RULES.get(path.stem, range(0))
+        for number, rest in rule_references(path):
+            if number in own:
+                assert not rest.startswith(" ("), f"{path.name}: R{number} is in this group and needs no title"
+                continue
+            expected = f" ({titles[f'R{number}']})"
+            assert rest.startswith(expected), f"{path.name}: R{number} must be followed by{expected}"
 
 
 def test_every_rule_has_a_not_a_finding_when_line():

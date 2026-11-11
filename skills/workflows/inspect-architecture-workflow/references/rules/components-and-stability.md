@@ -34,7 +34,7 @@ Examples:
   string helper; a `common` package holds date helpers, a retry policy, and a `Money` type.
 - Good: tax rules live in `tax-policy`; `slugify` lives in a `text` component.
 
-Not a finding when: the change touches one component, or every component it touches shares a recorded cohesion group with the others; a consumer that uses a small part of a component whose published surface is that small part is using it as designed.
+Not a finding when: `change-spans-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-spans-groups`: the changes that touched the components together were such mechanical edits; `thin-component-use`: the consumer is a composition root that uses only the component's wiring factory; `thin-use-of-unpublished-component`: the consumer is a composition root that uses only the component's wiring factory.
 
 ### R28. Name your cohesion position
 
@@ -43,10 +43,10 @@ splitting and consumers receive too many releases they do not need; neglect grou
 maintenance and too many components change per requirement; neglect grouping for reuse and the
 component is hard to reuse or version. Early projects lean toward grouping for maintenance,
 because localizing change matters more than reuse; as reuse appears, the structure drifts toward
-finer splits driven by reuse. Revisit boundaries when change and reuse patterns shift, and state
-which cost each component currently accepts. Cohesion groups are recorded in the model with
-`arch model add-group <name> members=<a,b> absorbs=<text>`, where `absorbs` names the kind of change
-the group takes in; the decisions file may explain a group at length for people. An audit proposes
+finer splits driven by reuse. Revisit boundaries when change and reuse patterns shift. The model records
+each cohesion group with `arch model add-group <name> members=<a,b> absorbs=<text>`, where
+`absorbs` names the kind of change the group takes in; the decisions file states which cost each
+component currently accepts and may explain a group at length for people. An audit proposes
 groups from the change history and a person confirms them; a cross-cutting change that crosses
 them may be recorded once as an exception, and recurring crossings revise the groups.
 
@@ -61,7 +61,7 @@ Examples:
 - Mature platform: "`orders-reporting` split out so reporting consumers stop receiving core
   releases."
 
-Not a finding when: the change touches only one component, so no group is needed, or the component's group records what it absorbs and the change history within {historyWindow} still fits that group.
+Not a finding when: `no-cohesion-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-without-groups`: the changes that touched components together were such mechanical edits.
 
 ### R29. Let the component map emerge
 
@@ -117,7 +117,7 @@ Examples:
 // now authorizer depends on entities, and entities depends on nothing
 ```
 
-Not a finding when: the loop exists only at run time, such as a callback handed in through a port, with no chain of source dependencies closing it; dependencies decide, not calls.
+Not a finding when: `component-cycle`: the loop exists only at run time, such as a callback handed in through a port, with no chain of source dependencies closing it, since dependencies decide, not calls.
 
 ### R31. Depend toward stability
 
@@ -143,7 +143,7 @@ Examples:
 - Good: `feature-flags-ui` depends on `entities`; `payments-domain` publishes the port `Payments` and
   `stripe-gateway` implements it.
 
-Not a finding when: the more volatile component that a stable one depends on has not changed within {historyWindow}, so the inversion costs nothing yet and is noted rather than raised, or a component's instability is undefined because it has no dependencies to or from other components.
+Not a finding when: `abstractions-without-implementor`: the component is a published extension point whose abstract types code outside the repository implements, and its published surface says so; `unused-abstractions`: the component is such a published extension point, consumed outside the repository.
 
 ### R32. Use metrics as a screen
 
@@ -158,7 +158,7 @@ delete it or fold it into its one consumer. Examine components far from the bala
 to the rest of the graph, and any whose distance rose between the base and head of the change
 under review. A flagged number is a measurement against a chosen pattern: say in words why the
 position is harmful, volatile and depended on or abstract and unused, before asking for a
-restructure. On a smaller graph, skip the arithmetic and apply R31 (Depend toward stability)
+restructure. On a smaller graph, skip the arithmetic and apply R31
 qualitatively.
 
 Check questions:
@@ -174,7 +174,7 @@ Examples:
 - Note and leave alone: a `string-utils` package in the same position but unchanged within
   {historyWindow}.
 
-Not a finding when: the graph has fewer than {distanceMinComponents} components for the distance comparison, the component in the zone of pain has not changed within {historyWindow}, or nobody can say in words why the position is harmful; a number alone is never a finding.
+Not a finding when: `distance-over-threshold`: nobody can say in words why the component's position is harmful, volatile and depended on or abstract and unused, since a number alone is never a finding.
 
 ### R33. Release components bottom-up
 
@@ -222,4 +222,4 @@ Not a finding when: the components build and release together from one repositor
 | `unused-abstractions` | A component exports abstract types and no unit outside it depends on it. | R31, R32 | check (needs exports) | minor | `unused-abstraction` |
 | `abstractions-without-implementor` | A component has abstract types with no implementor, or outside consumers that use none of its abstract types. | R31, R32 | judgment | minor | `unused-abstraction` |
 | `distance-over-threshold` | With at least {distanceMinComponents} components, a component's distance lies more than {distanceDeviations} standard deviations above the mean, or rose by at least {distanceJump} between base and head. | R32 | check (needs exports) | minor | `off-balance` |
-| `unversioned-dependency-across-releases` | A component is consumed by path with no version although the two components release separately. | R33 | judgment | major | `unversioned-dependency-across-releases` |
+| `unversioned-dependency-across-releases` | A component is consumed by path with no version although it and its consumer release separately. | R33 | judgment | major | `unversioned-dependency-across-releases` |

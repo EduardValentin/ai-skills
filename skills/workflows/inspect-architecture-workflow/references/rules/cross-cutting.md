@@ -6,14 +6,16 @@ Read this file before any other rule group, and read the vocabulary first if a t
 
 ## Applying any rule
 
-- Read a rule's `Not a finding when:` line before raising anything under it. A target that line
-  describes is compliant.
+- Read a rule's `Not a finding when:` line before raising anything under it. Where the rule has
+  more than one condition, each clause of that line names the condition it exempts and exempts no
+  other.
 - A target covered by a recorded exception is not a finding.
 - A condition that lacks a fact or a classification it needs is incomplete. It is never reported
   as passing and never guessed.
-- Severity comes from the consequence only, on the scale the vocabulary defines, and starts at the
-  condition's base severity. A check and a reviewer grade the same breach the same way. What
-  relaxes a rule for a project is its status, never a lowered severity.
+- A finding takes the base severity in its condition's row. A reviewer never regrades a condition,
+  and a check and a reviewer report the same severity for the same condition; only the escalation
+  the flow applies can raise it. What relaxes a rule for a project is its status, never a lowered
+  severity.
 - Speculation never blocks. Only a named upcoming change can raise a finding's weight. When a
   decision in scope would go differently depending on a future feature the reviewer cannot
   confirm, such as a second delivery mechanism, a second store, or another team taking over a
@@ -52,7 +54,7 @@ Examples:
 - Good review: "Works as described. The retry policy is duplicated in both callers and the config
   is read inside the loop, so tuning it means three edits."
 
-Not a finding when: no next change is known for the code the plan touches, so there is no cost to state, or the plan states the structural effect in plain words without naming a pattern, a layer count, or a diagram.
+Not a finding when: the plan or review states, in plain words, how the change keeps or lowers the cost of the likely next requests in the area it touches, even without naming a pattern, a layer count, or a diagram.
 
 ### R2. Name a shape mismatch
 

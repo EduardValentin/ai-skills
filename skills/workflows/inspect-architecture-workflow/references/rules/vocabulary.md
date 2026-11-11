@@ -34,10 +34,11 @@ uses a word in a sense that seems narrower than everyday speech.
 | Critical business rule | A rule the organization would apply without software, together with the data it needs, which would exist on paper. |
 | Entity | A module binding a small set of critical business rules to their data. Its interface is the rule functions. It knows nothing of storage, UI, frameworks, or use cases, and need not be a class. |
 | Value type | A small immutable type with no identity and no I/O, such as `Money` or `Period`, which entities and use cases may use freely. |
+| Flow threshold | A limit that exists because the process is automated, such as how many attempts a user gets or how many items one request may carry. It is an application rule and belongs in a use case. |
 | Use case | Application rules (sequencing, gating, input validation, flow thresholds) stated as input, output, and ordered steps. It orchestrates entities and does not know the delivery mechanism. |
 | Request and response model | The boundary data a use case accepts and returns. |
 | Boundary data | A plain structure (request, response, view model, record, payload) with public fields and no behavior, declared on the inner side. It is the only thing that crosses a boundary. |
-| Level | A unit's distance from the system's inputs and outputs. A request handler or a database client is low level, a use case higher, an entity highest. |
+| Level | A unit's distance from the system's inputs and outputs. A request handler or a database client is low level, a use case higher, an entity highest. Dependencies point from low to high. |
 | Ring | A band of units at one level. Four by default, inside out: entities, use cases, adapters, frameworks. A project may add rings; what matters is that dependencies point inward. |
 | Dependency | A source reference from one unit to another: an import, an implements or extends clause, a construction, or a type in a signature. It is what the code names, not what calls what at run time. |
 | Dependent | A unit that depends on another, directly or through other units. The dependents of B are what must be re-verified when B changes. |
@@ -61,6 +62,7 @@ uses a word in a sense that seems narrower than everyday speech.
 | View | The humble unit that copies a view model to the screen. |
 | View model | Boundary data of display-ready strings, booleans, and enumerations, set by the presenter. "Arrives formatted" means it reaches the view already formatted. |
 | Plugin | A relationship, not a kind of unit: a detail the policy does not know, which can be added, swapped, or removed without the policy changing. By default plugins do not depend on each other. |
+| Wiring factory | A function a component publishes that constructs the component's concrete parts and returns its published interface, so the composition root wires the component without reaching its internals. |
 | Composition root | The one lowest-level unit that constructs concrete details and wires everything together. It may depend on every ring, and nothing depends on it. |
 | Entry point | A place control enters the system: a route handler, a command, a job trigger, a message consumer. |
 | Device boundary | The line between code that decides and code that talks to a screen, store, network, file system, or clock. |
@@ -75,6 +77,7 @@ uses a word in a sense that seems narrower than everyday speech.
 | Term | Meaning |
 |---|---|
 | Component | A group of units that tooling keeps behind one published surface inside an enforced unit (a package, a module, or a separately built library). Independent release is one way to enforce it, not the definition. |
+| Interface-only component | A component holding only ports and the boundary data they use, with no executable code, that several components depend on. It is not a place for unrelated interfaces. |
 | Published surface | What a component exports for code outside it. Everything else in it is private to the component. |
 | Published versus public | Exported for use outside the component, versus visible only inside it. |
 | Enforced boundary | A line the compiler, module exports, the build, or a build-failing import rule refuses to let code cross. A boundary that exists only in a diagram is a drawn boundary, not an enforced one. |
@@ -83,6 +86,9 @@ uses a word in a sense that seems narrower than everyday speech.
 | Cohesion | How strongly the units in a component belong together: because they change for the same reasons, because they are used and released together, or both. |
 | Cohesion group | A recorded set of components the project lets change together for one kind of reason, such as the domain, UI, and feature packages of a repository organized by feature. |
 | Cohesion tension | The conflict between three motives for a component's edges: grouping units that change for the same reasons, so a change lands in one place; grouping units always used together into one versioned release; and splitting off units some consumers never use, so those consumers stop receiving releases they do not need. The first two grow components and the third shrinks them, so each component sits at a chosen position and pays a cost. |
+| Cohesive leaf | A component extracted to break a cycle, holding units that belong together for one reason and depending on no component of the cycle it broke. |
+| Deployable | A program or service built, shipped, and run on its own. |
+| Monolith | A system built and deployed as one deployable, however many components it holds. |
 | Release unit | A component built, versioned, and published on its own, so consumers depend on a named version rather than a path and choose when to adopt a new one. |
 | Stable | Hard to change because many units depend on it and it depends on few. |
 | Volatile | Easy to change because few units depend on it and it depends on many. Code meant to change often belongs in volatile components. |
@@ -103,8 +109,9 @@ uses a word in a sense that seems narrower than everyday speech.
 | Judgment | A condition a reviewer decides by reading code or a plan, citing `path:line` evidence. |
 | Finding | A target that meets a condition: a unit, an edge, a port, a component, or a plan section, with its evidence, its consequence for maintenance in one sentence, and the smallest correction inside the scope. |
 | Defect kind | The name of what is wrong, shared by conditions of different rules that describe the same defect. A finding is identified by its target and defect kind and lists every rule it breaks. |
-| Severity | How costly a finding's consequence is: `blocker` when the breach couples policy to detail or forms a cycle, `major` when it couples two units that change for different reasons or leaves a relied-upon boundary unenforced, `minor` when it is local to one unit and no dependent inherits it. Each condition carries a base severity. |
+| Severity | How costly a finding's consequence is: `blocker` when the breach couples policy to detail or forms a cycle, `major` when it couples two units that change for different reasons or leaves a relied-upon boundary unenforced, `minor` when it is local to one unit and no dependent inherits it. This scale explains what the levels mean; it is not applied anew to each finding. Each condition keeps the base severity in its row of the conditions table, and a reviewer never regrades a condition. |
 | Rule status | Whether a rule counts for a project or a component: `enforced`, `advisory` (reported, never counted toward the verdict), or `off` (not evaluated). A status is recorded with a one-sentence reason. |
 | Guidance | A rule about sequencing, topology, or practice that is advisory by default in every project. |
+| Decisions file | An optional `decisions.md` beside the model, holding longer explanations for people, such as the cost each component's cohesion position accepts. No check reads it. |
 | Smallest correction | The least change inside the scope that removes the finding's consequence. |
 | Wider observation | Something worth saying that lies outside the scope or needs more than the smallest correction. It is reported apart and never blocks. |

@@ -356,7 +356,7 @@ const DEFERRAL_AND_BOUNDARIES = [
     targets: ["component", "plan"],
     condition:
       "More than one deployable or a service catalog exists with no recorded team or deployment reason, " +
-      "and the simplest change edits several of them.",
+      "and the simplest change edits more than one of them.",
   },
   {
     id: "boundary-defers-nothing",
@@ -365,7 +365,7 @@ const DEFERRAL_AND_BOUNDARIES = [
     severity: "minor",
     defect: "unjustified-abstraction",
     targets: ["port", "component"],
-    condition: "A boundary defers no decision and its two sides change together for the same reason.",
+    condition: "A boundary defers no decision and the code on both sides of it changes together for the same reason.",
   },
   {
     id: "unit-mixes-change-cadences",
@@ -374,7 +374,7 @@ const DEFERRAL_AND_BOUNDARIES = [
     severity: "major",
     defect: "missing-boundary",
     targets: BEHAVIOR,
-    condition: "A unit changes at two unrelated cadences, so an internal boundary is missing.",
+    condition: "A unit changes for unrelated reasons at unrelated cadences, so an internal boundary is missing.",
   },
   {
     id: "rules-need-io",
@@ -468,7 +468,7 @@ const COMPONENTS_AND_STABILITY = [
     severity: "major",
     defect: "unversioned-dependency-across-releases",
     targets: ["component"],
-    condition: "A component is consumed by path with no version although the two components release separately.",
+    condition: "A component is consumed by path with no version although it and its consumer release separately.",
   },
   {
     id: "component-map-fixed-upfront",

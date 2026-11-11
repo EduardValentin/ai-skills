@@ -36,7 +36,7 @@ export type { OrdersComponent } from "./OrdersComponent";
 export { createOrdersComponent } from "./wiring";
 ```
 
-Not a finding when: the published symbol has a named outside consumer, including a composition root or the testing API, or the component has no dependents yet, so review alone is enough until the first one arrives.
+Not a finding when: `unenforced-component`: the component has no dependents in other components yet; `unconsumed-export`: the component is a library whose published surface serves consumers outside the repository, as its documentation states; `unconsumed-export-of-unpublished-component`: the component is such a library, serving consumers outside the repository.
 
 ### R39. Make forbidden edges uncompilable
 
@@ -56,7 +56,7 @@ Examples:
 - Good: `Orders` is unreachable from `web`; the plan lists "web to persistence: forbidden, enforced
   by package exports".
 
-Not a finding when: the ring skip is a detail implementing or translating to policy types, such as a gateway constructing entities under R5 (The consumer owns the port), or the skip is recorded as an exception with the risk it accepts.
+Not a finding when: `edge-skips-ring`: the skip is a detail implementing or translating to policy types, such as a gateway constructing entities under R5 (The consumer owns the port), or it is recorded as an exception with the risk it accepts.
 
 ### R40. Organize a monolith by domain
 
@@ -76,7 +76,7 @@ unit. Ideally there is one build unit per component; the pragmatic fallback is a
 and an infrastructure build unit, with visibility restricted inside infrastructure so no adapter
 calls another around the domain. The design states the style, the enforcement mode per boundary,
 and the run-time decoupling (in-process wiring or a separate process), sized to the team's size,
-skill, time, and budget, and says why that level suffices; it leaves cheap options open and pays
+skill, complexity, time, and budget, and says why that level suffices; it leaves cheap options open and pays
 for no build unit the team does not yet need.
 
 Check questions:
@@ -95,7 +95,7 @@ Examples:
 // app/wiring.ts  createOrdersComponent(...) handed to the controller
 ```
 
-Not a finding when: the top-level names are concepts and only delivery units sit beside them, or a technical folder holds delivery code for several concepts while each concept's rules and persistence live in its own component.
+Not a finding when: `structure-named-by-technology`: the technical top-level folders hold only delivery or infrastructure code, while each concept's rules and persistence live in its own component.
 
 ### R41. Verify the real dependency graph
 
@@ -114,7 +114,7 @@ Examples:
 - Good: `reporting` reads through `OrdersComponent`, or through a projection `orders` owns and
   publishes.
 
-Not a finding when: the dependency appears in the intended graph or a recorded exception, or the shared shape has one owning component that publishes it and the others read it only through that owner.
+Not a finding when: `shared-shape-without-owner`: one component owns the shape and publishes it, and the others read it only through that owner.
 
 ## Conditions
 
