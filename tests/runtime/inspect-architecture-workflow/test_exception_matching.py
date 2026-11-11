@@ -90,3 +90,29 @@ def test_port_exception_whose_unit_matches_no_module_fails_validate(tmp_path: Pa
     model_edit(root, "add-exception", "src/gone.ts#Thing", "*", "reason=x")
     result = run_arch(["model", "validate"], root)
     assert result.returncode == 2 and "src/gone.ts#Thing" in result.stderr
+
+
+@pytest.mark.parametrize("end", ["src/lending/**", "src/lending/*-use-case.ts", "src/lending/loan?.ts"])
+def test_validate_refuses_a_glob_end_even_when_it_matches_modules(tmp_path: Path, end: str):
+    for index, (section, entry) in enumerate((
+        ("exceptions", {"from": end, "to": "*", "reason": "x"}),
+        ("exceptions", {"from": "web", "to": end, "reason": "x"}),
+        ("forbidden", {"from": "web", "to": end, "reason": "x"}),
+    )):
+        root = fixture_root(tmp_path / f"case-{index}")
+        path = root / "docs/architecture/architecture.json"
+        document = json.loads(path.read_text())
+        document[section] = [entry]
+        path.write_text(json.dumps(document))
+        result = run_arch(["model", "validate"], root)
+        assert result.returncode == 2, (section, entry)
+        assert end in result.stderr and "exactly" in result.stderr
+
+
+def test_validate_accepts_every_exact_end(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    model_edit(root, "add-exception", "src/lending/loan.ts", "*", "reason=x")
+    model_edit(root, "add-exception", PORT_ROW, "*", "reason=x")
+    model_edit(root, "add-exception", "web", "external:react", "reason=x")
+    model_edit(root, "add-exception", "ring:entities", "ring:adapters", "reason=x")
+    assert validates(root)

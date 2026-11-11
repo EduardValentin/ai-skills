@@ -68,9 +68,10 @@ const REMOVAL_COMMAND = { forbidden: "remove-forbidden-edge", exceptions: "remov
 
 function edgeEndProblem(section, entry, end) {
   return (
-    `${section} ${entry.from} -> ${entry.to}: "${end}" is not a component, a ring, or a path matching a module. ` +
+    `${section} ${entry.from} -> ${entry.to}: "${end}" is not a component, a ring, or the exact path of a module. ` +
+    "Ends are matched exactly, never as globs. " +
     `Run arch model ${REMOVAL_COMMAND[section]} ${entry.from} ${entry.to}, ` +
-    "then add it again with a component name, ring:<ring>, or an existing path."
+    "then add it again with a component name, ring:<ring>, or the exact path of a module."
   );
 }
 
@@ -79,6 +80,7 @@ function unitOfEnd(end) {
 }
 
 function edgeEndProblems(model, paths) {
+  const known = new Set(paths);
   const entries = [
     ...model.forbidden.map((entry) => ({ section: "forbidden", entry })),
     ...model.exceptions.map((entry) => ({ section: "exceptions", entry })),
@@ -86,7 +88,7 @@ function edgeEndProblems(model, paths) {
   return entries.flatMap(({ section, entry }) =>
     [entry.from, entry.to]
       .filter((end) => end !== ANY_DESTINATION)
-      .filter((end) => isPathEnd(model, end) && !paths.some((path) => compileGlob(unitOfEnd(end)).test(path)))
+      .filter((end) => isPathEnd(model, end) && !known.has(unitOfEnd(end)))
       .map((end) => edgeEndProblem(section, entry, end)),
   );
 }

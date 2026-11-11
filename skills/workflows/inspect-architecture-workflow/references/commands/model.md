@@ -23,7 +23,7 @@ Create and check the model:
 - `arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]`: write a new model holding the adapter command and the starting point's default rule statuses, with no components yet; `add-component` adds the first. `local` also adds the record path to the repository's local exclude file. Refuses to overwrite a model.
 - `arch model migrate`: convert the four model files of the earlier format into `architecture.json`, leaving them in place. The adapter is left empty; set it with `set-adapter`.
 - `arch model status`: say whether a model file exists, without reading the code or running the adapter. A flow runs it first to learn whether there is a model.
-- `arch model validate`: check the model file against the schema, then the model against the code. It fails on a model with no components, a classification pattern or a port that matches no module, a module two components claim, and a forbidden edge or exception whose end matches nothing.
+- `arch model validate`: check the model file against the schema, then the model against the code. It fails on a model with no components, a classification pattern or a port that matches no module, a module two components claim, and a forbidden edge or exception whose end is not exact: a component, a ring, an external the adapter reports, `*` as a destination, or the path of a module with or without `#<Symbol>`. A glob end is refused.
 - `arch model explain <path>`: print the path's component, kind, ring, actors, and the classification pair that matched.
 - `arch model explain-thresholds`: print every knob with its default, the project's value, and its meaning.
 
@@ -111,7 +111,7 @@ $ arch model add-upcoming "a second delivery mechanism"
 the upcoming change "a second delivery mechanism" is already recorded. Nothing was changed.
 $ arch model validate
 model does not fit the code:
-- exceptions src/web/gone.ts -> *: "src/web/gone.ts" is not a component, a ring, or a path matching a module. Run arch model remove-exception src/web/gone.ts *, then add it again with a component name, ring:<ring>, or an existing path.
+- exceptions src/web/gone.ts -> *: "src/web/gone.ts" is not a component, a ring, or the exact path of a module. Ends are matched exactly, never as globs. Run arch model remove-exception src/web/gone.ts *, then add it again with a component name, ring:<ring>, or the exact path of a module.
 Fix these entries and run arch model validate again.
 ```
 

@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "capabilities": {
+    "exports": true,
+    "implements": true,
+    "constructs": true,
+    "signatures": true,
+    "symbolImports": true,
+    "typeChecks": true
+  },
+  "modules": [
+    {
+      "path": "src/app/cli.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "runCli",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/app/main.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [
+        {
+          "symbol": "MemoryNoteStore",
+          "path": "src/storage/memory-note-store.ts"
+        },
+        {
+          "symbol": "DefaultNoteMapper",
+          "path": "src/storage/default-note-mapper.ts"
+        },
+        {
+          "symbol": "DefaultNoteValidator",
+          "path": "src/domain/default-note-validator.ts"
+        },
+        {
+          "symbol": "AddNoteUseCase",
+          "path": "src/domain/add-note-use-case.ts"
+        },
+        {
+          "symbol": "DefaultNoteFacade",
+          "path": "src/facade/default-note-facade.ts"
+        }
+      ],
+      "signatures": [
+        {
+          "symbol": "main",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/contracts/note-events.ts",
+      "exports": {
+        "abstract": 2,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteAdded",
+          "types": []
+        },
+        {
+          "symbol": "NoteRemoved",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/contracts/note-listener.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteListener",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/domain/add-note-use-case.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "AddNoteUseCase",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/domain/default-note-validator.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "NoteValidator"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "DefaultNoteValidator",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/domain/note-mapper.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteMapper",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/domain/note-store.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteStore",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/domain/note-title.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteTitle",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/domain/note-validator.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteValidator",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/domain/note.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "Note",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/facade/default-note-facade.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "NoteFacade"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "DefaultNoteFacade",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/facade/note-facade.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteFacade",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/hooks/note-hook.ts",
+      "exports": {
+        "abstract": 1,
+        "concrete": 0
+      },
+      "implements": [],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "NoteHook",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/default-note-mapper.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "NoteMapper"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "DefaultNoteMapper",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    },
+    {
+      "path": "src/storage/memory-note-store.ts",
+      "exports": {
+        "abstract": 0,
+        "concrete": 1
+      },
+      "implements": [
+        "NoteStore"
+      ],
+      "constructs": [],
+      "signatures": [
+        {
+          "symbol": "MemoryNoteStore",
+          "types": []
+        }
+      ],
+      "typeChecks": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/app/cli.ts",
+      "to": "src/facade/note-facade.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteFacade"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/domain/add-note-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "AddNoteUseCase"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/domain/default-note-validator.ts",
+      "kind": "import",
+      "symbols": [
+        "DefaultNoteValidator"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/facade/default-note-facade.ts",
+      "kind": "import",
+      "symbols": [
+        "DefaultNoteFacade"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/storage/default-note-mapper.ts",
+      "kind": "import",
+      "symbols": [
+        "DefaultNoteMapper"
+      ]
+    },
+    {
+      "from": "src/app/main.ts",
+      "to": "src/storage/memory-note-store.ts",
+      "kind": "import",
+      "symbols": [
+        "MemoryNoteStore"
+      ]
+    },
+    {
+      "from": "src/domain/add-note-use-case.ts",
+      "to": "src/domain/note-mapper.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteMapper"
+      ]
+    },
+    {
+      "from": "src/domain/add-note-use-case.ts",
+      "to": "src/domain/note-store.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteStore"
+      ]
+    },
+    {
+      "from": "src/domain/add-note-use-case.ts",
+      "to": "src/domain/note-validator.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteValidator"
+      ]
+    },
+    {
+      "from": "src/domain/add-note-use-case.ts",
+      "to": "src/domain/note.ts",
+      "kind": "import",
+      "symbols": [
+        "Note"
+      ]
+    },
+    {
+      "from": "src/domain/default-note-validator.ts",
+      "to": "src/domain/note-validator.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteValidator"
+      ]
+    },
+    {
+      "from": "src/domain/default-note-validator.ts",
+      "to": "src/domain/note.ts",
+      "kind": "import",
+      "symbols": [
+        "Note"
+      ]
+    },
+    {
+      "from": "src/domain/note-mapper.ts",
+      "to": "src/domain/note.ts",
+      "kind": "type-import",
+      "symbols": [
+        "Note"
+      ]
+    },
+    {
+      "from": "src/domain/note-store.ts",
+      "to": "src/domain/note.ts",
+      "kind": "type-import",
+      "symbols": [
+        "Note"
+      ]
+    },
+    {
+      "from": "src/domain/note-validator.ts",
+      "to": "src/domain/note.ts",
+      "kind": "type-import",
+      "symbols": [
+        "Note"
+      ]
+    },
+    {
+      "from": "src/domain/note.ts",
+      "to": "src/domain/note-title.ts",
+      "kind": "import",
+      "symbols": [
+        "NoteTitle"
+      ]
+    },
+    {
+      "from": "src/facade/default-note-facade.ts",
+      "to": "src/domain/add-note-use-case.ts",
+      "kind": "import",
+      "symbols": [
+        "AddNoteUseCase"
+      ]
+    },
+    {
+      "from": "src/facade/default-note-facade.ts",
+      "to": "src/facade/note-facade.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteFacade"
+      ]
+    },
+    {
+      "from": "src/storage/default-note-mapper.ts",
+      "to": "src/domain/note-mapper.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteMapper"
+      ]
+    },
+    {
+      "from": "src/storage/default-note-mapper.ts",
+      "to": "src/domain/note.ts",
+      "kind": "import",
+      "symbols": [
+        "Note"
+      ]
+    },
+    {
+      "from": "src/storage/memory-note-store.ts",
+      "to": "src/domain/note-store.ts",
+      "kind": "type-import",
+      "symbols": [
+        "NoteStore"
+      ]
+    },
+    {
+      "from": "src/storage/memory-note-store.ts",
+      "to": "src/domain/note.ts",
+      "kind": "import",
+      "symbols": [
+        "Note"
+      ]
+    }
+  ],
+  "warnings": []
+}
