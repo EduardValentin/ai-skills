@@ -30,7 +30,7 @@
     { "at": "src/lending/loan-store.ts#LoanStore", "owner": "lending" },
     { "at": "src/notify/notifier.ts#Notifier", "owner": "notify" }
   ],
-  "thresholds": { "componentUseShare": 0.05 },
+  "thresholds": { "componentUseShare": 0.6, "distanceMinComponents": 5 },
   "forbidden": [
     { "from": "web", "to": "notify", "reason": "delivery code reaches notifications through a use case" }
   ]

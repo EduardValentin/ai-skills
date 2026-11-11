@@ -42,7 +42,7 @@ export const REASONS_TO_CHANGE_CHECKS = [
     group: GROUP,
     defect: "consumer-checks-implementation",
     severity: "major",
-    facts: ["typeChecks"],
+    facts: ["typeChecks", "implements"],
     needsBase: false,
     run: typeCheckOnImplementation,
   },

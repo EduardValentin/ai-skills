@@ -80,6 +80,23 @@ function boundaryDataImports(context) {
     );
 }
 
+function boundaryDataImportsExternal(context) {
+  return (context.graph.externals ?? []).flatMap((entry) =>
+    entry.importers
+      .filter((importer) => context.unitOf(importer)?.kind === "boundary-data")
+      .map((importer) =>
+        externalEdgeRow({
+          from: importer,
+          name: entry.name,
+          evidence:
+            `boundary data imports the ${entry.tag} external ${entry.name}: ` +
+            describeUnit(context.unitOf(importer)),
+          correction: CORRECTIONS.boundaryData(importer, `external:${entry.name}`),
+        }),
+      ),
+  );
+}
+
 export const BUSINESS_RULE_PLACEMENT_CHECKS = [
   {
     id: "entity-imports-non-entity",
@@ -109,6 +126,6 @@ export const BUSINESS_RULE_PLACEMENT_CHECKS = [
     severity: "blocker",
     facts: [],
     needsBase: false,
-    run: boundaryDataImports,
+    run: (context) => [...boundaryDataImports(context), ...boundaryDataImportsExternal(context)],
   },
 ];

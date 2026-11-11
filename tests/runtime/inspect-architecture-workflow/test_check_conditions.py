@@ -39,7 +39,7 @@ FACTS_OF = {
     "policy-detail-edge-beside-port": ["implements"],
     "plugin-imports-plugin": ["implements"],
     "distance-over-threshold": ["exports"],
-    "type-check-on-implementation": ["typeChecks"],
+    "type-check-on-implementation": ["typeChecks", "implements"],
     "thin-component-use": ["symbolImports"],
     "unconsumed-export": ["signatures", "symbolImports"],
 }
@@ -144,8 +144,9 @@ def test_deep_import_is_not_run_without_published_globs(tmp_path: Path):
     edit_json(root / ADAPTER, lambda d: d["capabilities"].update(symbolImports=False))
     edit_json(root / MODEL, lambda d: d["components"][4].pop("published"))
     out = check_output(root)
-    assert not rows_of(out["rows"], "deep-import") and not rows_of(out["rows"], "unconsumed-export")
-    assert not [e for e in out["incomplete"] if e["check"] in ("deep-import", "unconsumed-export")]
+    unchecked = ("deep-import", "unconsumed-export", "thin-component-use")
+    assert not [row for check in unchecked for row in rows_of(out["rows"], check)]
+    assert not [e for e in out["incomplete"] if e["check"] in unchecked]
 
 
 @pytest.mark.parametrize(("check", "fact"), FACT_CASES)
@@ -175,12 +176,23 @@ def test_registry_facts_match_the_fact_table():
 
 def test_threshold_knob_changes_thin_component_use(tmp_path: Path):
     root = fixture_root(tmp_path)
-    assert [r["target"] for r in rows_of(check_output(root)["rows"], "thin-component-use")] == ["web -> reports"]
-    model_edit(root, "set-threshold", "componentUseShare", "0.9")
-    thin = [r["target"] for r in rows_of(check_output(root)["rows"], "thin-component-use")]
-    assert "web -> reports" in thin and len(thin) > 1
-    model_edit(root, "set-threshold", "componentUseShare", "0")
+    assert [r["target"] for r in rows_of(check_output(root)["rows"], "thin-component-use")] == ["web -> catalog"]
+    model_edit(root, "set-threshold", "componentUseShare", "0.4")
     assert not rows_of(check_output(root)["rows"], "thin-component-use")
+    model_edit(root, "set-threshold", "componentUseShare", "0.9")
+    assert [r["target"] for r in rows_of(check_output(root)["rows"], "thin-component-use")] == ["web -> catalog"]
+
+
+def test_thin_component_use_counts_only_what_the_target_publishes(tmp_path: Path):
+    row = rows_of(check_output(fixture_root(tmp_path))["rows"], "thin-component-use")[0]
+    assert "1 of the 2 symbols catalog publishes" in row["evidence"]
+
+
+def test_thin_component_use_does_not_check_a_component_without_published_globs(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    model_edit(root, "set-threshold", "componentUseShare", "1")
+    targets = [r["target"] for r in rows_of(check_output(root)["rows"], "thin-component-use")]
+    assert targets == ["web -> catalog"]
 
 
 def test_thin_component_use_is_incomplete_for_a_pair_whose_edges_name_no_symbols(tmp_path: Path):
@@ -188,14 +200,86 @@ def test_thin_component_use_is_incomplete_for_a_pair_whose_edges_name_no_symbols
 
     def drop_symbols(document: dict) -> None:
         for edge in document["edges"]:
-            if edge.get("to") == "src/reports/monthly-report.ts":
+            if edge.get("to") == "src/catalog/api/search.ts":
                 edge.pop("symbols")
 
     edit_json(root / ADAPTER, drop_symbols)
     out = check_output(root)
-    assert not rows_at(out["rows"], "web -> reports", "thin-component-use")
+    assert not rows_at(out["rows"], "web -> catalog", "thin-component-use")
     (entry,) = [e for e in out["incomplete"] if e["check"] == "thin-component-use"]
-    assert entry["target"] == "web -> reports" and "symbols" in entry["reason"]
+    assert entry["target"] == "web -> catalog" and "symbols" in entry["reason"]
+
+
+def test_unconsumed_export_matches_the_unit_a_symbol_is_imported_from(tmp_path: Path):
+    root = fixture_root(tmp_path)
+
+    def import_same_name_from_another_unit(document: dict) -> None:
+        for edge in document["edges"]:
+            if edge.get("to") == "src/catalog/internal/index-builder.ts":
+                edge["symbols"] = ["IndexBuilder", "SuggestionSource"]
+
+    edit_json(root / ADAPTER, import_same_name_from_another_unit)
+    rows = check_output(root)["rows"]
+    assert rows_at(rows, "src/catalog/api/search.ts#SuggestionSource", "unconsumed-export")
+
+
+def test_unconsumed_export_is_consumed_by_importing_it_from_its_own_unit(tmp_path: Path):
+    root = fixture_root(tmp_path)
+
+    def import_it(document: dict) -> None:
+        for edge in document["edges"]:
+            if edge.get("to") == "src/catalog/api/search.ts":
+                edge["symbols"] = ["SearchIndex", "SuggestionSource"]
+
+    edit_json(root / ADAPTER, import_it)
+    assert not rows_of(check_output(root)["rows"], "unconsumed-export")
+
+
+def add_boundary_data_external(root: Path) -> str:
+    edit_json(root / ADAPTER, lambda d: d["edges"].append(
+        {"from": "src/lending/loan-request.ts", "external": {"name": "uuid", "tag": "vendor"}}))
+    return "src/lending/loan-request.ts -> external:uuid"
+
+
+def test_boundary_data_importing_an_external_is_a_row(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    target = add_boundary_data_external(root)
+    (row,) = rows_at(check_output(root)["rows"], target, "boundary-data-imports")
+    assert row["defect"] == "boundary-data-not-plain" and "R19" in row["rules"]
+
+
+def test_one_exception_covers_the_rows_of_an_allowed_external(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    before = check_output(root)
+    assert rows_at(before["rows"], FRAMEWORK_ROW, "entity-imports-non-entity") and before["covered"] == 0
+    model_edit(root, "add-exception", "lending", "external:orm", "reason=a pure mapping library")
+    after = check_output(root)
+    assert not [r for r in after["rows"] if r["target"] == FRAMEWORK_ROW]
+    assert after["covered"] == 1
+    assert len(after["rows"]) == len(before["rows"]) - 1
+    assert model_validates(root)
+
+
+def test_an_external_exception_covers_boundary_data_rows_too(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    target = add_boundary_data_external(root)
+    model_edit(root, "add-exception", "lending", "external:uuid", "rule=R19", "reason=identifiers only")
+    rows = check_output(root)["rows"]
+    assert not rows_at(rows, target, "boundary-data-imports")
+    assert rows_at(rows, target, "policy-imports-external")
+
+
+def test_exception_ends_are_validated_for_externals(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    assert run_arch(["model", "add-exception", "lending", "external:", "reason=x"], root).returncode == 2
+    assert run_arch(["model", "add-exception", "external:orm", "lending", "reason=x"], root).returncode == 2
+    model_edit(root, "add-exception", "lending", "external:nothing", "reason=x")
+    result = run_arch(["model", "validate"], root)
+    assert result.returncode == 2 and "external:nothing" in result.stderr
+
+
+def model_validates(root: Path) -> bool:
+    return run_arch(["model", "validate"], root).returncode == 0
 
 
 def test_distance_knob_changes_distance_over_threshold(tmp_path: Path):
@@ -243,8 +327,8 @@ def run_with_base(tmp_path: Path, head: list[float], base: list[float]) -> list[
     script = (
         f"import {{ runChecks }} from {json.dumps(RUN_MODULE)};"
         f"import {{ DEFAULT_KINDS, DEFAULT_THRESHOLDS }} from {json.dumps(DEFAULTS_MODULE)};"
-        "const model = { kinds: DEFAULT_KINDS, thresholds: DEFAULT_THRESHOLDS, rules: {}, forbidden: [],"
-        " exceptions: [], groups: [], components: [], ports: [] };"
+        "const model = { kinds: DEFAULT_KINDS, thresholds: { ...DEFAULT_THRESHOLDS, distanceMinComponents: 3 },"
+        " rules: {}, forbidden: [], exceptions: [], groups: [], components: [], ports: [] };"
         f"const touched = {json.dumps({'units': [], 'components': [f'c{i}' for i in range(len(head))], 'uncovered': []})};"
         f"console.log(JSON.stringify(runChecks({{ graph: {json.dumps(graph(head))}, model,"
         f" baseGraph: {json.dumps(graph(base))}, touched }})));"
@@ -266,3 +350,21 @@ def test_distance_that_did_not_move_stays_inherited(tmp_path: Path):
 
 def test_a_small_move_is_not_a_jump(tmp_path: Path):
     assert run_with_base(tmp_path, head=[0.4, 0.4, 0.4], base=[0.35, 0.4, 0.4]) == []
+
+
+def test_distance_is_not_run_below_the_minimum_component_count(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    model_edit(root, "set-threshold", "distanceMinComponents", "8")
+    out = check_output(root)
+    assert not rows_of(out["rows"], "distance-over-threshold")
+    assert {"check": "distance-over-threshold", "rules": ["R32"], "reason": "fewer than 8 components"} in out["notRun"]
+    result = run_arch(["check"], root)
+    assert "- distance-over-threshold (R32 Use metrics as a screen): fewer than 8 components" in result.stdout
+
+
+def test_distance_minimum_defaults_to_eight_components(tmp_path: Path):
+    root = fixture_root(tmp_path)
+    model_edit(root, "unset-threshold", "distanceMinComponents")
+    out = check_output(root)
+    assert [e["reason"] for e in out["notRun"] if e["check"] == "distance-over-threshold"] == [
+        "fewer than 8 components"]

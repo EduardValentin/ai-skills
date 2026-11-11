@@ -28,3 +28,7 @@ export function dependedOnComponents(row, context) {
   if (row.edge?.level === "component") return [row.edge.to];
   return rowComponents(row, context);
 }
+
+export function publishingComponents(context) {
+  return context.model.components.filter((component) => component.published.length > 0);
+}

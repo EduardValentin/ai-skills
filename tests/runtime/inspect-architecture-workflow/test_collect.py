@@ -50,7 +50,7 @@ def test_collect_writes_current_md_without_dates_or_run_numbers(tmp_path: Path):
     assert "rewritten by `arch collect`" in text
     assert "| domain | 5 | 4 | 0 | 0 | 0.5 | 0.5 | none |" in text
     assert "| web | adapters | 1 |" in text
-    assert text.rstrip().endswith("- domain: distance 0.5 beyond the project threshold")
+    assert text.rstrip().endswith("None")
     assert not any(word in text.lower() for word in ["generated at", "run ", "previous", "commit", "202"])
 
 

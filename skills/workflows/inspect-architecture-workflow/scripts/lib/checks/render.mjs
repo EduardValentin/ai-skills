@@ -40,7 +40,7 @@ function section(title, lines) {
 }
 
 function notRunLine(entry) {
-  return `- ${entry.check} (${entry.rules.map(titledRule).join("; ")})`;
+  return `- ${entry.check} (${entry.rules.map(titledRule).join("; ")}): ${entry.reason}`;
 }
 
 export function renderCheckMarkdown({ rows, incomplete, notRun, skipped, covered }) {
@@ -49,7 +49,7 @@ export function renderCheckMarkdown({ rows, incomplete, notRun, skipped, covered
     table(rows),
     ...coveredLine,
     section("Incomplete", incomplete.map(incompleteLine)),
-    section("Not run without --base", notRun.map(notRunLine)),
+    section("Not run", notRun.map(notRunLine)),
     section("Rules not enforced", skipped.map(skippedLine)),
   ].join("\n\n");
 }

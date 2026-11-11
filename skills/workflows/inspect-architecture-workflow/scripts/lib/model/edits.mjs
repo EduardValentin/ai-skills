@@ -177,7 +177,22 @@ function removeForbiddenEdge(doc, [from, to]) {
   removeOrRefuse(doc, "forbidden", sameEnds(from, to), `forbidden edge ${from} -> ${to}`);
 }
 
+const EXTERNAL_PREFIX = "external:";
+
+function requireValidExceptionEnds(from, to) {
+  if (from.startsWith(EXTERNAL_PREFIX)) {
+    throw new UsageError(
+      `an exception cannot start at ${from}: only its "to" end may be an external. ` +
+        "Put the importing component, ring, or path first.",
+    );
+  }
+  if (to.startsWith(EXTERNAL_PREFIX) && to.length === EXTERNAL_PREFIX.length) {
+    throw new UsageError(`"${to}" names no external. Write external:<name>, for example external:lodash.`);
+  }
+}
+
 function addException(doc, [from, to], keys) {
+  requireValidExceptionEnds(from, to);
   const entry = { from, to, ...(keys.rule && { rule: keys.rule }), reason: keys.reason };
   const matches = (existing) => sameEnds(from, to)(existing) && existing.rule === keys.rule;
   upsert(section(doc, "exceptions"), matches, entry);

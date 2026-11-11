@@ -1,4 +1,7 @@
 import { distanceOutliers } from "../graph/metrics.mjs";
+import { matchesAny } from "../glob.mjs";
+import { relativeToComponent } from "../model/classify.mjs";
+import { publishingComponents } from "./context.mjs";
 import { componentEdgeRow, componentRow } from "./rows.mjs";
 import { edgeTarget } from "./targets.mjs";
 import { unitsWithoutExports } from "./undecided.mjs";
@@ -10,7 +13,7 @@ const CORRECTIONS = {
   distance: (name) =>
     `Move ${name} toward the main sequence: make it more abstract if it is stable, or more concrete if it is not`,
   thin: (from, to) =>
-    `Depend on a smaller component than ${to}, or narrow ${to} to what ${from} uses, or fold what ${from} uses into it`,
+    `Narrow what ${to} publishes to what ${from} uses, or fold what ${from} uses into ${from}`,
 };
 
 function movedComponents(context) {
@@ -25,10 +28,16 @@ function movedComponents(context) {
   );
 }
 
+function fewerComponentsThanCompared(context) {
+  const { distanceMinComponents } = context.model.thresholds;
+  if (context.graph.components.length >= distanceMinComponents) return null;
+  return `fewer than ${distanceMinComponents} components`;
+}
+
 function distanceOverThreshold(context) {
   const { distanceDeviations } = context.model.thresholds;
   const outliers = new Map(
-    distanceOutliers(context.graph.components, distanceDeviations).map((outlier) => [outlier.name, outlier]),
+    distanceOutliers(context.graph.components, context.model.thresholds).map((outlier) => [outlier.name, outlier]),
   );
   const moved = movedComponents(context);
   return context.graph.components
@@ -53,15 +62,23 @@ function distanceUndecided(context) {
   return unitsWithoutExports(context, new Set(context.graph.components.map((component) => component.name)));
 }
 
-function importEdgesBetween(context, from, to) {
-  return context.graph.edges.filter(
-    (edge) =>
-      edge.kind !== "constructs" && context.componentOf(edge.from) === from && context.componentOf(edge.to) === to,
+function publishedUnitsOf(context, name) {
+  const component = context.model.components.find((candidate) => candidate.name === name);
+  if (!component || component.published.length === 0) return null;
+  return context.graph.units.filter(
+    (unit) => unit.component === name && matchesAny(relativeToComponent(component, unit.path), component.published),
   );
 }
 
-function exportedSymbolsOf(context, name) {
-  const declaring = context.graph.units.filter((unit) => unit.component === name && unit.kind !== "barrel");
+function importEdgesIntoPublished(context, from, published) {
+  const paths = new Set(published.map((unit) => unit.path));
+  return context.graph.edges.filter(
+    (edge) => edge.kind !== "constructs" && context.componentOf(edge.from) === from && paths.has(edge.to),
+  );
+}
+
+function exportedSymbolsOf(published) {
+  const declaring = published.filter((unit) => unit.kind !== "barrel");
   if (!declaring.every((unit) => unit.exports)) return null;
   return declaring.reduce((sum, unit) => sum + unit.exports.abstract + unit.exports.concrete, 0);
 }
@@ -70,11 +87,17 @@ function distinctSymbols(edges) {
   return new Set(edges.flatMap((edge) => edge.symbols.map((symbol) => `${edge.to}#${symbol}`)));
 }
 
+function publishedPairs(context) {
+  return context.graph.componentEdges.flatMap(({ from, to }) => {
+    const published = publishedUnitsOf(context, to);
+    return published ? [{ from, to, published, edges: importEdgesIntoPublished(context, from, published) }] : [];
+  });
+}
+
 function thinComponentUse(context) {
   const { componentUseShare } = context.model.thresholds;
-  return context.graph.componentEdges.flatMap(({ from, to }) => {
-    const edges = importEdgesBetween(context, from, to);
-    const total = exportedSymbolsOf(context, to);
+  return publishedPairs(context).flatMap(({ from, to, published, edges }) => {
+    const total = exportedSymbolsOf(published);
     if (edges.length === 0 || edges.some((edge) => !edge.symbols) || !(total > 0)) return [];
     const used = distinctSymbols(edges).size;
     if (used / total >= componentUseShare) return [];
@@ -83,7 +106,7 @@ function thinComponentUse(context) {
       componentEdgeRow({
         from,
         to,
-        evidence: `${from} uses ${used} of the ${total} exported symbols of ${to} (${percent}%)`,
+        evidence: `${from} uses ${used} of the ${total} symbols ${to} publishes (${percent}%)`,
         correction: CORRECTIONS.thin(from, to),
       }),
     ];
@@ -91,15 +114,16 @@ function thinComponentUse(context) {
 }
 
 function thinComponentUseUndecided(context) {
-  const targets = new Set(context.graph.componentEdges.map((edge) => edge.to));
-  const withoutSymbols = context.graph.componentEdges
-    .filter(({ from, to }) => importEdgesBetween(context, from, to).some((edge) => !edge.symbols))
+  const pairs = publishedPairs(context);
+  const withoutSymbols = pairs
+    .filter(({ edges }) => edges.some((edge) => !edge.symbols))
     .map(({ from, to }) => ({
       target: edgeTarget(from, to),
       reason:
         `edges from ${from} into ${to} name no imported symbols, so its use of ${to} is unknown. ` +
         "Make the adapter report symbols on every edge.",
     }));
+  const targets = new Set(pairs.map((pair) => pair.to));
   return [...withoutSymbols, ...unitsWithoutExports(context, targets)];
 }
 
@@ -112,6 +136,7 @@ export const COMPONENT_METRIC_CHECKS = [
     severity: "minor",
     facts: ["exports"],
     needsBase: false,
+    notRunReason: fewerComponentsThanCompared,
     run: distanceOverThreshold,
     undecided: distanceUndecided,
   },
@@ -123,6 +148,7 @@ export const COMPONENT_METRIC_CHECKS = [
     severity: "minor",
     facts: ["symbolImports"],
     needsBase: false,
+    applies: (context) => publishingComponents(context).length > 0,
     run: thinComponentUse,
     undecided: thinComponentUseUndecided,
   },

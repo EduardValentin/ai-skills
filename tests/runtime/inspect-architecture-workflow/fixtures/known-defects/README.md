@@ -34,7 +34,7 @@ and some seeds also trip a neighbouring check on a different target. Both are li
 | `src/storage/sql-loan-store.ts -> src/notify/mail-notifier.ts` | `plugin-imports-plugin` | R25 | `plugins-coupled` |
 | `src/storage/sql-loan-store.ts -> src/storage/loan-store.test.ts` | `production-imports-test` | R34 | `production-depends-on-test` |
 | `notify` | `unenforced-component` | R38 | `boundary-not-enforced` |
-| `web -> reports` | `thin-component-use` | R27 | `thin-component-use` |
+| `web -> catalog` | `thin-component-use` | R27 | `thin-component-use` |
 | `reports` | `distance-over-threshold` | R32 | `off-balance` |
 | `lending -> notify -> storage` | `component-cycle` | R30 | `cycle` |
 | `src/lending/penalty.ts -> src/lending/waiver.ts` | `module-cycle` | R30 | `cycle` |

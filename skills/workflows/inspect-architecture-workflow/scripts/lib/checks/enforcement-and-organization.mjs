@@ -1,5 +1,6 @@
 import { matchesAny } from "../glob.mjs";
 import { relativeToComponent } from "../model/classify.mjs";
+import { publishingComponents } from "./context.mjs";
 import { endMatches, subjectOf } from "./exceptions.mjs";
 import { componentRow, unitEdgeRow } from "./rows.mjs";
 import { edgePairs, edgeTarget } from "./targets.mjs";
@@ -92,10 +93,6 @@ function forbiddenEdgePresent(context) {
   });
 }
 
-function publishingComponents(context) {
-  return context.model.components.filter((component) => component.published.length > 0);
-}
-
 function outsideEdgesInto(context, name) {
   return context.graph.edges.filter(
     (edge) => context.componentOf(edge.to) === name && context.componentOf(edge.from) !== name,
@@ -111,7 +108,11 @@ function publishedUnits(context, component) {
 function symbolsUsedOutside(context, name) {
   const edges = outsideEdgesInto(context, name).filter((edge) => edge.kind !== "constructs");
   if (edges.some((edge) => !edge.symbols)) return null;
-  return new Set(edges.flatMap((edge) => edge.symbols));
+  return edges.flatMap((edge) => edge.symbols.map((symbol) => ({ symbol, via: context.unitOf(edge.to) })));
+}
+
+function isConsumed(used, unit, symbol) {
+  return used.some((entry) => entry.symbol === symbol && (entry.via === unit || entry.via?.kind === "barrel"));
 }
 
 function unconsumedExport(context) {
@@ -120,7 +121,7 @@ function unconsumedExport(context) {
     if (used === null) return [];
     return publishedUnits(context, component).flatMap((unit) =>
       [...new Set(unit.signatures.map((signature) => signature.symbol))]
-        .filter((symbol) => !used.has(symbol))
+        .filter((symbol) => !isConsumed(used, unit, symbol))
         .map((symbol) => ({
           target: `${unit.path}#${symbol}`,
           evidence: `${symbol} is published by ${component.name} and no unit outside it imports it`,

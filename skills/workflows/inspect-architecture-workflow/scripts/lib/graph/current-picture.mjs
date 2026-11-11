@@ -16,7 +16,7 @@ export function thresholdBreaches(graph, thresholds) {
   const zones = graph.components
     .filter((component) => component.zone !== null)
     .map((component) => `${component.name}: zone of ${component.zone}`);
-  const distances = distanceOutliers(graph.components, thresholds.distanceDeviations).map(
+  const distances = distanceOutliers(graph.components, thresholds).map(
     (outlier) => `${outlier.name}: distance ${outlier.distance} beyond the project threshold`,
   );
   return [...zones, ...distances];

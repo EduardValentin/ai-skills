@@ -33,6 +33,7 @@ export const DEFAULT_THRESHOLDS = {
   uselessMinInstability: 0.8,
   distanceDeviations: 1,
   distanceJump: 0.1,
+  distanceMinComponents: 8,
   planFixRounds: 2,
 };
 
@@ -49,6 +50,7 @@ export const THRESHOLD_DESCRIPTIONS = {
   uselessMinInstability: "Lowest instability of a unit that sits in the zone of uselessness.",
   distanceDeviations: "Standard deviations above the mean distance to the main sequence that mark an outlier.",
   distanceJump: "Increase in a component's distance to the main sequence between base and head that is reported.",
+  distanceMinComponents: "Fewest components for which distance from the balanced line is compared across the graph.",
   planFixRounds: "Rounds of plan fixes before the remaining findings go to the user.",
 };
 

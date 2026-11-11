@@ -38,7 +38,6 @@ def edit_json(path: Path, change) -> None:
 
 
 QUIETED_RULES = {
-    "R32": "payroll has three components, so the distance screen has nothing to compare",
     "R38": "payroll records no enforcement; the old-check tests below do not read it",
 }
 
@@ -50,14 +49,11 @@ def quiet_payroll(dest: Path) -> Path:
     def quiet_model(document: dict) -> None:
         document.setdefault("rules", {}).update({rule: ["off", reason] for rule, reason in QUIETED_RULES.items()})
 
-    def name_symbols(document: dict) -> None:
-        document["capabilities"].update(symbolImports=True, typeChecks=True)
-        for edge in document["edges"]:
-            if "to" in edge:
-                edge["symbols"] = [Path(edge["to"]).stem]
+    def provide_type_checks(document: dict) -> None:
+        document["capabilities"].update(typeChecks=True)
 
     edit_json(root / MODEL, quiet_model)
-    edit_json(root / ADAPTER, name_symbols)
+    edit_json(root / ADAPTER, provide_type_checks)
     return root
 
 
@@ -608,7 +604,7 @@ def test_zone_of_pain_without_the_exports_fact_is_incomplete(tmp_path: Path):
     graph["capabilities"]["exports"] = False
     out = run_checks(tmp_path, graph, touched_scope("domain"))
     assert out["rows"] == []
-    assert {e["check"] for e in out["incomplete"]} == {"zone-of-pain", "unused-abstractions", "distance-over-threshold"}
+    assert {e["check"] for e in out["incomplete"]} == {"zone-of-pain", "unused-abstractions"}
 
 
 def test_abstract_component_without_outside_consumers_is_a_minor_row(tmp_path: Path):
@@ -802,12 +798,14 @@ def test_checks_that_need_a_base_are_listed_as_not_run_without_one(tmp_path: Pat
     root = repo(tmp_path)
     init_repo(root)
     out = check_output(root)
-    assert [(e["check"], e["rules"]) for e in out["notRun"]] == [
-        ("zone-of-pain", ["R31", "R32"]), ("no-cohesion-groups", ["R28"]), ("change-spans-groups", ["R27"])]
+    assert [(e["check"], e["rules"], e["reason"]) for e in out["notRun"]] == [
+        ("zone-of-pain", ["R31", "R32"], "needs --base"), ("no-cohesion-groups", ["R28"], "needs --base"),
+        ("change-spans-groups", ["R27"], "needs --base"),
+        ("distance-over-threshold", ["R32"], "fewer than 8 components")]
     assert out["incomplete"] == []
     text = run_arch(["check"], root).stdout
-    assert "## Not run without --base\n\n- zone-of-pain (R31 Depend toward stability; R32 Use metrics as a screen)" in text
-    assert check_output(root, "--base", "HEAD")["notRun"] == []
+    assert "## Not run\n\n- zone-of-pain (R31 Depend toward stability; R32 Use metrics as a screen): needs --base" in text
+    assert [e["check"] for e in check_output(root, "--base", "HEAD")["notRun"]] == ["distance-over-threshold"]
 
 
 def test_every_uncovered_unit_is_incomplete_without_a_base(tmp_path: Path):
@@ -829,4 +827,4 @@ def test_a_unit_without_exports_makes_the_abstractness_checks_incomplete(tmp_pat
     out = run_checks(tmp_path, graph, touched_scope("svc"))
     assert out["rows"] == []
     assert {(e["check"], e["target"]) for e in out["incomplete"]} == {
-        ("zone-of-pain", "svc/a.ts"), ("unused-abstractions", "svc/a.ts"), ("distance-over-threshold", "svc/a.ts")}
+        ("zone-of-pain", "svc/a.ts"), ("unused-abstractions", "svc/a.ts")}

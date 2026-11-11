@@ -114,6 +114,7 @@
         "escalationFanIn": { "type": "integer", "minimum": 1 },
         "painMinFanIn": { "type": "integer", "minimum": 1 },
         "planFixRounds": { "type": "integer", "minimum": 1 },
+        "distanceMinComponents": { "type": "integer", "minimum": 1 },
         "distanceDeviations": { "type": "number", "exclusiveMinimum": 0 },
         "historyWindow": { "type": "string", "minLength": 1 }
       },

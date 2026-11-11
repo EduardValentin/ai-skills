@@ -8,6 +8,7 @@ import { isOffForEveryComponent, skippedRules, statusForRow } from "./status.mjs
 import { naturalOrder } from "./targets.mjs";
 
 const CLASSIFICATION_CHECK = "classification";
+const NEEDS_BASE = "needs --base";
 
 function union(lists) {
   return [...new Set(lists.flat())];
@@ -43,6 +44,10 @@ function inScope(row, touched) {
   return row.units.some((path) => units.has(path)) || row.components.some((name) => components.has(name));
 }
 
+function notRunEntry(check, reason) {
+  return { check: check.id, rules: check.rules, reason };
+}
+
 function missingFactEntry(check, missing) {
   return {
     check: check.id,
@@ -59,10 +64,14 @@ function undecidedEntries(check, context) {
 }
 
 function runCheck(check, context) {
-  const skipped = check.needsBase && !context.touched;
-  if (skipped || check.applies?.(context) === false) return { rows: [], incomplete: [] };
+  if (check.needsBase && !context.touched) {
+    return { rows: [], incomplete: [], notRun: [notRunEntry(check, NEEDS_BASE)] };
+  }
+  if (check.applies?.(context) === false) return { rows: [], incomplete: [], notRun: [] };
+  const reason = check.notRunReason?.(context);
+  if (reason) return { rows: [], incomplete: [], notRun: [notRunEntry(check, reason)] };
   const missing = check.facts.filter((fact) => !context.graph.capabilities?.[fact]);
-  if (missing.length > 0) return { rows: [], incomplete: [missingFactEntry(check, missing)] };
+  if (missing.length > 0) return { rows: [], incomplete: [missingFactEntry(check, missing)], notRun: [] };
   const rows = check.run(context).map((raw) => ({
     ...raw,
     check: check.id,
@@ -70,7 +79,7 @@ function runCheck(check, context) {
     rules: check.rules,
     severity: check.severity,
   }));
-  return { rows, incomplete: undecidedEntries(check, context) };
+  return { rows, incomplete: undecidedEntries(check, context), notRun: [] };
 }
 
 function unclassifiedEntries(graph, touched) {
@@ -111,11 +120,6 @@ function baseRowsOf(checks, { baseGraph, model, touched }) {
   return checks.flatMap((check) => runCheck(check, context).rows);
 }
 
-function notRunEntries(checks, touched) {
-  if (touched) return [];
-  return checks.filter((check) => check.needsBase).map((check) => ({ check: check.id, rules: check.rules }));
-}
-
 export function runChecks({ graph, model, baseGraph = null, touched = null }) {
   const context = createContext({ graph, model, baseGraph, touched });
   const active = CHECKS.filter((check) => !isOffForEveryComponent(model, check.rules));
@@ -129,7 +133,7 @@ export function runChecks({ graph, model, baseGraph = null, touched = null }) {
   return {
     rows: uncovered.map((row) => finalRow(row, context)).sort(byRuleThenTarget),
     incomplete: [...results.flatMap((result) => result.incomplete), ...unclassifiedEntries(graph, touched)],
-    notRun: notRunEntries(active, touched),
+    notRun: results.flatMap((result) => result.notRun),
     skipped: skippedRules(model),
     covered: decided.length - uncovered.length,
   };

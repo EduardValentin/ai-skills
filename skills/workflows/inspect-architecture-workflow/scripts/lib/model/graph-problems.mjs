@@ -45,9 +45,22 @@ function overlapProblems(model, paths) {
   });
 }
 
+const EXTERNAL_PREFIX = "external:";
+
 function isPathEnd(model, end) {
   const isComponent = model.components.some((component) => component.name === end);
-  return !isComponent && !end.startsWith(RING_PREFIX);
+  return !isComponent && !end.startsWith(RING_PREFIX) && !end.startsWith(EXTERNAL_PREFIX);
+}
+
+function unknownExternalProblems(model, graph) {
+  const known = new Set((graph.externals ?? []).map((external) => `${EXTERNAL_PREFIX}${external.name}`));
+  return model.exceptions
+    .filter((entry) => entry.to.startsWith(EXTERNAL_PREFIX) && !known.has(entry.to))
+    .map(
+      (entry) =>
+        `exceptions ${entry.from} -> ${entry.to}: the adapter reports no such external. ` +
+        `Run arch model remove-exception ${entry.from} ${entry.to}, or correct the name.`,
+    );
 }
 
 const REMOVAL_COMMAND = { forbidden: "remove-forbidden-edge", exceptions: "remove-exception" };
@@ -79,5 +92,6 @@ export function graphProblems(model, graph) {
     ...missingPortProblems(model, paths),
     ...overlapProblems(model, paths),
     ...edgeEndProblems(model, paths),
+    ...unknownExternalProblems(model, graph),
   ];
 }

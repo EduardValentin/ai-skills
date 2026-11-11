@@ -137,7 +137,7 @@ def test_explain_thresholds_lists_default_and_project_value(tmp_path: Path):
     assert "default 3" in fan_in and "project 5" in fan_in
     share = next(line for line in lines if line.startswith("interfaceUseShare"))
     assert "default 0.5" in share and "project 0.5" in share
-    assert len(lines) == 13
+    assert len(lines) == 14
 
 
 def test_edit_writes_one_entry_per_line_and_omits_defaults(tmp_path: Path):
