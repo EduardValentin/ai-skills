@@ -2,7 +2,7 @@
 name: implementation-workflow
 description: Use when an approved implementation plan or plan slice is ready for code changes and the work must continue through specialized independent review, manual QA, rendered visual verification, remediation, reruns, and reporting.
 compatibility: >-
-  Requires fresh-context dispatch of the native reviewer agents (acceptance-criteria, architecture, code-cleanliness, security, performance, and design-system when styling changes) and of `qa-verifier` and `visual-verifier`. A missing native agent may be replaced by a fresh generic subagent given that agent's mandate and preloaded skill; if fresh-context dispatch is impossible for any gate, return `IMPLEMENTATION BLOCKED`.
+  Requires fresh-context dispatch of the reviewer agents (acceptance-criteria, code-cleanliness, security, performance, and design-system when styling changes), `qa-verifier`, `visual-verifier`, and for architecture review the `inspect-architecture-workflow` skill's `architecture-reviewer` and `architecture-classifier`. A missing agent may be replaced by a fresh generic subagent given its prompt and preloaded skill; without the skill or fresh-context dispatch, return `IMPLEMENTATION BLOCKED`.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -132,15 +132,20 @@ by the delta since the previous round.
    non-goals, the frozen diff, the scope map, repository instructions, and the
    expected-demand profile. The full set is `acceptance-criteria-reviewer`,
    `code-cleanliness-reviewer`, `security-reviewer`, `performance-reviewer`,
-   `design-system-reviewer`, and `architecture-coordinator` in change-review
-   mode over the frozen diff. Change review runs only when the structural
-   precheck passes: place the diff's files in components by matching paths
-   against the globs in `docs/architecture/model/components.json`, and
-   dispatch when they fall in two or more components, or the diff adds a
-   package, a port, an import between components, or an external dependency,
-   or no committed record exists; otherwise record `architecture change
-   review: skipped, single-component diff` and run the other selected
-   reviewers. When the packet carries no selection, ask the
+   `design-system-reviewer`, and architecture change review. Architecture
+   change review is not one agent: the main agent invokes the
+   `inspect-architecture-workflow` skill with `change-review` and follows its
+   flow over the frozen diff, with the diff's base ref and the upcoming
+   changes the plan states. Its `arch applicable` step decides whether it
+   dispatches `architecture-reviewer`, and it dispatches
+   `architecture-classifier` only for modules the model does not cover. It
+   counts as `CLEAN` when its printed
+   verdict is `OK`, including the result with the line "no architecture
+   model; run a baseline audit to enable the full review", which goes into the
+   implementation report. `SHOULD_CHANGE` and `INCOMPLETE` block the gate
+   until the findings are fixed or the user accepts each one through the
+   model edit the flow names; the main agent never rejects an architecture
+   finding. When the packet carries no selection, ask the
    user once with these defaults: `acceptance-criteria-reviewer` and
    `code-cleanliness-reviewer` selected; `design-system-reviewer` selected
    when the diff touches styles, tokens, or UI primitives in a design-system
@@ -151,8 +156,8 @@ by the delta since the previous round.
    fix. Security severities map as critical and high to blocker, medium to
    major, low to minor. Resolve conflicting suggestions against the approved
    plan, repository instructions, and the demand profile; when architecture
-   review ran, resolve its findings first, because their fixes move code and
-   can void other findings.
+   change review printed findings, resolve them first, because their fixes
+   move code and can void other findings.
    Record every rejected finding with its reason; a finding is rejected only
    when it is technically wrong, outside the approved scope, or overridden by
    repository instructions.
@@ -194,7 +199,7 @@ shape.
 | `security-reviewer` | touches authentication, authorization, input parsing or validation, persistence, data exposure, redirects, files, external requests, privileged actions, dependencies, logging, serialization, or raw HTML rendering. |
 | `performance-reviewer` | touches data fetching, queries, caching, loops or list rendering over collections, memoization, dependencies, background work, or a hot path the demand profile names. |
 | `design-system-reviewer` | touches styles, tokens, UI primitives, or component markup. |
-| `architecture-coordinator` change review | passes the structural precheck on the delta's files alone: they fall in two or more components, or the delta adds a package, a port, an import between components, or an external dependency. A delta confined to one component with no new cross-component import does not. |
+| architecture change review | adds or edits source code or a dependency manifest. Re-enter the flow after a fix as it describes: its `arch applicable` step decides whether `architecture-reviewer` judges again, so a delta that brings no judgment condition into scope costs only the command. |
 
 ## Verification Gate
 
@@ -254,7 +259,9 @@ The final report includes:
   or the justified no-test exception
 - review gate: rounds used, per-reviewer outcome per round (`CLEAN`,
   findings, or carried forward with the unmet predicate), accepted and
-  rejected findings with dispositions
+  rejected findings with dispositions; for architecture change review, the
+  printed verdict line, or the no-model line, the model edits by which the
+  user accepted findings, and `.architecture/findings.json`
 - manual QA coverage, criterion-level outcomes, and final evidence
 - visual verification coverage and outcome, or `not applicable: no rendered
   surface changed`

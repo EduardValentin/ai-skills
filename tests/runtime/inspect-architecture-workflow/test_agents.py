@@ -112,3 +112,9 @@ def mentions_of_removed_names(root) -> list[str]:
 def test_no_agent_mentions_a_removed_agent():
     mentions = mentions_of_removed_names(AGENTS_DIR)
     assert not mentions, "\n".join(mentions)
+
+
+def test_no_skill_mentions_a_removed_agent_or_skill():
+    assert not (REPO_ROOT / "skills" / "abilities" / "software-architecture-principles").exists()
+    mentions = mentions_of_removed_names(REPO_ROOT / "skills")
+    assert not mentions, "\n".join(mentions)
