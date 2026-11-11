@@ -2,11 +2,12 @@
 
 import json
 import re
+import shlex
 from functools import cache
 
 import pytest
 
-from support import SKILL_DIR, run_node
+from support import SKILL_DIR, copy_fixture, init_repo, run_arch, run_node
 
 REFERENCES = SKILL_DIR / "references"
 RULES_DIR = REFERENCES / "rules"
@@ -377,3 +378,72 @@ def test_old_catalog_files_are_gone():
         assert not (RULES_DIR / name).exists(), name
     assert not (REFERENCES / "workflows").exists()
     assert not (REFERENCES / "mapping.md").exists()
+
+
+def not_a_finding_line(rule: str) -> str:
+    return next(line for line in rule_sections()[rule]["lines"] if line.startswith(NOT_A_FINDING))
+
+
+def clause_for(rule: str, condition: str) -> str:
+    clauses = not_a_finding_clauses(not_a_finding_line(rule))
+    return next(clause for clause in clauses if clause.startswith(f"`{condition}`"))
+
+
+def test_the_port_r4_requires_is_never_an_abstraction_without_reason():
+    exemption = not_a_finding_line("R8")
+    assert "the port R4 requires between policy and a store, a vendor, or another external agency" in exemption
+    assert "even with one implementer" in exemption
+    assert "the port R4 (Dependencies point toward policy) requires" in clause_for("R25", "boundary-defers-nothing")
+
+
+def test_r6_raises_the_direct_call_only_for_more_than_one_delivery_mechanism():
+    text = " ".join("\n".join(rule_sections()["R6"]["lines"]).split())
+    assert "only when controllers of more than one component call the same use case" in text
+    row = condition_rows("dependency-direction")["controller-imports-use-case"][0]
+    assert row[1].startswith("Controllers of more than one component import the same use-case unit")
+    assert "returns its result to its caller" in clause_for("R6", "use-case-names-its-details")
+
+
+def test_distance_is_a_screen_and_never_a_verdict():
+    text = " ".join("\n".join(rule_sections()["R32"]["lines"]).split())
+    assert "Distance is a screen" in text and "never on its own a finding" in text
+    for rule in ["R28", "R32"]:
+        assert first_paragraph(rule_sections()[rule]["lines"]).startswith(GUIDANCE), rule
+
+
+UNRECORDED_STRUCTURE = "no change in scope was made harder by"
+
+
+def test_judgments_about_unrecorded_structure_need_a_change_made_harder():
+    for rule, condition in [
+        ("R27", "thin-use-of-unpublished-component"),
+        ("R28", "change-history-without-groups"),
+        ("R38", "unconsumed-export-of-unpublished-component"),
+    ]:
+        assert UNRECORDED_STRUCTURE in clause_for(rule, condition), condition
+
+
+CLASSIFY_ARGUMENTS = ["before=", "ring=", "actors=", "value-type=true", "reason="]
+CODE_BLOCK = re.compile(r"^```(json)?\n(.*?)^```", re.MULTILINE | re.DOTALL)
+
+
+def test_classification_gives_one_example_for_each_classify_argument():
+    text = CLASSIFICATION.read_text()
+    for argument in CLASSIFY_ARGUMENTS:
+        items = re.findall(rf"^- `{re.escape(argument)}.*?(?=^- |^$)", text, re.MULTILINE | re.DOTALL)
+        assert len(items) == 1, f"classification.md does not explain {argument} once"
+        assert "`arch model classify" in items[0], f"{argument} has no example"
+
+
+def test_classification_commands_build_the_component_it_shows(tmp_path):
+    root = copy_fixture("known-defects", tmp_path / "project")
+    init_repo(root)
+    blocks = CODE_BLOCK.findall(CLASSIFICATION.read_text())
+    shown = json.loads(next(body for kind, body in blocks if kind == "json"))
+    commands = next(body for kind, body in blocks if not kind and "arch model add-component" in body)
+    for line in commands.splitlines():
+        result = run_arch(shlex.split(line)[1:], root)
+        assert result.returncode == 0, f"{line}: {result.stderr}"
+    model = json.loads((root / "docs/architecture/architecture.json").read_text())
+    built = next(component for component in model["components"] if component["name"] == shown["name"])
+    assert built == shown

@@ -85,7 +85,7 @@ Examples:
 - Good: web, store, and mail each depend on the rules and never on each other; `WikiFormatter` and
   `FileSystemPageStore` sit on opposite sides of `PageStore`.
 
-Not a finding when: `plugin-imports-plugin`: the project lets those two plugins depend on each other on purpose and has recorded an exception for that pair with its reason; `boundary-defers-nothing`: no exemption; `unit-mixes-change-cadences`: no exemption.
+Not a finding when: `plugin-imports-plugin`: the project lets those two plugins depend on each other on purpose and has recorded an exception for that pair with its reason; `boundary-defers-nothing`: the boundary is the port R4 (Dependencies point toward policy) requires between policy and a store, a vendor, or another external agency, which separates the rules from that detail; `unit-mixes-change-cadences`: no exemption.
 
 ### R26. Demonstrate the model without I/O
 

@@ -69,19 +69,20 @@ Not a finding when: `port-in-shared-bucket`: the shared component holds only por
 
 Advisory by default in a legacy baseline.
 
-**Give each use case an input boundary it implements and output boundaries it declares.** The
-controller depends on the input boundary, not on the use-case class. The use case calls an output
-boundary toward the UI and a storage port toward storage; the presenter and the gateway implement
-them. These ports and their boundary data live in the use-case component. Control runs from
-controller to use case to presenter while every dependency runs from adapter to use case: wherever
-control must flow outward, declare the port inward, implement it outward, and never call outward
-directly. The input boundary earns its place once a second delivery mechanism calls the use case:
-the check raises the controller's direct call only when controllers of more than one component
-call the same use case.
+**A use case declares the ports it calls outward, and gains an input boundary once a second
+delivery mechanism calls it.** The use case calls an output boundary toward the UI and a storage
+port toward storage; the presenter and the gateway implement them. These ports and their boundary
+data live in the use-case component. Control runs from controller to use case to presenter while
+every dependency runs from adapter to use case: wherever control must flow outward, declare the
+port inward, implement it outward, and never call outward directly. A use case that returns its
+result to its caller calls nothing outward and needs no output boundary. The input boundary, which
+the use case implements and the controllers depend on instead of the class, earns its place once
+a second delivery mechanism calls the use case: the check raises a controller's direct call only
+when controllers of more than one component call the same use case.
 
 Check questions:
 - Does the use case import its presenter or its gateway?
-- Does the controller import the use-case class?
+- Do the controllers of more than one delivery mechanism import the use-case class?
 - Are the boundaries declared in the use-case component?
 
 Examples:
@@ -99,7 +100,7 @@ export class PlaceOrder implements PlaceOrderInputBoundary {
 // persistence/SqlOrders implements Orders and holds all the query code
 ```
 
-Not a finding when: `controller-imports-use-case`: the controllers of the different components are one delivery mechanism split by area, such as one web API organized per feature, so record an exception for those calls with that reason. A use case that the controllers of one component call is never raised, and needs no input boundary for a caller that does not exist.
+Not a finding when: `controller-imports-use-case`: the controllers of the different components are one delivery mechanism split by area, such as one web API organized per feature, so record an exception for those calls with that reason, and a use case that the controllers of one component call is never raised; `use-case-names-its-details`: the use case returns its result to its caller instead of calling a presenter, and reaches its store only through a storage port, so it names no implementation.
 
 ### R7. Lower-level components are plugins
 
@@ -141,7 +142,7 @@ Examples:
 - Good: "The port `Payments` forbids checkout from naming the vendor SDK, so a vendor swap cannot touch
   checkout."
 
-Not a finding when: the abstraction names the decision it defers or the ripple it forbids, for example in its port's recorded `defers` reason, however few consumers and implementers it has.
+Not a finding when: the abstraction names the decision it defers or the ripple it forbids, for example in its port's recorded `defers` reason, however few consumers and implementers it has, or it is the port R4 requires between policy and a store, a vendor, or another external agency, which forbids the policy from naming that detail and so is never an abstraction without reason, even with one implementer.
 
 ### R9. Trace change impact along dependencies
 

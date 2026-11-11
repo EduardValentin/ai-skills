@@ -34,7 +34,7 @@ Examples:
   string helper; a `common` package holds date helpers, a retry policy, and a `Money` type.
 - Good: tax rules live in `tax-policy`; `slugify` lives in a `text` component.
 
-Not a finding when: `change-spans-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-spans-groups`: the changes that touched the components together were such mechanical edits; `thin-component-use`: the consumer is a composition root that uses only the component's wiring factory; `thin-use-of-unpublished-component`: the consumer is a composition root that uses only the component's wiring factory.
+Not a finding when: `change-spans-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-spans-groups`: the changes that touched the components together were such mechanical edits; `thin-component-use`: the consumer is a composition root that uses only the component's wiring factory; `thin-use-of-unpublished-component`: the consumer is a composition root that uses only the component's wiring factory, or the model declares no published surface for any component and no change in scope was made harder by that.
 
 ### R28. Name your cohesion position
 
@@ -63,7 +63,7 @@ Examples:
 - Mature platform: "`orders-reporting` split out so reporting consumers stop receiving core
   releases."
 
-Not a finding when: `no-cohesion-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-without-groups`: the changes that touched components together were such mechanical edits.
+Not a finding when: `no-cohesion-groups`: the change is a repository-wide mechanical edit, such as a dependency upgrade or a formatting pass, with no change of behavior in the components it touches; `change-history-without-groups`: the changes that touched components together were such mechanical edits, or the model records no cohesion groups, published surfaces, or forbidden edges at all and no change in scope was made harder by their absence; `cohesion-position-unstated`: the model records no cohesion groups and no change in scope was made harder by that.
 
 ### R29. Let the component map emerge
 
@@ -98,11 +98,12 @@ Not a finding when: the plan names only the first components and fixes the enfor
 
 **Allow no dependency cycles; break one by inverting a dependency or extracting a cohesive
 leaf.** A cycle makes its components one component that none can build, test, or release alone,
-and a change anywhere in it can break work everywhere in it. Preferred fix: declare the needed
-port in the component that needs it and have the other implement it. Alternatives: an
-interface-only component both depend on, or extraction of the shared concrete units into a new
-component both depend on, which is acceptable when the extracted set is cohesive and a smell when
-it is a grab-bag. Draw the graph with volatile components on top, so an upward arrow is visibly
+and a change anywhere in it can break work everywhere in it. First see whether one edge can go:
+move what it uses into the depending side, or merge the members when they always change together.
+When the dependency must stay, declare the needed port in the component that needs it and have the
+other implement it. Alternatives: an interface-only component both depend on, or extraction of the
+shared concrete units into a new component both depend on, which is acceptable when the extracted
+set is cohesive and a smell when it is a grab-bag. Draw the graph with volatile components on top, so an upward arrow is visibly
 wrong. A loop that exists only at run time, such as a callback handed in through a port, is not a
 cycle: dependencies decide, not calls. Acyclic is necessary, not sufficient: name the forbidden
 edges too, as R39 (Make forbidden edges uncompilable) requires.
@@ -152,8 +153,11 @@ Not a finding when: `abstractions-without-implementor`: the component is a publi
 
 Guidance: advisory by default.
 
-**Use the metrics as a screen, never a verdict.** When the graph has at least
-{distanceMinComponents} components, compare each component's distance with the rest of the graph:
+**Use the metrics as a screen, never a verdict.** Distance is a screen: it picks components worth
+a look, and is never on its own a finding or a reason to restructure. A component far from the
+balanced line is a finding only when someone can say in words what its position costs. When the
+graph has at least {distanceMinComponents} components, compare each component's distance with the
+rest of the graph:
 the metrics page defines instability, abstractness, distance, and the bounds of the zones. Two
 positions are harmful. In the zone of pain, every change ripples outward and the component cannot
 be extended without editing; the canonical case is a schema every service imports. Fix it first by

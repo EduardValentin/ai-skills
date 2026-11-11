@@ -16,30 +16,48 @@ kind's default: a `ring`, the `actors`, a one-sentence `reason`, or `valueType`.
 
 ```json
 { "name": "orders", "paths": ["src/orders/**"], "classify": [
-    ["legacy/order-report.*", "mixed", { "reason": "builds the report and also writes it to disk" }],
-    ["**/*-use-case.*", "use-case", { "actors": ["sales"] }],
+    ["legacy/order-report.*", "mixed", { "ring": "adapters", "reason": "builds the report and also writes it to disk" }],
+    ["**/*-use-case.*", "use-case", { "actors": ["sales", "support"] }],
     ["**/money.*", "entity", { "valueType": true }],
-    ["index.*", "barrel"],
     ["**", "entity"] ] }
 ```
 
-The commands that build it:
+The commands that build it, in this order:
 
 ```
-arch model add-component orders paths=src/orders/**
-arch model classify orders "**/*-use-case.*" use-case actors=sales
-arch model classify orders "legacy/order-report.*" mixed reason="builds the report and also writes it to disk" before="**/*-use-case.*"
+arch model add-component orders "paths=src/orders/**"
+arch model classify orders "**" entity
+arch model classify orders "**/*-use-case.*" use-case actors=sales,support before="**"
+arch model classify orders "**/money.*" entity value-type=true before="**"
+arch model classify orders "legacy/order-report.*" mixed ring=adapters reason="builds the report and also writes it to disk" before="**/*-use-case.*"
 arch model add-port src/orders/orders.ts#Orders owner=orders defers="which store keeps orders"
 arch model explain src/orders/place-order-use-case.ts
 ```
 
-`arch model classify` replaces a pair with the same pattern, or appends a new one; `before=` places
-it ahead of an existing pattern. `arch model unclassify` removes a pair and
-`arch model remove-component` removes a component. `arch model add-port` records a port as
-`path#Symbol` with the component that owns it, and optionally the ring of its humble side and the
-decision it defers, which R8 (Constraints need a named reason) and R25 (Boundaries at axes of
-change) read. `arch model explain <path>` prints a module's component, kind, ring, actors, and the
-pair that matched, so nobody has to read the model to find out.
+The full syntax is
+`arch model classify <component> <pattern> <kind> [ring=<ring>] [actors=<a,b>] [reason=<text>] [value-type=true] [before=<pattern>]`.
+Quote a pattern or a value that holds `*` or a space. `classify` replaces the pair with the same
+pattern, or appends a new pair after every existing one, so a pair narrower than an existing
+catch-all such as `**` needs `before=`. Each optional argument, with one example:
+
+- `before=<pattern>` places the pair ahead of an existing pattern of the component, which must
+  exist: `arch model classify orders "**/money.*" entity before="**"`.
+- `ring=<ring>` states a ring that differs from the kind's default, and is required for a kind with
+  no default ring when the other pairs of the component do not share one:
+  `arch model classify orders "legacy/order-report.*" mixed ring=adapters`.
+- `actors=<a,b>` lists the actors, comma-separated, with no spaces:
+  `arch model classify orders "**/*-use-case.*" use-case actors=sales,support`.
+- `value-type=true` marks the matched modules as a value type, which an entity may import:
+  `arch model classify orders "**/money.*" entity value-type=true`.
+- `reason=<text>` gives one sentence on the behavior behind a per-file pair:
+  `arch model classify orders "legacy/order-report.*" mixed reason="builds the report and also writes it to disk"`.
+
+`arch model unclassify` removes a pair and `arch model remove-component` removes a component.
+`arch model add-port` records a port as `path#Symbol` with the component that owns it, and
+optionally the ring of its humble side and the decision it defers, which R8 (Constraints need a
+named reason) and R25 (Boundaries at axes of change) read. `arch model explain <path>` prints a
+module's component, kind, ring, actors, and the pair that matched, so nobody has to read the model
+to find out.
 
 ## Default kinds
 
@@ -65,7 +83,7 @@ a kind that is neither a default nor declared there is refused. The defaults:
 | `mixed` | neutral | none | Matches two or more kinds; a candidate for a split under R10 (One actor per module) and R17 (Critical rules live in entities). |
 
 A kind with no default ring takes the ring the other pairs of its component share, when they all
-share one; otherwise its ring is unknown until the pair states one.
+share one; otherwise the pair states one with `ring=`, and the command refuses it without.
 
 ## Rings and level
 

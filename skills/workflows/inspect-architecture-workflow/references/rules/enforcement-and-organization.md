@@ -36,7 +36,7 @@ export type { OrdersComponent } from "./OrdersComponent";
 export { createOrdersComponent } from "./wiring";
 ```
 
-Not a finding when: `unenforced-component`: no exemption; `unconsumed-export`: the component is a library whose published surface serves consumers outside the repository, as its documentation states; `unconsumed-export-of-unpublished-component`: the component is such a library, serving consumers outside the repository.
+Not a finding when: `unenforced-component`: no exemption; `unconsumed-export`: the component is a library whose published surface serves consumers outside the repository, as its documentation states; `unconsumed-export-of-unpublished-component`: the component is such a library, serving consumers outside the repository, or the model declares no published surface for any component and no change in scope was made harder by that.
 
 ### R39. Make forbidden edges uncompilable
 
