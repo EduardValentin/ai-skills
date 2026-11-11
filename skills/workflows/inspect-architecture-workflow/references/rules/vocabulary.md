@@ -1,8 +1,8 @@
 # Vocabulary
 
-The terms the rule catalog, the classification guide, and the metrics page use, each defined
-here and nowhere else. Read it before the first rule file, and come back to it whenever a rule
-uses a word in a sense that seems narrower than everyday speech.
+The terms the rule catalog, the classification guide, the metrics page, and the three flows use,
+each defined here and nowhere else. Read it before the first rule file, and come back to it
+whenever a rule or a flow uses a word in a sense that seems narrower than everyday speech.
 
 ## Change and value
 
@@ -115,3 +115,16 @@ uses a word in a sense that seems narrower than everyday speech.
 | Decisions file | An optional `decisions.md` beside the model, holding longer explanations for people, such as the cost each component's cohesion position accepts. No check reads it. |
 | Smallest correction | The least change inside the scope that removes the finding's consequence. |
 | Wider observation | Something worth saying that lies outside the scope or needs more than the smallest correction. It is reported apart and never blocks. |
+
+## Flows and their files
+
+| Term | Meaning |
+|---|---|
+| Rule group | One file of the catalog: a set of related rules with their conditions table, such as dependency direction. `arch applicable` names the rule groups a scope brings into play. |
+| Uncovered module | A module the adapter reports that no classification pair of the model matches, so it has no component or kind. Conditions that need it are incomplete until it is classified. |
+| Judged finding | A finding a reviewer returns for a judgment condition, in the shape `arch findings add` reads: the judgment id, the target, the consequence, the correction, the evidence, and in a review its origin. The command adds the rules, defect kind, and severity from the judgment. |
+| Origin | Whether a finding is `introduced` by the change or plan under review or `inherited` from the code before it. An audit has no origin. Only introduced findings, and inherited ones a named upcoming change makes heavier, can block a review. |
+| Verdict | The one-word result of a flow: `OK`, `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE` when none is and a condition of an enforced rule could not be decided. `SHOULD_CHANGE` and `INCOMPLETE` block a caller's gate. |
+| Proposal | What a plan would add to or remove from the code, written in the module and edge shapes of the adapter document, so the command can check a plan before the code exists. |
+| Clarification request | A fact a plan leaves open that the review needs, such as where a new module lives. It is reported as incomplete, apart from the findings, and means the plan is not concrete enough to review fully. |
+| Working files | The files a flow writes for the command to read: the check output, the proposal, and the judged findings. Working files live under `.architecture/work/`, which is never committed. |

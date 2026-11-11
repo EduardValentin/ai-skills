@@ -14,7 +14,7 @@ const TEXT = { type: "string" };
 const SET_BY_JUDGMENT = ["rules", "defect", "severity"];
 const LIFT_RULE = 2;
 
-const JUDGED_SCHEMA = {
+export const JUDGED_SCHEMA = {
   type: "object",
   required: ["findings"],
   additionalProperties: false,

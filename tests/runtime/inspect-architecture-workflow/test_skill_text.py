@@ -5,7 +5,7 @@ import re
 import shlex
 from functools import cache
 
-from support import SKILL_DIR, run_node
+from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
 
 SKILL_MD = SKILL_DIR / "SKILL.md"
 REFERENCES = SKILL_DIR / "references"
@@ -22,7 +22,7 @@ DESCRIPTION = (
     "Use for a dedicated architecture audit, an architecture review of a diff, or an architecture review of an "
     "implementation plan or spec before approval, passing the flow name `audit`, `change-review`, or `plan-review`."
 )
-READ_ONLY_MODEL_SUBCOMMANDS = {"explain", "explain-thresholds", "validate"}
+READ_ONLY_MODEL_SUBCOMMANDS = {"explain", "explain-thresholds", "validate", "status"}
 FAILURE_LINE = "If a command fails"
 RETIRED = re.compile(r"\b(ledger|evaluator|coordinator|slices?|packet files?)\b", re.IGNORECASE)
 COMMAND_SPAN = re.compile(r"`(arch [^`]+)`")
@@ -30,6 +30,8 @@ FLAG = re.compile(r"(?<![\w-])--([a-z][a-z-]*)")
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 SKILL_PATH = re.compile(r"`((?:scripts|references|assets)/[^`\s]+)`")
 NUMBERED_STEP = re.compile(r"^(\d+)\. ")
+JSON_BLOCK = re.compile(r"^ *```json\n(.*?)^ *```", re.MULTILINE | re.DOTALL)
+PLACEHOLDER = re.compile(r"<[A-Za-z][A-Za-z ]*>")
 OLD_FILES = [
     "references/audit.md", "references/change-review.md", "references/plan-review.md", "references/slicing.md",
     "references/verdicts.md", "references/command.md", "assets/docs", "assets/ledger",
@@ -37,13 +39,13 @@ OLD_FILES = [
 
 SPEC_SCRIPT = """
 import { GLOBAL_FLAGS } from "./scripts/lib/cli/flags.mjs";
-import { APPLICABLE_SPEC } from "./scripts/lib/commands/applicable.mjs";
-import { CHECK_SPEC } from "./scripts/lib/commands/check.mjs";
+import { APPLICABLE_MODES, APPLICABLE_SPEC } from "./scripts/lib/commands/applicable.mjs";
+import { CHECK_EXCLUSIVE, CHECK_SPEC } from "./scripts/lib/commands/check.mjs";
 import { COLLECT_SPEC } from "./scripts/lib/commands/collect.mjs";
-import { ADD_SPEC, LIST_SPEC } from "./scripts/lib/commands/findings.mjs";
+import { ADD_REQUIRED, ADD_SPEC, LIST_SPEC } from "./scripts/lib/commands/findings.mjs";
 import { MODEL_SPEC, MODEL_SUBCOMMANDS } from "./scripts/lib/commands/model.mjs";
 import { QUERY_SPEC } from "./scripts/lib/commands/query.mjs";
-import { QUERY_FLAGS } from "./scripts/lib/queries/index.mjs";
+import { QUERY_FLAGS, QUERY_REQUIRED_FLAGS } from "./scripts/lib/queries/index.mjs";
 import { UNCOVERED_SPEC } from "./scripts/lib/commands/uncovered.mjs";
 import { EDITS } from "./scripts/lib/model/edits.mjs";
 console.log(JSON.stringify({
@@ -56,6 +58,10 @@ console.log(JSON.stringify({
   model: MODEL_SUBCOMMANDS,
   edits: Object.keys(EDITS),
   queryFlags: QUERY_FLAGS,
+  queryRequired: QUERY_REQUIRED_FLAGS,
+  addRequired: Object.fromEntries(Object.entries(ADD_REQUIRED).map(([key, flags]) => [key, Object.keys(flags)])),
+  applicableModes: APPLICABLE_MODES,
+  checkExclusive: CHECK_EXCLUSIVE,
 }));
 """
 
@@ -107,10 +113,10 @@ def command_lines(path) -> list[str]:
     return lines
 
 
-def check_flags(spec_flags: dict, args: list[str], allowed=None) -> tuple[list[str], list[str]]:
+def read_flags(spec_flags: dict, args: list[str], allowed=None) -> tuple[list[str], list[str], dict]:
     kinds = {**spec_flags, **specs()["global"]}
     names = set(kinds) if allowed is None else set(allowed) | set(specs()["global"])
-    problems, positional = [], []
+    problems, positional, given = [], [], {}
     index = 0
     while index < len(args):
         arg = args[index]
@@ -118,12 +124,19 @@ def check_flags(spec_flags: dict, args: list[str], allowed=None) -> tuple[list[s
             positional.append(arg)
         elif arg[2:] not in names:
             problems.append(f"unknown flag {arg}")
-        elif kinds[arg[2:]] != "boolean":
-            if index + 1 >= len(args) or args[index + 1].startswith("--"):
-                problems.append(f"{arg} has no value")
+        elif kinds[arg[2:]] == "boolean":
+            given[arg[2:]] = True
+        elif index + 1 >= len(args) or args[index + 1].startswith("--"):
+            problems.append(f"{arg} has no value")
+        else:
+            given[arg[2:]] = args[index + 1]
             index += 1
         index += 1
-    return problems, positional
+    return problems, positional, given
+
+
+def missing(required, given: dict) -> list[str]:
+    return [f"--{name} is required" for name in required if name not in given]
 
 
 def check_model_line(rest: list[str]) -> list[str]:
@@ -132,37 +145,56 @@ def check_model_line(rest: list[str]) -> list[str]:
         return [f"unknown model subcommand {rest[0]}"]
     if len(rest) == 1:
         return []
-    problems, positional = check_flags(specs()["top"]["model"]["flags"], rest[1:], subcommand["flags"])
+    problems, positional, given = read_flags(specs()["top"]["model"]["flags"], rest[1:], subcommand["flags"])
     keys = [arg.split("=", 1)[0] for arg in positional if re.match(r"^[a-z][a-z-]*=", arg)]
     plain = [arg for arg in positional if not re.match(r"^[a-z][a-z-]*=", arg)]
     allowed_keys = subcommand["required"] + subcommand["optional"]
     problems += [f"unknown argument {key}=" for key in keys if key not in allowed_keys]
     problems += [f"missing {key}=" for key in subcommand["required"] if key not in keys]
+    problems += missing(subcommand["requiredFlags"], given)
     if len(plain) != subcommand["positional"]:
         problems.append(f"{len(plain)} positional arguments, expected {subcommand['positional']}")
     return problems
 
 
+def check_findings_line(rest: list[str]) -> list[str]:
+    if rest[0] not in specs()["findings"]:
+        return [f"unknown findings subcommand {rest[0]}"]
+    problems, positional, given = read_flags(specs()["findings"][rest[0]]["flags"], rest[1:])
+    problems += [f"unexpected arguments {positional}"] if positional else []
+    if rest[0] == "add" and len(rest) > 1:
+        required = specs()["addRequired"]
+        problems += missing(required["always"], given)
+        problems += missing(required.get(given.get("flow"), {}), given)
+    return problems
+
+
+def mode_problems(name: str, rest: list[str], given: dict) -> list[str]:
+    if name == "applicable" and rest:
+        modes = [mode for mode in specs()["applicableModes"] if mode in given]
+        return [] if len(modes) == 1 else [f"needs exactly one of {specs()['applicableModes']}, got {modes}"]
+    if name == "check" and all(flag in given for flag in specs()["checkExclusive"]):
+        return [f"combines {specs()['checkExclusive']}"]
+    if name == "query" and rest:
+        return missing(specs()["queryRequired"].get(rest[0], []), given)
+    return []
+
+
 def check_top_line(name: str, rest: list[str]) -> list[str]:
     spec = specs()["top"][name]
     allowed = specs()["queryFlags"].get(rest[0], []) if name == "query" and rest else None
-    problems, positional = check_flags(spec["flags"], rest, allowed)
+    problems, positional, given = read_flags(spec["flags"], rest, allowed)
     low, high = spec["positional"].get("min", 0), spec["positional"].get("max", 0)
     if rest and not low <= len(positional) <= high:
         problems.append(f"{len(positional)} positional arguments, expected {low} to {high}")
-    return problems
+    return problems + mode_problems(name, rest, given)
 
 
 def line_problems(line: str) -> list[str]:
     tokens = shlex.split(line.replace("[", "").replace("]", ""))
     name, rest = tokens[1], tokens[2:]
     if name == "findings":
-        if not rest:
-            return []
-        if rest[0] not in specs()["findings"]:
-            return [f"unknown findings subcommand {rest[0]}"]
-        problems, positional = check_flags(specs()["findings"][rest[0]]["flags"], rest[1:])
-        return problems + ([f"unexpected arguments {positional}"] if positional else [])
+        return check_findings_line(rest) if rest else []
     if name == "model":
         return check_model_line(rest) if rest else []
     if name not in specs()["top"]:
@@ -350,3 +382,126 @@ def test_every_link_and_skill_path_resolves():
 def test_old_reference_files_are_gone():
     for name in OLD_FILES:
         assert not (SKILL_DIR / name).exists(), name
+
+
+SCHEMA_SCRIPT = """
+import { JUDGED_SCHEMA } from "./scripts/lib/findings/intake.mjs";
+import { proposalSchema } from "./scripts/lib/checks/proposal.mjs";
+import { validateShape } from "./scripts/lib/model/validate-shape.mjs";
+const examples = JSON.parse(process.argv[1] ?? "[]");
+const schemaOf = (document) => ("findings" in document ? JUDGED_SCHEMA : proposalSchema());
+console.log(JSON.stringify(examples.map(({ where, document }) => ({ where, problems: validateShape(document, schemaOf(document)) }))));
+"""
+
+
+def json_examples() -> list[dict]:
+    examples = []
+    for path in [*flow_files(), page_file("check"), page_file("findings")]:
+        for index, block in enumerate(JSON_BLOCK.findall(path.read_text())):
+            examples.append({"where": f"{path.name} block {index + 1}", "document": json.loads(block)})
+    return examples
+
+
+def test_every_json_example_matches_the_schema_the_command_reads():
+    examples = json_examples()
+    kinds = {"findings" in example["document"] for example in examples}
+    assert kinds == {True, False}, "expected both judged findings and proposal examples"
+    script = SCHEMA_SCRIPT.replace('process.argv[1] ?? "[]"', json.dumps(json.dumps(examples)))
+    result = run_node(script, SKILL_DIR)
+    assert result.returncode == 0, result.stderr
+    problems = [f"{entry['where']}: {entry['problems']}" for entry in json.loads(result.stdout) if entry["problems"]]
+    assert not problems, "\n".join(problems)
+
+
+def test_every_flow_shows_judged_findings_in_a_code_block():
+    for path in flow_files():
+        blocks = [json.loads(block) for block in JSON_BLOCK.findall(path.read_text())]
+        assert any("findings" in block for block in blocks), f"{path.name} shows no judged findings shape"
+
+
+JUDGED_CONTROLLER_FINDING = {
+    "findings": [{
+        "judgment": "handler-holds-business-logic", "target": "src/web/payroll-controller.ts",
+        "consequence": "A pay rule change means editing the HTTP handler.",
+        "correction": "Move the validation into the payroll use case.",
+        "evidence": ["src/web/payroll-controller.ts:1"], "origin": "introduced",
+    }],
+    "questions": [],
+}
+
+
+def change_with_a_new_external(tmp_path):
+    root = copy_fixture("payroll", tmp_path / "payroll")
+    init_repo(root)
+    git(["checkout", "-q", "-b", "feature"], root)
+    adapter = json.loads((root / "adapter.json").read_text())
+    adapter["edges"].append({"from": "src/web/payroll-controller.ts", "external": {"name": "zod", "tag": "vendor"}})
+    (root / "adapter.json").write_text(json.dumps(adapter, indent=2))
+    controller = root / "src/web/payroll-controller.ts"
+    controller.write_text('import { z } from "zod";\n' + controller.read_text())
+    git(["commit", "-q", "-am", "controller imports a validation library"], root)
+    return root
+
+
+class FlowRunner:
+    """Runs the change-review flow's own command lines, substituting only the placeholders."""
+
+    def __init__(self, root, values: dict):
+        self.root = root
+        self.values = values
+        self.steps = numbered_steps(flow_file("change-review").read_text())
+
+    def commands(self, step: int) -> list[str]:
+        return COMMAND_SPAN.findall(self.steps[step])
+
+    def substituted(self, line: str, extra: dict) -> list[str]:
+        values = {**self.values, **extra}
+        text = line.replace("[@<component>]", "")
+        for placeholder in set(PLACEHOLDER.findall(text)):
+            assert placeholder in values, f"no value for {placeholder} in `{line}`"
+            text = text.replace(placeholder, values[placeholder])
+        return shlex.split(text)[1:]
+
+    def run(self, line: str, **extra):
+        return run_arch(self.substituted(line, extra), self.root)
+
+    def run_step(self, step: int, **extra):
+        return self.run(self.commands(step)[0], **extra)
+
+    def acceptance(self, fragment: str) -> str:
+        return next(line for line in self.commands(11) if fragment in line)
+
+
+def test_the_change_review_flow_runs_as_written_through_an_acceptance(tmp_path):
+    root = change_with_a_new_external(tmp_path)
+    flow = FlowRunner(root, {
+        "<ref>": "main", "<target>": "src/web/payroll-controller.ts",
+        "<upcoming change>": "a second payroll form", "<text>": "accepted by the owner",
+    })
+    status = flow.run_step(1)
+    assert json.loads(status.stdout)["model"] is True
+    applicable = json.loads(flow.run_step(3).stdout)
+    assert applicable["review"] is True and "humble-objects" in applicable["groups"]
+    assert flow.run_step(5).returncode in (0, 1)
+    judged = shlex.split(flow.commands(10)[0])
+    (root / judged[judged.index("--judged") + 1]).write_text(json.dumps(JUDGED_CONTROLLER_FINDING))
+    assert "Verdict: SHOULD_CHANGE: 0 blocker, 1 major" in flow.run_step(10).stdout
+
+    assert flow.run(flow.acceptance("'*'"), **{"<R>": "R20"}).returncode == 0
+    flow.run_step(5)
+    accepted = flow.run_step(10).stdout
+    assert "Dropped: 1 (1 covered by an exception)" in accepted
+    assert "Verdict: INCOMPLETE" in accepted
+
+    assert flow.run(flow.acceptance("set-rule"), **{"<R>": "R13"}).returncode == 0
+    flow.run_step(5)
+    assert "Verdict: OK" in flow.run_step(10).stdout
+
+
+WORKING_FILES_SENTENCE = "Working files live under `.architecture/work/`"
+
+
+def test_flows_and_pages_state_where_working_files_live_in_one_sentence():
+    for path in [*flow_files(), page_file("findings"), page_file("check"), page_file("applicable")]:
+        text = " ".join(path.read_text().split())
+        assert WORKING_FILES_SENTENCE in text, f"{path.name} does not say: {WORKING_FILES_SENTENCE}"

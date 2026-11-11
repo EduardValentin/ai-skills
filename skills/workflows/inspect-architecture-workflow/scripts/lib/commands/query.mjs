@@ -2,7 +2,7 @@ import { UsageError } from "../cli/errors.mjs";
 import { GLOBAL_FLAGS, parseArgs } from "../cli/flags.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { requireModel } from "../model/load.mjs";
-import { FLAG_CHECKS, QUERIES, QUERY_FLAGS } from "../queries/index.mjs";
+import { QUERIES, QUERY_FLAGS, requireQueryFlags } from "../queries/index.mjs";
 import { renderJson, renderMarkdown } from "../render.mjs";
 
 export const QUERY_SPEC = {
@@ -38,7 +38,7 @@ export async function run(args, { root }) {
   const [name, ...rest] = positional;
   const query = selectQuery(name);
   rejectForeignFlags(name, flags);
-  FLAG_CHECKS[name]?.(flags);
+  requireQueryFlags(name, flags);
   const model = requireModel(root, flags);
   const graph = await loadGraph(root, model, { flags });
   const result = await query({ graph, model, positional: rest, flags, root });

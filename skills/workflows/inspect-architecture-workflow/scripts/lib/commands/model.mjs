@@ -13,6 +13,7 @@ import { writeDocument } from "../model/write.mjs";
 const MAX_POSITIONAL = 12;
 const KEY_VALUE = /^([a-z][a-z-]*)=([\s\S]*)$/;
 const INIT_FLAGS = ["start", "adapter", "record-mode"];
+const INIT_REQUIRED_FLAGS = ["start", "adapter"];
 const INIT_USAGE =
   'arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]';
 const GLOBAL_FLAGS = ["json", "record"];
@@ -99,9 +100,6 @@ function requireChoice(flags, name, choices) {
 
 async function init({ root, flags }) {
   const start = requireChoice(flags, "start", STARTS);
-  if (!flags.adapter) {
-    throw new UsageError('init needs --adapter "<command>", the command that prints the adapter document.');
-  }
   const modeFlags = { "record-mode": flags["record-mode"] ?? RECORD_MODES[0] };
   const recordMode = requireChoice(modeFlags, "record-mode", RECORD_MODES);
   const file = modelFile(root, flags);
@@ -133,12 +131,12 @@ function applyEdit(edit) {
 }
 
 function command(usage, positional, run, extra = {}) {
-  return { usage, positional, required: [], optional: [], flags: [], run, ...extra };
+  return { usage, positional, required: [], optional: [], flags: [], requiredFlags: [], run, ...extra };
 }
 
 function directCommands() {
   return {
-    init: command(INIT_USAGE, 0, init, { flags: INIT_FLAGS }),
+    init: command(INIT_USAGE, 0, init, { flags: INIT_FLAGS, requiredFlags: INIT_REQUIRED_FLAGS }),
     validate: command("arch model validate", 0, validate),
     status: command("arch model status", 0, status),
     explain: command("arch model explain <path>", 1, explain),
@@ -149,7 +147,10 @@ function directCommands() {
 
 function editCommands() {
   return Object.fromEntries(
-    Object.entries(EDITS).map(([name, edit]) => [name, { ...edit, flags: [], run: applyEdit(edit) }]),
+    Object.entries(EDITS).map(([name, edit]) => [
+      name,
+      { ...edit, flags: [], requiredFlags: [], run: applyEdit(edit) },
+    ]),
   );
 }
 
@@ -167,6 +168,11 @@ function rejectForeignFlags(subcommand, flags) {
   if (foreign.length > 0) {
     throw new UsageError(`--${foreign[0]} does not apply to this subcommand. usage: ${subcommand.usage}`);
   }
+}
+
+function requireFlags(subcommand, flags) {
+  const missing = subcommand.requiredFlags.find((name) => !flags[name]);
+  if (missing) throw new UsageError(`--${missing} is required. usage: ${subcommand.usage}`);
 }
 
 function splitKeyValues(subcommand, args) {
@@ -204,6 +210,7 @@ export async function run(args, { root }) {
   const [name, ...rest] = all;
   const subcommand = chooseSubcommand(name);
   rejectForeignFlags(subcommand, flags);
+  requireFlags(subcommand, flags);
   const parsed = splitKeyValues(subcommand, rest);
   checkArguments(subcommand, parsed);
   return subcommand.run({ root, flags, ...parsed });

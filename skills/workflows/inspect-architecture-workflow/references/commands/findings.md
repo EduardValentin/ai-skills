@@ -41,8 +41,8 @@ arch findings list --rank
 | `--json` | none | Print the result as JSON. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
-The check, judged, and proposal files must be under `.architecture/` or outside the project; a flow
-keeps them under `.architecture/work/`.
+The check output, the judged findings, and the proposal are working files. Working files live
+under `.architecture/work/`; the command refuses a working file elsewhere inside the project.
 
 ## Exit codes
 
@@ -64,33 +64,37 @@ The judged findings file is one object:
   "questions": ["Will payroll run in a second time zone this year?"] }
 ```
 
-`judgment` is an id from a rule-group file's conditions table, and `rules`, `defect`, and `severity`
-come from it, so a finding must not set them. `target` is a unit path, an edge `<from> -> <to>`, a
-port `<path>#<Symbol>`, or a component, of a kind that judgment applies to. `evidence` holds
-`path:line` entries that exist in the reviewed tree; in plan review, `<plan>#<heading>` entries
-naming headings of the plan. `origin` is `introduced` or `inherited`, required in a change or plan
-review and absent in an audit. `"wider": true` marks a target outside the reviewed scope and is
-refused inside it; an audit's scope is the whole codebase, so an audit finding never sets it. `liftedBy` names the confirmed upcoming change that makes the finding a blocker.
-A judged finding whose rules are all `off` for its target's component, or that a recorded
-exception covers, is dropped rather than refused. Such a finding is listed in `dropped` with its
-target, judgment id, and reason (`rule off` or `covered by an exception`). When any finding breaks
-the rules above, `add` stores nothing
-and lists every problem, each prefixed with its file and its place in that file, such as
-`.architecture/work/judged.json: findings[0] (src/domain/payroll-use-case.ts)`.
+`judgment` is an id from the conditions table of a rule group, and `rules`, `defect`, and
+`severity` come from it, so a judged finding must not set them. `target` is a unit path, an edge
+`<from> -> <to>`, a port `<path>#<Symbol>`, or a component, of a kind that judgment applies to.
+`evidence` holds `path:line` entries that exist in the reviewed tree; in plan review,
+`<plan>#<heading>` entries naming headings of the plan. `origin` is `introduced` or `inherited`,
+required in a change or plan review and absent in an audit. `"wider": true` marks a target outside
+the reviewed scope and is refused inside it; an audit's scope is the whole project, so an audit
+finding never sets it. `liftedBy` names a confirmed upcoming change that makes the finding a
+blocker: one passed with `--upcoming` or recorded with `arch model add-upcoming`.
+
+A judged finding is dropped, not refused, when a recorded exception covers it or every rule it
+names is `off` for its target's component. That is how a finding the owner accepted leaves the
+verdict: `arch model add-exception <target> '*' rule=<R> reason="<text>"` covers a unit, port, or
+component target, and an exception with two ends covers an edge. When any judged finding breaks the
+rules above, `add` stores nothing and lists every problem, each prefixed with its file and its place
+in that file, such as `.architecture/work/judged.json: findings[0] (src/domain/payroll-use-case.ts)`.
 
 The printed result has one line each for the verdict with its blocking counts by severity, the
-inherited counts, the incomplete conditions and why, the checks not run, the advisory findings, the
-dropped findings with their reasons (counting the check's `covered` number), and
-the rules not enforced; then the corrections, grouped by correction and ordered by severity; then
-the count of wider observations and each question for the owner. The verdict is `OK`,
+inherited counts, the incomplete conditions and why, the checks not run, the advisory findings,
+`Dropped:` with the count of findings an exception covers or whose rule is off and the reasons,
+and the rules not enforced; then the corrections, grouped by correction and ordered by severity;
+then the count of wider observations and each question for the owner. The verdict is `OK`,
 `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE`
-when none is and an enforced condition could not be decided. With `--rank`, a ranking follows.
-Without a model, the result is the verdict `OK` and the line "no architecture model; run a baseline
-audit to enable the full review".
+when none is and a condition of an enforced rule could not be decided. With `--rank`, a ranking
+follows. Without a model, the result is the verdict `OK` and the line "no architecture model; run a
+baseline audit to enable the full review".
 
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
-`advisory`, `covered`, `dropped`, `wider`, `incompleteCount`, `incompleteReasons`, `notRun`, `notEnforced`,
-`corrections`, `questions`, `findings`, and with `--rank` a `ranking`.
+`advisory`, `covered` (check findings an exception covered), `dropped` (each dropped judged finding
+with its `target`, `judgment`, and `reason`), `wider`, `incompleteCount`, `incompleteReasons`,
+`notRun`, `notEnforced`, `corrections`, `questions`, `findings`, and with `--rank` a `ranking`.
 
 ## Example
 
@@ -116,6 +120,32 @@ Questions for the owner: 1
 ```
 
 Corrections 2 to 4 and the cycle's full path are left out here for length.
+
+Accepting a judged finding: on the payroll fixture after a commit that makes the payroll controller
+import a new external, a reviewer judged `handler-holds-business-logic` (R20) on
+`src/web/payroll-controller.ts`, and the verdict was `SHOULD_CHANGE: 0 blocker, 1 major`. The owner
+accepted it with an exception, and `check` and `add` ran again with the same judged file:
+
+```
+$ arch model add-exception src/web/payroll-controller.ts '*' rule=R20 reason="validation stays here until the second form arrives"
+$ arch check --base main --out .architecture/work/check.json
+wrote .architecture/work/check.json: 2 findings, 1 incomplete
+$ arch findings add --flow change-review --base main --check .architecture/work/check.json --judged .architecture/work/judged.json
+# Architecture change-review: changes since main
+Verdict: INCOMPLETE: 0 blocker, 0 major, 0 minor blocking
+Inherited: 2 blocker, 0 major, 0 minor (not blocking)
+Incomplete: 1 conditions (1 missing facts)
+Not run: distance-over-threshold (fewer than 8 components)
+Advisory: 0 findings
+Dropped: 1 (1 covered by an exception)
+Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
+Corrections: none
+Wider observations: 0
+Questions for the owner: 0
+```
+
+The verdict is `INCOMPLETE` because the adapter does not provide `typeChecks`, which an enforced
+condition of R13 needs.
 
 An audit of the known-defects fixture with one file per reviewer, one holding a finding and the
 other only a question, stores both files' content in one result:

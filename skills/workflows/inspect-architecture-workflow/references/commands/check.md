@@ -21,11 +21,14 @@ arch check --strict
 | Flag | Value | Meaning |
 |---|---|---|
 | `--base` | a branch, tag, or commit | Compare with that commit: build its graph with the current model and mark each finding `introduced` or `inherited`. Only findings in the touched scope are reported. |
-| `--proposal` | a proposal file | Check the current code plus a plan's proposed facts (shape below). Cannot be combined with `--base`. The file must be under `.architecture/` or outside the project. |
-| `--out` | a file under `.architecture/work/` | Write the JSON output there and print one line. A file elsewhere inside the project is refused, because it would change the reviewed state. |
+| `--proposal` | a proposal file | Check the current code plus a plan's proposed facts (shape below). Cannot be combined with `--base`. The proposal is a working file. |
+| `--out` | a working file | Write the JSON output there and print one line. |
 | `--strict` | none | Also exit 1 when a condition of an enforced rule could not be decided. |
 | `--json` | none | Print the JSON output instead of the report. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
+
+Working files live under `.architecture/work/`; the command refuses a working file elsewhere
+inside the project, because it would change the reviewed state.
 
 ## Exit codes
 

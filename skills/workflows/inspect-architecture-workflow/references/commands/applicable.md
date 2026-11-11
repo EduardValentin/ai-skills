@@ -22,13 +22,14 @@ arch applicable --all
 |---|---|---|
 | `--base` | a branch, tag, or commit | The scope is a change: everything that differs from that commit. |
 | `--files` | comma-separated paths from the project root | The scope is these files, classified by the model as they stand. Additions such as a new component edge are not detected. |
-| `--proposal` | a proposal file under `.architecture/` or outside the project | The scope is a plan: the proposal's modules and edges, and the components and component edges they add. The file has the shape `arch check` reads with `--proposal`. |
+| `--proposal` | a proposal, a working file | The scope is a plan: the proposal's modules and edges, and the components and component edges they add. The file has the shape `arch check` reads with `--proposal`. |
 | `--all` | none | The scope is every unit and component, as in an audit. A review is needed whenever any judgment condition is in scope. |
 | `--full` | none | With `--base`, `--files`, or `--proposal`: list every judgment condition in scope even when the scope is contained in one component. `--all` already lists them all. |
 | `--json` | none | Print the JSON output instead of the report. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
 
-Pass exactly one of `--base`, `--files`, `--proposal`, and `--all`.
+Pass exactly one of `--base`, `--files`, `--proposal`, and `--all`. Working files live under
+`.architecture/work/`; the command refuses a working file elsewhere inside the project.
 
 ## Exit codes
 

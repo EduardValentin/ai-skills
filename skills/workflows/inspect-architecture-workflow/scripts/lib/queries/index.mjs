@@ -22,9 +22,17 @@ export const QUERIES = {
   volatility,
 };
 
-export const FLAG_CHECKS = {
+export const QUERY_REQUIRED_FLAGS = {
+  touched: ["base"],
+};
+
+const REQUIRED_FLAG_CHECKS = {
   touched: requireBase,
 };
+
+export function requireQueryFlags(name, flags) {
+  if ((QUERY_REQUIRED_FLAGS[name] ?? []).some((flag) => !flags[flag])) REQUIRED_FLAG_CHECKS[name](flags);
+}
 
 export const QUERY_FLAGS = {
   "ring-crossings": ["direction", "include-barrels"],

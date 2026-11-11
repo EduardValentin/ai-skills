@@ -9,7 +9,7 @@ import { validateShape } from "../model/validate-shape.mjs";
 const CLARIFICATION_CHECK = "clarification";
 const NAME = { type: "string", minLength: 1 };
 
-function proposalSchema() {
+export function proposalSchema() {
   const { modules, edges } = readDocumentSchema().properties;
   const object = (properties) => ({
     type: "object",

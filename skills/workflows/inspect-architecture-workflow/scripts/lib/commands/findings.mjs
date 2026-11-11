@@ -30,17 +30,25 @@ function requireFlag(flags, name, reason) {
   throw new UsageError(`--${name} is required ${reason}. Pass --${name} <value>.`);
 }
 
+export const ADD_REQUIRED = {
+  always: { flow: "to say which review this is", check: "to name the arch check --json output" },
+  "change-review": { base: "in change-review, the ref the diff is against" },
+  "plan-review": {
+    plan: "in plan-review, the plan file that was reviewed",
+    proposal: "in plan-review, the proposal file the check ran on",
+  },
+};
+
+function requireAll(flags, required = {}) {
+  for (const [name, reason] of Object.entries(required)) requireFlag(flags, name, reason);
+}
+
 function checkAddFlags(flags, root) {
-  requireFlag(flags, "flow", "to say which review this is");
+  requireAll(flags, ADD_REQUIRED.always);
   if (!FLOWS.includes(flags.flow)) {
     throw new UsageError(`--flow ${flags.flow} is not a flow. Use one of: ${FLOWS.join(", ")}.`);
   }
-  requireFlag(flags, "check", "to name the arch check --json output");
-  if (flags.flow === "change-review") requireFlag(flags, "base", "in change-review, the ref the diff is against");
-  if (flags.flow === "plan-review") {
-    requireFlag(flags, "plan", "in plan-review, the plan file that was reviewed");
-    requireFlag(flags, "proposal", "in plan-review, the proposal file the check ran on");
-  }
+  requireAll(flags, ADD_REQUIRED[flags.flow]);
   for (const name of ["check", "proposal"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
   for (const file of flags.judged ?? []) requireWorkPlacement(root, file, "judged");
 }

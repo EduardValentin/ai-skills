@@ -22,8 +22,8 @@ Create and check the model:
 
 - `arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]`: write a new model holding the adapter command and the starting point's default rule statuses, with no components yet; `add-component` adds the first. `local` also adds the record path to the repository's local exclude file. Refuses to overwrite a model.
 - `arch model migrate`: convert the four model files of the earlier format into `architecture.json`, leaving them in place. The adapter is left empty; set it with `set-adapter`.
-- `arch model validate`: check the model against the schema and against the code. It fails on a model with no components, a classification pattern or a port that matches no module, a module two components claim, and a forbidden edge or exception whose end matches nothing. It prints `model: ok` only when the model file and the code both pass; a model that does not fit the code prints `model does not fit the code:` and each problem; when the adapter cannot run it prints `model file: ok`, then the tooling error.
-- `arch model status`: print `model: present at <path>` or `model: absent; run a baseline audit`, without running the adapter. Exits 0 either way.
+- `arch model status`: say whether a model file exists, without reading the code or running the adapter. A flow runs it first to learn whether there is a model.
+- `arch model validate`: check the model file against the schema, then the model against the code. It fails on a model with no components, a classification pattern or a port that matches no module, a module two components claim, and a forbidden edge or exception whose end matches nothing.
 - `arch model explain <path>`: print the path's component, kind, ring, actors, and the classification pair that matched.
 - `arch model explain-thresholds`: print every knob with its default, the project's value, and its meaning.
 
@@ -46,7 +46,7 @@ Rule statuses, thresholds, and accepted findings:
 - `arch model unset-threshold <knob>`: return the knob to its default.
 - `arch model add-forbidden-edge <from> <to> reason=<text>`: record a dependency that must not exist, so a check reports it. Each end is a component name, `ring:<ring>`, or a path glob.
 - `arch model remove-forbidden-edge <from> <to>`
-- `arch model add-exception <from> <to> [rule=<R>] reason=<text>`: accept a finding by recording an intended dependency, for one target or generalized to a component or ring pair. Ends are written as for a forbidden edge, and `to` may also be `external:<name>`, or the literal `*` to accept a judged finding whose target is a unit, a port, or a component, with `from` naming that target. Without `rule=` it covers every rule. `arch findings add` drops a judged finding that an exception covers.
+- `arch model add-exception <from> <to> [rule=<R>] reason=<text>`: accept a finding. For an edge, record the intended dependency, for one edge or generalized to a component or ring pair; ends are written as for a forbidden edge, and `to` may also be `external:<name>`. For a judged finding on a unit, a port, or a component, `from` is that target and `to` is the literal `*`, quoted for the shell: `arch model add-exception src/web/payroll-controller.ts '*' rule=R20 reason="<text>"`. Without `rule=` the exception covers every rule. Both `arch check` and `arch findings add` drop a finding an exception covers.
 - `arch model remove-exception <from> <to> [rule=<R>]`
 - `arch model add-upcoming <text>`: remember an upcoming change the owner confirmed, so every later review counts it as a named upcoming change, as `--upcoming` does for one run of `arch findings add`. Refused when the same text is already recorded.
 - `arch model remove-upcoming <text>`: forget a recorded upcoming change once it has shipped or been dropped.
@@ -68,13 +68,17 @@ A flag given to a subcommand it does not apply to is a usage error.
 
 | Code | Meaning |
 |---|---|
-| 0 | The model was written, or the answer was printed. |
-| 2 | A usage error, no model, a model that does not fit the code (`validate`), or an edit that would make the model invalid, in which case the file is left unchanged. |
+| 0 | The model was written, or the answer was printed. `status` exits 0 whether or not a model exists. |
+| 2 | A usage error, no model, a model that does not fit the code or an adapter that cannot run (`validate`), or an edit that would make the model invalid, in which case the file is left unchanged. |
 
 ## Output
 
 An edit prints `updated <model file>`; `init` and `migrate` print `wrote <model file>` and the next
-step. `validate` prints `model: ok`, or exits 2 listing each problem; `status --json` prints `model` (true or false) and `path`. A refused edit prints
+step. `status` prints `model: present at <model file>` or `model: absent; run a baseline audit`;
+with `--json`, an object with `model`, true or false, and `path`, the model file. `validate` prints `model: ok` only when
+the model file and the code both pass. A model that does not fit the code exits 2 with
+`model does not fit the code:` and one line per problem on standard error. When the adapter cannot
+run, `validate` prints `model file: ok` and then exits 2 with the tooling error. A refused edit prints
 `edit refused, <model file> left unchanged:` and each schema problem. With `--json`, `explain`
 prints `path`, `component`, `kind`, `ring`, `actors`, `valueType`, and `matched` (`component`,
 `index`, `pattern`), each `null` when unknown; `explain-thresholds` prints one object per knob with
@@ -82,9 +86,18 @@ prints `path`, `component`, `kind`, `ring`, `actors`, `valueType`, and `matched`
 
 ## Example
 
-From the payroll fixture, explaining a path, then recording the same upcoming change twice:
+In a project with no model, then on the payroll fixture: explaining a path, recording the same
+upcoming change twice, and validating after an exception was recorded for a file that does not
+exist:
 
 ```
+$ arch model status
+model: absent; run a baseline audit
+$ arch model status --json
+{
+  "model": false,
+  "path": "/project/docs/architecture/architecture.json"
+}
 $ arch model explain src/domain/payroll-use-case.ts
 path: src/domain/payroll-use-case.ts
 component: domain
@@ -96,6 +109,11 @@ $ arch model add-upcoming "a second delivery mechanism"
 updated docs/architecture/architecture.json
 $ arch model add-upcoming "a second delivery mechanism"
 the upcoming change "a second delivery mechanism" is already recorded. Nothing was changed.
+$ arch model validate
+model does not fit the code:
+- exceptions src/web/gone.ts -> *: "src/web/gone.ts" is not a component, a ring, or a path matching a module. Run arch model remove-exception src/web/gone.ts *, then add it again with a component name, ring:<ring>, or an existing path.
+Fix these entries and run arch model validate again.
 ```
 
-The command prints the model file's absolute path; it is shortened here.
+The command prints the model file's absolute path; it is shortened here, and `/project` stands for
+the project root.

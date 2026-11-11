@@ -22,10 +22,10 @@ export const APPLICABLE_SPEC = {
 
 const CONTAINED = "contained in one component; adds no component, port, cross-component edge, or external";
 
-const MODES = ["base", "files", "proposal", "all"];
+export const APPLICABLE_MODES = ["base", "files", "proposal", "all"];
 
 function requireOneMode(flags) {
-  if (MODES.filter((mode) => flags[mode]).length === 1) return;
+  if (APPLICABLE_MODES.filter((mode) => flags[mode]).length === 1) return;
   throw new UsageError(
     "pass exactly one of --base <ref> (a change against a commit), --files <a,b,...> (paths from the project root), " +
       "--proposal <file> (a plan review), or --all (an audit).",
