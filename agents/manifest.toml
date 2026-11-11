@@ -1,10 +1,10 @@
 version = 1
 
 [[agent]]
-id = "architecture-code-auditor"
-source = "architecture-code-auditor.md"
-description = "Read-only code reader that classifies modules the architecture model leaves uncovered, proposing model rules, overrides, or components with behavioral reasons, and answers evaluator fact questions with evidence lines. Dispatched by the architecture-coordinator."
-groups = ["inspect-architecture-workflow"]
+id = "architecture-classifier"
+source = "architecture-classifier.md"
+description = "Read-only code reader that proposes architecture model entries, as arch model commands with one-sentence behavioral reasons, for modules the model leaves uncovered or whose classification a reviewer disputes."
+groups = ["ticket-workflow", "implementation-workflow", "inspect-architecture-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "medium"
@@ -35,28 +35,10 @@ tools = ["Read", "Glob", "Grep", "Bash"]
 color = "blue"
 
 [[agent]]
-id = "architecture-coordinator"
-source = "architecture-coordinator.md"
-description = "Architect agent that runs the inspect-architecture-workflow skill: audits a codebase, reviews a diff, or reviews an implementation plan before approval by dispatching mapping and evaluation subagents, merging their rows, and writing the committed architecture record and the uncommitted refactoring ledger."
+id = "architecture-reviewer"
+source = "architecture-reviewer.md"
+description = "Read-only reviewer that judges the architecture conditions no check decides, reading the evidence packet and the source it names, and returns judged findings with evidence and questions for the owner. In a plan review it first turns the plan into a proposal the command can check."
 groups = ["ticket-workflow", "implementation-workflow", "inspect-architecture-workflow"]
-preload_skills = ["inspect-architecture-workflow"]
-
-[agent.codex]
-model = "gpt-5.6-sol"
-model_reasoning_effort = "medium"
-sandbox_mode = "workspace-write"
-
-[agent.claude]
-model = "inherit"
-effort = "medium"
-tools = ["Read", "Glob", "Grep", "Bash", "Write", "Edit", "Agent"]
-color = "cyan"
-
-[[agent]]
-id = "architecture-evaluator"
-source = "architecture-evaluator.md"
-description = "Read-only specialist that runs architecture evaluation workflows over query output from the arch command, judging rows without opening project files, and returns assessment rows with base severities. Dispatched by the architecture-coordinator: one instance per workflow in an audit, one for every applicable workflow in a change or plan review."
-groups = ["inspect-architecture-workflow"]
 
 [agent.codex]
 model_reasoning_effort = "high"
@@ -66,7 +48,7 @@ sandbox_mode = "read-only"
 model = "sonnet"
 effort = "high"
 permissionMode = "plan"
-tools = ["Read"]
+tools = ["Read", "Glob", "Grep", "Bash"]
 color = "cyan"
 
 [[agent]]
