@@ -34,25 +34,8 @@ export function changeAdditions({ model, baseGraph, graph, renames }) {
   };
 }
 
-function spreadReasons(components) {
-  if (components.length < 2) return [];
-  return [`the change touches ${components.length} components: ${components.join(", ")}`];
-}
-
-function uncoveredReasons(uncovered) {
-  if (uncovered.length === 0) return [];
-  return [`the change touches files the model does not cover: ${uncovered.join(", ")}`];
-}
-
-export function reviewReasons({ components, uncovered, additions }) {
-  return [
-    ...spreadReasons(components),
-    ...additions.components.map((name) => `the change adds component ${name}`),
-    ...additions.ports.map((at) => `the change adds port ${at}`),
-    ...additions.componentEdges.map((edge) => `the change adds the component edge ${edgeName(edge)}`),
-    ...additions.externals.map((name) => `the change adds external ${name}`),
-    ...uncoveredReasons(uncovered),
-  ];
+export function plainAdditions(additions) {
+  return { ...additions, componentEdges: additions.componentEdges.map(edgeName) };
 }
 
 const ROLES_STANDING_IN = new Set(["policy", "detail", "wiring"]);
@@ -74,15 +57,31 @@ function unitTargets(model, units) {
   return units.filter((unit) => unit.kind).flatMap((unit) => targetsOfUnit(model, unit));
 }
 
-function componentTargets(additions) {
-  const names = [...additions.components, ...additions.componentEdges.flatMap((edge) => [edge.from, edge.to])];
+const TOUCHED_UNIT = "touched-unit";
+const UNIT_KINDS = Object.keys(DEFAULT_KINDS);
+
+function touchedUnitTargets(units) {
+  return units.map((unit) => ({ kind: TOUCHED_UNIT, component: unit.component ?? null }));
+}
+
+function addedComponentNames(additions) {
+  return [...additions.components, ...additions.componentEdges.flatMap((edge) => [edge.from, edge.to])];
+}
+
+function componentTargets({ components, additions, everyComponent = false }) {
+  const names = everyComponent ? components : addedComponentNames(additions);
   return [...new Set(names)].map((name) => ({ kind: "component", component: name }));
 }
 
 const PLAN_TARGETS = [{ kind: "plan", component: null }];
 
-export function judgmentTargets(model, { units, additions, plan = false }) {
-  return [...unitTargets(model, units), ...componentTargets(additions), ...(plan ? PLAN_TARGETS : [])];
+export function judgmentTargets(model, scope) {
+  return [
+    ...unitTargets(model, scope.units),
+    ...touchedUnitTargets(scope.units),
+    ...componentTargets(scope),
+    ...(scope.plan ? PLAN_TARGETS : []),
+  ];
 }
 
 const KNOB = /\{([A-Za-z]+)\}/g;
@@ -95,8 +94,17 @@ function judgmentEntry(model, judgment) {
   return { id: judgment.id, targets: judgment.targets, condition: conditionFor(model, judgment) };
 }
 
+function judgesEveryUnit(judgment) {
+  return judgment.group === "cross-cutting" && UNIT_KINDS.every((kind) => judgment.targets.includes(kind));
+}
+
+function appliesTo(judgment, target) {
+  if (target.kind === TOUCHED_UNIT) return judgesEveryUnit(judgment);
+  return judgment.targets.includes(target.kind);
+}
+
 function rulesInScope(model, judgment, targets) {
-  const matching = targets.filter((target) => judgment.targets.includes(target.kind));
+  const matching = targets.filter((target) => appliesTo(judgment, target));
   return judgment.rules.filter((rule) =>
     matching.some((target) => statusForRule(model, rule, target.component) !== "off"),
   );

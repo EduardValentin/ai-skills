@@ -2,6 +2,7 @@ import { highestSeverity } from "../checks/escalate.mjs";
 import { ruleNumber, titledRule } from "../checks/rule-titles.mjs";
 import { naturalOrder } from "../checks/targets.mjs";
 import { alternatives, plural } from "../text.mjs";
+import { REVIEW_NOT_DONE } from "./applicable.mjs";
 import { SEVERITIES, classifyFindings, computeVerdict } from "./verdict.mjs";
 
 export const NO_COMPONENT = "no component";
@@ -36,6 +37,7 @@ function groupCorrections(findings) {
 function incompleteReasons(incomplete) {
   const labelOf = (entry) => {
     if (entry.clarification) return "clarification requests";
+    if (entry.check === REVIEW_NOT_DONE) return "reviews not done";
     return entry.check === "classification" ? "unclassified units" : "missing facts";
   };
   const counts = new Map();
@@ -150,7 +152,7 @@ function droppedLine(data) {
 
 function judgmentConditionsLine(counts) {
   if (!counts) return "Judgment conditions: not reported";
-  return `Judgment conditions: ${counts.inScope} in scope, ${counts.notReviewed} not reviewed`;
+  return `Judgment conditions: ${counts.inScope} in scope, ${counts.reviewed} reviewed`;
 }
 
 function listOrNone(items) {

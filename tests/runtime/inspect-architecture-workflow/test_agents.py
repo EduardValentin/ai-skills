@@ -185,3 +185,18 @@ def test_reviewer_skips_each_unrecorded_concept_on_its_own():
                    "no forbidden-edge judgment on one that records no forbidden edge",
                    "no cohesion-group judgment on one that records no cohesion group"]:
         assert clause in text, clause
+
+
+RETIRED_GATE = re.compile(r"--full\b|structural precheck|not reviewed", re.IGNORECASE)
+
+
+def test_no_skill_or_agent_mentions_the_retired_review_gate():
+    mentions = []
+    for root in (REPO_ROOT / "skills", AGENTS_DIR):
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or "__pycache__" in path.parts:
+                continue
+            for index, line in enumerate(path.read_text(errors="ignore").splitlines(), start=1):
+                if RETIRED_GATE.search(line):
+                    mentions.append(f"{path.relative_to(REPO_ROOT)}:{index}: {line.strip()}")
+    assert not mentions, "\n".join(mentions)

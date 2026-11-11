@@ -40,9 +40,9 @@ defined in `references/rules/vocabulary.md`.
    It exits 1 only when the plan introduces a blocker or major finding of an enforced rule;
    continue either way. If it refuses the proposal, give its message to the reviewer, write the
    corrected proposal, and run this step again.
-6. Run `arch applicable --proposal .architecture/work/proposal.json --full --out .architecture/work/applicable.json`.
-   If `groups` in that file is empty, go to step 9 and leave out `--judged`.
-7. Ask the same reviewer to judge, with `.architecture/work/check.json`,
+6. Run `arch applicable --proposal .architecture/work/proposal.json --out .architecture/work/applicable.json`.
+   It lists the judgment conditions in scope, the plan's own among them.
+7. Ask the same reviewer to judge, always, with `.architecture/work/check.json`,
    `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, the file of every other
    group in `groups`, such as `references/rules/dependency-direction.md`, each with its `judgments`
    entries as printed (`id`, `targets`, `condition`), and the upcoming changes the plan states, word

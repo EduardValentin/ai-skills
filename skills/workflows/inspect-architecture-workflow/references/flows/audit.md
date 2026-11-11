@@ -33,7 +33,7 @@ defined in `references/rules/vocabulary.md`.
    before this pass: then stop and show them to the user.
 8. Run `arch collect`. It rewrites `current.md` in the record path.
 9. Run `arch check --out .architecture/work/check.json`; exit 1, an enforced blocker or major, continues.
-10. Run `arch applicable --all --out .architecture/work/applicable.json`; if `review` is `false`, skip to step 14.
+10. Run `arch applicable --all --out .architecture/work/applicable.json`; its `groups` name the reviewers.
 11. Dispatch, in parallel, one `architecture-reviewer` per rule group in `groups` other than
     `cross-cutting`, or one for `cross-cutting` when it is the only group. Each packet: the flow
     `audit` and the scope, the whole project; `.architecture/work/check.json`;

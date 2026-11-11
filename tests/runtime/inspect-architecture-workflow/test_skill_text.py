@@ -513,7 +513,7 @@ def test_the_change_review_flow_runs_as_written_through_acceptances(tmp_path):
     assert json.loads(flow.run_step(1).stdout)["model"] is True
     assert flow.run_step(3).returncode == 0
     applicable = json.loads((root / APPLICABLE_FILE).read_text())
-    assert applicable["review"] is True and "humble-objects" in applicable["groups"]
+    assert applicable["adds"]["externals"] == ["zod"] and "humble-objects" in applicable["groups"]
     assert flow.run_step(5).returncode in (0, 1)
     flow.judged_path(10).write_text(json.dumps(CHANGE_REVIEW_JUDGED))
     assert "Verdict: SHOULD_CHANGE: 0 blocker, 2 major" in flow.run_step(10).stdout
@@ -529,6 +529,55 @@ def test_the_change_review_flow_runs_as_written_through_acceptances(tmp_path):
     assert flow.run(flow.command_in(11, "set-rule"), **{"<R>": "R13"}).returncode == 0
     flow.run_step(5)
     assert "Verdict: OK" in flow.run_step(10).stdout
+
+
+def change_inside_one_component(tmp_path):
+    root = payroll_repository(tmp_path)
+    git(["checkout", "-q", "-b", "feature"], root)
+    employee = root / "src/domain/employee.ts"
+    employee.write_text(employee.read_text() + "export const PAY_DAY = 25;\n")
+    git(["commit", "-q", "-am", "a pay day constant"], root)
+    return root
+
+
+def flow_reaches_the_reviewer(step: str, applicable: dict) -> bool:
+    assert "If `units` and `uncovered` in `applicable.json` are both empty" in step, step
+    return bool(applicable["units"] or applicable["uncovered"])
+
+
+def test_the_change_review_flow_reaches_the_reviewer_for_a_change_inside_one_component(tmp_path):
+    root = change_inside_one_component(tmp_path)
+    flow = FlowRunner("change-review", root, {"<ref>": "main", "<upcoming change>": "a second payroll form"})
+    assert flow.run_step(3).returncode == 0
+    applicable = json.loads((root / APPLICABLE_FILE).read_text())
+    assert applicable["components"] == ["domain"] and not any(applicable["adds"].values())
+    assert flow_reaches_the_reviewer(flow.steps[6], applicable)
+    assert flow.steps[7].startswith("7. Dispatch one `architecture-reviewer`, once")
+    assert "shape-mismatch-hidden" in [entry["id"] for entry in applicable["judgments"]["cross-cutting"]]
+    assert flow.run_step(5).returncode in (0, 1)
+    flow.judged_path(10).write_text(json.dumps({"findings": [], "questions": []}))
+    reviewed = flow.run_step(10).stdout
+    assert f"Judgment conditions: {applicable['inScope']} in scope, {applicable['inScope']} reviewed" in reviewed
+
+
+def test_the_change_review_flow_dispatches_nobody_when_no_unit_is_touched(tmp_path):
+    root = payroll_repository(tmp_path)
+    git(["checkout", "-q", "-b", "feature"], root)
+    (root / "NOTES.md").write_text("release notes\n")
+    git(["add", "NOTES.md"], root)
+    git(["commit", "-q", "-m", "notes only"], root)
+    flow = FlowRunner("change-review", root, {"<ref>": "main"})
+    assert flow.run_step(3).returncode == 0
+    applicable = json.loads((root / APPLICABLE_FILE).read_text())
+    assert not flow_reaches_the_reviewer(flow.steps[6], applicable)
+    assert "no unit touched; no code to review" in flow.steps[6]
+
+
+def test_no_flow_lets_a_precheck_skip_the_selected_review():
+    for name in FLOW_NAMES:
+        text = flow_text(name)
+        for phrase in ["`review` is", "skip to step", "leave out `--judged`", "notReviewed", "--full"]:
+            assert phrase not in text, f"{name}: {phrase}"
 
 
 def test_the_audit_flow_classifies_every_module_before_collecting(tmp_path):
@@ -551,7 +600,7 @@ def test_the_audit_flow_classifies_every_module_before_collecting(tmp_path):
     assert flow.run_step(8).returncode == 0
     assert flow.run_step(9).returncode in (0, 1)
     assert flow.run_step(10).returncode == 0
-    assert json.loads((root / APPLICABLE_FILE).read_text())["review"] is True
+    assert json.loads((root / APPLICABLE_FILE).read_text())["inScope"] > 0
     flow.judged_path(14).write_text(json.dumps({"findings": [], "questions": []}))
     audited = flow.run_step(14).stdout
     assert "# Architecture audit" in audited and "Judgment conditions: " in audited

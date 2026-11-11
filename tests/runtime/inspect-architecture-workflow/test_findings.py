@@ -1087,28 +1087,48 @@ def applicable_file(root: Path, tmp_path: Path, *args: str) -> Path:
     return write_json(tmp_path / "applicable.json", json.loads(result.stdout))
 
 
-def test_judgment_conditions_in_scope_and_not_reviewed_travel_with_the_run(tmp_path):
+def test_judgment_conditions_in_scope_and_reviewed_travel_with_the_run(tmp_path):
     root = workspace(tmp_path)
     scope = applicable_file(root, tmp_path, "--all")
     in_scope = json.loads(scope.read_text())["inScope"]
     check = check_file(root, tmp_path)
-    skipped = add(root, "audit", check, "--applicable", str(scope))
-    assert skipped.returncode == 0, skipped.stderr
-    assert f"Judgment conditions: {in_scope} in scope, {in_scope} not reviewed" in skipped.stdout
-    assert store(root)["lastRun"]["judgmentConditions"] == {"inScope": in_scope, "notReviewed": in_scope}
     reviewed = add(root, "audit", check, "--applicable", str(scope), "--judged", str(judged(tmp_path)))
-    assert f"Judgment conditions: {in_scope} in scope, 0 not reviewed" in reviewed.stdout
+    assert reviewed.returncode == 0, reviewed.stderr
+    assert f"Judgment conditions: {in_scope} in scope, {in_scope} reviewed" in reviewed.stdout
+    assert store(root)["lastRun"]["judgmentConditions"] == {"inScope": in_scope, "reviewed": in_scope}
+    assert not any(line.startswith("- judgment-review") for line in reviewed.stdout.splitlines())
 
 
-def test_a_contained_change_reports_the_conditions_it_left_out(tmp_path):
+def test_conditions_in_scope_without_a_judged_file_make_the_review_incomplete(tmp_path):
     root = workspace(tmp_path)
     touch(root, EMPLOYEE)
     scope = applicable_file(root, tmp_path, "--base", "main")
-    counts = json.loads(scope.read_text())
-    assert counts["review"] is False and counts["notReviewed"] > 0
+    in_scope = json.loads(scope.read_text())["inScope"]
+    assert in_scope > 0
     result = add(root, "change-review", check_file(root, tmp_path, "--base", "main"), "--base", "main",
                  "--applicable", str(scope))
-    assert f"Judgment conditions: {counts['inScope']} in scope, {counts['notReviewed']} not reviewed" in result.stdout
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert "Verdict: INCOMPLETE: 0 blocker, 0 major, 0 minor blocking" in lines
+    assert f"Judgment conditions: {in_scope} in scope, 0 reviewed" in lines
+    assert "Incomplete: 1 conditions (1 reviews not done)" in lines
+    assert (f"- judgment-review: {in_scope} judgment conditions in scope: no judged file was passed, so no reviewer "
+            "judged them. Dispatch architecture-reviewer with the conditions arch applicable lists, then run "
+            "arch findings add again with --judged.") in lines
+    reviewed = add(root, "change-review", check_file(root, tmp_path, "--base", "main"), "--base", "main",
+                   "--applicable", str(scope), "--judged", str(judged(tmp_path)))
+    assert "Verdict: OK" in reviewed.stdout
+
+
+def test_no_condition_in_scope_needs_no_judged_file(tmp_path):
+    root = workspace(tmp_path)
+    (root / "NOTES.md").write_text("notes\n")
+    scope = applicable_file(root, tmp_path, "--base", "main")
+    assert json.loads(scope.read_text())["inScope"] == 0
+    result = add(root, "change-review", check_file(root, tmp_path, "--base", "main"), "--base", "main",
+                 "--applicable", str(scope))
+    assert "Verdict: OK" in result.stdout
+    assert "Judgment conditions: 0 in scope, 0 reviewed" in result.stdout
 
 
 def test_without_applicable_the_judgment_conditions_are_not_reported(tmp_path):

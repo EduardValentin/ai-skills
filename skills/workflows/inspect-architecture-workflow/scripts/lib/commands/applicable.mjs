@@ -3,7 +3,7 @@ import {
   changeAdditions,
   judgmentScope,
   judgmentTargets,
-  reviewReasons,
+  plainAdditions,
 } from "../checks/applicability.mjs";
 import { titledRule } from "../checks/rule-titles.mjs";
 import { touchedScope } from "../checks/scope.mjs";
@@ -14,13 +14,12 @@ import { loadGraph } from "../graph/load.mjs";
 import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
 import { createClassifier } from "../model/classify.mjs";
 import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
+import { plural } from "../text.mjs";
 
 export const APPLICABLE_SPEC = {
-  flags: { base: "git-ref", files: "value", proposal: "value", all: "boolean", full: "boolean", out: "value" },
+  flags: { base: "git-ref", files: "value", proposal: "value", all: "boolean", out: "value" },
   positional: { min: 0, max: 0 },
 };
-
-const CONTAINED = "contained in one component; adds no component, port, cross-component edge, or external";
 
 export const APPLICABLE_MODES = ["base", "files", "proposal", "all"];
 
@@ -82,57 +81,57 @@ async function scopeFromAll(root, model, flags) {
     units: graph.units,
     components: graph.components.map((component) => component.name),
     uncovered: graph.uncovered,
-    additions: { ...NO_ADDITIONS, components: graph.components.map((component) => component.name) },
+    additions: NO_ADDITIONS,
+    everyComponent: true,
   };
-}
-
-function auditApplicability(model, scope) {
-  const groups = judgmentScope(model, judgmentTargets(model, scope));
-  const inScope = judgmentCount(groups);
-  const uncovered = scope.uncovered;
-  if (inScope === 0) {
-    return { review: false, reasons: ["no judgment condition is in scope"], groups, uncovered, notReviewed: 0 };
-  }
-  const reasons = [`audit: every unit and component is in scope and ${inScope} judgment conditions apply`];
-  return { review: true, reasons, groups, uncovered, notReviewed: 0 };
 }
 
 function judgmentCount(groups) {
   return groups.reduce((sum, entry) => sum + entry.judgments.length, 0);
 }
 
-function applicability(model, scope, flags) {
-  if (flags.all) return auditApplicability(model, scope);
-  const structural = reviewReasons(scope);
-  const groups = judgmentScope(model, judgmentTargets(model, scope));
-  const inScope = judgmentCount(groups);
-  const uncovered = scope.uncovered;
-  if (structural.length > 0) return { review: true, reasons: structural, groups, uncovered, notReviewed: 0 };
-  if (flags.full && inScope > 0) {
-    const reasons = [`--full was passed and ${inScope} judgment conditions are in scope`];
-    return { review: true, reasons, groups, uncovered, notReviewed: 0 };
-  }
-  return { review: false, reasons: [CONTAINED], groups: [], uncovered, notReviewed: inScope };
+function unitEntry(unit) {
+  return { path: unit.path, kind: unit.kind ?? null, component: unit.component ?? null };
 }
 
-function jsonOutput(result, flags) {
+function jsonOutput(scope, groups, flags) {
+  const uncovered = new Set(scope.uncovered);
   return {
     model: true,
     mode: APPLICABLE_MODES.find((mode) => flags[mode]),
-    review: result.review,
-    reasons: result.reasons,
-    groups: result.groups.map((entry) => entry.group),
-    uncovered: result.uncovered,
-    judgments: Object.fromEntries(result.groups.map((entry) => [entry.group, entry.judgments])),
-    inScope: judgmentCount(result.groups) + result.notReviewed,
-    notReviewed: result.notReviewed,
+    units: scope.units.filter((unit) => !uncovered.has(unit.path)).map(unitEntry),
+    components: scope.components,
+    uncovered: scope.uncovered,
+    adds: plainAdditions(scope.additions),
+    groups: groups.map((entry) => entry.group),
+    judgments: Object.fromEntries(groups.map((entry) => [entry.group, entry.judgments])),
+    inScope: judgmentCount(groups),
   };
 }
 
-function notReviewedLines(result) {
-  if (result.notReviewed === 0) return [];
+function componentsText(components) {
+  const names = components.length > 0 ? ` (${components.join(", ")})` : "";
+  return `${plural(components.length, "component")}${names}`;
+}
+
+function touchedText(output) {
+  if (output.units.length === 0 && output.uncovered.length === 0) return "no unit touched";
+  const uncovered = output.uncovered.length > 0 ? `, ${plural(output.uncovered.length, "uncovered file")}` : "";
+  return `${plural(output.units.length, "unit")} in ${componentsText(output.components)}${uncovered}`;
+}
+
+function scopeSummary(output) {
+  if (!output.model) return "no model";
+  const conditions = `${plural(output.inScope, "judgment condition")} in ${plural(output.groups.length, "rule group")}`;
+  return `${touchedText(output)}; ${conditions}`;
+}
+
+function additionLines(adds) {
   return [
-    `Judgment conditions not reviewed for a contained change: ${result.notReviewed}. Pass --full to review them.`,
+    ...adds.components.map((name) => `component ${name}`),
+    ...adds.ports.map((at) => `port ${at}`),
+    ...adds.componentEdges.map((edge) => `component edge ${edge}`),
+    ...adds.externals.map((name) => `external ${name}`),
   ];
 }
 
@@ -140,32 +139,25 @@ function bulleted(lines) {
   return lines.length > 0 ? lines.map((line) => `- ${line}`) : ["- none"];
 }
 
-function renderProse(result) {
-  const groupLines = result.groups.map((entry) => `${entry.group}: ${entry.rules.map(titledRule).join("; ")}`);
+function renderProse(output, groups) {
+  const groupLines = groups.map((entry) => `${entry.group}: ${entry.rules.map(titledRule).join("; ")}`);
   return [
-    `Review needed: ${result.review ? "yes" : "no"}`,
-    "Reasons:",
-    ...bulleted(result.reasons),
+    `Scope of the review: ${scopeSummary(output)}`,
+    "Adds:",
+    ...bulleted(additionLines(output.adds)),
     "Rule groups with judgment conditions:",
     ...bulleted(groupLines),
     "Uncovered files:",
-    ...bulleted(result.uncovered),
-    ...notReviewedLines(result),
+    ...bulleted(output.uncovered),
   ].join("\n");
 }
 
-const NO_MODEL_OUTPUT = { model: false, review: false, reasons: [NO_MODEL_LINE] };
-
-function summaryLine(output) {
-  if (!output.model) return "no model";
-  const review = output.review ? "yes" : "no";
-  return `review ${review}, ${output.inScope} judgment conditions in scope, ${output.notReviewed} not reviewed`;
-}
+const NO_MODEL_OUTPUT = { model: false, reasons: [NO_MODEL_LINE] };
 
 async function emit(output, text, { root, flags }) {
   if (flags.out) {
     await writeWorkFile(root, flags.out, `${JSON.stringify(output, null, 2)}\n`);
-    console.log(`wrote ${flags.out}: ${summaryLine(output)}`);
+    console.log(`wrote ${flags.out}: ${scopeSummary(output)}`);
   } else {
     console.log(flags.json ? JSON.stringify(output, null, 2) : text);
   }
@@ -188,7 +180,8 @@ export async function run(args, { root }) {
     return 0;
   }
   const scope = await scopeOf(root, model, flags);
-  const result = applicability(model, scope, flags);
-  await emit(jsonOutput(result, flags), renderProse(result), { root, flags });
+  const groups = judgmentScope(model, judgmentTargets(model, scope));
+  const output = jsonOutput(scope, groups, flags);
+  await emit(output, renderProse(output, groups), { root, flags });
   return 0;
 }

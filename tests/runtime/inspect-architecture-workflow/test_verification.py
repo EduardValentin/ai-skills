@@ -46,6 +46,7 @@ def test_sound_small_has_no_finding(tmp_path: Path):
     assert run_arch(["uncovered"], root).returncode == 0
     applicable = run_arch(["applicable", "--all"], root)
     assert applicable.returncode == 0, applicable.stderr
+    assert applicable.stdout.startswith("Scope of the review: ") and "Review needed" not in applicable.stdout
 
 
 def test_sound_small_output_asks_for_no_more_structure(tmp_path: Path):
@@ -253,6 +254,8 @@ def test_no_model_in_an_empty_repository_reports_it_and_writes_only_inside_the_w
     assert json.loads((tmp_path / ".architecture/work/check.json").read_text()) == {"model": False}
     applicable = run_arch(["applicable", "--all"], tmp_path)
     assert applicable.returncode == 0 and "no architecture model" in applicable.stdout
+    applicable_json = run_arch(["applicable", "--all", "--json"], tmp_path)
+    assert json.loads(applicable_json.stdout) == {"model": False, "reasons": [applicable.stdout.strip()]}
     added = run_arch(["findings", "add", "--flow", "change-review", "--base", "main",
                       "--check", ".architecture/work/check.json"], tmp_path)
     assert added.returncode == 0, added.stderr

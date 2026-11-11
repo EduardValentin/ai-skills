@@ -8,7 +8,7 @@ import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
 import { checkBinding } from "../findings/binding.mjs";
 import { requireWorkPlacement } from "../findings/placement.mjs";
-import { judgmentConditions, readApplicable } from "../findings/applicable.mjs";
+import { judgmentConditions, readApplicable, reviewNotDone } from "../findings/applicable.mjs";
 import { judgedFindings, judgedQuestions, readJudged } from "../findings/intake.mjs";
 import { checkFinding, mergeFindings, replaceStored, scopeTag } from "../findings/merge.mjs";
 import { overlappingFindings } from "../findings/overlaps.mjs";
@@ -95,7 +95,7 @@ function lastRunOf({ flags, subject, check, model, judged, findings, upcoming, t
     scope: subject.scopeLabel,
     base: flags.base ?? null,
     plan: flags.plan ?? null,
-    incomplete: withEnforcement(model, check.incomplete),
+    incomplete: withEnforcement(model, [...check.incomplete, ...reviewNotDone(applicable, flags.judged)]),
     skipped: check.skipped,
     notRun: check.notRun,
     judgmentConditions: judgmentConditions(applicable, flags.judged),

@@ -14,7 +14,6 @@ CLOCK = "src/adapters/system-clock.ts"
 MAIN = "src/web/main.ts"
 STRAY = "src/stray/helper.ts"
 NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review"
-CONTAINED = "contained in one component; adds no component, port, cross-component edge, or external"
 MODEL = "docs/architecture/architecture.json"
 GROUPS = [
     "dependency-direction", "reasons-to-change", "business-rule-placement", "humble-objects",
@@ -77,53 +76,56 @@ def registry() -> dict:
     return json.loads(result.stdout)
 
 
-def test_change_inside_one_component_needs_no_review(tmp_path: Path):
+NO_ADDS = {"components": [], "ports": [], "componentEdges": [], "externals": []}
+
+
+def condition_count(out: dict) -> int:
+    return sum(len(entries) for entries in out["judgments"].values())
+
+
+def test_change_inside_one_component_lists_its_judgment_conditions(tmp_path: Path):
     root = repo(tmp_path)
     touch(root, EMPLOYEE)
     out = applicable(root, "--base", "HEAD")
     assert out["model"] is True
-    assert out["review"] is False
-    assert out["reasons"] == [CONTAINED]
-    assert out["groups"] == [] and out["judgments"] == {}
-    assert out["uncovered"] == []
-    assert out["notReviewed"] == len([j for entries in applicable(root, "--base", "HEAD", "--full")["judgments"].values()
-                                      for j in entries])
-    assert out["notReviewed"] > 0
+    assert not {"review", "reasons", "notReviewed"} & set(out)
+    assert out["units"] == [{"path": EMPLOYEE, "kind": "entity", "component": "domain"}]
+    assert out["components"] == ["domain"] and out["uncovered"] == []
+    assert out["adds"] == NO_ADDS
+    assert "entity-carries-framework-traits" in judgment_ids(out, "business-rule-placement")
+    assert out["inScope"] == condition_count(out) > 0
 
 
-def test_contained_change_prose_counts_what_was_not_reviewed(tmp_path: Path):
+def test_prose_opens_with_the_scope_of_the_review(tmp_path: Path):
     root = repo(tmp_path)
     touch(root, EMPLOYEE)
+    out = applicable(root, "--base", "HEAD")
     result = run_arch(["applicable", "--base", "HEAD"], root)
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
-    assert lines[0] == "Review needed: no"
-    assert f"- {CONTAINED}" in lines
-    count = applicable(root, "--base", "HEAD")["notReviewed"]
-    assert lines[-1] == f"Judgment conditions not reviewed for a contained change: {count}. Pass --full to review them."
+    assert lines[0] == (
+        f"Scope of the review: 1 unit in 1 component (domain); {out['inScope']} judgment conditions in "
+        f"{len(out['groups'])} rule groups"
+    )
+    assert lines[1:3] == ["Adds:", "- none"]
+    assert not any("Review needed" in line or "not reviewed" in line for line in lines)
 
 
-def test_full_reviews_a_contained_change_with_judgments_in_scope(tmp_path: Path):
+def test_the_full_flag_no_longer_exists(tmp_path: Path):
     root = repo(tmp_path)
-    touch(root, EMPLOYEE)
-    out = applicable(root, "--base", "HEAD", "--full")
-    assert out["review"] is True
-    assert "business-rule-placement" in out["groups"]
-    assert "entity-carries-framework-traits" in judgment_ids(out, "business-rule-placement")
-    assert out["notReviewed"] == 0
-    assert len(out["reasons"]) == 1 and "--full" in out["reasons"][0]
+    result = run_arch(["applicable", "--base", "HEAD", "--full"], root)
+    assert result.returncode == 2 and "--full" in result.stderr
 
 
-def test_full_with_nothing_in_scope_is_not_a_review(tmp_path: Path):
+def test_every_rule_off_leaves_no_judgment_condition(tmp_path: Path):
     root = repo(tmp_path)
     for number in range(1, 42):
         result = run_arch(["model", "set-rule", f"R{number}", "off", "reason=all off"], root)
         assert result.returncode == 0, result.stderr
     touch(root, EMPLOYEE)
-    out = applicable(root, "--base", "HEAD", "--full")
-    assert out["review"] is False
-    assert out["reasons"] == [CONTAINED]
-    assert out["notReviewed"] == 0
+    out = applicable(root, "--base", "HEAD")
+    assert out["groups"] == [] and out["judgments"] == {} and out["inScope"] == 0
+    assert out["units"] == [{"path": EMPLOYEE, "kind": "entity", "component": "domain"}]
 
 
 def test_custom_kind_stands_in_for_default_kinds_of_its_role(tmp_path: Path):
@@ -135,31 +137,43 @@ def test_custom_kind_stands_in_for_default_kinds_of_its_role(tmp_path: Path):
 
     edit_json(root / MODEL, custom_kind)
     touch(root, EMPLOYEE)
-    out = applicable(root, "--base", "HEAD", "--full")
+    out = applicable(root, "--base", "HEAD")
     placement = judgment_ids(out, "business-rule-placement")
     assert "entity-carries-framework-traits" in placement and "critical-rule-in-use-case" in placement
     assert "device-unit-holds-logic" not in judgment_ids(out, "humble-objects")
 
 
-def test_new_cross_component_edge_needs_review(tmp_path: Path):
+def test_a_neutral_custom_kind_still_brings_the_cross_cutting_conditions(tmp_path: Path):
+    root = repo(tmp_path)
+
+    def neutral_kind(document: dict) -> None:
+        document["kinds"] = {"notes": {"role": "neutral", "ring": "entities"}}
+        document["components"][0]["classify"][-1] = ["**", "notes"]
+
+    edit_json(root / MODEL, neutral_kind)
+    touch(root, EMPLOYEE)
+    out = applicable(root, "--base", "HEAD")
+    assert out["groups"] == ["cross-cutting"]
+    assert judgment_ids(out, "cross-cutting") == ["shape-mismatch-hidden"]
+
+
+def test_a_new_cross_component_edge_is_listed_under_adds(tmp_path: Path):
     root = repo(tmp_path)
     touch(root, CLOCK)
     add_adapter_edge(root, {"from": CLOCK, "to": MAIN, "kind": "import"})
     out = applicable(root, "--base", "HEAD")
-    assert out["review"] is True
-    assert any("adapters -> web" in reason for reason in out["reasons"]), out["reasons"]
+    assert out["adds"] == {**NO_ADDS, "componentEdges": ["adapters -> web"]}
+    assert "components-and-stability" in out["groups"]
 
 
-def test_new_external_needs_review(tmp_path: Path):
+def test_a_new_external_is_listed_under_adds(tmp_path: Path):
     root = repo(tmp_path)
     touch(root, CLOCK)
     add_adapter_edge(root, {"from": CLOCK, "external": {"name": "luxon", "tag": "vendor"}})
-    out = applicable(root, "--base", "HEAD")
-    assert out["review"] is True
-    assert any("luxon" in reason for reason in out["reasons"]), out["reasons"]
+    assert applicable(root, "--base", "HEAD")["adds"] == {**NO_ADDS, "externals": ["luxon"]}
 
 
-def test_new_port_and_component_need_review(tmp_path: Path):
+def test_a_new_port_and_component_are_listed_under_adds(tmp_path: Path):
     root = repo(tmp_path)
 
     def declare(document: dict) -> None:
@@ -172,14 +186,14 @@ def test_new_port_and_component_need_review(tmp_path: Path):
     (root / "src/billing/invoices.ts").write_text("export interface Invoices {}\n")
     template = json.loads((root / ADAPTER).read_text())["modules"][0]
     edit_json(root / ADAPTER, lambda d: d["modules"].append({**template, "path": "src/billing/invoices.ts"}))
-    reasons = " | ".join(applicable(root, "--base", "HEAD")["reasons"])
-    assert "billing" in reasons and "src/billing/invoices.ts#Invoices" in reasons
+    adds = applicable(root, "--base", "HEAD")["adds"]
+    assert adds["components"] == ["billing"] and adds["ports"] == ["src/billing/invoices.ts#Invoices"]
 
 
 def test_groups_follow_touched_kinds(tmp_path: Path):
     root = repo(tmp_path)
     touch(root, CONTROLLER)
-    out = applicable(root, "--base", "HEAD", "--full")
+    out = applicable(root, "--base", "HEAD")
     assert "humble-objects" in out["groups"]
     assert "handler-holds-business-logic" in judgment_ids(out, "humble-objects")
     assert set(out["groups"]) == set(out["judgments"])
@@ -193,7 +207,7 @@ def test_group_is_dropped_when_its_rules_are_off(tmp_path: Path):
         result = run_arch(["model", "set-rule", rule, "off", "reason=no humble objects here"], root)
         assert result.returncode == 0, result.stderr
     touch(root, CONTROLLER)
-    out = applicable(root, "--base", "HEAD", "--full")
+    out = applicable(root, "--base", "HEAD")
     assert "humble-objects" not in out["groups"]
     assert "humble-objects" not in out["judgments"]
 
@@ -204,33 +218,41 @@ def test_component_rule_off_drops_only_that_component(tmp_path: Path):
         result = run_arch(["model", "set-rule", f"{rule}@web", "off", "reason=thin controllers"], root)
         assert result.returncode == 0, result.stderr
     touch(root, CONTROLLER)
-    assert "humble-objects" not in applicable(root, "--base", "HEAD", "--full")["groups"]
+    assert "humble-objects" not in applicable(root, "--base", "HEAD")["groups"]
     touch(root, CLOCK)
-    assert "humble-objects" in applicable(root, "--base", "HEAD", "--full")["groups"]
+    assert "humble-objects" in applicable(root, "--base", "HEAD")["groups"]
 
 
-def test_touched_uncovered_file_is_listed_and_needs_review(tmp_path: Path):
+def test_a_touched_uncovered_unit_is_listed_and_brings_the_cross_cutting_conditions(tmp_path: Path):
     root = repo(tmp_path)
     add_stray_module(root)
     out = applicable(root, "--base", "HEAD")
-    assert out["uncovered"] == [STRAY]
-    assert out["review"] is True
-    assert out["notReviewed"] == 0
+    assert out["uncovered"] == [STRAY] and out["units"] == []
+    assert out["groups"] == ["cross-cutting"]
+    assert judgment_ids(out, "cross-cutting") == ["shape-mismatch-hidden"]
 
 
-def test_files_mode_uses_component_spread_only(tmp_path: Path):
+def test_a_change_that_touches_no_unit_has_nothing_in_scope(tmp_path: Path):
+    root = repo(tmp_path)
+    (root / "NOTES.md").write_text("notes\n")
+    out = applicable(root, "--base", "HEAD")
+    assert out["units"] == [] and out["uncovered"] == [] and out["components"] == []
+    assert out["judgments"] == {} and out["inScope"] == 0
+    prose = run_arch(["applicable", "--base", "HEAD"], root).stdout.splitlines()
+    assert prose[0] == "Scope of the review: no unit touched; 0 judgment conditions in 0 rule groups"
+
+
+def test_files_mode_lists_the_units_and_components_without_additions(tmp_path: Path):
     root = copy_fixture("payroll", tmp_path / "p")
     add_adapter_edge(root, {"from": CLOCK, "to": MAIN, "kind": "import"})
     single = applicable(root, "--files", f"{EMPLOYEE},src/domain/clock.ts")
-    assert single["review"] is False
-    assert single["reasons"] == [CONTAINED]
+    assert [unit["path"] for unit in single["units"]] == [EMPLOYEE, "src/domain/clock.ts"]
+    assert single["components"] == ["domain"] and single["adds"] == NO_ADDS
     spread = applicable(root, "--files", f"{EMPLOYEE},{MAIN}")
-    assert spread["review"] is True
-    assert any("domain" in reason and "web" in reason for reason in spread["reasons"])
+    assert spread["components"] == ["domain", "web"]
     assert "humble-objects" in spread["groups"]
     stray = applicable(root, "--files", "docs/notes.md")
-    assert stray["uncovered"] == ["docs/notes.md"]
-    assert stray["review"] is True
+    assert stray["uncovered"] == ["docs/notes.md"] and stray["units"] == []
 
 
 def test_files_mode_treats_an_unclassified_path_as_uncovered(tmp_path: Path):
@@ -239,13 +261,13 @@ def test_files_mode_treats_an_unclassified_path_as_uncovered(tmp_path: Path):
         classify=[["main.ts", "composition-root"], ["*-controller.ts", "controller"]]))
     out = applicable(root, "--files", "src/web/notes.txt")
     assert out["uncovered"] == ["src/web/notes.txt"]
-    assert out["review"] is True
+    assert out["units"] == []
 
 
-def test_no_model_is_not_a_review(tmp_path: Path):
+def test_no_model_says_so(tmp_path: Path):
     result = run_arch(["applicable", "--files", "a.ts", "--json"], tmp_path)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"model": False, "review": False, "reasons": [NO_MODEL_LINE]}
+    assert json.loads(result.stdout) == {"model": False, "reasons": [NO_MODEL_LINE]}
     plain = run_arch(["applicable", "--files", "a.ts"], tmp_path)
     assert plain.returncode == 0
     assert plain.stdout.strip() == NO_MODEL_LINE
@@ -258,8 +280,9 @@ def test_plain_output_is_short_prose(tmp_path: Path):
     result = run_arch(["applicable", "--base", "HEAD"], root)
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
-    assert lines[0] == "Review needed: yes"
-    assert "Reasons:" in lines
+    assert lines[0].startswith("Scope of the review: 2 units in 2 components (")
+    assert ", 1 uncovered file; " in lines[0]
+    assert "Adds:" in lines
     assert "Rule groups with judgment conditions:" in lines
     assert "Uncovered files:" in lines
     assert any(line.startswith("- humble-objects: ") and "R20 Split humble from testable units" in line
@@ -364,34 +387,32 @@ def test_exactly_one_of_the_four_modes_is_required(tmp_path: Path):
 def test_all_puts_every_unit_and_component_in_scope(tmp_path: Path):
     root = repo(tmp_path)
     out = applicable(root, "--all")
-    assert out["review"] is True
     assert set(out["groups"]) == set(out["judgments"]) and len(out["groups"]) > 0
+    assert EMPLOYEE in [unit["path"] for unit in out["units"]]
+    assert out["components"] == ["domain", "adapters", "web"] and out["adds"] == NO_ADDS
     assert "entity-carries-framework-traits" in judgment_ids(out, "business-rule-placement")
     assert "handler-holds-business-logic" in judgment_ids(out, "humble-objects")
     assert "components-and-stability" in out["groups"]
-    assert out["notReviewed"] == 0
 
 
-def test_all_is_not_a_review_when_every_rule_is_off(tmp_path: Path):
+def test_all_has_nothing_in_scope_when_every_rule_is_off(tmp_path: Path):
     root = repo(tmp_path)
     for number in range(1, 42):
         assert run_arch(["model", "set-rule", f"R{number}", "off", "reason=all off"], root).returncode == 0
     out = applicable(root, "--all")
-    assert out["review"] is False and out["groups"] == []
+    assert out["groups"] == [] and out["inScope"] == 0
 
 
 def test_proposal_scope_is_its_modules_edges_and_components(tmp_path: Path):
     root = repo(tmp_path)
     plain = write_proposal(root, modules=[{"path": EMPLOYEE}], edges=[])
     contained = applicable(root, "--proposal", plain)
-    assert contained["review"] is False and contained["reasons"] == [CONTAINED]
-    assert applicable(root, "--proposal", plain, "--full")["review"] is True
+    assert contained["adds"] == NO_ADDS and contained["inScope"] > 0
     crossing = write_proposal(
         root, modules=[{"path": CLOCK}], edges=[{"from": CLOCK, "to": MAIN, "kind": "import"}]
     )
     out = applicable(root, "--proposal", crossing)
-    assert out["review"] is True
-    assert any("adapters -> web" in reason for reason in out["reasons"]), out["reasons"]
+    assert out["adds"]["componentEdges"] == ["adapters -> web"]
     assert "components-and-stability" in out["groups"]
 
 
@@ -402,7 +423,7 @@ PLAN_JUDGMENTS = {"structure-consequence-unstated": "cross-cutting", "plan-names
 def test_proposal_brings_the_plan_judgments_into_scope(tmp_path: Path):
     root = repo(tmp_path)
     contained = write_proposal(root, modules=[{"path": EMPLOYEE}], edges=[])
-    out = applicable(root, "--proposal", contained, "--full")
+    out = applicable(root, "--proposal", contained)
     for judgment, group in PLAN_JUDGMENTS.items():
         assert judgment in judgment_ids(out, group), judgment
     audit = applicable(root, "--all")
@@ -412,7 +433,7 @@ def test_proposal_brings_the_plan_judgments_into_scope(tmp_path: Path):
 def test_every_judgment_carries_its_targets_and_condition(tmp_path: Path):
     root = repo(tmp_path)
     proposal = write_proposal(root, modules=[{"path": EMPLOYEE}], edges=[])
-    for args in (["--all"], ["--files", EMPLOYEE, "--full"], ["--proposal", proposal, "--full"]):
+    for args in (["--all"], ["--files", EMPLOYEE], ["--proposal", proposal]):
         out = applicable(root, *args)
         assert out["judgments"], args
         for entries in out["judgments"].values():
@@ -439,23 +460,21 @@ def test_proposal_file_follows_the_work_placement_rule(tmp_path: Path):
     assert result.returncode == 2 and ".architecture/" in result.stderr
 
 
-def test_out_writes_the_json_and_prints_the_counts(tmp_path: Path):
+def test_out_writes_the_json_and_prints_the_scope(tmp_path: Path):
     root = repo(tmp_path)
     touch(root, EMPLOYEE)
     result = run_arch(["applicable", "--base", "HEAD", "--out", ".architecture/work/applicable.json"], root)
     assert result.returncode == 0, result.stderr
     written = json.loads((root / ".architecture/work/applicable.json").read_text())
     assert written == applicable(root, "--base", "HEAD")
-    assert written["inScope"] == written["notReviewed"] > 0
     assert result.stdout.strip() == (
-        f"wrote .architecture/work/applicable.json: review no, {written['inScope']} judgment conditions in scope, "
-        f"{written['notReviewed']} not reviewed"
+        f"wrote .architecture/work/applicable.json: 1 unit in 1 component (domain); {written['inScope']} judgment "
+        f"conditions in {len(written['groups'])} rule groups"
     )
     refused = run_arch(["applicable", "--base", "HEAD", "--out", "applicable.json"], root)
     assert refused.returncode == 2 and ".architecture/work/" in refused.stderr
 
 
-def test_in_scope_counts_the_listed_judgments_and_those_left_out(tmp_path: Path):
-    root = repo(tmp_path)
-    out = applicable(root, "--all")
-    assert out["inScope"] == sum(len(entries) for entries in out["judgments"].values()) and out["notReviewed"] == 0
+def test_in_scope_counts_the_listed_judgments(tmp_path: Path):
+    out = applicable(repo(tmp_path), "--all")
+    assert out["inScope"] == condition_count(out)

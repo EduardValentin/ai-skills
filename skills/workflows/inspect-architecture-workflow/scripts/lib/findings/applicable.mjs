@@ -20,7 +20,7 @@ function isCount(value) {
 
 export function readApplicable(file, flow) {
   const output = readJson(file);
-  if (output.model !== true || !isCount(output.inScope) || !isCount(output.notReviewed)) {
+  if (output.model !== true || !isCount(output.inScope) || !Array.isArray(output.units)) {
     throw new UsageError(
       `applicable file ${file} is not arch applicable output. Create it with ${APPLICABLE_COMMAND}.`,
     );
@@ -37,6 +37,19 @@ export function readApplicable(file, flow) {
 
 export function judgmentConditions(applicable, judgedFiles = []) {
   if (!applicable) return null;
-  const notReviewed = judgedFiles.length > 0 ? applicable.notReviewed : applicable.inScope;
-  return { inScope: applicable.inScope, notReviewed };
+  return { inScope: applicable.inScope, reviewed: judgedFiles.length > 0 ? applicable.inScope : 0 };
+}
+
+export const REVIEW_NOT_DONE = "judgment-review";
+
+export function reviewNotDone(applicable, judgedFiles = []) {
+  if (!applicable || applicable.inScope === 0 || judgedFiles.length > 0) return [];
+  return [{
+    check: REVIEW_NOT_DONE,
+    rules: [],
+    target: `${applicable.inScope} judgment conditions in scope`,
+    reason:
+      "no judged file was passed, so no reviewer judged them. Dispatch architecture-reviewer with the conditions " +
+      "arch applicable lists, then run arch findings add again with --judged.",
+  }];
 }

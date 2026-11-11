@@ -1,7 +1,7 @@
 # Change review
 
 The procedure for reviewing a diff against a base commit: the command decides every condition it
-can, at most one reviewer judges the rest, and the command stores and prints the findings. Follow
+can, one reviewer always judges the rest, and the command stores and prints the findings. Follow
 it step by step when the skill is invoked with `change-review` or a calling workflow names this flow.
 
 Inputs: the base ref the diff is compared with, written `<ref>` below, and the upcoming changes the
@@ -23,10 +23,11 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
    module still uncovered after that is reported incomplete, never as passing.
 5. Run `arch check --base <ref> --out .architecture/work/check.json`. It exits 1 only when the change
    introduces a blocker or major finding of an enforced rule; continue either way.
-6. If `review` is `false` or `groups` is empty, go to step 10 and leave out `--judged`.
-   `notReviewed` counts the judgment conditions a contained change leaves out; if the user wants
-   them judged, run step 3 again with `--full` added, then continue at this step.
-7. Dispatch one `architecture-reviewer` with this packet:
+6. If `units` and `uncovered` in `applicable.json` are both empty, the change touches no unit and
+   there is no code to review: dispatch nobody, run step 10 without `--judged`, and return its
+   result with the line "no unit touched; no code to review". Otherwise the reviewer runs, however
+   small the change.
+7. Dispatch one `architecture-reviewer`, once, with this packet:
    - the flow `change-review`, the base ref, and the scope: the diff against `<ref>`;
    - the check output `.architecture/work/check.json`, whose findings it does not repeat;
    - `references/rules/vocabulary.md`, `references/rules/cross-cutting.md`, and the file of every
@@ -76,10 +77,9 @@ root and the skill folder. Working files live under `.architecture/work/`. Terms
     it with the rest. After a threshold, a finding from `check` no longer appears on the rerun, and a
     judged finding whose condition names that knob is judged again by the same reviewer, in a fresh
     `judged.json`, beforehand.
-12. After a fix to the code or to the classification, run steps 3 and 5 again. If `groups` is now
-    empty, run step 10 without `--judged`. Otherwise the same reviewer judges again against the new
-    `judgments`, writes a fresh `judged.json`, and steps 9 and 10 follow. Never pass judged
-    findings written before the fix.
+12. After a fix to the code or to the classification, run steps 3, 5, and 6 again. The same reviewer
+    judges again against the new `judgments`, writes a fresh `judged.json`, and steps 9 and 10
+    follow. Never pass judged findings written before the fix.
 13. For a judged finding the fix resolved, offer a check that catches it next time:
     `arch model add-forbidden-edge <from> <to> reason="<text>"` for an edge, or
     `arch model set-threshold <knob> <value>` for a number. Run it only if the user agrees.

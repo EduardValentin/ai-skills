@@ -25,11 +25,11 @@ arch findings list --rank
 |---|---|---|
 | `--flow` | `audit`, `change-review`, or `plan-review` | Required: which flow produced the findings. |
 | `--check` | the `arch check` JSON file | Required. It must come from the same mode, base, or proposal as this run, and no source file may have changed since it ran. |
-| `--judged` | a judged findings file | One reviewer's findings and questions. Repeat the flag once per reviewer; the files are read in the order given and their findings and questions joined. Leave it out when no reviewer ran. |
+| `--judged` | a judged findings file | One reviewer's findings and questions. Repeat the flag once per reviewer; the files are read in the order given and their findings and questions joined. Leave it out only when the scope touches no unit, so no reviewer had code to judge. |
 | `--base` | a branch, tag, or commit | Required in `change-review`: the ref the check compared with. |
 | `--plan` | the plan file | Required in `plan-review`: plan evidence cites its headings. |
 | `--proposal` | the proposal file | Required in `plan-review`: the file the check ran on. |
-| `--applicable` | the `arch applicable` JSON file | Made with `--out` for the same scope: `--all` in an audit, `--base` in a change review, `--proposal` in a plan review. Its counts give the line `Judgment conditions: <n> in scope, <m> not reviewed`. |
+| `--applicable` | the `arch applicable` JSON file | Made with `--out` for the same scope: `--all` in an audit, `--base` in a change review, `--proposal` in a plan review. Its count gives the line `Judgment conditions: <n> in scope, <m> reviewed`. |
 | `--upcoming` | text | A named upcoming change the user confirmed; repeat the flag for each. A finding's `liftedBy` must equal one of them or one recorded with `arch model add-upcoming`. |
 | `--json` | none | Print the result as JSON. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
@@ -94,11 +94,14 @@ inherited counts, and the count of incomplete conditions by kind, followed by on
 condition, `- <check> (<rule numbers and titles>): <target>: <reason and what to do>`, where a
 condition missing a fact for every target names `all targets` and a clarification request is
 `- clarification: <task>: <reason>`; then one line each for the checks not run,
-`Judgment conditions: <n> in scope, <m> not reviewed`, the advisory findings,
+`Judgment conditions: <n> in scope, <m> reviewed`, the advisory findings,
 `Dropped:` with the count of findings an exception covers or whose rule is off and the reasons,
 and the rules not enforced. The judgment line counts the conditions `arch applicable` put in scope,
-and those no reviewer judged: the ones a contained change left out, or all of them when no
-`--judged` file was given. Without `--applicable` it reads `Judgment conditions: not reported`.
+and those a reviewer judged: all of them when a `--judged` file was given, none otherwise. Judgment
+conditions in scope with no `--judged` file mean the selected review was not done: they add the
+incomplete line `- judgment-review: <n> judgment conditions in scope: <reason>`, which says to
+dispatch the reviewer, and make the verdict `INCOMPLETE` when nothing blocks. Without
+`--applicable` it reads `Judgment conditions: not reported`.
 Then come the corrections, grouped by correction and ordered by severity.
 A finding keeps every distinct correction of the check rows and judged findings merged into it, a
 check row's first, printed as `Fix: <a> | <b>`.
@@ -113,14 +116,15 @@ reconciled into one. A check finding never overlaps, since its correction is fix
 judged file never overlaps with itself. Then come the questions for the user, and last
 `Classification disputes: <n>`, one line per dispute: `- <path>: <reason>`. The verdict is `OK`,
 `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE`
-when none is and a condition of an enforced rule could not be decided. With `--rank`, a ranking
+when none is and a condition of an enforced rule could not be decided or no reviewer judged the
+conditions in scope. With `--rank`, a ranking
 follows; wider observations stay in their own section and are not ranked. Without a model, the result is the verdict `OK` and the line "no architecture model; run a
 baseline audit to enable the full review".
 
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
 `advisory`, `covered` (check findings an exception covered), `incomplete` (each incomplete entry
 with its `check`, `rules`, `target`, `reason`, and `enforced`), `judgmentConditions` (`inScope` and
-`notReviewed`, or `null` without `--applicable`), `dropped` (each dropped judged finding
+`reviewed`, or `null` without `--applicable`), `dropped` (each dropped judged finding
 with its `target`, `judgment`, and `reason`), `wider`, `incompleteCount`, `incompleteReasons`,
 `notRun`, `notEnforced`, `corrections` (each group's `severity`, `rules`, `targets`,
 `consequence`, `corrections`, and `findings` count), `questions`, `disputes` (each `path` and
@@ -135,7 +139,7 @@ adapter, with the judged file above:
 
 ```
 $ arch applicable --base main --out .architecture/work/applicable.json
-wrote .architecture/work/applicable.json: review yes, 38 judgment conditions in scope, 0 not reviewed
+wrote .architecture/work/applicable.json: 1 unit in 1 component (domain); 38 judgment conditions in 9 rule groups
 $ arch findings add --flow change-review --base main --check .architecture/work/check.json --applicable .architecture/work/applicable.json --judged .architecture/work/judged.json
 # Architecture change-review: changes since main
 Verdict: SHOULD_CHANGE: 3 blocker, 2 major, 0 minor blocking
@@ -143,7 +147,7 @@ Inherited: 0 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 1 conditions (1 missing facts)
 - type-check-on-implementation (R13 Substitutable implementations, narrow interfaces): all targets: the adapter document does not provide typeChecks, so type-check-on-implementation could not be decided. Make the adapter provide it, or set R13 to advisory or off with arch model set-rule.
 Not run: distance-over-threshold (fewer than 8 components)
-Judgment conditions: 38 in scope, 0 not reviewed
+Judgment conditions: 38 in scope, 38 reviewed
 Advisory: 0 findings
 Dropped: 0
 Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
@@ -176,7 +180,7 @@ Inherited: 2 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 1 conditions (1 missing facts)
 - type-check-on-implementation (R13 Substitutable implementations, narrow interfaces): all targets: the adapter document does not provide typeChecks, so type-check-on-implementation could not be decided. Make the adapter provide it, or set R13 to advisory or off with arch model set-rule.
 Not run: distance-over-threshold (fewer than 8 components)
-Judgment conditions: 18 in scope, 0 not reviewed
+Judgment conditions: 18 in scope, 18 reviewed
 Advisory: 0 findings
 Dropped: 1 (1 covered by an exception)
 Rules not enforced: R6 Use cases own their boundaries (off: one delivery mechanism; controllers call use cases directly)
@@ -201,7 +205,7 @@ Verdict: SHOULD_CHANGE: 20 blocker, 10 major, 3 minor blocking
 Inherited: 0 blocker, 0 major, 0 minor (not blocking)
 Incomplete: 0 conditions
 Not run: zone-of-pain (needs --base), no-cohesion-groups (needs --base), change-spans-groups (needs --base)
-Judgment conditions: 60 in scope, 0 not reviewed
+Judgment conditions: 60 in scope, 60 reviewed
 Advisory: 0 findings
 Dropped: 0
 Rules not enforced: none
