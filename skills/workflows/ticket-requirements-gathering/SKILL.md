@@ -73,12 +73,10 @@ unavailable.
 6. Ask the user once which reviewers this ticket runs, covering both the plan
    gate and the implementation review gate, and record the answer as the
    reviewer selection. Present the list with these defaults: selected,
-   `acceptance-criteria-reviewer` and `code-cleanliness-reviewer`; selected
-   when the repository keeps a design system and the ticket touches UI,
-   `design-system-reviewer`; not selected, `security-reviewer`,
-   `performance-reviewer`, architecture plan review, and architecture change
-   review (both run through the `inspect-architecture-workflow` skill). The
-   user may change any
+   `code-cleanliness-reviewer`; not selected, `acceptance-criteria-reviewer`,
+   `design-system-reviewer`, `security-reviewer`, `performance-reviewer`,
+   architecture plan review, and architecture change review (both run
+   through the `inspect-architecture-workflow` skill). The user may change any
    default. The selection travels in the handoff and is reused for reruns and
    remediation rounds; it is asked again only when the user asks to change
    it.
@@ -124,9 +122,13 @@ review. The flow prints a verdict, findings with corrections phrased
 for the plan, clarification requests where the plan is not concrete enough,
 and questions for the user; put the questions to the user.
 
-`OK` passes, and so does the result printed with the line "no architecture
-model; run a baseline audit to enable the full review", which goes into the
-handoff. `SHOULD_CHANGE` or `INCOMPLETE` blocks approval: answer the
+`OK` passes. When the project has no architecture model, the flow stops
+before any review and asks for the baseline flow. Stop at that gate and ask
+the user to choose: run `inspect-architecture-workflow` with `baseline` now
+and then continue with the plan review, or continue without an architecture
+plan review, recorded in the handoff as `architecture review: not run, no
+baseline`. Never pass that gate silently, and never create the model on your
+own initiative. `SHOULD_CHANGE` or `INCOMPLETE` blocks approval: answer the
 clarifications and revise the plan within the revisions the flow allows, or
 present a finding to the user, who may accept it with a reason through the
 model edit the flow names. Only the user accepts a finding. When the
@@ -152,10 +154,11 @@ After plan approval, return:
 - written implementation plan and its separate approval evidence;
 - the reviewer selection for both gates;
 - architecture plan-review evidence when selected: the printed verdict line,
-  or the no-model line, `.architecture/findings.json`, the clarification
-  requests, the revisions made, and the model edits by which the user
-  accepted findings, with their reasons; otherwise `architecture plan review:
-  not selected`;
+  `.architecture/findings.json`, the clarification requests, the revisions
+  made, and the model edits by which the user accepted findings, with their
+  reasons; or `architecture review: not run, no baseline` when the user chose
+  to continue without a model; otherwise `architecture plan review: not
+  selected`;
 - accepted assumptions, remaining open questions, and material risks;
 - required verification surfaces.
 

@@ -79,8 +79,8 @@ Choose scanning depth from the plan's ambiguity, risk, coupling, and current
 confidence. Before editing, produce a locator-backed scope map covering
 affected files or surfaces, entry points, tests, risks, and verification
 surfaces. Record whether the diff will touch a rendered surface (components,
-styles, tokens, layout, or copy that affects layout) and whether it will touch
-styles, tokens or UI primitives; the gates below key off those two facts.
+styles, tokens, layout, or copy that affects layout); the verification gate
+keys off that fact.
 
 Before broad searches or large reads, consider fresh, read-only subagents for
 independent and compressible discovery. Keep plan interpretation and the core
@@ -142,20 +142,22 @@ by the delta since the previous round.
    and changes no dependency gets no agent, and the result says so. No
    precheck can skip that review. It dispatches `architecture-classifier` only for
    modules the model does not cover. It counts as `CLEAN` when its printed
-   verdict is `OK`, including the result with the line "no architecture
-   model; run a baseline audit to enable the full review", which goes into the
-   implementation report. `SHOULD_CHANGE` and `INCOMPLETE` block the gate
+   verdict is `OK`. When the project has no architecture model, the flow
+   stops before any review and asks for the baseline flow; the gate stops
+   there and asks the user to choose: run `inspect-architecture-workflow`
+   with `baseline` now and then continue with the change review, or continue
+   without an architecture review, recorded in the implementation report as
+   `architecture review: not run, no baseline`. Never pass that gate
+   silently, and never create the model on your own initiative.
+   `SHOULD_CHANGE` and `INCOMPLETE` block the gate
    until the findings are fixed or the user accepts each one through the
    model edit the flow names; the main agent never rejects an architecture
    finding. When the selection excludes architecture change review, no
    architecture review runs and the implementation report records
    `architecture change review: not selected`. When the packet carries no
    selection, ask the user once with these defaults:
-   `acceptance-criteria-reviewer` and
-   `code-cleanliness-reviewer` selected; `design-system-reviewer` selected
-   when the diff touches styles, tokens, or UI primitives in a design-system
-   source the repository keeps; the others not selected. Record the answer
-   and reuse it for every round of this gate.
+   `code-cleanliness-reviewer` selected; every other reviewer offered and not
+   selected. Record the answer and reuse it for every round of this gate.
 3. Aggregate all findings. Deduplicate findings that name the same location
    and defect, keeping the highest severity and every reviewer's suggested
    fix. Security severities map as critical and high to blocker, medium to
@@ -266,8 +268,9 @@ The final report includes:
 - review gate: rounds used, per-reviewer outcome per round (`CLEAN`,
   findings, or carried forward with the unmet predicate), accepted and
   rejected findings with dispositions; for architecture change review, the
-  printed verdict line, or the no-model line, the model edits by which the
-  user accepted findings, and `.architecture/findings.json`, or
+  printed verdict line, the model edits by which the user accepted findings,
+  and `.architecture/findings.json`; `architecture review: not run, no
+  baseline` when the user chose to continue without a model; or
   `architecture change review: not selected`
 - manual QA coverage, criterion-level outcomes, and final evidence
 - visual verification coverage and outcome, or `not applicable: no rendered
@@ -282,8 +285,9 @@ from this workflow.
 
 - Editing before the entry gate, demand profile and scope map are complete.
 - Broadening scope or changing the plan without approval.
-- Dispatching fewer than the selected reviewers in round one, or skipping
-  the design-system reviewer when styles, tokens or primitives changed.
+- Dispatching fewer than the selected reviewers in round one.
+- Passing the architecture gate without a model, or creating the model
+  without the user choosing the baseline flow.
 - Accepting a round as passed while any reviewer is not `CLEAN`.
 - Re-dispatching every reviewer after a fix, or handing a re-dispatched
   reviewer the full diff as its review target instead of the delta.
