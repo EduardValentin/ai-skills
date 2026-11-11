@@ -692,3 +692,9 @@ def test_plan_review_reads_clarification_requests_from_the_printed_result():
     step = " ".join(numbered_steps(flow_file("plan-review").read_text())[10].split())
     assert "- clarification: <task>: <reason>" in step
     assert "check.json" not in step and '"clarification": true' not in step
+
+
+def test_suggested_commands_quote_a_published_glob():
+    text = (REFERENCES / "classification.md").read_text()
+    assert "published='orders.*'" in text
+    assert not re.search(r"published=[^'<\s`]*\*", text)

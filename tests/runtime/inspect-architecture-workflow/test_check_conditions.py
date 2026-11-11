@@ -481,3 +481,5 @@ def test_corrections_about_enforcement_or_the_published_surface_name_the_edit_th
         found = rows_of(rows, check)
         assert found, check
         assert all(edit in correction for row in found for correction in row["corrections"]), (check, found)
+    deep = [correction for row in rows_of(rows, "deep-import") for correction in row["corrections"]]
+    assert all(re.search(r"published='[^' ]+'", correction) for correction in deep), deep

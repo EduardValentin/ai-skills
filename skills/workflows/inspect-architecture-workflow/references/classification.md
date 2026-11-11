@@ -57,7 +57,7 @@ and its entry points, with `arch model set-component`, or the same keys on `add-
 proposing a component, state `enforcement=` only when the code shows what makes the build fail on
 an import of the component's internals, such as an import rule or a visibility rule the build runs,
 and name that mechanism; leave it out otherwise, never invent one:
-`arch model set-component orders enforcement="import rules fail the build" published=orders.*`.
+`arch model set-component orders enforcement="import rules fail the build" published='orders.*'`.
 
 `arch model unclassify` removes a pair and `arch model remove-component` removes a component.
 `arch model add-port` records a port as `path#Symbol` with the component that owns it, and

@@ -1,5 +1,6 @@
 import { matchesAny } from "../glob.mjs";
 import { relativeToComponent } from "../model/classify.mjs";
+import { shellWord } from "../text.mjs";
 import { publishingComponents } from "./context.mjs";
 import { endMatches, subjectOf } from "./exceptions.mjs";
 import { componentRow, unitEdgeRow } from "./rows.mjs";
@@ -17,7 +18,7 @@ const CORRECTIONS = {
   deepImport: (from, component) =>
     `Import through the published surface of ${component.name} (${component.published.join(", ")}) instead of ` +
     `from ${from}, or publish the module on purpose with arch model set-component ${component.name} ` +
-    `published=${[...component.published, relativeToComponent(component, from)].join(",")}`,
+    `published=${shellWord([...component.published, relativeToComponent(component, from)].join(","))}`,
   forbidden: (from, to) =>
     `Remove the dependency of ${from} on ${to}, which the model forbids, and make the edge uncompilable`,
   unconsumed: (symbol, component) =>
