@@ -6,6 +6,13 @@ function describeFlags(flags) {
   return Object.keys(flags).map((name) => `--${name}`).join(", ");
 }
 
+function checkGitRef(name, value) {
+  if (!value.startsWith("-")) return;
+  throw new UsageError(
+    `--${name} ${value} starts with "-", so git could read it as an option. Pass a branch, tag, or commit name.`,
+  );
+}
+
 function readFlag(name, kind, argv, index, flags) {
   if (kind === "boolean") {
     flags[name] = true;
@@ -15,6 +22,7 @@ function readFlag(name, kind, argv, index, flags) {
   if (next === undefined || next.startsWith("--")) {
     throw new UsageError(`--${name} needs a value. Pass it as --${name} <value>.`);
   }
+  if (kind === "git-ref") checkGitRef(name, next);
   flags[name] = next;
   return index + 1;
 }

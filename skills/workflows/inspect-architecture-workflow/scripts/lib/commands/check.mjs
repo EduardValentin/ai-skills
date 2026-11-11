@@ -4,11 +4,9 @@ import { renderCheckMarkdown } from "../checks/render.mjs";
 import { runChecks } from "../checks/run.mjs";
 import { touchedScope } from "../checks/scope.mjs";
 import { loadGraph } from "../graph/load.mjs";
-import { loadModel } from "../model/load.mjs";
+import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
 
-export const CHECK_SPEC = { flags: { base: "value", strict: "boolean" }, positional: { min: 0, max: 0 } };
-
-const NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review";
+export const CHECK_SPEC = { flags: { base: "git-ref", strict: "boolean" }, positional: { min: 0, max: 0 } };
 
 function printWarnings(graph) {
   for (const warning of graph.warnings) console.error(warning);

@@ -7,6 +7,7 @@ import { HUMBLE_OBJECTS_CHECKS } from "./humble-objects.mjs";
 import { REASONS_TO_CHANGE_CHECKS } from "./reasons-to-change.mjs";
 import { TESTS_CHECKS } from "./tests.mjs";
 
+export { JUDGMENTS } from "./judgments.mjs";
 export { RULE_TITLES } from "./rule-titles.mjs";
 
 export const CHECKS = [

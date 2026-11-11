@@ -1,4 +1,4 @@
-import { touched } from "./change.mjs";
+import { requireBase, touched } from "./change.mjs";
 import { cycles, componentGraph, components, groups, metrics } from "./components.mjs";
 import { volatility } from "./history.mjs";
 import { entryPoints, ports, signatures } from "./ports.mjs";
@@ -20,4 +20,8 @@ export const QUERIES = {
   signatures,
   externals,
   volatility,
+};
+
+export const FLAG_CHECKS = {
+  touched: requireBase,
 };

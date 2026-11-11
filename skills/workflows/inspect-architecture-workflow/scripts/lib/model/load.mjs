@@ -8,6 +8,8 @@ import { modelProblems } from "./schema.mjs";
 const DEFAULT_RECORD_DIR = "docs/architecture";
 const MODEL_FILE = "architecture.json";
 
+export const NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review";
+
 export function recordDir(root, flags = {}) {
   const chosen = flags.record ?? process.env.ARCH_RECORD_DIR ?? DEFAULT_RECORD_DIR;
   return resolve(root, chosen);

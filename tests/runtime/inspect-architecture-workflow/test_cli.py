@@ -25,5 +25,5 @@ def test_missing_subcommand_is_a_usage_error(tmp_path: Path):
 
 
 def test_unbuilt_subcommand_reports_not_implemented(tmp_path: Path):
-    result = run_arch(["applicable"], tmp_path)
+    result = run_arch(["findings"], tmp_path)
     assert result.returncode == 2 and "not implemented" in result.stderr

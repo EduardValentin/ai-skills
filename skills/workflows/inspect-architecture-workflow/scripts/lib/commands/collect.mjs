@@ -5,7 +5,7 @@ import { renderCurrentPicture } from "../graph/current-picture.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { recordDir, requireModel } from "../model/load.mjs";
 
-export const COLLECT_SPEC = { flags: { ref: "value" }, positional: { min: 0, max: 0 } };
+export const COLLECT_SPEC = { flags: { ref: "git-ref" }, positional: { min: 0, max: 0 } };
 
 function summaryLine(graph) {
   const cycles = graph.cycles.modules.length + graph.cycles.components.length;

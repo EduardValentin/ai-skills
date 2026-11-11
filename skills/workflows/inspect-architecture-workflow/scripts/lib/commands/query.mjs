@@ -2,7 +2,7 @@ import { UsageError } from "../cli/errors.mjs";
 import { parseArgs } from "../cli/flags.mjs";
 import { loadGraph } from "../graph/load.mjs";
 import { requireModel } from "../model/load.mjs";
-import { QUERIES } from "../queries/index.mjs";
+import { FLAG_CHECKS, QUERIES } from "../queries/index.mjs";
 import { renderJson, renderMarkdown } from "../render.mjs";
 
 export const QUERY_SPEC = {
@@ -13,9 +13,9 @@ export const QUERY_SPEC = {
     component: "value",
     ring: "value",
     tag: "value",
-    base: "value",
+    base: "git-ref",
     "with-neighbors": "boolean",
-    since: "value",
+    since: "git-ref",
   },
   positional: { min: 1, max: 2 },
 };
@@ -29,6 +29,7 @@ export async function run(args, { root }) {
   const { positional, flags } = parseArgs(QUERY_SPEC, args);
   const [name, ...rest] = positional;
   const query = selectQuery(name);
+  FLAG_CHECKS[name]?.(flags);
   const model = requireModel(root, flags);
   const graph = await loadGraph(root, model, { flags });
   const result = await query({ graph, model, positional: rest, flags, root });

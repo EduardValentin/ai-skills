@@ -55,8 +55,12 @@ function neighborTable(graph, touchedPaths, neighbors) {
   return table(["Path", "Component", "Kind", "Ring", "Actors", "Abstract", "Concrete"], rows);
 }
 
-export async function touched({ graph, model, flags, root }) {
+export function requireBase(flags) {
   if (!flags.base) throw new UsageError("usage: arch query touched --base <ref>");
+}
+
+export async function touched({ graph, model, flags, root }) {
+  requireBase(flags);
   const changes = await changedPaths(root, flags.base);
   const baseUnits = await pathsOfBaseUnits(root, model, flags, changes);
   const currentUnits = new Set(graph.units.map((unit) => unit.path));

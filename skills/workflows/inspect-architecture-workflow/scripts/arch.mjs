@@ -2,6 +2,7 @@
 import process from "node:process";
 import { ArchError, UsageError } from "./lib/cli/errors.mjs";
 import { parseArgs } from "./lib/cli/flags.mjs";
+import { run as runApplicable } from "./lib/commands/applicable.mjs";
 import { run as runCheck } from "./lib/commands/check.mjs";
 import { run as runCollect } from "./lib/commands/collect.mjs";
 import { run as runModel } from "./lib/commands/model.mjs";
@@ -18,12 +19,10 @@ function pending(name, spec) {
   };
 }
 
-const NO_POSITIONAL = { min: 0, max: 0 };
-
 const handlers = {
   collect: runCollect,
   check: runCheck,
-  applicable: pending("applicable", { flags: {}, positional: NO_POSITIONAL }),
+  applicable: runApplicable,
   findings: pending("findings", { flags: {}, positional: { min: 0, max: 2 } }),
   query: runQuery,
   uncovered: runUncovered,
