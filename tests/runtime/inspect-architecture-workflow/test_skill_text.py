@@ -42,7 +42,7 @@ import { GLOBAL_FLAGS } from "./scripts/lib/cli/flags.mjs";
 import { APPLICABLE_MODES, APPLICABLE_SPEC } from "./scripts/lib/commands/applicable.mjs";
 import { CHECK_EXCLUSIVE, CHECK_SPEC } from "./scripts/lib/commands/check.mjs";
 import { COLLECT_SPEC } from "./scripts/lib/commands/collect.mjs";
-import { ADD_REQUIRED, ADD_REQUIRED_WITH_MODEL, ADD_SPEC, LIST_SPEC } from "./scripts/lib/commands/findings.mjs";
+import { ADD_REQUIRED, ADD_SPEC, LIST_SPEC } from "./scripts/lib/commands/findings.mjs";
 import { MODEL_SPEC, MODEL_SUBCOMMANDS } from "./scripts/lib/commands/model.mjs";
 import { QUERY_SPEC } from "./scripts/lib/commands/query.mjs";
 import { QUERY_FLAGS, QUERY_REQUIRED_FLAGS } from "./scripts/lib/queries/index.mjs";
@@ -60,7 +60,6 @@ console.log(JSON.stringify({
   queryFlags: QUERY_FLAGS,
   queryRequired: QUERY_REQUIRED_FLAGS,
   addRequired: Object.fromEntries(Object.entries(ADD_REQUIRED).map(([key, flags]) => [key, Object.keys(flags)])),
-  addRequiredWithModel: ADD_REQUIRED_WITH_MODEL,
   applicableModes: APPLICABLE_MODES,
   checkExclusive: CHECK_EXCLUSIVE,
 }));
@@ -166,7 +165,6 @@ def check_findings_line(rest: list[str]) -> list[str]:
     if rest[0] == "add" and len(rest) > 1:
         required = specs()["addRequired"]
         problems += missing(required["always"], given)
-        problems += missing(specs()["addRequiredWithModel"], given)
         problems += missing(required.get(given.get("flow"), {}), given)
     return problems
 

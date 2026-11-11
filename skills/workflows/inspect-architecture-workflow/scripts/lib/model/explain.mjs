@@ -31,7 +31,7 @@ export function thresholdRows(model) {
   return Object.keys(DEFAULT_THRESHOLDS).map((knob) => ({
     knob,
     default: DEFAULT_THRESHOLDS[knob],
-    project: model ? model.thresholds[knob] : DEFAULT_THRESHOLDS[knob],
+    project: model.thresholds[knob],
     description: THRESHOLD_DESCRIPTIONS[knob],
   }));
 }

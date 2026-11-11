@@ -50,6 +50,7 @@ function rejectForeignFlags(name, flags) {
 export async function run(args, { root }) {
   const { positional, flags } = parseArgs(QUERY_SPEC, args);
   const [name, ...rest] = positional;
+  const model = requireModel(root, flags);
   if (name === undefined) {
     console.log(queryList());
     return 0;
@@ -57,7 +58,6 @@ export async function run(args, { root }) {
   const query = selectQuery(name);
   rejectForeignFlags(name, flags);
   requireQueryFlags(name, flags);
-  const model = requireModel(root, flags);
   const graph = await loadGraph(root, model, { flags });
   const result = await query({ graph, model, positional: rest, flags, root });
   console.log(flags.json ? renderJson(result) : renderMarkdown(result));

@@ -20,7 +20,7 @@ function isCount(value) {
 
 export function readApplicable(file, flow) {
   const output = readJson(file);
-  if (output.model !== true || !isCount(output.inScope) || !(isCount(output.units) || Array.isArray(output.units))) {
+  if (!isCount(output.inScope) || !(isCount(output.units) || Array.isArray(output.units))) {
     throw new UsageError(
       `applicable file ${file} is not arch applicable output. Create it with ${APPLICABLE_COMMAND}.`,
     );

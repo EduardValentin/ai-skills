@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import copy_fixture, init_repo, run_arch
+from support import assert_needs_baseline, copy_fixture, init_repo, run_arch
 
 MODEL = "docs/architecture/architecture.json"
 ADAPTER = "adapter.json"
@@ -111,8 +111,7 @@ def test_unreadable_proposal_is_a_usage_error(tmp_path):
     assert run_arch(["check", "--proposal", str(broken)], root).returncode == 2
 
 
-def test_proposal_without_a_model_prints_the_baseline_line(tmp_path):
+def test_proposal_without_a_model_names_the_baseline_flow(tmp_path):
     bare = tmp_path / "bare"
     bare.mkdir()
-    result = run_arch(["check", "--proposal", str(proposal(tmp_path))], bare)
-    assert result.returncode == 0 and "no architecture model" in result.stdout
+    assert_needs_baseline(run_arch(["check", "--proposal", str(proposal(tmp_path))], bare))

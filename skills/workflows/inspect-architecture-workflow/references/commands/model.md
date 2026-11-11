@@ -22,7 +22,7 @@ Create and check the model:
 
 - `arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]`: write a new model holding the adapter command and the starting point's default rule statuses, with no components yet; `add-component` adds the first. `local` also adds the record path to the repository's local exclude file. Refuses to overwrite a model.
 - `arch model migrate`: convert the four model files of the earlier format into `architecture.json`, leaving them in place. The adapter is left empty; set it with `set-adapter`.
-- `arch model status`: say whether a model file exists, without reading the code or running the adapter. A flow runs it first to learn whether there is a model.
+- `arch model status`: say whether a model file exists, without reading the code or running the adapter. Every flow runs it first to learn whether there is a model. `status`, `init`, and `migrate` are the only subcommands of the whole command that run without a model; every other one exits 2 and names the baseline flow, which creates the model.
 - `arch model validate`: check the model file against the schema, then the model against the code. It fails on a model with no components, a classification pattern that matches no module in a component that has modules, a port that matches no module, a module two components claim, and a forbidden edge or exception whose end is not exact: a component, a ring, an external the adapter reports, `*` as a destination, or the path of a module with or without `#<Symbol>`. A glob end is refused. A pattern of a component that has no modules yet, as in a greenfield project, is only a warning.
 - `arch model explain <path>`: print the path's component, kind, ring, actors, and the classification pair that matched.
 - `arch model explain-thresholds`: print every knob with its default, the project's value, and its meaning.
@@ -70,12 +70,12 @@ A flag given to a subcommand it does not apply to is a usage error.
 | Code | Meaning |
 |---|---|
 | 0 | The model was written, or the answer was printed. `status` exits 0 whether or not a model exists. |
-| 2 | A usage error, no model, a model that does not fit the code or an adapter that cannot run (`validate`), or an edit that would make the model invalid, in which case the file is left unchanged. |
+| 2 | A usage error, no model (the message names the baseline flow to run first), a model that does not fit the code or an adapter that cannot run (`validate`), or an edit that would make the model invalid, in which case the file is left unchanged. |
 
 ## Output
 
 An edit prints `updated <model file>`; `init` and `migrate` print `wrote <model file>` and the next
-step. `status` prints `model: present at <model file>` or `model: absent; run a baseline audit`;
+step. `status` prints `model: present at <model file>` or `model: absent; run the baseline flow`;
 with `--json`, an object with `model`, true or false, and `path`, the model file. `validate` prints `model: ok` only when
 the model file and the code both pass, after one `warning:` line per pattern of a component that has
 no modules yet; with `--json`, `{"ok": true, "warnings": [...]}`. A model that does not fit the code exits 2 with
@@ -94,7 +94,7 @@ exist:
 
 ```
 $ arch model status
-model: absent; run a baseline audit
+model: absent; run the baseline flow
 $ arch model status --json
 {
   "model": false,

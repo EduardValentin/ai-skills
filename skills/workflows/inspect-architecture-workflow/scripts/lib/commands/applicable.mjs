@@ -14,7 +14,7 @@ import { loadGraph } from "../graph/load.mjs";
 import { runRecord } from "../findings/binding.mjs";
 import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
 import { createClassifier } from "../model/classify.mjs";
-import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
+import { requireModel } from "../model/load.mjs";
 import { plural } from "../text.mjs";
 
 export const APPLICABLE_SPEC = {
@@ -103,7 +103,6 @@ function unitsOutput(scope, flags) {
 
 function jsonOutput({ scope, groups, flags, run }) {
   return {
-    model: true,
     mode: APPLICABLE_MODES.find((mode) => flags[mode]),
     run,
     units: unitsOutput(scope, flags),
@@ -133,7 +132,6 @@ function touchedText(output) {
 }
 
 function scopeSummary(output) {
-  if (!output.model) return "no model";
   const conditions = `${plural(output.inScope, "judgment condition")} in ${plural(output.groups.length, "rule group")}`;
   return `${touchedText(output)}; ${conditions}`;
 }
@@ -164,8 +162,6 @@ function renderProse(output, groups) {
   ].join("\n");
 }
 
-const NO_MODEL_OUTPUT = { model: false, reasons: [NO_MODEL_LINE] };
-
 async function emit(output, text, { root, flags }) {
   if (flags.out) {
     await writeWorkFile(root, flags.out, `${JSON.stringify(output, null, 2)}\n`);
@@ -186,11 +182,7 @@ export async function run(args, { root }) {
   const { flags } = parseArgs(APPLICABLE_SPEC, args);
   requireOneMode(flags);
   for (const name of ["proposal", "out"]) if (flags[name]) requireWorkPlacement(root, flags[name], name);
-  const model = loadModel(root, flags);
-  if (!model) {
-    await emit(NO_MODEL_OUTPUT, NO_MODEL_LINE, { root, flags });
-    return 0;
-  }
+  const model = requireModel(root, flags);
   const scope = await scopeOf(root, model, flags);
   const groups = judgmentScope(model, judgmentTargets(model, scope));
   const run = await runRecord({ root, model, flags });

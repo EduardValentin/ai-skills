@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import copy_fixture, git, run_arch
+from support import assert_needs_baseline, copy_fixture, git, run_arch
 
 RECORD = "docs/architecture/architecture.json"
 GUIDANCE_RULES = {"R3", "R15", "R23", "R24", "R26", "R28", "R29", "R32", "R33", "R37"}
@@ -262,9 +262,9 @@ def test_validate_reports_every_problem_and_exits_2(tmp_path: Path):
     assert result.returncode == 2 and "ports[0].owner" in result.stderr
 
 
-def test_validate_without_a_model_says_how_to_create_one(tmp_path: Path):
-    result = edit(tmp_path, "validate")
-    assert result.returncode == 2 and "arch model init" in result.stderr
+def test_validate_and_explain_thresholds_without_a_model_name_the_baseline_flow(tmp_path: Path):
+    assert_needs_baseline(edit(tmp_path, "validate"))
+    assert_needs_baseline(edit(tmp_path, "explain-thresholds"))
 
 
 def test_unknown_subcommand_and_unknown_argument(tmp_path: Path):
@@ -472,7 +472,7 @@ def test_status_reports_a_present_model_without_running_the_adapter(tmp_path: Pa
 def test_status_reports_an_absent_model_with_exit_zero(tmp_path: Path):
     result = edit(tmp_path, "status")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "model: absent; run a baseline audit"
+    assert result.stdout.strip() == "model: absent; run the baseline flow"
     as_json = json.loads(edit(tmp_path, "status", "--json").stdout)
     assert as_json == {"model": False, "path": str(model_file(tmp_path))}
 

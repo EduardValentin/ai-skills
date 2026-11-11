@@ -2,7 +2,7 @@ import json
 import re
 from pathlib import Path
 
-from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+from support import SKILL_DIR, assert_needs_baseline, copy_fixture, git, init_repo, run_arch, run_node
 
 CHECKS_DIR = SKILL_DIR / "scripts" / "lib" / "checks"
 REGISTRY_MODULE = (CHECKS_DIR / "registry.mjs").as_uri()
@@ -13,7 +13,6 @@ CONTROLLER = "src/web/payroll-controller.ts"
 CLOCK = "src/adapters/system-clock.ts"
 MAIN = "src/web/main.ts"
 STRAY = "src/stray/helper.ts"
-NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review"
 MODEL = "docs/architecture/architecture.json"
 GROUPS = [
     "dependency-direction", "reasons-to-change", "business-rule-placement", "humble-objects",
@@ -87,7 +86,7 @@ def test_change_inside_one_component_lists_its_judgment_conditions(tmp_path: Pat
     root = repo(tmp_path)
     touch(root, EMPLOYEE)
     out = applicable(root, "--base", "HEAD")
-    assert out["model"] is True
+    assert "model" not in out
     assert not {"review", "reasons", "notReviewed"} & set(out)
     assert out["units"] == [{"path": EMPLOYEE, "kind": "entity", "component": "domain"}]
     assert out["components"] == ["domain"] and out["uncovered"] == []
@@ -264,13 +263,9 @@ def test_files_mode_treats_an_unclassified_path_as_uncovered(tmp_path: Path):
     assert out["units"] == []
 
 
-def test_no_model_says_so(tmp_path: Path):
-    result = run_arch(["applicable", "--files", "a.ts", "--json"], tmp_path)
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"model": False, "reasons": [NO_MODEL_LINE]}
-    plain = run_arch(["applicable", "--files", "a.ts"], tmp_path)
-    assert plain.returncode == 0
-    assert plain.stdout.strip() == NO_MODEL_LINE
+def test_no_model_exits_2_naming_the_baseline_flow(tmp_path: Path):
+    assert_needs_baseline(run_arch(["applicable", "--files", "a.ts", "--json"], tmp_path))
+    assert_needs_baseline(run_arch(["applicable", "--files", "a.ts"], tmp_path))
 
 
 def test_plain_output_is_short_prose(tmp_path: Path):

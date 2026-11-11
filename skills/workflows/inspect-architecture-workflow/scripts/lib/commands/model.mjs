@@ -6,7 +6,7 @@ import { EDITS } from "../model/edits.mjs";
 import { explainPath, renderExplanation, renderThresholds, thresholdRows } from "../model/explain.mjs";
 import { graphProblems } from "../model/graph-problems.mjs";
 import { RECORD_MODES, STARTS, initModel } from "../model/init.mjs";
-import { loadModel, modelFile, readDocument, recordDir } from "../model/load.mjs";
+import { missingModelError, modelFile, readDocument, recordDir, requireModel } from "../model/load.mjs";
 import { migrateOldModel } from "../model/migrate.mjs";
 import { writeDocument } from "../model/write.mjs";
 
@@ -17,21 +17,7 @@ const INIT_REQUIRED_FLAGS = ["start", "adapter"];
 const INIT_USAGE =
   'arch model init --start <greenfield|legacy> --adapter "<command>" [--record-mode committed|local]';
 const GLOBAL_FLAGS = ["json", "record"];
-const ABSENT_LINE = "model: absent; run a baseline audit";
-
-function missingModel(root, flags) {
-  return new ModelError(
-    `no architecture model found at ${modelFile(root, flags)}. ` +
-      'Create one with arch model init --start <greenfield|legacy> --adapter "<command>", ' +
-      "or convert the old files with arch model migrate.",
-  );
-}
-
-function requireModel(root, flags) {
-  const model = loadModel(root, flags);
-  if (model) return model;
-  throw missingModel(root, flags);
-}
+const ABSENT_LINE = "model: absent; run the baseline flow";
 
 function requireComponents(model) {
   if (model.components.length > 0) return;
@@ -43,7 +29,7 @@ function requireComponents(model) {
 
 function requireDocument(root, flags) {
   if (existsSync(modelFile(root, flags))) return readDocument(modelFile(root, flags));
-  throw missingModel(root, flags);
+  throw missingModelError(root, flags);
 }
 
 function print(flags, data, text) {
@@ -88,7 +74,7 @@ function explain({ root, flags, positional: [path] }) {
 }
 
 function explainThresholds({ root, flags }) {
-  const rows = thresholdRows(loadModel(root, flags));
+  const rows = thresholdRows(requireModel(root, flags));
   print(flags, rows, renderThresholds(rows));
   return 0;
 }

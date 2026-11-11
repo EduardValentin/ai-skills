@@ -34,14 +34,11 @@ inside the project, because it would change the reviewed state.
 
 | Code | Meaning |
 |---|---|
-| 0 | No finding of an enforced rule is a blocker or major, or there is no model. With `--base` or `--proposal`, no introduced one is. Minor findings are printed and do not fail. A breach a recorded exception covers does not count. |
+| 0 | No finding of an enforced rule is a blocker or major. With `--base` or `--proposal`, no introduced one is. Minor findings are printed and do not fail. A breach a recorded exception covers does not count. |
 | 1 | A finding of an enforced rule is a blocker or major (with `--base` or `--proposal`, an introduced one), the same line the findings verdict draws. With `--strict`, also a minor finding of an enforced rule, or an incomplete condition of an enforced rule. |
-| 2 | An invalid model, an adapter failure, an invalid proposal, or a usage error. |
+| 2 | No model, an invalid model, an adapter failure, an invalid proposal, or a usage error. Without a model the message names the baseline flow to run first, and nothing is checked or written. |
 
 ## Output
-
-Without a model the report is the line "no architecture model; run a baseline audit to enable the
-full review", and the JSON is `{ "model": false }`.
 
 The report is a table with the columns Rule (number and title), Target, Severity, Status, Origin,
 Evidence, and Corrections, several alternatives joined by `|`; then "Covered by recorded exceptions" with a count when any finding was
@@ -49,7 +46,7 @@ covered; then three sections. Incomplete lists each condition that lacked a fact
 classification, with what to do. Not run lists each check that needs something this run lacks,
 such as `--base`. Rules not enforced lists every rule set to `advisory` or `off`, with its reason.
 
-The JSON output has `model`; `run` (`mode` of `audit`, `base`, or `proposal`, the resolved `base`
+The JSON output has `run` (`mode` of `audit`, `base`, or `proposal`, the resolved `base`
 commit, the `proposal` path, and the `state` it ran on, which `arch findings add` compares to
 refuse a stale check); `rows`, one per finding (`check`, `target`, `defect`, `rules`, `severity`,
 `baseSeverity`, `lifts`, `status`, `origin` of `introduced`, `inherited`, or `none`, `evidence`,
@@ -59,8 +56,7 @@ distinct correction of the checks that met at this target, each with its smalles
 one edge can be compared without reading their text); `incomplete` (`check`, `rules`, `target`, `reason`, and for a plan's open fact
 `clarification`, `task`, and `fact`); `notRun` (`check`, `rules`, `reason`); `skipped` (`rule`,
 `status`, `reason`, `component`); and `covered`, the count of findings recorded exceptions covered.
-With `--out`, the one printed line is `wrote <file>: <n> findings, <n> incomplete`, or
-`wrote <file>: no model`.
+With `--out`, the one printed line is `wrote <file>: <n> findings, <n> incomplete`.
 
 A proposal file states what a plan adds or removes, in the module and edge shapes of the adapter
 document:
@@ -105,4 +101,12 @@ $ arch check
 - R6 Use cases own their boundaries: off (one delivery mechanism; controllers call use cases directly)
 ```
 
-The command exits 1 because findings of enforced rules are blockers.
+The command exits 1 because findings of enforced rules are blockers. In a project with no model,
+it exits 2 and writes nothing:
+
+```
+$ arch check --base main --out .architecture/work/check.json
+no architecture model at /project/docs/architecture/architecture.json. Run the baseline flow first: invoke the inspect-architecture-workflow skill with the flow name baseline, which creates the model. Then run this command again.
+```
+
+`/project` stands for the project root.

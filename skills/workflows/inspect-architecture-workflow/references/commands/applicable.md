@@ -6,8 +6,8 @@ uncovered files, what the change adds, and the judgment conditions that apply, g
 group, so a flow hands its reviewer exactly those conditions and names only the rule-group files it
 needs. It never weighs whether a change is worth a review: once a review is selected, a reviewer
 judges whatever this command lists, and only a scope with no judgment condition, one that touches
-no code and changes no dependency, gets none. Without a model it says so, which is how every flow learns there is no model
-before doing anything else.
+no code and changes no dependency, gets none. It needs the model: without one it exits 2 and names
+the baseline flow to run first.
 
 ## Synopsis
 
@@ -38,8 +38,8 @@ Pass exactly one of `--base`, `--files`, `--proposal`, and `--all`. Working file
 
 | Code | Meaning |
 |---|---|
-| 0 | The scope was printed, whatever it holds, including when there is no model. |
-| 2 | An invalid model, an adapter failure, an unreadable proposal, or a usage error, such as none or more than one of `--base`, `--files`, `--proposal`, and `--all`. |
+| 0 | The scope was printed, whatever it holds. |
+| 2 | No model, an invalid model, an adapter failure, an unreadable proposal, or a usage error, such as none or more than one of `--base`, `--files`, `--proposal`, and `--all`. |
 
 ## Output
 
@@ -57,7 +57,7 @@ that touches nothing reads `Scope of the review: no unit touched`. Then come `Ad
 component, port, component edge, or external the change adds, each rule group with judgment
 conditions and its rules, and the uncovered files.
 
-The JSON output has `model`; `mode`, the scope flag given (`base`, `files`, `proposal`, or `all`);
+The JSON output has `mode`, the scope flag given (`base`, `files`, `proposal`, or `all`);
 `run`, the record `arch findings add` binds the file to, as it binds the check file: the `mode`
 (`audit` for `--all`), the resolved `base`, the `proposal` path, and the working-tree `state`;
 `units`, each touched unit the model covers with its `path`, `kind`, and `component`, or with
@@ -68,10 +68,9 @@ what the change adds: `components`, `ports` (each `<path>#<Symbol>`), `component
 names, each the name of a rule-group file; `judgments`, the judgments in scope per group, each with
 its `id`, its `targets`, and its one-sentence `condition` with the project's knob values filled in, so
 a caller can hand a reviewer the conditions as they are, the cross-cutting ones listed once under
-`cross-cutting`; and `inScope`, the count of judgment conditions listed. Without a model it is
-`{"model":false,"reasons":["no architecture model; run a baseline audit to enable the full review"]}`
-and the report is that line alone. With `--out`, the command prints `wrote <file>: ` followed by the
-scope summary, or `wrote <file>: no model`.
+`cross-cutting`; and `inScope`, the count of judgment conditions listed. With `--out`, the command
+prints `wrote <file>: ` followed by the scope summary. Without a model it prints nothing on standard
+output and writes no file; the message on standard error names the baseline flow.
 
 ## Example
 

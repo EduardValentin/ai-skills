@@ -8,8 +8,6 @@ import { modelProblems } from "./schema.mjs";
 const DEFAULT_RECORD_DIR = "docs/architecture";
 const MODEL_FILE = "architecture.json";
 
-export const NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review";
-
 export function recordDir(root, flags = {}) {
   const chosen = flags.record ?? process.env.ARCH_RECORD_DIR ?? DEFAULT_RECORD_DIR;
   return resolve(root, chosen);
@@ -124,10 +122,16 @@ export function loadModel(root, flags = {}) {
   return normalize(doc);
 }
 
+export function missingModelError(root, flags = {}) {
+  return new ModelError(
+    `no architecture model at ${modelFile(root, flags)}. Run the baseline flow first: ` +
+      "invoke the inspect-architecture-workflow skill with the flow name baseline, which creates the model. " +
+      "Then run this command again.",
+  );
+}
+
 export function requireModel(root, flags = {}) {
   const model = loadModel(root, flags);
   if (model) return model;
-  throw new ModelError(
-    'no architecture model found. Run arch model init --start <greenfield|legacy> --adapter "<command>" first.',
-  );
+  throw missingModelError(root, flags);
 }

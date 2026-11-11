@@ -3,7 +3,8 @@
 What `arch uncovered` does, its flags, exit codes, and output. Read it when classifying a codebase
 or when it fails. It lists every module the adapter reports that the model leaves without a
 component or a kind. A condition that needs such a module's classification is reported incomplete,
-never as passing, so an audit repeats classification until this list is empty.
+never as passing, so the baseline flow, and an audit after it, repeat classification until this
+list is empty.
 
 ## Synopsis
 
@@ -25,7 +26,7 @@ arch uncovered --json
 |---|---|
 | 0 | Every module is classified. |
 | 1 | At least one module is uncovered; the paths are printed. |
-| 2 | No model, an invalid model, an adapter failure, or a usage error. |
+| 2 | No model, in which case the message names the baseline flow to run first, an invalid model, an adapter failure, or a usage error. |
 
 ## Output
 

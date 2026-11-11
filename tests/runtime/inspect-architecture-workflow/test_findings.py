@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+from support import SKILL_DIR, assert_needs_baseline, copy_fixture, git, init_repo, run_arch, run_node
 
 MODEL = "docs/architecture/architecture.json"
 ADAPTER = "adapter.json"
@@ -14,7 +14,6 @@ CLOCK = "src/adapters/system-clock.ts"
 MAIN = "src/web/main.ts"
 CONTROLLER = "src/web/payroll-controller.ts"
 EMPLOYEE_TO_CLOCK = f"{EMPLOYEE} -> {CLOCK}"
-NO_MODEL_LINE = "no architecture model; run a baseline audit to enable the full review"
 
 
 def edit_json(path: Path, change) -> None:
@@ -524,15 +523,19 @@ def test_inherited_finding_with_a_confirmed_lift_blocks(tmp_path):
     assert "Verdict: SHOULD_CHANGE: 1 blocker, 0 major, 0 minor blocking" in result.stdout
 
 
-def test_verdict_incomplete_needs_a_model(tmp_path):
+def test_findings_without_a_model_name_the_baseline_flow_and_store_nothing(tmp_path):
     bare = tmp_path / "bare"
     bare.mkdir()
-    check = check_file(bare, tmp_path)
-    result = add(bare, "change-review", check, "--base", "main")
-    assert result.returncode == 0, result.stderr
-    assert "Verdict: OK" in result.stdout and NO_MODEL_LINE in result.stdout
+    work = ".architecture/work"
+    assert_needs_baseline(run_arch([
+        "findings", "add", "--flow", "change-review", "--base", "main", "--check", f"{work}/check.json",
+        "--applicable", f"{work}/applicable.json",
+    ], bare))
+    assert_needs_baseline(run_arch(["findings", "list"], bare))
     assert not (bare / STORE).exists()
 
+
+def test_an_open_plan_fact_makes_the_verdict_incomplete(tmp_path):
     root = workspace(tmp_path / "with-model")
     proposal = write_json(
         tmp_path / "proposal.json",
@@ -819,12 +822,11 @@ def test_invalid_store_is_refused_with_the_way_out(tmp_path):
     assert "Delete .architecture/findings.json and rerun the flow" in result.stderr
 
 
-def test_rank_without_a_model_says_to_init(tmp_path):
+def test_rank_without_a_model_names_the_baseline_flow(tmp_path):
     root = workspace(tmp_path)
     assert audit(root, tmp_path).returncode == 0
     (root / MODEL).unlink()
-    result = run_arch(["findings", "list", "--rank"], root)
-    assert result.returncode == 2 and "arch model init" in result.stderr
+    assert_needs_baseline(run_arch(["findings", "list", "--rank"], root))
 
 
 def test_run_findings_are_matched_by_scope_too(tmp_path):
@@ -895,7 +897,7 @@ def test_files_inside_the_project_outside_the_work_directory_are_refused(tmp_pat
     work_check(root, "--base", "main")
     (root / "judged.json").write_text(json.dumps({"findings": []}))
     result = run_arch(["findings", "add", "--flow", "change-review", "--check", f"{WORK}/check.json",
-                       "--judged", "judged.json", "--base", "main"], root)
+                       "--applicable", f"{WORK}/applicable.json", "--judged", "judged.json", "--base", "main"], root)
     assert_refused(result, root, "--judged judged.json", ".architecture/work/", "reviewed state")
     (root / "proposal.json").write_text(json.dumps({"version": 1}))
     proposal = run_arch(["check", "--proposal", "proposal.json"], root)
@@ -1175,7 +1177,7 @@ def test_no_condition_in_scope_needs_no_judged_file(tmp_path):
     assert "Judgment conditions: 0 in scope, 0 reviewed" in result.stdout
 
 
-def test_findings_add_requires_the_applicable_file_when_a_model_exists(tmp_path):
+def test_findings_add_requires_the_applicable_file(tmp_path):
     root = workspace(tmp_path)
     result = add_without_applicable(root, "audit", check_file(root, tmp_path))
     assert_refused(result, root, "--applicable is required", "arch applicable",

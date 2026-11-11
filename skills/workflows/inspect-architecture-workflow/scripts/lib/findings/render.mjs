@@ -80,10 +80,6 @@ export function contractData(store) {
   };
 }
 
-export function noModelData(flow) {
-  return { flow, verdict: "OK", noModel: true };
-}
-
 function countsLine(counts) {
   return SEVERITIES.map((severity) => `${counts[severity]} ${severity}`).join(", ");
 }
@@ -159,13 +155,6 @@ function listOrNone(items) {
 }
 
 export function renderContract(data) {
-  if (data.noModel) {
-    return [
-      `# Architecture ${data.flow}: no model`,
-      `Verdict: ${data.verdict}`,
-      "no architecture model; run a baseline audit to enable the full review",
-    ].join("\n");
-  }
   const reasons = data.incompleteReasons ? ` (${data.incompleteReasons})` : "";
   const corrections = data.corrections.map(correctionLine);
   return [

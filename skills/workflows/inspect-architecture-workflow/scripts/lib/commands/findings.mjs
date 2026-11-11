@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
-import { ModelError, UsageError } from "../cli/errors.mjs";
+import { UsageError } from "../cli/errors.mjs";
 import { parseArgs } from "../cli/flags.mjs";
 import { proposalComparison } from "../checks/proposal.mjs";
 import { touchedScope } from "../checks/scope.mjs";
 import { loadGraph } from "../graph/load.mjs";
-import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
+import { requireModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
 import { requireBinding } from "../findings/binding.mjs";
 import { requireWorkPlacement } from "../findings/placement.mjs";
@@ -12,7 +12,7 @@ import { judgmentConditions, readApplicable, reviewNotDone } from "../findings/a
 import { judgedFindings, judgedQuestions, readJudged } from "../findings/intake.mjs";
 import { checkFinding, mergeFindings, replaceStored, scopeTag } from "../findings/merge.mjs";
 import { overlappingFindings } from "../findings/overlaps.mjs";
-import { contractData, noModelData, rankData, renderContract, renderRank } from "../findings/render.mjs";
+import { contractData, rankData, renderContract, renderRank } from "../findings/render.mjs";
 import { readStore, storeOf, writeStore } from "../findings/store.mjs";
 import { withEnforcement } from "../findings/verdict.mjs";
 
@@ -33,20 +33,14 @@ function requireFlag(flags, name, reason) {
   throw new UsageError(`--${name} is required ${reason}. Pass --${name} <value>.`);
 }
 
-export const ADD_REQUIRED_WITH_MODEL = ["applicable"];
-
 const APPLICABLE_COMMAND = "arch applicable <the same scope flags> --out .architecture/work/applicable.json";
 
-function requireApplicable(flags) {
-  if (flags.applicable) return;
-  throw new UsageError(
-    "--applicable is required when a model exists: it names the judgment conditions the review covers. " +
-      `Create it with ${APPLICABLE_COMMAND}, then pass --applicable .architecture/work/applicable.json.`,
-  );
-}
-
 export const ADD_REQUIRED = {
-  always: { flow: "to say which review this is", check: "to name the arch check --json output" },
+  always: {
+    flow: "to say which review this is",
+    check: "to name the arch check --json output",
+    applicable: `to name the judgment conditions the review covers; create the file with ${APPLICABLE_COMMAND}`,
+  },
   "change-review": { base: "in change-review, the ref the diff is against" },
   "plan-review": {
     plan: "in plan-review, the plan file that was reviewed",
@@ -59,10 +53,11 @@ function requireAll(flags, required = {}) {
 }
 
 function checkAddFlags(flags, root) {
-  requireAll(flags, ADD_REQUIRED.always);
+  requireFlag(flags, "flow", ADD_REQUIRED.always.flow);
   if (!FLOWS.includes(flags.flow)) {
     throw new UsageError(`--flow ${flags.flow} is not a flow. Use one of: ${FLOWS.join(", ")}.`);
   }
+  requireAll(flags, ADD_REQUIRED.always);
   requireAll(flags, ADD_REQUIRED[flags.flow]);
   for (const name of WORK_FILE_FLAGS) if (flags[name]) requireWorkPlacement(root, flags[name], name);
   for (const file of flags.judged ?? []) requireWorkPlacement(root, file, "judged");
@@ -79,9 +74,8 @@ function readCheckOutput(file) {
       `check file ${file} cannot be read as JSON: ${error.message}. Create it with ${CHECK_COMMAND}.`,
     );
   }
-  if (output.model === false) return output;
   const lists = ["rows", "incomplete", "notRun", "skipped"];
-  if (output.model !== true || lists.some((name) => !Array.isArray(output[name]))) {
+  if (lists.some((name) => !Array.isArray(output[name]))) {
     throw new UsageError(`check file ${file} is not arch check --json output. Create it with ${CHECK_COMMAND}.`);
   }
   return output;
@@ -128,17 +122,9 @@ function print(data, flags) {
 async function add(args, { root }) {
   const { flags } = parseArgs(ADD_SPEC, args);
   checkAddFlags(flags, root);
+  const model = requireModel(root, flags);
   const check = readCheckOutput(flags.check);
-  if (check.model === false) {
-    print(noModelData(flags.flow), flags);
-    return 0;
-  }
-  requireApplicable(flags);
   const applicable = readApplicable(flags.applicable, flags.flow);
-  const model = loadModel(root, flags);
-  if (!model) {
-    throw new ModelError(`${flags.check} was made with a model, but none is found now. Run from the same project.`);
-  }
   await requireBinding({ output: check, kind: "check", flags, root, model });
   await requireBinding({ output: applicable, kind: "applicable", flags, root, model });
   const subject = await reviewSubject({ root, model, flags });
@@ -165,12 +151,10 @@ async function add(args, { root }) {
   return 0;
 }
 
-async function ranking(root, store, flags) {
+async function ranking(root, store, model) {
   if (store.lastRun.flow !== "audit") {
     throw new UsageError("--rank applies to an audit. Run arch findings add --flow audit first.");
   }
-  const model = loadModel(root, flags);
-  if (!model) throw new UsageError("--rank needs the architecture model. Run arch model init, then rank again.");
   const commits = await componentCommitCounts({ model, root });
   const ranked = contractData(store).findings.filter((finding) => !finding.wider);
   return rankData({ findings: ranked, commits, window: model.thresholds.historyWindow });
@@ -178,16 +162,13 @@ async function ranking(root, store, flags) {
 
 async function list(args, { root }) {
   const { flags } = parseArgs(LIST_SPEC, args);
+  const model = requireModel(root, flags);
   const store = readStore(root);
   if (!store.lastRun) {
-    if (!loadModel(root, flags)) {
-      console.log(NO_MODEL_LINE);
-      return 0;
-    }
     throw new UsageError("no findings are stored. Run arch findings add after a review, then list them.");
   }
   const data = contractData(store);
-  const rank = flags.rank ? await ranking(root, store, flags) : null;
+  const rank = flags.rank ? await ranking(root, store, model) : null;
   if (flags.json) console.log(JSON.stringify({ ...data, ...(rank && { ranking: rank }) }, null, 2));
   else console.log([renderContract(data), ...(rank ? [renderRank(rank)] : [])].join("\n\n"));
   return 0;

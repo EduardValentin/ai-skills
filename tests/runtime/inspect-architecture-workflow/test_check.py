@@ -2,7 +2,7 @@ import json
 import shutil
 from pathlib import Path
 
-from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+from support import SKILL_DIR, assert_needs_baseline, copy_fixture, git, init_repo, run_arch, run_node
 
 CHECKS_DIR = SKILL_DIR / "scripts" / "lib" / "checks"
 RUN_MODULE = (CHECKS_DIR / "run.mjs").as_uri()
@@ -180,8 +180,8 @@ def test_unseeded_fixture_has_only_the_construction_rows_without_a_base(tmp_path
     assert (row["check"], row["defect"], row["severity"], row["baseSeverity"]) == (
         "detail-constructed-outside-root", "detail-constructed-outside-root", "blocker", "blocker")
     assert (row["status"], row["origin"], row["lifts"]) == ("enforced", "none", [])
-    assert set(out) == {"model", "run", "rows", "incomplete", "notRun", "skipped", "covered"}
-    assert out["model"] is True and out["incomplete"] == [] and out["covered"] == 0
+    assert set(out) == {"run", "rows", "incomplete", "notRun", "skipped", "covered"}
+    assert out["incomplete"] == [] and out["covered"] == 0
     assert out["skipped"] == [
         {"rule": "R6", "status": "off", "component": None,
          "reason": "one delivery mechanism; controllers call use cases directly"},
@@ -581,12 +581,9 @@ def test_with_base_only_introduced_breach_exits_1(tmp_path: Path):
     assert find(out["rows"], f"{EMPLOYEE} -> {CONTROLLER}", "R4")["origin"] == "introduced"
 
 
-def test_no_model_exits_0_with_the_baseline_line(tmp_path: Path):
-    result = run_arch(["check"], tmp_path)
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "no architecture model; run a baseline audit to enable the full review"
-    as_json = run_arch(["check", "--json"], tmp_path)
-    assert as_json.returncode == 0 and json.loads(as_json.stdout) == {"model": False}
+def test_no_model_exits_2_naming_the_baseline_flow(tmp_path: Path):
+    assert_needs_baseline(run_arch(["check"], tmp_path))
+    assert_needs_baseline(run_arch(["check", "--json"], tmp_path))
 
 
 def test_unknown_base_exits_2_naming_it(tmp_path: Path):

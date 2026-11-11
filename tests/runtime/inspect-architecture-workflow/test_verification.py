@@ -1,10 +1,11 @@
 import json
 import re
+import shutil
 from pathlib import Path
 
 import pytest
 
-from support import FIXTURES, SKILL_DIR, copy_fixture, git, run_arch, run_node
+from support import FIXTURES, SKILL_DIR, assert_needs_baseline, copy_fixture, git, run_arch, run_node
 from test_check_conditions import ADAPTER, MODEL, edit_json, ids_of, seeded
 
 REGISTRY_MODULE = (SKILL_DIR / "scripts" / "lib" / "checks" / "registry.mjs").as_uri()
@@ -243,25 +244,47 @@ def snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
-def test_no_model_in_an_empty_repository_reports_it_and_writes_only_inside_the_work_folder(tmp_path: Path):
-    git(["init", "-q", "-b", "main"], tmp_path)
-    status = run_arch(["model", "status"], tmp_path)
-    assert status.returncode == 0 and "absent" in status.stdout
-    plain = run_arch(["check"], tmp_path)
-    assert plain.returncode == 0 and "no architecture model" in plain.stdout
-    written = run_arch(["check", "--out", ".architecture/work/check.json"], tmp_path)
-    assert written.returncode == 0, written.stderr
-    assert json.loads((tmp_path / ".architecture/work/check.json").read_text()) == {"model": False}
-    applicable = run_arch(["applicable", "--all"], tmp_path)
-    assert applicable.returncode == 0 and "no architecture model" in applicable.stdout
-    applicable_json = run_arch(["applicable", "--all", "--json"], tmp_path)
-    assert json.loads(applicable_json.stdout) == {"model": False, "reasons": [applicable.stdout.strip()]}
-    added = run_arch(["findings", "add", "--flow", "change-review", "--base", "main",
-                      "--check", ".architecture/work/check.json"], tmp_path)
-    assert added.returncode == 0, added.stderr
-    assert "no architecture model" in added.stdout
-    outside = [name for name in snapshot(tmp_path) if not name.startswith(".architecture/")]
-    assert outside == []
+WORK = ".architecture/work"
+NEEDS_A_MODEL = {
+    "check": ["check", "--out", f"{WORK}/check.json"],
+    "check --base": ["check", "--base", "main"],
+    "applicable": ["applicable", "--all", "--out", f"{WORK}/applicable.json"],
+    "findings add": ["findings", "add", "--flow", "audit", "--check", f"{WORK}/check.json",
+                     "--applicable", f"{WORK}/applicable.json"],
+    "findings list": ["findings", "list"],
+    "collect": ["collect"],
+    "query": ["query"],
+    "query units": ["query", "units"],
+    "uncovered": ["uncovered"],
+}
+
+
+def repository_without_a_model(tmp_path: Path) -> Path:
+    root = copy_fixture("sound-small", tmp_path / "p")
+    shutil.rmtree(root / "docs")
+    git(["init", "-q", "-b", "main"], root)
+    git(["add", "-A"], root)
+    git(["commit", "-q", "-m", "code without a model"], root)
+    return root
+
+
+@pytest.mark.parametrize("name", NEEDS_A_MODEL)
+def test_without_a_model_every_review_command_exits_2_naming_the_baseline_flow(tmp_path: Path, name: str):
+    root = repository_without_a_model(tmp_path)
+    before = snapshot(root)
+    assert_needs_baseline(run_arch(NEEDS_A_MODEL[name], root))
+    assert snapshot(root) == before
+
+
+def test_without_a_model_status_reports_it_and_init_creates_one(tmp_path: Path):
+    root = repository_without_a_model(tmp_path)
+    status = run_arch(["model", "status", "--json"], root)
+    assert status.returncode == 0, status.stderr
+    assert json.loads(status.stdout)["model"] is False
+    assert run_arch(["model", "status"], root).stdout.strip() == "model: absent; run the baseline flow"
+    created = run_arch(["model", "init", "--start", "legacy", "--adapter", "cat adapter.json"], root)
+    assert created.returncode == 0, created.stderr
+    assert json.loads(run_arch(["model", "status", "--json"], root).stdout)["model"] is True
 
 
 DIRECTION_FIXTURES = ["known-defects", "payroll", "sound-small", "over-engineered"]

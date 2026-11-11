@@ -57,13 +57,13 @@ usage error whose message names the flags that query takes.
 | Code | Meaning |
 |---|---|
 | 0 | The table was printed, or, without a query name, the list of queries with their flags. |
-| 2 | An unknown query, a flag the query does not take, a missing path or `--base`, no model, an invalid model, an adapter failure, or no git history for `volatility`. |
+| 2 | No model, in which case the message names the baseline flow to run first, an unknown query, a flag the query does not take, a missing path or `--base`, an invalid model, an adapter failure, or no git history for `volatility`. |
 
 ## Output
 
 Without a query name, `arch query` prints each query on its own line with the flags it takes,
 optional ones in brackets, as in `- units [--component <value>] [--kind <value>] [--ring <value>]`,
-and reads neither the model nor the code.
+and reads no code.
 
 A markdown table, or two tables for `touched --with-neighbors`. A query that needs an adapter fact
 the adapter does not provide prints "not provided by the adapter". With `--json`, one line:

@@ -29,7 +29,7 @@ arch findings list --rank
 | `--base` | a branch, tag, or commit | Required in `change-review`: the ref the check compared with. |
 | `--plan` | the plan file | Required in `plan-review`: plan evidence cites its headings. |
 | `--proposal` | the proposal file | Required in `plan-review`: the file the check ran on. |
-| `--applicable` | the `arch applicable` JSON file | Required when a model exists. Made with `--out` for the same scope: `--all` in an audit, `--base` in a change review, `--proposal` in a plan review. Like the check file, it must come from the same mode, base, or proposal as this run, and no source file may have changed since it ran. Its count gives the line `Judgment conditions: <n> in scope, <m> reviewed`. |
+| `--applicable` | the `arch applicable` JSON file | Required. Made with `--out` for the same scope: `--all` in an audit, `--base` in a change review, `--proposal` in a plan review. Like the check file, it must come from the same mode, base, or proposal as this run, and no source file may have changed since it ran. Its count gives the line `Judgment conditions: <n> in scope, <m> reviewed`. |
 | `--upcoming` | text | A named upcoming change the user confirmed; repeat the flag for each. A finding's `liftedBy` must equal one of them or one recorded with `arch model add-upcoming`. |
 | `--json` | none | Print the result as JSON. |
 | `--record` | a directory | Read the model from this record path instead of `docs/architecture/`. `ARCH_RECORD_DIR` does the same. |
@@ -50,7 +50,7 @@ under `.architecture/work/`; the command refuses a working file elsewhere inside
 | Code | Meaning |
 |---|---|
 | 0 | The findings were stored and the result printed, whatever its verdict. |
-| 2 | A usage error, a check or applicable file that is missing, does not match this run, or is stale, or judged findings refused; nothing is stored. A missing file's message names the `arch check` or `arch applicable` command, with `--out`, that creates it. |
+| 2 | No model, a usage error, a check or applicable file that is missing, does not match this run, or is stale, or judged findings refused; nothing is stored. A missing file's message names the `arch check` or `arch applicable` command, with `--out`, that creates it. |
 
 ## Output
 
@@ -117,8 +117,8 @@ judged file never overlaps with itself. Then come the questions for the user, an
 `SHOULD_CHANGE` when a blocking finding of an enforced rule is a blocker or major, or `INCOMPLETE`
 when none is and a condition of an enforced rule could not be decided or no reviewer judged the
 conditions in scope. With `--rank`, a ranking
-follows; wider observations stay in their own section and are not ranked. Without a model, the result is the verdict `OK` and the line "no architecture model; run a
-baseline audit to enable the full review".
+follows; wider observations stay in their own section and are not ranked. Without a model there is
+no verdict: both `add` and `list` exit 2, store nothing, and name the baseline flow to run first.
 
 With `--json`: `flow`, `scope`, `verdict`, `blocking` and `inherited` (counts by severity),
 `advisory`, `covered` (check findings an exception covered), `incomplete` (each incomplete entry

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import SKILL_DIR, copy_fixture, git, init_repo, run_arch, run_node
+from support import SKILL_DIR, assert_needs_baseline, copy_fixture, git, init_repo, run_arch, run_node
 
 MODEL = "docs/architecture/architecture.json"
 CURRENT = "docs/architecture/current.md"
@@ -35,9 +35,8 @@ def test_collect_prints_the_counts_and_writes_the_cache(tmp_path: Path):
     assert len(cache_files(root)) == 1
 
 
-def test_collect_without_a_model_says_to_run_init(tmp_path: Path):
-    result = run_arch(["collect"], tmp_path)
-    assert result.returncode == 2 and "arch model init" in result.stderr
+def test_collect_without_a_model_names_the_baseline_flow(tmp_path: Path):
+    assert_needs_baseline(run_arch(["collect"], tmp_path))
 
 
 def test_collect_writes_current_md_without_dates_or_run_numbers(tmp_path: Path):

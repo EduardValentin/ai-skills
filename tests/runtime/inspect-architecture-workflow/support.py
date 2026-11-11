@@ -49,6 +49,17 @@ def run_node(script: str, cwd: Path, *args: str) -> subprocess.CompletedProcess[
     )
 
 
+NO_MODEL_FRAGMENTS = ("no architecture model at", "Run the baseline flow first", "the flow name baseline")
+
+
+def assert_needs_baseline(result: subprocess.CompletedProcess[str]) -> None:
+    """The command refused to run without a model and named the baseline flow."""
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert result.stdout == ""
+    for fragment in NO_MODEL_FRAGMENTS:
+        assert fragment in result.stderr, result.stderr
+
+
 def copy_fixture(name: str, dest: Path) -> Path:
     shutil.copytree(FIXTURES / name, dest, dirs_exist_ok=True)
     return dest

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from support import copy_fixture, git, init_repo, run_arch
+from support import assert_needs_baseline, copy_fixture, git, init_repo, run_arch
 
 MODEL = "docs/architecture/architecture.json"
 ADAPTER = "adapter.json"
@@ -362,12 +362,11 @@ def test_implementers_cell_says_when_the_adapter_gave_no_implements_fact(tmp_pat
     assert clock[3] == "not provided by the adapter"
 
 
-def test_query_and_uncovered_without_a_model_say_how_to_make_one(tmp_path: Path):
+def test_query_and_uncovered_without_a_model_name_the_baseline_flow(tmp_path: Path):
     root = payroll(tmp_path)
     (root / MODEL).unlink()
-    for args in (["query", "metrics"], ["uncovered"]):
-        result = run_arch(args, root)
-        assert result.returncode == 2 and "arch model init" in result.stderr
+    for args in (["query"], ["query", "metrics"], ["uncovered"]):
+        assert_needs_baseline(run_arch(args, root))
 
 
 def test_unknown_query_and_unknown_flag_are_usage_errors(tmp_path: Path):

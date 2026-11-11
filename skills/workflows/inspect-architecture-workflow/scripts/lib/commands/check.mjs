@@ -9,7 +9,7 @@ import { requireWorkPlacement, writeWorkFile } from "../findings/placement.mjs";
 import { runRecord } from "../findings/binding.mjs";
 import { STOPPING } from "../findings/verdict.mjs";
 import { loadGraph } from "../graph/load.mjs";
-import { NO_MODEL_LINE, loadModel } from "../model/load.mjs";
+import { requireModel } from "../model/load.mjs";
 import { componentCommitCounts } from "../queries/history.mjs";
 
 export const CHECK_EXCLUSIVE = ["base", "proposal"];
@@ -63,8 +63,7 @@ async function emit(output, flags, root) {
     return;
   }
   await writeWorkFile(root, flags.out, `${JSON.stringify(output, null, 2)}\n`);
-  const counts = output.model ? `${output.rows.length} findings, ${output.incomplete.length} incomplete` : "no model";
-  console.log(`wrote ${flags.out}: ${counts}`);
+  console.log(`wrote ${flags.out}: ${output.rows.length} findings, ${output.incomplete.length} incomplete`);
 }
 
 export async function run(args, { root }) {
@@ -76,17 +75,12 @@ export async function run(args, { root }) {
         "Use --base to review a diff, or --proposal to review a plan.",
     );
   }
-  const model = loadModel(root, flags);
-  if (!model) {
-    if (flags.json || flags.out) await emit({ model: false }, flags, root);
-    else console.log(NO_MODEL_LINE);
-    return 0;
-  }
+  const model = requireModel(root, flags);
   const { clarifications, ...subject } = await subjectOf(root, model, flags);
   printWarnings(subject.graph);
   const result = runChecks({ model, ...subject });
   const incomplete = [...result.incomplete, ...clarifications];
-  const output = { model: true, run: await runRecord({ root, model, flags }), ...result, incomplete };
+  const output = { run: await runRecord({ root, model, flags }), ...result, incomplete };
   await emit(output, flags, root);
   return breaches(result, flags) || leavesEnforcedRuleUndecided(output, model, flags) ? 1 : 0;
 }

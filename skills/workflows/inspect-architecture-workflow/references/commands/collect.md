@@ -26,7 +26,7 @@ arch collect --json
 | Code | Meaning |
 |---|---|
 | 0 | The graph was built. |
-| 2 | No model, an invalid model, an adapter that failed or printed an invalid document, or a usage error. |
+| 2 | No model, in which case the message names the baseline flow to run first, an invalid model, an adapter that failed or printed an invalid document, or a usage error. |
 
 ## Output
 
