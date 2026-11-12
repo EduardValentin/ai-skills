@@ -50,8 +50,7 @@ have.
 - Follow the naming and test organization patterns already in the repository:
   file names, describe/test wording, folder placement, fixture style.
 - **Organize by component under test**, one class or module per test file.
-  Inside it, group scenarios by the component's responsibility only when a
-  responsibility has more than one scenario; a single scenario stays ungrouped.
+  Inside it, group scenarios by the component's responsibility.
 - Never test an intermediate migration state — for example, never assert a file
   is gone from its old folder after a restructure.
 - Never test for the absence of something that no longer exists as a concept,
@@ -114,7 +113,6 @@ layer such as Mock Service Worker.
 | "A quick mock keeps the integration test simple" | A mocked integration test proves nothing about the deployed application. |
 | "I'll copy this test for each input" | Same scenario, different inputs: parameterize it. |
 | "My naming is clearer than the repo's" | Follow the repository's existing naming and organization. |
-| "A group per scenario keeps the file tidy" | Groups hold several scenarios of one responsibility. One scenario stays ungrouped. |
 | "I'll test the repository directly, it's the same flow" | It is not. Act through an entry point. |
 | "There's no integration setup, I'll add one quickly" | Scaffolding a test type is a decision for the owner. Ask first. |
 | "A short sleep fixes the failing assertion" | That is manufactured flakiness. Fix the wait or the sync assumption. |
