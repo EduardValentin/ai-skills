@@ -34,7 +34,7 @@ have.
 | | Unit | Integration | End-to-end |
 |---|---|---|---|
 | Volume | many | fewer | fewest |
-| Mocks | external dependencies | only for an agreed, documented blocker | none |
+| Mocks | external dependencies | none | none |
 | Act through | the unit's public surface | an application entry point | the deployed application |
 | Assert | returned values and interactions | real persisted state | real persisted state |
 
