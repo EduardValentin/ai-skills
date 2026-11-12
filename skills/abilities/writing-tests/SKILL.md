@@ -26,8 +26,8 @@ have.
    set up for that type — existing suites, containers, runner configuration, run
    scripts.
 3. If that setup does not exist, **stop and ask before scaffolding it.**
-4. If the project already has a pattern for that type, follow it rather than
-   inventing one.
+4. If the project already has a test framework setup for that type
+   (unit, integration, or end-to-end), use it. Never introduce a second one.
 
 ## Quick Reference
 
@@ -45,6 +45,13 @@ have.
 - **Arrange, Act, Assert.** Expectations live only in Assert, never in Arrange
   or Act.
 - Extract duplicated Arrange code into shared test utilities.
+- **Parameterize the same scenario over different inputs.** One test body with
+  a table of inputs, not one copy per input.
+- Follow the naming and test organization patterns already in the repository:
+  file names, describe/test wording, folder placement, fixture style.
+- **Organize by component under test**, one class or module per test file.
+  Inside it, group scenarios by the component's responsibility only when a
+  responsibility has more than one scenario; a single scenario stays ungrouped.
 - Never test an intermediate migration state — for example, never assert a file
   is gone from its old folder after a restructure.
 - Never test for the absence of something that no longer exists as a concept,
@@ -105,6 +112,9 @@ layer such as Mock Service Worker.
 | "I'll cover both cases in one test" | One scenario per test. Merged cases hide which behavior broke. |
 | "The global clock/file read is fine, I'll just patch it" | Patching global state hides an architecture failure. Flag it. |
 | "A quick mock keeps the integration test simple" | A mocked integration test proves nothing about the deployed application. |
+| "I'll copy this test for each input" | Same scenario, different inputs: parameterize it. |
+| "My naming is clearer than the repo's" | Follow the repository's existing naming and organization. |
+| "A group per scenario keeps the file tidy" | Groups hold several scenarios of one responsibility. One scenario stays ungrouped. |
 | "I'll test the repository directly, it's the same flow" | It is not. Act through an entry point. |
 | "There's no integration setup, I'll add one quickly" | Scaffolding a test type is a decision for the owner. Ask first. |
 | "A short sleep fixes the failing assertion" | That is manufactured flakiness. Fix the wait or the sync assumption. |
