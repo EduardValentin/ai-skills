@@ -1,0 +1,14 @@
+# Typography
+- Max 3 sizes (S/M/L), one family; rank by size, then weight, not color. Body 16–20px; subhead 18–22px; header ≤32px.
+- Body `line-height` 1.4–1.5; raise for long multi-paragraph blocks.
+- Body start-aligned (LTR left, RTL right); never justify or center body; center only short lines.
+- Weights: regular body, bold headings; semibold if bold too heavy. Thin/extra-light/black only ≥24px.
+- Size per x-height: IF ratio <0.52 THEN `px × 0.52 / ratio`. IF face reads 100 lighter than Arial THEN +100 weight.
+- IF a non-body size is used as body text THEN raise its APCA Lc target by 15.
+- Large headings: negative tracking growing with size; text faces more, display faces ~0.
+- All caps/small caps: <1 line, +0.05–0.12em tracking; real small caps only. Never caps body.
+- Emphasis: bold or italic sparingly, never both; underline only links.
+- Paragraphs: first-line indent 1–4em OR 4–10pt gap, never both.
+- Kerning on (`font-kerning: normal`); `hyphens: auto` if justified.
+- Bespoke type pairing; no default system, Arial, Times or monospace body font.
+- Glyphs: curly quotes/apostrophes; primes for ft/in; – vs — vs -, never `--`; …; ™ ©; nbsp after § ¶; one space between sentences, no runs of spaces; & only in names.
