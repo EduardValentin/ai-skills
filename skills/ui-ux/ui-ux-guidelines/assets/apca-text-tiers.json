@@ -1,0 +1,19 @@
+{
+  "source": "APCA in a Nutshell, Use-Case & Size Ranges (Myndex, git.apcacontrast.com), transcribed 2026-11-14. Lc 90 uses the non-body 12px/400 floor; Lc 75 uses the non-body 15px/400 floor.",
+  "tiers": [
+    { "minFontSizePx": 24, "fontWeight": 200, "minLc": 90 },
+    { "minFontSizePx": 18, "fontWeight": 300, "minLc": 90 },
+    { "minFontSizePx": 12, "fontWeight": 400, "minLc": 90 },
+    { "minFontSizePx": 24, "fontWeight": 300, "minLc": 75 },
+    { "minFontSizePx": 15, "fontWeight": 400, "minLc": 75 },
+    { "minFontSizePx": 14, "fontWeight": 700, "minLc": 75 },
+    { "minFontSizePx": 48, "fontWeight": 200, "minLc": 60 },
+    { "minFontSizePx": 36, "fontWeight": 300, "minLc": 60 },
+    { "minFontSizePx": 24, "fontWeight": 400, "minLc": 60 },
+    { "minFontSizePx": 21, "fontWeight": 500, "minLc": 60 },
+    { "minFontSizePx": 18, "fontWeight": 600, "minLc": 60 },
+    { "minFontSizePx": 16, "fontWeight": 700, "minLc": 60 },
+    { "minFontSizePx": 36, "fontWeight": 400, "minLc": 45 },
+    { "minFontSizePx": 24, "fontWeight": 700, "minLc": 45 }
+  ]
+}

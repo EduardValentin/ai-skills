@@ -1,0 +1,6 @@
+[
+  { "id": "text.body.light", "fg": "#16211d", "bg": "#fbf8f1", "kind": "text", "fontSizePx": 18, "fontWeight": 400 },
+  { "id": "text.body.dark", "fg": "oklch(96% 0.01 95)", "bg": "hsl(165 20% 8%)", "kind": "text", "fontSizePx": 18, "fontWeight": 400 },
+  { "id": "button.primary.label", "fg": "rgb(255 255 255)", "bg": "#0b4f4a", "kind": "text", "fontSizePx": 18, "fontWeight": 700 },
+  { "id": "field.border", "fg": "#56635d", "bg": "#ffffff", "kind": "input-border" }
+]

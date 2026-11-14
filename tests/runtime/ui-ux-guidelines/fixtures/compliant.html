@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tide notes: compliant fixture</title>
+<style>
+  :root {
+    --ink: #16211d; --paper: #fbf8f1; --field: #ffffff; --accent: #0b4f4a; --on-accent: #ffffff; --line: #56635d;
+    --space-xs: 8px; --space-s: 16px; --space-m: 24px; --space-xl: 48px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 18px/1.5 Georgia, serif; color: var(--ink); background: var(--paper); }
+  .skip { position: absolute; left: var(--space-s); top: var(--space-xs); min-height: 48px; padding: 12px var(--space-s);
+    background: var(--accent); color: var(--on-accent); transform: translateY(-300%); }
+  .skip:focus { transform: none; }
+  header, main { max-width: 30em; margin: 0 auto; padding: var(--space-m) var(--space-s); }
+  h1 { font-size: 32px; line-height: 1.2; margin: 0 0 var(--space-s); }
+  h2 { font-size: 22px; line-height: 1.3; margin: var(--space-xl) 0 var(--space-xs); }
+  p { margin: 0 0 var(--space-s); }
+  nav ul { display: flex; flex-wrap: wrap; gap: var(--space-xs); list-style: none; margin: 0; padding: 0; }
+  nav a { display: block; min-width: 48px; min-height: 48px; padding: 10px var(--space-s); color: var(--accent); font-weight: 700; }
+  label { display: block; font-weight: 700; margin-bottom: 4px; }
+  input { display: block; width: 100%; min-height: 48px; padding: var(--space-xs) 12px; font: inherit; color: var(--ink);
+    background: var(--field); border: 2px solid var(--line); border-radius: 4px; margin-bottom: var(--space-s); }
+  .actions { display: flex; flex-wrap: wrap; gap: var(--space-s); }
+  button { min-height: 48px; padding: 10px var(--space-m); font: inherit; font-weight: 700; border-radius: 4px; }
+  .primary { background: var(--accent); color: var(--on-accent); border: 2px solid var(--accent); }
+  .secondary { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<header>
+  <h1>Tide notes</h1>
+  <nav aria-label="Primary">
+    <ul>
+      <li><a href="#chart">Chart</a></li>
+      <li><a href="#alerts">Alerts</a></li>
+      <li><a href="#about">About</a></li>
+    </ul>
+  </nav>
+</header>
+<main id="content">
+  <section id="chart">
+    <h2>Reading the chart</h2>
+    <p>The harbour gauge records the water level every six minutes and the table below the chart rounds each reading to the nearest ten. Spring tides arrive two days after the new and the full moon, when the range between high and low water is widest and the mud flats stay bare for longest.</p>
+    <p>Neap tides fall a week later and move far less water, so the channel stays deep enough for small boats all day. Check the wind as well, because a strong onshore breeze can hold the water in for an hour past the printed time.</p>
+  </section>
+  <section id="alerts">
+    <h2>Tide alerts</h2>
+    <form action="#content">
+      <label for="email">Email address</label>
+      <input id="email" name="email" type="email" autocomplete="email">
+      <div class="actions">
+        <button class="primary" type="submit">Send alerts</button>
+        <button class="secondary" type="button">Cancel</button>
+      </div>
+    </form>
+  </section>
+</main>
+</body>
+</html>

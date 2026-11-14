@@ -1,0 +1,5 @@
+[
+  { "id": "text.muted.light", "fg": "#9a9a9a", "bg": "#ffffff", "kind": "text", "fontSizePx": 16, "fontWeight": 400 },
+  { "id": "text.muted.dark", "fg": "#8b8b8b", "bg": "#000000", "kind": "text", "fontSizePx": 16, "fontWeight": 400 },
+  { "id": "icon.close", "fg": "#cccccc", "bg": "#ffffff", "kind": "icon-outline" }
+]

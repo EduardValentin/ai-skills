@@ -190,3 +190,20 @@ sandbox_mode = "workspace-write"
 model = "sonnet"
 effort = "high"
 color = "orange"
+
+[[agent]]
+id = "ux-auditor"
+source = "ux-auditor.md"
+description = "Read-only UX auditor that runs the contrast and geometry validators on changed frontend pages, then judges hierarchy, cognitive load, form ergonomics, keyboard navigation and five-state coverage, returning Blocking Defects and Ergonomic Improvements."
+groups = ["ui-ux-guidelines"]
+preload_skills = ["ui-ux-guidelines"]
+
+[agent.codex]
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+
+[agent.claude]
+model = "sonnet"
+effort = "medium"
+tools = ["Read", "Glob", "Grep", "Bash"]
+color = "orange"
