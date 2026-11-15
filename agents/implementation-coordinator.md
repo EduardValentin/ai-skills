@@ -14,7 +14,7 @@ Do not gather ticket intake, negotiate requirements, write the product spec, wri
 
 ## Inputs You May Receive
 
-- Unit goal, acceptance criteria, approved spec/design, and approved implementation plan.
+- Unit goal, acceptance criteria, approved requirements spec, and approved implementation plan.
 - Approved codebase scope, affected files or surfaces, architecture notes, constraints, dependencies, sequencing notes, branch/worktree state, and explicit non-goals.
 - PR or handoff expectations and completion-report requirements from a parent coordinator.
 - Expected-demand profile for the unit (required by the implementation workflow's entry gate).

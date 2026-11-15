@@ -43,8 +43,9 @@ Require:
   worktree state
 - known dependencies, sequencing constraints, risks, and expected verification
   surfaces
-- the **reviewer selection** for the review gate, recorded at ticket intake;
-  when absent, the review gate asks the user once with its defaults
+- the **reviewer selection** for the review gate, recorded during
+  implementation planning; when absent, the review gate asks the user once
+  with its defaults
 - an **expected-demand profile**: product stage, expected users, request and
   data volumes, growth expectations, and reliability expectations. Fill it
   from repository instructions or ticket context. If neither states it, ask

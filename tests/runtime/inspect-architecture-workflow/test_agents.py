@@ -17,7 +17,7 @@ HOUSE_SECTIONS = [
 ]
 REMOVED_NAMES = [
     "architecture-coordinator", "architecture-evaluator", "architecture-code-auditor",
-    "software-architecture-principles",
+    "software-architecture-principles", "ticket-requirements-gathering",
 ]
 CALLER_GROUPS = ["ticket-workflow", "implementation-workflow", "inspect-architecture-workflow"]
 READ_ONLY_TOOLS = ["Read", "Glob", "Grep", "Bash"]
@@ -191,7 +191,7 @@ GATE_FILES = [
     *sorted(path for path in SKILL_DIR.rglob("*") if path.is_file() and "__pycache__" not in path.parts),
     REVIEWER, CLASSIFIER,
     *(REPO_ROOT / "skills" / "workflows" / name / "SKILL.md"
-      for name in ["implementation-workflow", "ticket-requirements-gathering", "ticket-workflow"]),
+      for name in ["implementation-workflow", "requirements-gathering", "implementation-planning", "ticket-workflow"]),
 ]
 RETIRED_GATE = re.compile(
     r"notReviewed|arch applicable[^\n]*--full|Review needed|`review` is|not reviewed for a contained change"
