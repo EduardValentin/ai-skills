@@ -51,8 +51,8 @@ that can return concise locator-backed findings.
 
 ## Setup
 
-1. Confirm the work is one standalone piece intended for implementation. Ask
-   when either point is unclear.
+1. Confirm the work is one standalone piece intended for implementation,
+   asking when unclear.
 2. Read the request, and the ticket and any parent Epic, story, or ticket when
    one exists, for goals, stakeholder implications, acceptance criteria,
    dependencies, constraints, and ambiguities.
@@ -73,8 +73,8 @@ Brainstorm.
 
 ## Brainstorm And Requirements Spec Approval
 
-Interview the user one question at a time, grounded in the request, any ticket
-context, and relevant repository evidence. Resolve unknowns, assumptions, constraints, edge cases, risks, non-goals, and
+Interview the user one question at a time, grounded in the request, any ticket, and
+repository evidence. Resolve unknowns, assumptions, constraints, edge cases, risks, non-goals, and
 alternatives that could materially change implementation.
 
 An unknown is material when it could change user-visible behavior, scope,
@@ -95,6 +95,8 @@ After requirements spec approval, return:
 - the work, with ticket and parent context when a ticket exists;
 - the prototype-backed decision: whether the repository contains a reference
   prototype app and the work implies a user-visible UI change;
+- the `UI appearance decision`: `none`, `changes existing UI`, or
+  `new app or page`;
 - the Brainstorm completion record;
 - the written requirements spec and its explicit approval evidence;
 - accepted assumptions, remaining open questions, and material risks;
@@ -107,5 +109,4 @@ approval evidence to Setup, Brainstorm, assumptions, or open questions.
 ## Change Recovery
 
 A change to scope, behavior, or acceptance criteria invalidates the
-requirements spec approval. Return to the earliest affected checkpoint and
-preserve earlier fresh evidence.
+requirements spec approval and returns to the earliest affected checkpoint.

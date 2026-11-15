@@ -52,6 +52,8 @@ Repository instructions and an existing design system override module defaults (
    | Token values or names | `semantic-design-tokens` skill |
    | Reusing, extending or creating components | `reusable-ui-components` skill |
 
+   When a visual spec exists, it is the direction; build from it.
+
 2. **Build.** Native semantics before custom wrappers; ARIA only for what the platform cannot express. Style only from semantic tokens. Give every data view five states: Ideal, Empty, Loading, Partial, Error.
 
 3. **Validate** browser-rendered UI. Run the scripts in this skill directory on every changed page (absolute paths); fix each violation with its `corrective` value and rerun until all exit `0`.

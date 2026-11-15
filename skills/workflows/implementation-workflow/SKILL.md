@@ -51,6 +51,8 @@ Require:
   from repository instructions or the work's context. If neither states it, ask
   the user before proceeding; do not guess and do not leave it blank.
 
+When the handoff carries a `UI appearance decision` other than `none`, require the visual spec; return to `implementation-planning` when it is missing. A plan that carries no `UI appearance decision` passes as before. The implementer builds from the visual spec.
+
 Check that the packet is current and internally consistent. If required
 context is missing, stale, or contradictory enough to make implementation
 unsafe, return `IMPLEMENTATION BLOCKED`. Name the blocker and the exact input

@@ -2,7 +2,7 @@
 name: development-workflow
 description: Use when coordinating one piece of development work from intake or resuming at an evidenced approved-requirements, implementation-transition, or PR-readiness checkpoint.
 compatibility: >-
-  Requires repository, PR, and CI access, and tracker access for a ticket; `requirements-gathering` and `implementation-planning`, else return an upstream handoff; `implementation-workflow`, else work inline only if authorized; `raising-a-pull-request`; for selected architecture reviews, `inspect-architecture-workflow` with its `architecture-reviewer` and `architecture-classifier` agents; for prototype-backed UI, `prototype-backed-workflow`. Other gaps block only the affected transition.
+  Needs repository, PR, and CI access, and tracker access for a ticket. Without `requirements-gathering` or `implementation-planning`, return an upstream handoff; without `implementation-workflow`, work inline only if authorized. Also uses `raising-a-pull-request`, `inspect-architecture-workflow` and its agents, `prototype-backed-workflow`, and `frontend-designer` (absent: a generic subagent given its prompt and `ui-ux-guidelines`). Other gaps block only the affected transition.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -20,13 +20,22 @@ Do not use this workflow for a related batch of work items. If a fresh approved 
 
 Mandatory lifecycle:
 
-Setup -> Brainstorm -> Requirements spec approval -> Plan approval -> Implementation -> Parity step (prototype-backed work) -> PR readiness
+Setup -> Brainstorm -> Requirements spec approval -> Visual direction -> Plan approval -> Implementation -> Parity step (prototype-backed work) -> PR readiness
 
 Approval is artifact-specific. A user can approve only an artifact they have seen. Agreement with decisions, assumptions, recommendations, investigation progress, or "good to go" does not approve an unwritten requirements spec or implementation plan.
 
 ## Session Title
 
 When a chat session starts with this skill, name that session after the work: use the ticket id and title when a ticket exists, for example `ABC-123 Add password reset`, otherwise a short title of the request. If the session started before the work was identified, set the title as soon as intake resolves it. If the session title cannot be set, say so and continue.
+
+## Visual Direction
+
+Skip this stage when the `UI appearance decision` in the requirements handoff is `none`. Otherwise dispatch `frontend-designer`, passing the approved requirements spec, the app URL and start command or page paths, and any inspiration the user supplied:
+
+- `new app or page`: send an `Explore` brief, show the user the mockups, send their pick or mix to the same agent, and receive the visual spec. Where the harness cannot continue an agent, dispatch again with the pick and the mockup paths.
+- `changes existing UI`: send a `Decide` brief.
+
+On prototype-backed work the visual spec directs the prototype change. Picking a mockup is not approval; the visual spec is approved with the plan. A change to the visual direction invalidates only the visual spec and plan approval. Pass the visual spec to `implementation-planning`.
 
 ## Prototype-Backed Projects
 
@@ -48,7 +57,7 @@ re-run the step.
 
 Resume after the longest contiguous sequence of fresh checkpoints established by reliable conversation context, supplied records, or accessible PR evidence and, when a ticket exists, ticket evidence:
 
-- The requirements checkpoint requires one fresh, internally consistent handoff containing the user's request, ticket and parent context when a ticket exists, the prototype-backed decision, a Brainstorm completion record, the written requirements spec and its explicit approval evidence, the written implementation plan and its explicit approval evidence, accepted assumptions and open questions, and risks and required verification surfaces.
+- The requirements checkpoint requires one fresh, internally consistent handoff containing the user's request, ticket and parent context when a ticket exists, the prototype-backed decision, the `UI appearance decision`, a Brainstorm completion record, the written requirements spec and its explicit approval evidence, the written implementation plan and its explicit approval evidence, accepted assumptions and open questions, and risks and required verification surfaces.
 - The execution-mode checkpoint separately requires that handoff and evidence of the selected or approved mode.
 - The execution-authorization checkpoint separately requires the valid handoff, selected mode, and an explicit instruction to execute the approved plan in that mode.
 - The ticket-transition checkpoint applies only when a ticket exists and separately requires execution authorization and the completed transition result, including evidence when tracker mutation was excluded.
@@ -69,7 +78,7 @@ A change to scope, behavior, or acceptance criteria invalidates the requirements
 1. After plan approval, recommend inline, delegated, or hybrid execution based on size, coupling, risk, separability, and implementation context.
 2. Ask the user to select or approve the execution mode before dispatch or edits.
 3. Treat an explicit instruction to execute the approved plan in the selected mode as execution authorization. Mode approval alone is not execution authorization. When a ticket exists, that instruction also authorizes moving only the associated ticket to the process-appropriate In Progress state; announce and complete that transition before code or test edits, and ask separately if the user or tracker policy excluded tracker mutation. Without a ticket, the instruction alone is the authorization.
-4. Invoke `implementation-workflow` with the approved requirements spec and approval evidence, approved plan and approval evidence, accepted assumptions and open questions, execution mode, explicit execution authorization, the request and ticket context when a ticket exists, Brainstorm record, refreshed repository state and ticket state when a ticket exists, ticket-transition outcome when a ticket exists, the reviewer selection and architecture plan-review evidence from the handoff, the expected-demand profile (stage, expected users, load and data volumes, reliability expectations), taken from repository instructions or the work's context and confirmed with the user when neither states it, and required verification surfaces.
+4. Invoke `implementation-workflow` with the approved requirements spec and approval evidence, approved plan and approval evidence, accepted assumptions and open questions, execution mode, explicit execution authorization, the request and ticket context when a ticket exists, Brainstorm record, refreshed repository state and ticket state when a ticket exists, ticket-transition outcome when a ticket exists, the visual spec and `UI appearance decision` when the handoff has them, the reviewer selection and architecture plan-review evidence from the handoff, the expected-demand profile (stage, expected users, load and data volumes, reliability expectations), taken from repository instructions or the work's context and confirmed with the user when neither states it, and required verification surfaces.
 5. If that skill is unavailable, implement inline only when the user explicitly authorizes the fallback and execution mode. Otherwise return a concrete handoff or access blocker without inventing collaborator results.
 
 Keep implementation within the approved artifacts. A change to scope, behavior, or acceptance criteria invalidates the requirements spec and plan approvals and returns to `requirements-gathering`; a plan-only change invalidates plan approval and returns to `implementation-planning`. An execution-mode change returns only to mode approval here.

@@ -190,3 +190,19 @@ sandbox_mode = "workspace-write"
 model = "sonnet"
 effort = "high"
 color = "orange"
+
+[[agent]]
+id = "frontend-designer"
+source = "frontend-designer.md"
+description = "Creative designer for frontend work: studies the app, its audience and any inspiration, decides how new or changed UI looks, and returns a compact visual spec, or mockups to choose from, before the implementation plan is written."
+groups = ["development-workflow", "ui-ux-guidelines"]
+preload_skills = ["ui-ux-guidelines"]
+
+[agent.codex]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+
+[agent.claude]
+model = "opus"
+effort = "high"
