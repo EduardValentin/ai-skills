@@ -16,7 +16,7 @@ metadata:
 
 Coordinate one piece of development work, with or without a ticket, through requirements intake, implementation transition, and final PR readiness. `requirements-gathering` owns Setup through Requirements spec approval and `implementation-planning` owns Plan approval; invoke them in turn from intake and consume the approved handoff. Detailed implementation, review, QA, UI verification, and fix-loop mechanics belong to the `implementation-workflow` skill.
 
-Do not use this workflow for a related batch of work items. If a fresh approved requirements handoff and execution mode are already established, the ticket (when one exists) is already In Progress, and the request is only to execute, review, verify, and open a PR, invoke `implementation-workflow` directly. This shortcut is not available for work marked prototype-backed.
+Do not use this workflow for a related batch of work items. If a fresh approved requirements handoff and execution mode are already established, any ticket is already In Progress, and the request is only to execute, review, verify, and open a PR, invoke `implementation-workflow` directly. This shortcut is not available for work marked prototype-backed.
 
 Mandatory lifecycle:
 
@@ -114,7 +114,7 @@ Use this readiness shape:
 
 ## Final Report
 
-End with the request summary, approved requirements spec summary, approved plan summary, implementation status, PR link or creation blocker, PR-readiness result, and remaining risks, blockers, assumptions, or follow-ups.
+End with the request summary, with the ticket summary when a ticket exists, approved requirements spec summary, approved plan summary, implementation status, PR link or creation blocker, PR-readiness result, the ticket state when a ticket exists, and remaining risks, blockers, assumptions, or follow-ups.
 
 ## Stop Conditions
 
