@@ -171,16 +171,14 @@ export function auditGeometry(config) {
     box,
     ...pointerPseudoBoxes(element).map((pseudo) => hitTested(element, box, clipToContainers(element, pseudo))),
   ];
-  const LABELABLE = "input, select, textarea";
   const measureTarget = (element) => {
     const isTiny = (box) => box.width < 2 || box.height < 2;
     let box = element.getBoundingClientRect();
     if (isTiny(box) || undiscoverableReason(element)) box = whileFocused(element, () => element.getBoundingClientRect());
     const labels = ["checkbox", "radio"].includes(element.type) ? [...(element.labels ?? [])].filter(ux.isRendered) : [];
-    const wrappingLabel = element.matches(LABELABLE) ? element.parentElement?.closest("label") : null;
     const areas = [
       ...withPointerArea(element, box),
-      ...[...labels, wrappingLabel].filter((label) => label && ux.isRendered(label)).flatMap((label) => withPointerArea(label, label.getBoundingClientRect())),
+      ...labels.flatMap((label) => withPointerArea(label, label.getBoundingClientRect())),
     ];
     const merged = unionBox(areas);
     const seen = unionBox([box, ...labels.map((label) => label.getBoundingClientRect())]);
@@ -375,9 +373,8 @@ export function auditGeometry(config) {
     for (const [index, first] of targets.entries()) {
       for (const second of targets.slice(index + 1)) {
         if (first.el.contains(second.el) || second.el.contains(first.el)) continue;
-        if (sameSegmentedControl(first.el, second.el)) continue;
         const gap = gapBetween(first.box.visual, second.box.visual);
-        if (gap >= threshold) continue;
+        if (gap >= threshold || (gap <= 1 && sameSegmentedControl(first.el, second.el))) continue;
         fail("TARGET-GAP", `${ux.selectorOf(first.el)} <-> ${ux.selectorOf(second.el)}`, gap, `>= ${threshold}px`, `increase spacing by ${round(threshold - gap)} px`);
       }
     }

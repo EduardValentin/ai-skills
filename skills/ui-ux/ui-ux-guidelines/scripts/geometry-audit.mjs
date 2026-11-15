@@ -46,15 +46,15 @@ Rules: ${ALL_RULES.join(", ")}
 
 Notes:
   Inline links inside running text are exempt from target size and gap checks.
-  Checkbox and radio targets include their label. Controls revealed on focus (skip links) are measured focused.
-  A target is its pointer area: the element box, its absolutely positioned ::before/::after that take pointer
-  events (an invisible hit area), and a wrapping label for fields; areas are clipped by overflow:hidden/clip
-  ancestors and by the unreachable edges of scroll containers. Each target is scrolled into view and its
-  hit area is hit-tested, so any strip another element covers is not counted. A focusable group (e.g. a radiogroup root) is measured as its
-  own box joined with its controls' pointer areas, and is checked like any other target.
+  Controls revealed on focus (skip links) are measured focused.
+  A target is its pointer area: the element box plus its absolutely positioned ::before/::after that take
+  pointer events (an invisible hit area). Areas are clipped by overflow:hidden/clip ancestors and by the
+  unreachable edges of scroll containers. Each target is scrolled into view and its hit area is hit-tested,
+  so any strip another element covers is not counted. Labels count only for checkboxes and radios. A
+  focusable group (e.g. a radiogroup root) is measured as its own box joined with its controls' areas.
   Gap rules measure the visible space between controls (the drawn box, plus the label for checkboxes and
-  radios), not between pointer areas. Options inside one segmented control (a radiogroup or tablist) are
-  one control: the gap rules skip pairs within it and measure the control against its neighbours.
+  radios), not between pointer areas. Options of one radiogroup or tablist that touch (gap <= 1px) form a
+  segmented control and are exempt; options set apart must keep the full gap.
   LINE-LENGTH minimum is not enforced when the text already spans 80% of the viewport.
   SPACING-RATIO: the gap under a heading must be smaller than the gap above it, and the largest gap
   inside a section/article/fieldset/li group must not exceed the separation between sibling groups.

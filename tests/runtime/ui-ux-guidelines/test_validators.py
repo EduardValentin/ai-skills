@@ -100,10 +100,16 @@ class RenderedPageTests(unittest.TestCase):
         completed = run_script("geometry-audit.mjs", str(FIXTURES / "hit-areas.html"), "--rules", "TARGET-SIZE,TARGET-GAP", "--viewports", "375")
         self.assertEqual(completed.returncode, 1)
         results = json.loads(completed.stdout)["pages"][0]["results"]
-        self.assertEqual({(result["ruleId"], result["selector"]) for result in results}, {("TARGET-SIZE", "#covered"), ("TARGET-SIZE", "#deep")})
-        for result in results:
-            self.assertEqual(result["measured"]["height"], 38)
-            self.assertEqual(result["measured"]["visual"], {"width": 24, "height": 24})
+        found = {(result["ruleId"], result["selector"]): result["measured"] for result in results}
+        self.assertEqual(
+            set(found),
+            {("TARGET-SIZE", "#covered"), ("TARGET-SIZE", "#deep"), ("TARGET-SIZE", "#short"), ("TARGET-GAP", "#compact <-> #roomy")},
+        )
+        for selector in ("#covered", "#deep"):
+            self.assertEqual(found[("TARGET-SIZE", selector)]["height"], 38)
+            self.assertEqual(found[("TARGET-SIZE", selector)]["visual"], {"width": 24, "height": 24})
+        self.assertEqual(found[("TARGET-SIZE", "#short")]["height"], 34)
+        self.assertEqual(found[("TARGET-GAP", "#compact <-> #roomy")], 4)
 
     def test_compliant_page_passes_dom_contrast(self) -> None:
         completed = run_script("contrast-audit.mjs", "dom", "--html", str(FIXTURES / "compliant.html"))
