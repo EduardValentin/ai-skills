@@ -41,7 +41,7 @@ the selection for reruns and remediations unless the user asks to change it.
 
 Write an implementation plan grounded in the approved requirements spec, the
 work and any ticket, relevant repository evidence, and the verification
-surfaces. Embed the visual spec verbatim as implementation direction.
+surfaces. Embed any supplied visual spec verbatim as implementation direction.
 
 When the reviewer selection includes architecture plan review, invoke
 `inspect-architecture-workflow` with `plan-review` before presenting the plan
@@ -65,12 +65,8 @@ removes architecture plan review from this plan gate's selection, so plan
 revisions neither re-enter the flow nor ask again. Never pass that gate
 silently, and never create the model on your own initiative.
 
-Architecture plan review judges structure only; the user approves behavior,
-scope, and acceptance criteria.
-
 Present the written plan and any plan-review return, and obtain separate
-explicit approval. Agreement with decisions or recommendations does not
-approve an unwritten plan.
+explicit approval.
 
 ## Approved Handoff
 
@@ -78,7 +74,7 @@ After plan approval, return:
 
 - the work, with ticket and parent context when a ticket exists;
 - the prototype-backed decision;
-- the visual spec and the `UI appearance decision`;
+- the `UI appearance decision` and any visual spec;
 - the Brainstorm completion record;
 - the written requirements spec and its explicit approval evidence;
 - the written implementation plan and its separate approval evidence;
@@ -96,6 +92,7 @@ and required handoff.
 
 ## Change Recovery
 
-A plan-only change invalidates plan approval. A change to scope, behavior, or
-acceptance criteria invalidates both approvals and returns to
+A plan-only change invalidates plan approval. A change to the visual direction
+returns to the caller for a new visual spec; do not edit it. A change to scope,
+behavior, or acceptance criteria invalidates both approvals and returns to
 `requirements-gathering`.

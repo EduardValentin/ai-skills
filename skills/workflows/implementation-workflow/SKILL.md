@@ -224,8 +224,10 @@ Run after the review gate passes.
   criterion. Passing automated checks never satisfy this gate.
 - When the diff touched a rendered surface, dispatch `frontend-auditor` in the
   same fan-out with the running app, affected routes and states, configured
-  breakpoints, and the diff. Every changed rendered surface is in scope; there
-  is no exception for surfaces some other process might also check.
+  breakpoints, and the diff, stating that the visual direction is new when
+  the visual spec's `basis` is `new`. Every changed rendered surface is in
+  scope; there is no exception for surfaces some other process might also
+  check.
 - Wait for every dispatched verifier. A QA `BUGS FOUND`, a visual or
   accessibility finding of severity `blocker` or `major`, or a `BLOCKED`
   visual verdict, or a cannot-proceed verdict from QA sends the work to the

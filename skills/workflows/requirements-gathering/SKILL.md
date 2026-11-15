@@ -2,7 +2,7 @@
 name: requirements-gathering
 description: Use when gathering, clarifying, documenting, and approving the requirements spec for one piece of work, whether or not it comes with a ticket.
 compatibility: >-
-  Requires repository access, and tracker access only when the work has a ticket. Discovery agents are optional; without them, inspect inline. `development-workflow` and `implementation-planning` may consume the handoff; without them, return it to the user. Stop only when missing access could materially change scope, behavior, or acceptance criteria.
+  Requires repository access, and tracker access only when the work has a ticket. Discovery agents are optional; without them, inspect inline. `development-workflow` and `implementation-planning` may consume the handoff; without them, return it to the user.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -20,28 +20,30 @@ Take one piece of work, not a batch, through:
 
 The work is the user's request, and a ticket is optional. Stop after returning
 the requirements handoff. Do not plan, implement, change ticket state, select
-an execution mode, or verify PR readiness. Do not use this skill for broad future-work planning,
-PRD management, backlog writing, implementation-only work, or PR verification.
+an execution mode, or verify PR readiness. Do not use this skill for broad
+future-work planning, PRD management, backlog writing, implementation-only
+work, or PR verification.
 
 Approval is artifact-specific. Agreement with decisions, assumptions, or
-recommendations does not approve an unwritten requirements spec.
+recommendations, or a Brainstorm record, does not approve an unwritten
+requirements spec.
 
 ## Resume Rules
 
 Resume after the longest contiguous sequence of fresh checkpoints:
 
-- Setup requires current request, ticket, and repository evidence for every
-  material requirements decision.
+- Setup requires current request and repository evidence, and ticket evidence
+  when a ticket exists, for every material requirements decision.
 - Brainstorm requires a record showing that material unknowns are resolved and
   naming the lower-impact assumptions and open questions the user explicitly
   accepted.
 - Requirements spec approval requires the written, presented spec and its
   explicit approval evidence.
 
-The Brainstorm record is checkpoint evidence, not approval evidence. Refresh
-ticket and repository state before resuming. Missing, stale, or contradictory
-evidence invalidates that checkpoint and every later one. Recover from the
-earliest affected checkpoint without replaying earlier fresh work.
+Refresh repository state, and the ticket when one exists, before resuming.
+Missing, stale, or contradictory evidence invalidates that checkpoint and every
+later one. Recover from the earliest affected checkpoint without replaying
+earlier fresh work.
 
 ## Discovery
 
@@ -95,16 +97,16 @@ After requirements spec approval, return:
 - the work, with ticket and parent context when a ticket exists;
 - the prototype-backed decision: whether the repository contains a reference
   prototype app and the work implies a user-visible UI change;
-- the `UI appearance decision`: `none`, `changes existing UI`, or
-  `new app or page`;
+- the `UI appearance decision`: `new app or page` when the work adds a page or
+  app, otherwise `changes existing UI` when it changes how existing UI looks,
+  otherwise `none`;
 - the Brainstorm completion record;
 - the written requirements spec and its explicit approval evidence;
 - accepted assumptions, remaining open questions, and material risks;
 - required verification surfaces.
 
 If blocked, return the fresh completed checkpoints, earliest incomplete
-checkpoint, exact missing evidence, and required handoff. Do not attach
-approval evidence to Setup, Brainstorm, assumptions, or open questions.
+checkpoint, exact missing evidence, and required handoff.
 
 ## Change Recovery
 
