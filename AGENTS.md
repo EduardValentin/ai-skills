@@ -193,9 +193,8 @@ never edit installed or generated copies.
 
 ## UI/UX Quality Gate
 
-- On any task that creates, styles, refactors, or audits frontend UI, invoke
-  the `ui-ux-guidelines` skill and follow its gate: read only the relevant
-  domain modules, define tokens first, and run both validator scripts until
-  they exit `0`.
-- Before finishing, delegate review to the `ux-auditor` agent and resolve
-  every Blocking Defect it returns.
+- On any task that creates or changes frontend UI, invoke the
+  `ui-ux-guidelines` skill and follow its gate until both validator scripts
+  exit `0`.
+- Before finishing, delegate review to the `frontend-auditor` agent and
+  resolve every `blocker` and `major` finding.

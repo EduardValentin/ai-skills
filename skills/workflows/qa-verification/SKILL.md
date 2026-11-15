@@ -2,7 +2,7 @@
 name: qa-verification
 description: Use when manually verifying acceptance criteria and user-observable or system-observable behavior for a running app, API, service, job, script, integration, frontend PR, or mixed executable surface. Use when the user asks for QA, browser behavior evidence, acceptance-criteria verification, PR-note verification, backend/API probes, CLI checks, persistence, auth, validation, state transitions, regression probes, and PR/ticket-linked QA.
 compatibility: >-
-  Requires access to the running surface, mode-appropriate interaction and probe tools, and any credentials, fixtures, seed data, feature flags, or real dependencies required by the acceptance criteria. Try available PR or ticket tooling, ask the caller for missing metadata, and only then use explicitly provisional diff scope. If runtime evidence is unavailable, return the documented blocker verdict. Naming `visual-verifier` is a flag target only; QA never depends on it.
+  Requires access to the running surface, mode-appropriate interaction and probe tools, and any credentials, fixtures, seed data, feature flags, or real dependencies required by the acceptance criteria. Try available PR or ticket tooling, ask the caller for missing metadata, and only then use explicitly provisional diff scope. If runtime evidence is unavailable, return the documented blocker verdict. Naming `frontend-auditor` is a flag target only; QA never depends on it.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -74,7 +74,7 @@ When provided runtime facts show QA can proceed but verification has not yet bee
 - Starting the app, scoping from the diff, or inferring testing instructions before attempting available PR/ticket tooling and asking for missing details.
 - Falling back to diff-scoped QA before the caller has had a chance to provide missing ticket/PR details, acceptance criteria, implemented surface area, and testing instructions.
 - Treating inferred diff scope as authoritative when ticket/PR details, acceptance criteria, or testing instructions are available.
-- Comparing appearance against references, analogs, computed styles, or bounding boxes instead of verifying behavior after user or system actions; flag appearance concerns for the `visual-verifier` agent.
+- Comparing appearance against references, analogs, computed styles, or bounding boxes instead of verifying behavior after user or system actions; flag appearance concerns for the `frontend-auditor` agent.
 - Modifying product code or changing configuration to repair a finding while acting as the QA verifier.
 - Assessing PR readiness, CI approval gates, unresolved review comments, mergeability, or tracker-state gates.
 - Omitting state-transition, persistence, side-effect, or propagation checks when the acceptance criteria depend on them.

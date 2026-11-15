@@ -2,7 +2,7 @@
 name: implementation-workflow
 description: Use when an approved implementation plan or plan slice is ready for code changes and the work must continue through specialized independent review, manual QA, rendered visual verification, remediation, reruns, and reporting.
 compatibility: >-
-  Requires fresh-context dispatch of reviewer agents (acceptance-criteria, code-cleanliness, security, performance, design-system), `qa-verifier`, `visual-verifier`, and for selected architecture review the `inspect-architecture-workflow` skill's `architecture-reviewer` and `architecture-classifier`. A missing agent may be replaced by a fresh generic subagent given its prompt and skill, read-only for a reviewer; without that dispatch, or the selected skill, return `IMPLEMENTATION BLOCKED`.
+  Requires fresh-context dispatch of reviewer agents (acceptance-criteria, code-cleanliness, security, performance, design-system), `qa-verifier`, `frontend-auditor`, and for selected architecture review the `inspect-architecture-workflow` skill's `architecture-reviewer` and `architecture-classifier`. A missing agent may be replaced by a fresh generic subagent given its prompt and skill, read-only for a reviewer; without that dispatch, or the selected skill, return `IMPLEMENTATION BLOCKED`.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
@@ -219,7 +219,7 @@ Run after the review gate passes.
   surface and entry points, setup and runtime details, changed behavior,
   known risks, check evidence, and review context. Require evidence for every
   criterion. Passing automated checks never satisfy this gate.
-- When the diff touched a rendered surface, dispatch `visual-verifier` in the
+- When the diff touched a rendered surface, dispatch `frontend-auditor` in the
   same fan-out with the running app, affected routes and states, configured
   breakpoints, and the diff. Every changed rendered surface is in scope; there
   is no exception for surfaces some other process might also check.
@@ -230,7 +230,7 @@ Run after the review gate passes.
 
 Fallbacks: if `qa-verifier` is unavailable, use a separate fresh agent with
 the `qa-verification` skill preloaded that can exercise the runtime surface;
-if `visual-verifier` is unavailable, use a separate fresh agent with the
+if `frontend-auditor` is unavailable, use a separate fresh agent with the
 `visual-validation` skill preloaded. If no fresh-context verifier can produce
 evidence, return `IMPLEMENTATION BLOCKED`.
 
@@ -296,7 +296,7 @@ from this workflow.
 - Carrying forward a reviewer that raised an accepted finding, or one whose
   predicate the delta meets.
 - Treating automated checks as review, QA, or visual verification.
-- Skipping `visual-verifier` for a changed rendered surface for any reason.
+- Skipping `frontend-auditor` for a changed rendered surface for any reason.
 - Letting the implementer perform the independent review.
 - Completing while relevant findings, failed criteria, or missing evidence
   remain.
