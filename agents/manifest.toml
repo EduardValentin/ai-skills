@@ -142,11 +142,11 @@ effort = "medium"
 color = "green"
 
 [[agent]]
-id = "visual-verifier"
-source = "visual-verifier.md"
-description = "Rendered-output and accessibility verifier for frontend changes that need DOM-backed layout, responsive, focus, contrast and motion checks without a comparison basis."
-groups = ["ticket-workflow", "implementation-workflow", "visual-validation"]
-preload_skills = ["visual-validation"]
+id = "frontend-auditor"
+source = "frontend-auditor.md"
+description = "Rendered-output auditor for frontend changes: runs the contrast and geometry validators, inspects layout, responsive, focus and motion evidence, and judges hierarchy, form ergonomics, keyboard path and state coverage, without a comparison basis."
+groups = ["ticket-workflow", "implementation-workflow", "visual-validation", "ui-ux-guidelines"]
+preload_skills = ["visual-validation", "ui-ux-guidelines"]
 
 [agent.codex]
 model = "gpt-5.6-sol"

@@ -1,6 +1,6 @@
 ---
 name: reusable-ui-components
-description: "Use when working on frontend applications using a component based UI framework or native components. Examples: React, HTML based MVC apps."
+description: "Use when creating, refactoring, or reviewing UI components: deciding whether to reuse a component, extend it with variants, compose with slots, or create a new one, and when shaping component APIs or design-system boundaries."
 metadata:
   status: experimental
   allows_tool_references: "false"

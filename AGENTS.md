@@ -190,3 +190,11 @@ never edit installed or generated copies.
   `scripts/ai-skills check-local-installs --harness codex`
   diagnostic. Report duplicate, missing, or stale repository skills and never
   repair local state automatically.
+
+## UI/UX Quality Gate
+
+- On any task that creates or changes frontend UI, invoke the
+  `ui-ux-guidelines` skill and follow its gate until both validator scripts
+  exit `0`.
+- Before finishing, delegate review to the `frontend-auditor` agent and
+  resolve every `blocker` and `major` finding.

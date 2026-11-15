@@ -1,0 +1,16 @@
+# Layout
+- Settle hierarchy first; primary element largest with most whitespace; max 2 top-size elements per view.
+- DOM and focus order match visual order.
+- ol/ul/dl for item groups, grids included; table for rows×columns with caption, th, scope.
+- Spacing: 8pt grid (4pt for dense UI), t-shirt scale with widening steps; no arbitrary values.
+- Nest groups as rectangles: smallest gap innermost, growing outward; intra-group < inter-group; heading-to-content < group-to-group.
+- Group by proximity, similarity, or alignment first; border/background only when those fail; connector line only if neither works.
+- Never put unrelated items close.
+- One alignment per component/section; one corner-radius system.
+- One column grid on all pages; spans take combined width plus gutters; narrow gutters for airy items, wide to split callouts (outer columns) from body (middle); grid adapts to breakpoints and orientation.
+- Put actions beside their task area in easy reach; ≥2mm between targets; fewer interactive elements → bigger key targets.
+- Mobile: content over chrome; nav/search out of the fold.
+- Nav: top bar only for few options; 4-5 frequent options always visible; tab bar persistent, nav bar scrolls unless sticky.
+- Forms: one column, one field per row; short related fields (City/State/Zip) share a row; label above, nearer its own field than any other, never right-aligned; side labels only on very long desktop forms.
+- 4-6 fields per section; split topics into fieldsets with legend.
+- Keep layouts simple and consistent; merge multi-page displays.
