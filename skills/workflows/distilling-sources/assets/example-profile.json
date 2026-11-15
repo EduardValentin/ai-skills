@@ -1,0 +1,46 @@
+{
+  "goal": "A lean UI/UX ruleset for coding agents: always-loaded floors, design guides read before writing interface code, and a specification for a contrast checker script.",
+  "sources": [
+    "https://www.nngroup.com/articles/ten-usability-heuristics/",
+    "https://www.nngroup.com/articles/touch-target-size/",
+    "https://practicaltypography.com/summary-of-key-rules.html"
+  ],
+  "keep": "Falsifiable rules, numeric thresholds, and behavioral contracts that hold for any interface.",
+  "discard": "Prose, history, examples, rationale, and styles tied to one framework.",
+  "conflicts": "Keep the stricter accessibility or ergonomic bound.",
+  "targets": [
+    {
+      "name": "INVARIANTS",
+      "route": "Only the strictest universal floors, such as minimum text size, contrast, and touch target size.",
+      "output": "invariants.md",
+      "cap_tokens": 150,
+      "pass": 1,
+      "format": "Dense bullets, one floor per bullet, no rationale."
+    },
+    {
+      "name": "SCRIPT_CONTRAST",
+      "route": "Luminance or color-space math that a program can verify.",
+      "output": "spec-contrast-auditor.md",
+      "cap_tokens": null,
+      "pass": 1,
+      "format": "A technical specification: command-line interface, every check with its formula and threshold, and the JSON report schema."
+    },
+    {
+      "name": "TYPOGRAPHY",
+      "route": "Type scale, spacing, and line-length heuristics needed before writing code.",
+      "output": "domain-typography.md",
+      "cap_tokens": 400,
+      "pass": 2,
+      "format": "Bulleted imperatives and IF -> THEN decisions, no rationale or examples."
+    },
+    {
+      "name": "INTERACTION_FORMS",
+      "route": "Behavior of controls, forms, validation, and error messages needed before writing code.",
+      "output": "domain-interaction-forms.md",
+      "cap_tokens": 400,
+      "pass": 2,
+      "format": "Bulleted imperatives and IF -> THEN decisions, no rationale or examples."
+    }
+  ],
+  "checkpoints": ["after_fetch", "after_bucket"]
+}
