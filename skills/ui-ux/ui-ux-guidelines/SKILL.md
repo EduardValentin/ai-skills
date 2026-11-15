@@ -26,7 +26,7 @@ Design rules and their validators. Tokens belong to `semantic-design-tokens`, co
 
 - Bespoke UI where no design system exists; no stock component-library looks.
 - button acts, a[href] navigates; one h1, no skipped headings; skip link.
-- Targets ≥48×48px (≥1cm); every visible control tappable.
+- Targets ≥48×48px pointer area (≥1cm); every visible control tappable.
 - Text contrast ≥4.5:1 (body Lc75); control edges/icons ≥3:1.
 - Never color alone (links, errors, state, hierarchy); errors need text/icon.
 - Visible focus on every focusable control.

@@ -14,7 +14,7 @@ const DOCUMENT_RULES = [
   "MEDIA-MUTE-PRESSED", "MEDIA-VOLUME-RANGE", "CONTROL-NAME", "LABEL-ASSOC", "ARIA-REFS", "IMG-ALT",
 ];
 const VIEWPORT_RULES = [
-  "FOCUS-HIDDEN", "TARGET-SIZE", "TARGET-GAP-BUTTON", "TARGET-GAP", "REFLOW-OVERFLOW", "FORM-OPTIONS-VISIBLE",
+  "FOCUS-HIDDEN", "TARGET-SIZE", "TARGET-GAP", "REFLOW-OVERFLOW", "FORM-OPTIONS-VISIBLE",
   "BODY-FONT-SIZE", "LINE-LENGTH", "SPACING-RATIO", "APCA-NONTEXT-15", "APCA-ICON-30", "APCA-TEXT-SIZE", "TEXT-RESIZE-200",
 ];
 const ALL_RULES = [...DOCUMENT_RULES, ...VIEWPORT_RULES];
@@ -28,7 +28,7 @@ Usage:
 Options:
   --viewports <list>          WIDTH or WIDTHxHEIGHT, comma-separated (default 320,375,1440)
   --mobile-viewports <list>   widths where FORM-OPTIONS-VISIBLE runs (default 320,375)
-  --pt-scale <n>              multiplier for the 48px target and 16px/8px gap thresholds (default 1)
+  --pt-scale <n>              multiplier for the 48px target and the 8px gap threshold (default 1)
   --body-text-selector <css>  body text for LINE-LENGTH and BODY-FONT-SIZE (default "main p")
   --measure-min <n>           minimum average characters per line (default 45)
   --measure-max <n>           maximum average characters per line (default 75)
@@ -47,6 +47,14 @@ Rules: ${ALL_RULES.join(", ")}
 Notes:
   Inline links inside running text are exempt from target size and gap checks.
   Checkbox and radio targets include their label. Controls revealed on focus (skip links) are measured focused.
+  A target is its pointer area: the element box, its absolutely positioned ::before/::after that take pointer
+  events (an invisible hit area), and a wrapping label for fields; areas are clipped by overflow:hidden/clip
+  ancestors and by the unreachable edges of scroll containers. Each target is scrolled into view and its
+  hit area is hit-tested, so any strip another element covers is not counted. A focusable group (e.g. a radiogroup root) is measured as its
+  own box joined with its controls' pointer areas, and is checked like any other target.
+  Gap rules measure the visible space between controls (the drawn box, plus the label for checkboxes and
+  radios), not between pointer areas. Options inside one segmented control (a radiogroup or tablist) are
+  one control: the gap rules skip pairs within it and measure the control against its neighbours.
   LINE-LENGTH minimum is not enforced when the text already spans 80% of the viewport.
   SPACING-RATIO: the gap under a heading must be smaller than the gap above it, and the largest gap
   inside a section/article/fieldset/li group must not exceed the separation between sibling groups.

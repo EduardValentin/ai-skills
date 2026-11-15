@@ -8,7 +8,7 @@
 - Never put unrelated items close.
 - One alignment per component/section; one corner-radius system.
 - One column grid on all pages; spans take combined width plus gutters; narrow gutters for airy items, wide to split callouts (outer columns) from body (middle); grid adapts to breakpoints and orientation.
-- Put actions beside their task area in easy reach; ≥2mm between targets; fewer interactive elements → bigger key targets.
+- Put actions beside their task area in easy reach; ≥2mm between visible targets; fewer interactive elements → bigger key targets.
 - Mobile: content over chrome; nav/search out of the fold.
 - Nav: top bar only for few options; 4-5 frequent options always visible; tab bar persistent, nav bar scrolls unless sticky.
 - Forms: one column, one field per row; short related fields (City/State/Zip) share a row; label above, nearer its own field than any other, never right-aligned; side labels only on very long desktop forms.

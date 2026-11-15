@@ -95,13 +95,109 @@ export function auditGeometry(config) {
     right: Math.max(...boxes.map((box) => box.right)),
     bottom: Math.max(...boxes.map((box) => box.bottom)),
   });
-  const targetBox = (element) => {
+  const pixels = (value) => (value.endsWith("px") ? Number.parseFloat(value) : Number.NaN);
+  const paddingBox = (element, style) => {
+    const box = element.getBoundingClientRect();
+    return {
+      left: box.left + pixels(style.borderLeftWidth),
+      right: box.right - pixels(style.borderRightWidth),
+      top: box.top + pixels(style.borderTopWidth),
+      bottom: box.bottom - pixels(style.borderBottomWidth),
+    };
+  };
+  const span = (start, end, size, from, to) => {
+    if (!Number.isNaN(start) && !Number.isNaN(end)) return [from + start, to - end];
+    if (!Number.isNaN(start) && !Number.isNaN(size)) return [from + start, from + start + size];
+    if (!Number.isNaN(end) && !Number.isNaN(size)) return [to - end - size, to - end];
+    return null;
+  };
+  const pointerPseudoBoxes = (element) => {
+    const host = getComputedStyle(element);
+    if (host.position === "static") return [];
+    const inner = paddingBox(element, host);
+    return ["::before", "::after"].flatMap((pseudo) => {
+      const style = getComputedStyle(element, pseudo);
+      const generated = !["none", "normal"].includes(style.content) && style.display !== "none";
+      if (!generated || style.position !== "absolute" || style.pointerEvents === "none" || style.visibility === "hidden") return [];
+      const x = span(pixels(style.left), pixels(style.right), pixels(style.width), inner.left, inner.right);
+      const y = span(pixels(style.top), pixels(style.bottom), pixels(style.height), inner.top, inner.bottom);
+      return x && y ? [{ left: x[0], right: x[1], top: y[0], bottom: y[1] }] : [];
+    });
+  };
+  const clipToContainers = (host, box) => {
+    let clipped = { ...box };
+    for (let node = host; node && node !== document.documentElement; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+      const visible = paddingBox(node, style);
+      const left = visible.left - node.scrollLeft;
+      const top = visible.top - node.scrollTop;
+      const inner = ["auto", "scroll"].includes(style.overflowX) || ["auto", "scroll"].includes(style.overflowY)
+        ? { left, top, right: left + Math.max(node.scrollWidth, visible.right - visible.left), bottom: top + Math.max(node.scrollHeight, visible.bottom - visible.top) }
+        : visible;
+      if (style.overflowX !== "visible") clipped = { ...clipped, left: Math.max(clipped.left, inner.left), right: Math.min(clipped.right, inner.right) };
+      if (style.overflowY !== "visible") clipped = { ...clipped, top: Math.max(clipped.top, inner.top), bottom: Math.min(clipped.bottom, inner.bottom) };
+    }
+    return clipped;
+  };
+  const answersPointer = (element, x, y) => {
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null;
+    const hit = document.elementFromPoint(x, y);
+    if (!hit) return false;
+    if (hit === element || element.contains(hit)) return true;
+    return [...(element.labels ?? [])].some((label) => label.contains(hit));
+  };
+  const hitTested = (element, box, claimed) => {
+    const centerX = Math.floor((box.left + box.right) / 2);
+    const centerY = Math.floor((box.top + box.bottom) / 2);
+    const reach = (from, to, point) => {
+      const step = Math.sign(to - from);
+      let reached = from;
+      while (step !== 0 && (to - reached) * step > 0.01) {
+        const next = step > 0 ? Math.min(to, reached + 1) : Math.max(to, reached - 1);
+        if (point(Math.floor((reached + next) / 2)) === false) break;
+        reached = next;
+      }
+      return reached;
+    };
+    return {
+      left: reach(box.left, claimed.left, (x) => answersPointer(element, x, centerY)),
+      right: reach(box.right, claimed.right, (x) => answersPointer(element, x, centerY)),
+      top: reach(box.top, claimed.top, (y) => answersPointer(element, centerX, y)),
+      bottom: reach(box.bottom, claimed.bottom, (y) => answersPointer(element, centerX, y)),
+    };
+  };
+  const withPointerArea = (element, box) => [
+    box,
+    ...pointerPseudoBoxes(element).map((pseudo) => hitTested(element, box, clipToContainers(element, pseudo))),
+  ];
+  const LABELABLE = "input, select, textarea";
+  const measureTarget = (element) => {
     const isTiny = (box) => box.width < 2 || box.height < 2;
     let box = element.getBoundingClientRect();
     if (isTiny(box) || undiscoverableReason(element)) box = whileFocused(element, () => element.getBoundingClientRect());
     const labels = ["checkbox", "radio"].includes(element.type) ? [...(element.labels ?? [])].filter(ux.isRendered) : [];
-    const merged = unionBox([box, ...labels.map((label) => label.getBoundingClientRect())]);
-    return { ...merged, width: merged.right - merged.left, height: merged.bottom - merged.top };
+    const wrappingLabel = element.matches(LABELABLE) ? element.parentElement?.closest("label") : null;
+    const areas = [
+      ...withPointerArea(element, box),
+      ...[...labels, wrappingLabel].filter((label) => label && ux.isRendered(label)).flatMap((label) => withPointerArea(label, label.getBoundingClientRect())),
+    ];
+    const merged = unionBox(areas);
+    const seen = unionBox([box, ...labels.map((label) => label.getBoundingClientRect())]);
+    const visual = { ...seen, width: seen.right - seen.left, height: seen.bottom - seen.top };
+    return { ...merged, width: merged.right - merged.left, height: merged.bottom - merged.top, visual };
+  };
+  const toDocument = (box) => ({
+    ...box,
+    left: box.left + scrollX,
+    right: box.right + scrollX,
+    top: box.top + scrollY,
+    bottom: box.bottom + scrollY,
+  });
+  const targetBox = (element) => {
+    element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+    const measured = measureTarget(element);
+    return { ...toDocument(measured), visual: toDocument(measured.visual) };
   };
 
   const interactive = [
@@ -240,7 +336,18 @@ export function auditGeometry(config) {
     }
   });
 
-  const targets = interactive.filter((el) => !isInlineTextLink(el) && !revealedReason(el)).map((el) => ({ el, box: targetBox(el) }));
+  const membersOf = (element) => interactive.filter((other) => other !== element && element.contains(other) && ux.isRendered(other));
+  const groupBox = (element) => {
+    const own = targetBox(element);
+    const members = membersOf(element).map(targetBox);
+    if (members.length === 0) return own;
+    const merged = unionBox([own, ...members]);
+    return { ...merged, width: merged.right - merged.left, height: merged.bottom - merged.top, visual: own.visual };
+  };
+  const targets = interactive
+    .filter((el) => !isInlineTextLink(el) && !revealedReason(el))
+    .map((el) => ({ el, box: groupBox(el) }));
+  scrollTo({ left: 0, top: 0, behavior: "instant" });
   const minimum = round(48 * config.ptScale);
 
   rule("TARGET-SIZE", true, () => {
@@ -248,7 +355,7 @@ export function auditGeometry(config) {
       const width = round(box.width);
       const height = round(box.height);
       if (width >= minimum && height >= minimum) continue;
-      fail("TARGET-SIZE", el, { width, height }, `>= ${minimum}px x ${minimum}px`, { width: Math.max(width, minimum), height: Math.max(height, minimum) });
+      fail("TARGET-SIZE", el, { width, height, visual: { width: round(box.visual.width), height: round(box.visual.height) } }, `>= ${minimum}px x ${minimum}px`, { width: Math.max(width, minimum), height: Math.max(height, minimum) });
     }
   });
 
@@ -257,19 +364,24 @@ export function auditGeometry(config) {
     const dy = Math.max(0, second.top - first.bottom, first.top - second.bottom);
     return round(Math.hypot(dx, dy));
   };
-  const checkGaps = (ruleId, threshold, wantsButtonPair) => {
+  const SEGMENTED = "[role=radiogroup], [role=tablist]";
+  const segmentOf = (element) => element.parentElement?.closest(SEGMENTED) ?? null;
+  const sameSegmentedControl = (first, second) => {
+    const segment = segmentOf(first);
+    return segment !== null && segment === segmentOf(second);
+  };
+  rule("TARGET-GAP", true, () => {
+    const threshold = round(8 * config.ptScale);
     for (const [index, first] of targets.entries()) {
       for (const second of targets.slice(index + 1)) {
         if (first.el.contains(second.el) || second.el.contains(first.el)) continue;
-        if ((first.el.matches(BUTTONS) && second.el.matches(BUTTONS)) !== wantsButtonPair) continue;
-        const gap = gapBetween(first.box, second.box);
+        if (sameSegmentedControl(first.el, second.el)) continue;
+        const gap = gapBetween(first.box.visual, second.box.visual);
         if (gap >= threshold) continue;
-        fail(ruleId, `${ux.selectorOf(first.el)} <-> ${ux.selectorOf(second.el)}`, gap, `>= ${threshold}px`, `increase spacing by ${round(threshold - gap)} px`);
+        fail("TARGET-GAP", `${ux.selectorOf(first.el)} <-> ${ux.selectorOf(second.el)}`, gap, `>= ${threshold}px`, `increase spacing by ${round(threshold - gap)} px`);
       }
     }
-  };
-  rule("TARGET-GAP-BUTTON", true, () => checkGaps("TARGET-GAP-BUTTON", round(16 * config.ptScale), true));
-  rule("TARGET-GAP", true, () => checkGaps("TARGET-GAP", round(8 * config.ptScale), false));
+  });
 
   rule("REFLOW-OVERFLOW", true, () => {
     const scrollWidth = document.scrollingElement.scrollWidth;

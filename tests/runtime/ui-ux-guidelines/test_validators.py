@@ -85,7 +85,7 @@ class RenderedPageTests(unittest.TestCase):
         found = {(result["ruleId"], result["viewport"]) for result in results}
         self.assertIn(("REFLOW-OVERFLOW", "320x800"), found)
         self.assertIn(("TARGET-SIZE", "375x800"), found)
-        self.assertIn(("TARGET-GAP-BUTTON", "375x800"), found)
+        self.assertIn(("TARGET-GAP", "375x800"), found)
         self.assertIn(("LINE-LENGTH", "1440x900"), found)
         self.assertIn(("BODY-FONT-SIZE", "320x800"), found)
         self.assertIn(("SPACING-RATIO", "1440x900"), found)
@@ -95,6 +95,15 @@ class RenderedPageTests(unittest.TestCase):
         save = next(r for r in results if r["ruleId"] == "TARGET-SIZE" and r["selector"].endswith("button:nth-of-type(1)"))
         self.assertEqual(save["measured"]["height"], 30)
         self.assertEqual(save["corrective"], {"width": 48, "height": 48})
+
+    def test_invisible_hit_areas_count_only_where_they_answer_the_pointer(self) -> None:
+        completed = run_script("geometry-audit.mjs", str(FIXTURES / "hit-areas.html"), "--rules", "TARGET-SIZE,TARGET-GAP", "--viewports", "375")
+        self.assertEqual(completed.returncode, 1)
+        results = json.loads(completed.stdout)["pages"][0]["results"]
+        self.assertEqual({(result["ruleId"], result["selector"]) for result in results}, {("TARGET-SIZE", "#covered"), ("TARGET-SIZE", "#deep")})
+        for result in results:
+            self.assertEqual(result["measured"]["height"], 38)
+            self.assertEqual(result["measured"]["visual"], {"width": 24, "height": 24})
 
     def test_compliant_page_passes_dom_contrast(self) -> None:
         completed = run_script("contrast-audit.mjs", "dom", "--html", str(FIXTURES / "compliant.html"))
