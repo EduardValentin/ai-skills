@@ -233,8 +233,8 @@ Run after the review gate passes.
 
 Fallbacks: if `qa-verifier` is unavailable, use a separate fresh agent with
 the `qa-verification` skill preloaded that can exercise the runtime surface;
-if `frontend-auditor` is unavailable, use a separate fresh agent with the
-`visual-validation` skill preloaded. If no fresh-context verifier can produce
+if `frontend-auditor` is unavailable, use a separate fresh agent given its
+prompt and the `ui-ux-guidelines` skill. If no fresh-context verifier can produce
 evidence, return `IMPLEMENTATION BLOCKED`.
 
 ## Remediation Loop

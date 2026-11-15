@@ -12,7 +12,8 @@ compatibility: >-
   the checks as unverified. Defers to the `semantic-design-tokens` and
   `reusable-ui-components` skills; when absent, reuse existing tokens and
   components by inspection. Uses the `frontend-auditor` agent; when absent,
-  follow the `visual-validation` skill or review inline.
+  give its prompt to a fresh generic subagent, or review inline against this
+  skill and its validators.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -20,7 +21,7 @@ metadata:
 
 # UI/UX Guidelines
 
-Design rules and their validators. Tokens belong to `semantic-design-tokens`, component reuse to `reusable-ui-components`, rendered evidence to `visual-validation`.
+Design rules and their validators. Tokens belong to `semantic-design-tokens`, component reuse to `reusable-ui-components`, rendered evidence to the `frontend-auditor` agent.
 
 ## Invariants
 

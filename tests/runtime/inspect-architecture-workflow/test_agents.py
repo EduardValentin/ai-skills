@@ -18,6 +18,7 @@ HOUSE_SECTIONS = [
 REMOVED_NAMES = [
     "architecture-coordinator", "architecture-evaluator", "architecture-code-auditor",
     "software-architecture-principles", "ticket-requirements-gathering", "ticket-workflow",
+    "visual-validation",
 ]
 CALLER_GROUPS = ["development-workflow", "implementation-workflow", "inspect-architecture-workflow"]
 READ_ONLY_TOOLS = ["Read", "Glob", "Grep", "Bash"]
