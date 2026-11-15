@@ -12,7 +12,8 @@ compatibility: >-
   the checks as unverified. Defers to the `semantic-design-tokens` and
   `reusable-ui-components` skills; when absent, reuse existing tokens and
   components by inspection. Uses the `frontend-auditor` agent; when absent,
-  follow the `visual-validation` skill or review inline.
+  give its prompt to a fresh generic subagent, or review inline against this
+  skill and its validators.
 metadata:
   status: experimental
   allows_tool_references: "true"
@@ -20,7 +21,7 @@ metadata:
 
 # UI/UX Guidelines
 
-Design rules and their validators. Tokens belong to `semantic-design-tokens`, component reuse to `reusable-ui-components`, rendered evidence to `visual-validation`.
+Design rules and their validators. Tokens belong to `semantic-design-tokens`, component reuse to `reusable-ui-components`, rendered evidence to the `frontend-auditor` agent.
 
 ## Invariants
 
@@ -51,6 +52,8 @@ Repository instructions and an existing design system override module defaults (
    | Buttons, forms, errors, feedback, navigation | `references/interaction-forms.md` |
    | Token values or names | `semantic-design-tokens` skill |
    | Reusing, extending or creating components | `reusable-ui-components` skill |
+
+   When a visual spec exists, it is the direction; build from it.
 
 2. **Build.** Native semantics before custom wrappers; ARIA only for what the platform cannot express. Style only from semantic tokens. Give every data view five states: Ideal, Empty, Loading, Partial, Error.
 

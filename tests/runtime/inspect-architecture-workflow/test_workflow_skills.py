@@ -6,9 +6,10 @@ from support import REPO_ROOT
 
 WORKFLOWS = REPO_ROOT / "skills" / "workflows"
 IMPLEMENTATION = WORKFLOWS / "implementation-workflow" / "SKILL.md"
-REQUIREMENTS = WORKFLOWS / "ticket-requirements-gathering" / "SKILL.md"
-TICKET = WORKFLOWS / "ticket-workflow" / "SKILL.md"
-CALLERS = [IMPLEMENTATION, REQUIREMENTS, TICKET]
+REQUIREMENTS = WORKFLOWS / "requirements-gathering" / "SKILL.md"
+PLANNING = WORKFLOWS / "implementation-planning" / "SKILL.md"
+DEVELOPMENT = WORKFLOWS / "development-workflow" / "SKILL.md"
+CALLERS = [IMPLEMENTATION, PLANNING, DEVELOPMENT]
 NOT_RUN = "`architecture review: not run, no baseline`"
 OTHER_REVIEWERS = [
     "`acceptance-criteria-reviewer`", "`design-system-reviewer`", "`security-reviewer`", "`performance-reviewer`",
@@ -33,8 +34,8 @@ def test_implementation_workflow_selects_only_the_cleanliness_reviewer_by_defaul
     assert defaults == "`code-cleanliness-reviewer` selected; every other reviewer offered and not selected."
 
 
-def test_requirements_gathering_selects_only_the_cleanliness_reviewer_by_default():
-    defaults = between(flat(REQUIREMENTS), "Present the list with these defaults:", "The user may change any")
+def test_implementation_planning_selects_only_the_cleanliness_reviewer_by_default():
+    defaults = between(flat(PLANNING), "Present the list with these defaults:", "The user may change any")
     selected = between(defaults, "selected,", "; not selected,")
     assert selected == "`code-cleanliness-reviewer`"
     not_selected = defaults.split("; not selected,", 1)[1]
@@ -43,7 +44,7 @@ def test_requirements_gathering_selects_only_the_cleanliness_reviewer_by_default
 
 
 def test_no_workflow_preselects_a_reviewer_by_what_the_change_touches():
-    for path in [IMPLEMENTATION, REQUIREMENTS]:
+    for path in [IMPLEMENTATION, PLANNING]:
         text = flat(path)
         assert "`design-system-reviewer` selected when" not in text, path.parent.name
         assert "selected when the repository keeps a design system" not in text, path.parent.name

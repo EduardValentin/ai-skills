@@ -43,12 +43,15 @@ Require:
   worktree state
 - known dependencies, sequencing constraints, risks, and expected verification
   surfaces
-- the **reviewer selection** for the review gate, recorded at ticket intake;
-  when absent, the review gate asks the user once with its defaults
+- the **reviewer selection** for the review gate, recorded during
+  implementation planning; when absent, the review gate asks the user once
+  with its defaults
 - an **expected-demand profile**: product stage, expected users, request and
   data volumes, growth expectations, and reliability expectations. Fill it
-  from repository instructions or ticket context. If neither states it, ask
+  from repository instructions or the work's context. If neither states it, ask
   the user before proceeding; do not guess and do not leave it blank.
+
+When the handoff carries a `UI appearance decision` other than `none`, require the visual spec; return to `implementation-planning` when it is missing. A plan that carries no `UI appearance decision` passes as before. The implementer builds from the visual spec.
 
 Check that the packet is current and internally consistent. If required
 context is missing, stale, or contradictory enough to make implementation
@@ -199,7 +202,7 @@ input requires a user decision, ask the user, then continue.
 
 ### Invalidation Table
 
-Judge each predicate from the delta's hunks, not from the ticket's overall
+Judge each predicate from the delta's hunks, not from the work's overall
 shape.
 
 | Reviewer | The delta invalidates its prior `CLEAN` when it |
@@ -221,8 +224,10 @@ Run after the review gate passes.
   criterion. Passing automated checks never satisfy this gate.
 - When the diff touched a rendered surface, dispatch `frontend-auditor` in the
   same fan-out with the running app, affected routes and states, configured
-  breakpoints, and the diff. Every changed rendered surface is in scope; there
-  is no exception for surfaces some other process might also check.
+  breakpoints, and the diff, stating that the visual direction is new when
+  the visual spec's `basis` is `new`. Every changed rendered surface is in
+  scope; there is no exception for surfaces some other process might also
+  check.
 - Wait for every dispatched verifier. A QA `BUGS FOUND`, a visual or
   accessibility finding of severity `blocker` or `major`, or a `BLOCKED`
   visual verdict, or a cannot-proceed verdict from QA sends the work to the
@@ -230,8 +235,8 @@ Run after the review gate passes.
 
 Fallbacks: if `qa-verifier` is unavailable, use a separate fresh agent with
 the `qa-verification` skill preloaded that can exercise the runtime surface;
-if `frontend-auditor` is unavailable, use a separate fresh agent with the
-`visual-validation` skill preloaded. If no fresh-context verifier can produce
+if `frontend-auditor` is unavailable, use a separate fresh agent given its
+prompt and the `ui-ux-guidelines` skill. If no fresh-context verifier can produce
 evidence, return `IMPLEMENTATION BLOCKED`.
 
 ## Remediation Loop
