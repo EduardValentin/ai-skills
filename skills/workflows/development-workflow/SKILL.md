@@ -2,7 +2,7 @@
 name: development-workflow
 description: Use when coordinating one piece of development work from intake or resuming at an evidenced approved-requirements, implementation-transition, or PR-readiness checkpoint.
 compatibility: >-
-  Needs repository, PR, CI, and, if ticketed, tracker access. Without `requirements-gathering` or `implementation-planning`, return an upstream handoff; without `implementation-workflow`, work inline only if authorized. Uses `raising-a-pull-request`, `prototype-backed-workflow` for prototypes, `inspect-architecture-workflow` with `architecture-reviewer` and `architecture-classifier` for selected reviews, and `frontend-designer` (absent: generic subagent given its prompt and `ui-ux-guidelines`).
+  Needs repository, PR, CI, ticket access. Without `requirements-gathering` or `implementation-planning`, return a handoff; without `implementation-workflow`, work inline only if authorized. Uses `raising-a-pull-request`, `prototype-backed-workflow` for prototype-backed UI, `inspect-architecture-workflow` with `architecture-reviewer` and `architecture-classifier`, and `frontend-designer` (else generic subagent with its prompt and `ui-ux-guidelines`). Other gaps block only the affected transition.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual
