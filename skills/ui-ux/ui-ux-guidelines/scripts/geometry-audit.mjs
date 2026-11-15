@@ -47,14 +47,11 @@ Rules: ${ALL_RULES.join(", ")}
 Notes:
   Inline links inside running text are exempt from target size and gap checks.
   Controls revealed on focus (skip links) are measured focused.
-  A target is its pointer area: the element box plus its absolutely positioned ::before/::after that take
-  pointer events (an invisible hit area). Areas are clipped by overflow:hidden/clip ancestors and by the
-  unreachable edges of scroll containers. Each target is scrolled into view and its hit area is hit-tested,
-  so any strip another element covers is not counted. Labels count only for checkboxes and radios. A
-  focusable group (e.g. a radiogroup root) is measured as its own box joined with its controls' areas.
-  Gap rules measure the visible space between controls (the drawn box, plus the label for checkboxes and
-  radios), not between pointer areas. Options of one radiogroup or tablist that touch (gap <= 1px) form a
-  segmented control and are exempt; options set apart must keep the full gap.
+  A tap area is the element box, its absolutely positioned ::before/::after that take pointer events (an
+  invisible hit area), and the label of a checkbox or radio. A text field's label does not count.
+  TARGET-SIZE: every tap area, including each option of an option group, is at least 48x48px.
+  TARGET-GAP: tap areas of different controls are at least 8px apart. An option group is one control:
+  role radiogroup, tablist, listbox, menu, menubar or toolbar, or native radios sharing a name.
   LINE-LENGTH minimum is not enforced when the text already spans 80% of the viewport.
   SPACING-RATIO: the gap under a heading must be smaller than the gap above it, and the largest gap
   inside a section/article/fieldset/li group must not exceed the separation between sibling groups.

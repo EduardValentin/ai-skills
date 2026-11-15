@@ -3,36 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hit areas fixture</title>
+<title>Tap areas fixture</title>
 <style>
   body { margin: 0; font: 18px/1.5 Georgia, serif; }
-  .slot { position: relative; width: 24px; height: 24px; margin: 64px; }
-  .icon { position: relative; display: block; width: 24px; height: 24px; padding: 0; border: 0; background: #0b4f4a; }
+  .block { margin: 64px; }
+  .icon { position: relative; display: inline-block; width: 24px; height: 24px; padding: 0; border: 0; background: #0b4f4a; }
   .icon::before { content: ""; position: absolute; inset: -12px; }
-  .cover { position: absolute; z-index: 2; top: -12px; left: -12px; width: 48px; height: 10px; }
-  .segmented { display: inline-flex; margin: 64px; border: 2px solid #0b4f4a; }
+  .icons .icon + .icon { margin-left: 24px; }
+  .segmented { display: inline-flex; border: 2px solid #0b4f4a; }
   .segmented button { min-width: 64px; min-height: 48px; border: 0; background: #ffffff; font: inherit; }
-  .spaced { display: inline-flex; gap: 4px; margin: 64px; }
-  .spaced button { min-width: 64px; min-height: 48px; font: inherit; }
-  .wrapped { display: block; margin: 64px; }
+  .segmented .narrow { min-width: 0; width: 30px; padding: 0; }
+  .spaced { display: inline-flex; gap: 4px; }
+  .beside { min-width: 64px; min-height: 48px; margin-left: 4px; font: inherit; }
+  .choice { display: block; min-height: 48px; min-width: 120px; }
   .wrapped input { display: block; height: 28px; width: 200px; font: inherit; }
-  .spacer { height: 3000px; }
 </style>
 </head>
 <body>
 <main>
-  <div class="slot"><button id="icon" class="icon" type="button" aria-label="Close"></button></div>
-  <div class="slot"><button id="covered" class="icon" type="button" aria-label="Pin"></button><div class="cover"></div></div>
-  <div class="segmented" role="radiogroup" aria-label="View">
-    <button type="button" role="radio" aria-checked="true">Day</button><button type="button" role="radio" aria-checked="false">Week</button><button type="button" role="radio" aria-checked="false">Month</button>
+  <div class="block"><button id="icon" class="icon" type="button" aria-label="Close"></button></div>
+
+  <div class="block icons">
+    <button id="pin" class="icon" type="button" aria-label="Pin"></button><button id="archive" class="icon" type="button" aria-label="Archive"></button>
   </div>
-  <div class="spaced" role="radiogroup" aria-label="Density">
-    <button id="compact" type="button" role="radio" aria-checked="true">Compact</button>
-    <button id="roomy" type="button" role="radio" aria-checked="false">Roomy</button>
+
+  <div id="tools" class="block icons" role="toolbar" aria-label="Formatting">
+    <button class="icon" type="button" aria-label="Bold"></button><button class="icon" type="button" aria-label="Italic"></button>
   </div>
-  <label class="wrapped">Email address <input id="short" type="email"></label>
-  <div class="spacer"></div>
-  <div class="slot"><button id="deep" class="icon" type="button" aria-label="Archive"></button><div class="cover"></div></div>
+
+  <div class="block">
+    <div id="view" class="segmented" role="radiogroup" aria-label="View">
+      <button type="button" role="radio" aria-checked="true">Day</button><button type="button" role="radio" aria-checked="false">Week</button><button id="narrow" class="narrow" type="button" role="radio" aria-checked="false">M</button>
+    </div>
+  </div>
+
+  <div class="block">
+    <div id="density" class="segmented spaced" role="radiogroup" aria-label="Density">
+      <button type="button" role="radio" aria-checked="true">Compact</button>
+      <button type="button" role="radio" aria-checked="false">Roomy</button>
+    </div><button id="reset" class="beside" type="button">Reset</button>
+  </div>
+
+  <form class="block">
+    <label class="choice"><input type="radio" name="plan" value="a" checked> Monthly</label>
+    <label class="choice"><input type="radio" name="plan" value="b"> Yearly</label>
+  </form>
+
+  <label class="block wrapped">Email address <input id="short" type="email"></label>
 </main>
 </body>
 </html>

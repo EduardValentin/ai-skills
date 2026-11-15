@@ -96,20 +96,23 @@ class RenderedPageTests(unittest.TestCase):
         self.assertEqual(save["measured"]["height"], 30)
         self.assertEqual(save["corrective"], {"width": 48, "height": 48})
 
-    def test_invisible_hit_areas_count_only_where_they_answer_the_pointer(self) -> None:
-        completed = run_script("geometry-audit.mjs", str(FIXTURES / "hit-areas.html"), "--rules", "TARGET-SIZE,TARGET-GAP", "--viewports", "375")
+    def test_tap_areas_and_option_groups(self) -> None:
+        completed = run_script("geometry-audit.mjs", str(FIXTURES / "hit-areas.html"), "--rules", "TARGET-SIZE,TARGET-GAP", "--viewports", "1440")
         self.assertEqual(completed.returncode, 1)
         results = json.loads(completed.stdout)["pages"][0]["results"]
         found = {(result["ruleId"], result["selector"]): result["measured"] for result in results}
         self.assertEqual(
             set(found),
-            {("TARGET-SIZE", "#covered"), ("TARGET-SIZE", "#deep"), ("TARGET-SIZE", "#short"), ("TARGET-GAP", "#compact <-> #roomy")},
+            {
+                ("TARGET-GAP", "#pin <-> #archive"),
+                ("TARGET-SIZE", "#narrow"),
+                ("TARGET-GAP", "#density <-> #reset"),
+                ("TARGET-SIZE", "#short"),
+            },
         )
-        for selector in ("#covered", "#deep"):
-            self.assertEqual(found[("TARGET-SIZE", selector)]["height"], 38)
-            self.assertEqual(found[("TARGET-SIZE", selector)]["visual"], {"width": 24, "height": 24})
-        self.assertEqual(found[("TARGET-SIZE", "#short")]["height"], 34)
-        self.assertEqual(found[("TARGET-GAP", "#compact <-> #roomy")], 4)
+        self.assertEqual(found[("TARGET-GAP", "#pin <-> #archive")], 0)
+        self.assertEqual(found[("TARGET-SIZE", "#narrow")]["width"], 30)
+        self.assertEqual(found[("TARGET-GAP", "#density <-> #reset")], 4)
 
     def test_compliant_page_passes_dom_contrast(self) -> None:
         completed = run_script("contrast-audit.mjs", "dom", "--html", str(FIXTURES / "compliant.html"))

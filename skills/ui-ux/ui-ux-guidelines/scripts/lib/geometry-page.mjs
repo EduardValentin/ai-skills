@@ -124,78 +124,14 @@ export function auditGeometry(config) {
       return x && y ? [{ left: x[0], right: x[1], top: y[0], bottom: y[1] }] : [];
     });
   };
-  const clipToContainers = (host, box) => {
-    let clipped = { ...box };
-    for (let node = host; node && node !== document.documentElement; node = node.parentElement) {
-      const style = getComputedStyle(node);
-      if (style.overflowX === "visible" && style.overflowY === "visible") continue;
-      const visible = paddingBox(node, style);
-      const left = visible.left - node.scrollLeft;
-      const top = visible.top - node.scrollTop;
-      const inner = ["auto", "scroll"].includes(style.overflowX) || ["auto", "scroll"].includes(style.overflowY)
-        ? { left, top, right: left + Math.max(node.scrollWidth, visible.right - visible.left), bottom: top + Math.max(node.scrollHeight, visible.bottom - visible.top) }
-        : visible;
-      if (style.overflowX !== "visible") clipped = { ...clipped, left: Math.max(clipped.left, inner.left), right: Math.min(clipped.right, inner.right) };
-      if (style.overflowY !== "visible") clipped = { ...clipped, top: Math.max(clipped.top, inner.top), bottom: Math.min(clipped.bottom, inner.bottom) };
-    }
-    return clipped;
-  };
-  const answersPointer = (element, x, y) => {
-    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null;
-    const hit = document.elementFromPoint(x, y);
-    if (!hit) return false;
-    if (hit === element || element.contains(hit)) return true;
-    return [...(element.labels ?? [])].some((label) => label.contains(hit));
-  };
-  const hitTested = (element, box, claimed) => {
-    const centerX = Math.floor((box.left + box.right) / 2);
-    const centerY = Math.floor((box.top + box.bottom) / 2);
-    const reach = (from, to, point) => {
-      const step = Math.sign(to - from);
-      let reached = from;
-      while (step !== 0 && (to - reached) * step > 0.01) {
-        const next = step > 0 ? Math.min(to, reached + 1) : Math.max(to, reached - 1);
-        if (point(Math.floor((reached + next) / 2)) === false) break;
-        reached = next;
-      }
-      return reached;
-    };
-    return {
-      left: reach(box.left, claimed.left, (x) => answersPointer(element, x, centerY)),
-      right: reach(box.right, claimed.right, (x) => answersPointer(element, x, centerY)),
-      top: reach(box.top, claimed.top, (y) => answersPointer(element, centerX, y)),
-      bottom: reach(box.bottom, claimed.bottom, (y) => answersPointer(element, centerX, y)),
-    };
-  };
-  const withPointerArea = (element, box) => [
-    box,
-    ...pointerPseudoBoxes(element).map((pseudo) => hitTested(element, box, clipToContainers(element, pseudo))),
-  ];
-  const measureTarget = (element) => {
+  const sized = (box) => ({ ...box, width: box.right - box.left, height: box.bottom - box.top });
+  const tapArea = (element) => {
     const isTiny = (box) => box.width < 2 || box.height < 2;
     let box = element.getBoundingClientRect();
     if (isTiny(box) || undiscoverableReason(element)) box = whileFocused(element, () => element.getBoundingClientRect());
     const labels = ["checkbox", "radio"].includes(element.type) ? [...(element.labels ?? [])].filter(ux.isRendered) : [];
-    const areas = [
-      ...withPointerArea(element, box),
-      ...labels.flatMap((label) => withPointerArea(label, label.getBoundingClientRect())),
-    ];
-    const merged = unionBox(areas);
-    const seen = unionBox([box, ...labels.map((label) => label.getBoundingClientRect())]);
-    const visual = { ...seen, width: seen.right - seen.left, height: seen.bottom - seen.top };
-    return { ...merged, width: merged.right - merged.left, height: merged.bottom - merged.top, visual };
-  };
-  const toDocument = (box) => ({
-    ...box,
-    left: box.left + scrollX,
-    right: box.right + scrollX,
-    top: box.top + scrollY,
-    bottom: box.bottom + scrollY,
-  });
-  const targetBox = (element) => {
-    element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
-    const measured = measureTarget(element);
-    return { ...toDocument(measured), visual: toDocument(measured.visual) };
+    const labelBoxes = labels.flatMap((label) => [label.getBoundingClientRect(), ...pointerPseudoBoxes(label)]);
+    return sized(unionBox([box, ...pointerPseudoBoxes(element), ...labelBoxes]));
   };
 
   const interactive = [
@@ -334,18 +270,9 @@ export function auditGeometry(config) {
     }
   });
 
-  const membersOf = (element) => interactive.filter((other) => other !== element && element.contains(other) && ux.isRendered(other));
-  const groupBox = (element) => {
-    const own = targetBox(element);
-    const members = membersOf(element).map(targetBox);
-    if (members.length === 0) return own;
-    const merged = unionBox([own, ...members]);
-    return { ...merged, width: merged.right - merged.left, height: merged.bottom - merged.top, visual: own.visual };
-  };
   const targets = interactive
     .filter((el) => !isInlineTextLink(el) && !revealedReason(el))
-    .map((el) => ({ el, box: groupBox(el) }));
-  scrollTo({ left: 0, top: 0, behavior: "instant" });
+    .map((el) => ({ el, box: tapArea(el) }));
   const minimum = round(48 * config.ptScale);
 
   rule("TARGET-SIZE", true, () => {
@@ -353,28 +280,37 @@ export function auditGeometry(config) {
       const width = round(box.width);
       const height = round(box.height);
       if (width >= minimum && height >= minimum) continue;
-      fail("TARGET-SIZE", el, { width, height, visual: { width: round(box.visual.width), height: round(box.visual.height) } }, `>= ${minimum}px x ${minimum}px`, { width: Math.max(width, minimum), height: Math.max(height, minimum) });
+      fail("TARGET-SIZE", el, { width, height }, `>= ${minimum}px x ${minimum}px`, { width: Math.max(width, minimum), height: Math.max(height, minimum) });
     }
   });
 
-  const gapBetween = (first, second) => {
-    const dx = Math.max(0, second.left - first.right, first.left - second.right);
-    const dy = Math.max(0, second.top - first.bottom, first.top - second.bottom);
-    return round(Math.hypot(dx, dy));
+  const OPTION_GROUPS = "[role=radiogroup], [role=tablist], [role=listbox], [role=menu], [role=menubar], [role=toolbar]";
+  const outermostGroup = (element) => {
+    let group = null;
+    for (let node = element.closest(OPTION_GROUPS); node; node = node.parentElement?.closest(OPTION_GROUPS)) group = node;
+    return group;
   };
-  const SEGMENTED = "[role=radiogroup], [role=tablist]";
-  const segmentOf = (element) => element.parentElement?.closest(SEGMENTED) ?? null;
-  const sameSegmentedControl = (first, second) => {
-    const segment = segmentOf(first);
-    return segment !== null && segment === segmentOf(second);
-  };
+  const nativeRadioGroup = (element) =>
+    element.type === "radio" && element.name ? `${ux.selectorOf(element.form ?? document.body)} radio ${element.name}` : null;
+  const controls = new Map();
+  for (const { el, box } of targets) {
+    const group = outermostGroup(el);
+    const key = group ?? nativeRadioGroup(el) ?? el;
+    const control = controls.get(key) ?? { el: group ?? el, boxes: group ? [group.getBoundingClientRect()] : [] };
+    control.boxes.push(box);
+    controls.set(key, control);
+  }
+  const controlBoxes = [...controls.values()].map(({ el, boxes }) => ({ el, box: unionBox(boxes) }));
+
   rule("TARGET-GAP", true, () => {
     const threshold = round(8 * config.ptScale);
-    for (const [index, first] of targets.entries()) {
-      for (const second of targets.slice(index + 1)) {
+    for (const [index, first] of controlBoxes.entries()) {
+      for (const second of controlBoxes.slice(index + 1)) {
         if (first.el.contains(second.el) || second.el.contains(first.el)) continue;
-        const gap = gapBetween(first.box.visual, second.box.visual);
-        if (gap >= threshold || (gap <= 1 && sameSegmentedControl(first.el, second.el))) continue;
+        const dx = Math.max(0, second.box.left - first.box.right, first.box.left - second.box.right);
+        const dy = Math.max(0, second.box.top - first.box.bottom, first.box.top - second.box.bottom);
+        const gap = round(Math.hypot(dx, dy));
+        if (gap >= threshold) continue;
         fail("TARGET-GAP", `${ux.selectorOf(first.el)} <-> ${ux.selectorOf(second.el)}`, gap, `>= ${threshold}px`, `increase spacing by ${round(threshold - gap)} px`);
       }
     }
