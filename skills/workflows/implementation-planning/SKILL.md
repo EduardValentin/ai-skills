@@ -2,7 +2,7 @@
 name: implementation-planning
 description: Use when writing and approving the implementation plan for one piece of work whose requirements spec is approved.
 compatibility: >-
-  Requires repository access, plus tracker access when the work has a ticket. Without `requirements-gathering`, return an upstream handoff. A selected architecture plan review requires `inspect-architecture-workflow` and its `architecture-reviewer` and `architecture-classifier`; a missing agent is replaced by a fresh generic read-only subagent given its prompt, and a missing skill blocks plan approval. `ticket-workflow` may consume the handoff; without it, return the handoff to the user.
+  Requires repository access, plus tracker access when the work has a ticket. Without `requirements-gathering`, return an upstream handoff. A selected architecture plan review requires `inspect-architecture-workflow` and its `architecture-reviewer` and `architecture-classifier`; a missing agent is replaced by a fresh generic read-only subagent given its prompt, and a missing skill blocks plan approval. `development-workflow` may consume the handoff; without it, return the handoff to the user.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual

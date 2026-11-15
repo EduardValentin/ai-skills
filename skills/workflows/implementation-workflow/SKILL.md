@@ -48,7 +48,7 @@ Require:
   with its defaults
 - an **expected-demand profile**: product stage, expected users, request and
   data volumes, growth expectations, and reliability expectations. Fill it
-  from repository instructions or ticket context. If neither states it, ask
+  from repository instructions or the work's context. If neither states it, ask
   the user before proceeding; do not guess and do not leave it blank.
 
 Check that the packet is current and internally consistent. If required
@@ -200,7 +200,7 @@ input requires a user decision, ask the user, then continue.
 
 ### Invalidation Table
 
-Judge each predicate from the delta's hunks, not from the ticket's overall
+Judge each predicate from the delta's hunks, not from the work's overall
 shape.
 
 | Reviewer | The delta invalidates its prior `CLEAN` when it |

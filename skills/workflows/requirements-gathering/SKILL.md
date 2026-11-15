@@ -2,7 +2,7 @@
 name: requirements-gathering
 description: Use when gathering, clarifying, documenting, and approving the requirements spec for one piece of work, whether or not it comes with a ticket.
 compatibility: >-
-  Requires repository access, and tracker access only when the work has a ticket. Discovery agents are optional; without them, inspect inline. `ticket-workflow` and `implementation-planning` may consume the handoff; without them, return it to the user. Stop only when missing access could materially change scope, behavior, or acceptance criteria.
+  Requires repository access, and tracker access only when the work has a ticket. Discovery agents are optional; without them, inspect inline. `development-workflow` and `implementation-planning` may consume the handoff; without them, return it to the user. Stop only when missing access could materially change scope, behavior, or acceptance criteria.
 metadata:
   ai-skills-category: procedural
   ai-skills-invocation: manual

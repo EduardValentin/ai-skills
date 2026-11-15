@@ -8,8 +8,8 @@ WORKFLOWS = REPO_ROOT / "skills" / "workflows"
 IMPLEMENTATION = WORKFLOWS / "implementation-workflow" / "SKILL.md"
 REQUIREMENTS = WORKFLOWS / "requirements-gathering" / "SKILL.md"
 PLANNING = WORKFLOWS / "implementation-planning" / "SKILL.md"
-TICKET = WORKFLOWS / "ticket-workflow" / "SKILL.md"
-CALLERS = [IMPLEMENTATION, PLANNING, TICKET]
+DEVELOPMENT = WORKFLOWS / "development-workflow" / "SKILL.md"
+CALLERS = [IMPLEMENTATION, PLANNING, DEVELOPMENT]
 NOT_RUN = "`architecture review: not run, no baseline`"
 OTHER_REVIEWERS = [
     "`acceptance-criteria-reviewer`", "`design-system-reviewer`", "`security-reviewer`", "`performance-reviewer`",
