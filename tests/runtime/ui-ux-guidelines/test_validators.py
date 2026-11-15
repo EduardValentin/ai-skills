@@ -124,6 +124,16 @@ class RenderedPageTests(unittest.TestCase):
         rules = {violation["ruleId"] for violation in json.loads(completed.stdout)["violations"]}
         self.assertLessEqual({"CT-WCAG-TEXT-NORMAL", "CT-WCAG-INPUT-BORDER", "CT-WCAG-BUTTON-BOUNDARY"}, rules)
 
+    def test_control_boundary_is_the_better_of_fill_and_border(self) -> None:
+        completed = run_script("contrast-audit.mjs", "dom", "--html", str(FIXTURES / "boundaries.html"), "--viewports", "375", "--verbose")
+        self.assertEqual(completed.returncode, 1)
+        report = json.loads(completed.stdout)
+        self.assertEqual({violation["selector"] for violation in report["violations"]}, {"#faint"})
+        self.assertEqual({violation["boundary"] for violation in report["violations"]}, {"border"})
+        outlined = [entry for entry in report["passes"] if entry["selector"] == "#outlined" and entry["ruleId"] == "CT-WCAG-UI-COMPONENT"]
+        self.assertEqual(outlined[0]["boundary"], "border")
+        self.assertGreaterEqual(outlined[0]["measured"]["value"], 3)
+
     def test_missing_input_is_a_usage_error(self) -> None:
         completed = run_script("geometry-audit.mjs", str(FIXTURES / "absent.html"))
         self.assertEqual(completed.returncode, 2)

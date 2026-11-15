@@ -108,7 +108,7 @@ function resolvePair(pair) {
     const color = parseColor(pair.fg);
     foreground = compositeOver(color, background.color, color.a * pair.opacity);
   }
-  return { foreground, background: background.color };
+  return { foreground, background: background.color, boundary: pair.boundary };
 }
 
 function evaluateItem(item, options, report, context) {
@@ -144,7 +144,7 @@ function evaluateItem(item, options, report, context) {
     const value = Math.max(...resolved.map((pair) => measure(requirement.metric, pair.foreground, pair.background)));
     const measured = { metric: metricName(requirement.metric), value: roundFor(requirement.metric, value) };
     if (!requirement.belowSmallestTier && value >= requirement.threshold) {
-      report.passes.push({ ruleId: requirement.ruleId, ...identity, measured });
+      report.passes.push({ ruleId: requirement.ruleId, ...identity, measured, ...(best.boundary ? { boundary: best.boundary } : {}) });
       continue;
     }
     correction ??= measurable.length ? correctiveColor(best.foreground, best.background, pairPasses) : null;
@@ -176,6 +176,7 @@ function evaluateItem(item, options, report, context) {
       });
     }
     for (const key of ["side", "adjacent", "pairedSelector"]) if (item[key]) violation[key] = item[key];
+    if (best.boundary) violation.boundary = best.boundary;
     report.violations.push(violation);
   }
 }

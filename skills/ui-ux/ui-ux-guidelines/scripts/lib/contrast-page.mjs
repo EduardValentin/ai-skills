@@ -56,9 +56,11 @@ export function collectContrastItems(config) {
   const overParent = (element, color) => ({ fg: color, opacity: 1, bg: ux.backgroundLayers(element.parentElement) });
 
   const boundaryPairs = (element, style) => {
-    if (isFilled(style)) return [overParent(element, style.backgroundColor)];
+    const pairs = [];
+    if (isFilled(style)) pairs.push({ ...overParent(element, style.backgroundColor), boundary: "fill" });
     const sides = visibleSides(style);
-    return sides.length ? [overParent(element, style[`border-${sides[0]}-color`])] : [];
+    if (sides.length) pairs.push({ ...overParent(element, style[`border-${sides[0]}-color`]), boundary: "border" });
+    return pairs;
   };
 
   const isIconFont = (style) => config.iconFonts.some((font) => style.fontFamily.toLowerCase().includes(font));
@@ -147,12 +149,9 @@ export function collectContrastItems(config) {
       add("button-boundary", button, [], { inconclusiveReason: "background-image" });
       continue;
     }
-    const pairs = [];
-    if (isFilled(style)) pairs.push(overParent(button, style.backgroundColor));
-    const sides = visibleSides(style);
-    if (sides.length) pairs.push(overParent(button, style[`border-${sides[0]}-color`]));
+    const pairs = boundaryPairs(button, style);
     if (pairs.length === 0 && style.textDecorationLine.includes("underline")) {
-      pairs.push(overParent(button, style.textDecorationColor));
+      pairs.push({ ...overParent(button, style.textDecorationColor), boundary: "underline" });
     }
     if (pairs.length) add("button-boundary", button, pairs);
   }
