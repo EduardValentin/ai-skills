@@ -179,6 +179,11 @@ python3 scripts/sync_native_agents.py push
 python3 scripts/sync_native_agents.py check
 ```
 
+An agent whose model is fixed sets `tier` in the manifest; the `[tiers]` table
+maps each tier to one model per harness, and it is the only place a model is
+named. An agent sized per dispatch sets no tier, so the dispatcher picks its
+model. Agent prompts and skills never name a model.
+
 Skills and native agents have separate source and delivery paths.
 
 ## Keep Documentation Current
