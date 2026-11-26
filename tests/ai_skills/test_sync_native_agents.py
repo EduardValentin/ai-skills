@@ -138,6 +138,76 @@ groups = ["ticket-workflow"] # Standard TOML inline comment.
                 self.assertEqual(str(raised.exception), expected)
                 self.assertNotIn(private_value, str(raised.exception))
 
+    def load_manifest(self, manifest: str) -> list[sync_native_agents.NativeAgent]:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            agents = repo / "agents"
+            agents.mkdir()
+            (agents / "mapper.md").write_text("# Mapper\n", encoding="utf-8")
+            (agents / "manifest.toml").write_text(manifest, encoding="utf-8")
+            with patch.dict(os.environ, {"AI_SKILLS_REPO": str(repo)}):
+                return sync_native_agents.load_agents()
+
+    def test_tier_resolves_to_each_harness_model(self) -> None:
+        agents = self.load_manifest(
+            """
+version = 1
+
+[tiers.top]
+codex = "codex-top"
+claude = "claude-top"
+
+[[agent]]
+id = "demo-mapper"
+tier = "top"
+source = "mapper.md"
+description = "Map code."
+
+[agent.codex]
+sandbox_mode = "read-only"
+
+[[agent]]
+id = "demo-sized"
+source = "mapper.md"
+description = "Sized per dispatch."
+""".lstrip()
+        )
+
+        tiered, untiered = agents
+        self.assertEqual(tiered.codex["model"], "codex-top")
+        self.assertEqual(tiered.claude["model"], "claude-top")
+        self.assertNotIn("model", untiered.codex)
+        self.assertNotIn("model", untiered.claude)
+
+    def test_tier_rejects_unknown_names_conflicts_and_partial_tables(self) -> None:
+        agent = (
+            "[[agent]]",
+            'id = "demo-mapper"',
+            'source = "mapper.md"',
+            'description = "Map code."',
+        )
+        top = ("[tiers.top]", 'codex = "codex-top"', 'claude = "claude-top"')
+        cases = (
+            (
+                ("version = 1", *top, *agent, 'tier = "missing"'),
+                "demo-mapper.tier must name a tier defined under [tiers]",
+            ),
+            (
+                ("version = 1", *top, *agent, 'tier = "top"', "[agent.claude]", 'model = "sonnet"'),
+                "demo-mapper sets both tier and claude.model",
+            ),
+            (
+                ("version = 1", "[tiers.top]", 'codex = "codex-top"', *agent),
+                "tiers.top must set exactly: codex, claude",
+            ),
+        )
+
+        for lines, expected in cases:
+            with self.subTest(expected=expected):
+                with self.assertRaises(ValueError) as raised:
+                    self.load_manifest("\n".join(lines) + "\n")
+                self.assertEqual(str(raised.exception), expected)
+
     def test_push_check_and_drift_detection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary_root = Path(directory)

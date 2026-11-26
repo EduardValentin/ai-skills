@@ -54,6 +54,8 @@ CLAUDE_FIELD_ORDER = (
     "initialPrompt",
 )
 
+HARNESSES = ("codex", "claude")
+
 CODEX_REGISTRATION_PREFIX = "# BEGIN ai-skills native agent registration:"
 CODEX_REGISTRATION_SUFFIX = "# END ai-skills native agent registration:"
 
@@ -104,6 +106,7 @@ def load_agents() -> list[NativeAgent]:
     if data.get("version") != 1:
         raise ValueError("agents/manifest.toml must set version = 1")
 
+    tiers = load_tiers(data.get("tiers", {}))
     entries = data.get("agent", [])
     if not isinstance(entries, list) or not entries:
         raise ValueError("agents/manifest.toml must define at least one [[agent]]")
@@ -136,6 +139,7 @@ def load_agents() -> list[NativeAgent]:
             raise ValueError(f"{agent_id}.codex has unsupported keys: {', '.join(unknown_codex)}")
         if unknown_claude:
             raise ValueError(f"{agent_id}.claude has unsupported keys: {', '.join(unknown_claude)}")
+        apply_tier(agent_id, entry.get("tier"), tiers, {"codex": codex, "claude": claude})
 
         source_path = repo_root() / "agents" / source
         if not source_path.is_file():
@@ -153,6 +157,35 @@ def load_agents() -> list[NativeAgent]:
             )
         )
     return agents
+
+
+def load_tiers(value: Any) -> dict[str, dict[str, str]]:
+    if not isinstance(value, dict):
+        raise ValueError("agents/manifest.toml tiers must be a table")
+    tiers: dict[str, dict[str, str]] = {}
+    for name, models in value.items():
+        if not isinstance(models, dict) or set(models) != set(HARNESSES):
+            raise ValueError(f"tiers.{name} must set exactly: {', '.join(HARNESSES)}")
+        if not all(isinstance(model, str) and model.strip() for model in models.values()):
+            raise ValueError(f"tiers.{name} models must be non-empty strings")
+        tiers[name] = dict(models)
+    return tiers
+
+
+def apply_tier(
+    agent_id: str,
+    tier: Any,
+    tiers: dict[str, dict[str, str]],
+    harness_settings: dict[str, dict[str, Any]],
+) -> None:
+    if tier is None:
+        return
+    if not isinstance(tier, str) or tier not in tiers:
+        raise ValueError(f"{agent_id}.tier must name a tier defined under [tiers]")
+    for harness, settings in harness_settings.items():
+        if "model" in settings:
+            raise ValueError(f"{agent_id} sets both tier and {harness}.model")
+        settings["model"] = tiers[tier][harness]
 
 
 def required_string(entry: dict[str, Any], key: str) -> str:
